@@ -38,6 +38,6 @@ manager 持有进程/PTY/日志，不持有 Pi context。扩展运行时持有�
 - 分支切换：只调整显示和通知，不改任务是否运行。
 - quit：按明确的退出策略清理；不能再把每一种 session_shutdown 都当成进程退出。
 
-用户明确停止 subagent 时，它及其后代创建的后台 job 一并停止，按创建归属通过同一 JobManager 控制；这是执行停止操作，与上述会话/UI 绑定变更分开。关闭 child 查看器、detach 或 reload 不解除创建归属，具体规则见 [子代理运行控制](../agent-runs.md)。
+用户明确停止 subagent 时，它及其后代创建的后台 job 一并停止，按创建归属通过同一 JobManager 控制；这是执行停止操作，与上述会话/UI 绑定变更分开。关闭 child 查看器、detach 或 reload 不解除创建归属，具体规则见 [子代理运行控制](../agents/runs.md)。
 
 活跃 manager 的协议不兼容升级不能无声热替换；先保留既有运行任务和可用控制，再给出明确的升级状态。

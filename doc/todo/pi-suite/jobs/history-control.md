@@ -29,7 +29,9 @@
 - [执行模式与后端](execution.md)
 - [同进程保活](session-lifecycle.md)
 - [活动数量状态](../status.md)
-- [子代理停止边界](../agent-runs.md)
+- [子代理停止边界](../agents/runs.md)
+- [输出读取](output.md)
+- [统一工具设计](../tool-design.md)
 
 ## 记录与历史查看
 
@@ -62,19 +64,20 @@ Pi 重新启动后仍可读取保存的记录和日志，但不因此获得原�
 - attach 中的输入和工具写入走同一输入入口。敏感输入可显式标记 sensitive，仅保留时间与已发送标记，输入通道不保存或返回正文；程序自行回显的内容仍按输出通道处理。
 - 输出按采集顺序保存；跨 stdout/stderr 的时间顺序不承诺等同于程序内部写入顺序。历史输出使用安全文本或终端渲染，不直接执行其中的终端控制内容。
 
-默认读末尾一页，允许向前、向后分页；完整详情支持滚动，只有用户停在底部时跟随新输出。模型按需读有限日志，不把每次完整输出注入上下文。日志文件按需读取、视图缓存保持有限；不因为内存尾部缓存淘汰就宣称原日志已被删除。
+模型默认读取按 [输出读取](output.md) 的智能截断返回头部、尾部和中段关键行，可按偏移分页或搜索；完整详情支持滚动，只有用户停在底部时跟随新输出。模型按需读有限日志，不把每次完整输出注入上下文。日志文件按需读取、视图缓存保持有限；不因为内存尾部缓存淘汰就宣称原日志已被删除。
 
 ## 查询和控制入口
 
-延续 [execution](execution.md) 的统一 manager 和旧工具适配方案；以下是新接口需要具备的能力，不要求同时注册多套等价工具。
+统一 manager 承担全部入口；工具名与共享参数按 [统一工具设计](../tool-design.md)，上游旧工具不再注册。
 
 | 入口 | 精简参数与返回 |
 | --- | --- |
 | job_list | id? 查询单项；否则 state? 为 active/finished/all，默认 active；scope? 为 session/workspace，默认 session；cursor?/limit? 用于列表分页；返回 ID、短标题、状态、mode、耗时和停止/清理摘要，不附整段日志 |
-| job_read | id、stream?；pipe 默认 stdout，可选 stdout/stderr；PTY 默认 output；两种模式都可选 input；offset?/limitBytes? 分页，默认末尾 16 KiB、上限 64 KiB；返回实际 offset、nextOffset、结束标记和可读范围 |
-| job_write | id、输入内容或原适配接口的按键参数；敏感输入按需指定 sensitive；已结束或已停止接收输入的对象明确报错 |
-| job_attach / job_detach | id；只连接或退出查看交互，不停止 job；已结束对象打开历史，不创建新 PTY |
+| job_read | id、stream?；pipe 默认 stdout，可选 stdout/stderr；PTY 默认 output；两种模式都可选 input，monitor 另有 events；offset?/limitBytes? 分页，默认读取为智能截断、上限 64 KiB；search?/context? 搜索；返回实际 offset、nextOffset、结束标记和可读范围 |
+| job_write | id 与 input、keys 或 paste 之一；submit 追加回车；敏感输入按需指定 sensitive；已结束、已停止接收输入或用户接管中的对象明确报错 |
+| wait | ids、mode?、timeoutMs?；等待 job 结算，超时或取消只结束等待；已返回的结算从通知队列撤销 |
 | job_stop | id；明确请求停止指定执行，返回真实状态、是否提出停止请求和清理结果；重复调用合并正在处理的请求，不隐式重启或反复发送终止 |
+| attach / detach（用户操作） | /jobs 详情或 job_start 的 attach；只连接或退出查看交互，不停止 job；已结束对象打开历史，不创建新 PTY |
 
 id 查询忽略列表筛选并返回详情；state/scope/cursor/limit 是列表参数，不能与 id 混用。不存在或不支持的日志通道明确报错；指定 offset 时按原始字节读取并处理 UTF-8 边界。模型不需要手工计算进度、耗时或终态计数。
 
@@ -90,4 +93,4 @@ id 查询忽略列表筛选并返回详情；state/scope/cursor/limit 是列表�
 
 subagent 发起的 job 由运行上下文自动记录创建归属；停止该 subagent 时，AgentManager 调用同一 JobManager 停止它及所属后代创建的活动 job，不需要模型逐项调用 job_stop。job 归属与 task/agent 的展示引用分开，执行已 detach 或创建 child 已完成仍参与级联清理。关闭视图、会话切换和 reload 仅改变绑定，不触发该停止流程。
 
-注册和启动 job 时检查创建执行是否已在停止，并先记录受管对象；若停止与启动同时发生，继续将该 job 纳入同一停止请求。停止返回 child/job 的真实结算信息，pending/unconfirmed 继续可查询，日志与历史保留。具体运行子树与执行标识规则见 [子代理停止边界](../agent-runs.md)。
+注册和启动 job 时检查创建执行是否已在停止，并先记录受管对象；若停止与启动同时发生，继续将该 job 纳入同一停止请求。停止返回 child/job 的真实结算信息，pending/unconfirmed 继续可查询，日志与历史保留。具体运行子树与执行标识规则见 [子代理停止边界](../agents/runs.md)。

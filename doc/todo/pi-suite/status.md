@@ -29,7 +29,7 @@
 - [goal 状态栏联动](goal-status.md)
 - [统一面板布局](ui.md)
 - [job 查询与控制](jobs/history-control.md)
-- [子代理记录与控制](agent-runs.md)
+- [子代理记录与控制](agents/runs.md)
 
 ## 发布契约
 
@@ -53,7 +53,7 @@ ctx.ui.setStatus("pi-suite:runtime", "agents 2 · jobs 3");
 
 默认统计当前绑定主会话可见的执行集合，与 jobs/agents 详情列表的默认归属过滤共用逻辑：包括当前分支引用的对象及所属 child 的执行对象。按实际 job ID 和 subagent 执行 ID 去重，不把主 agent 计入 subagent 数量。
 
-- subagent 活动数包含已开始且尚未结算的执行：启动中、运行中、等待用户/任务/宿主、停止中。等待回答仍是活动执行，不因暂时没有模型流而消失。
+- subagent 活动数包含已开始且尚未结算的执行：启动中、运行中、等待用户/父 agent/任务/宿主、停止中。等待回答仍是活动执行，不因暂时没有模型流而消失；child 向父 agent 提问时同样计入。workflow 内的 child 计入其 workflow 详情，不计入 agents 数量。
 - 排队未开始的 subagent、已结束执行，以及仅保留会话但没有未结算运行的 idle subagent 不计入活动数；排队数在详情中单独查看。
 - job 活动数包含 starting、running、stopping；当前 manager 中退出清理仍 pending/unconfirmed 的执行保留在活动集合，并在详情明确“清理待确认”，避免尚未确认停止就显示空闲。
 - 只剩持久历史、没有当前可控句柄的记录不当作已知活动 job；历史中的未确认状态保留诊断，不能把保存的 PID 当作当前运行证据。

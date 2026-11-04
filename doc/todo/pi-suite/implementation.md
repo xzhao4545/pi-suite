@@ -16,9 +16,10 @@
 - [ ] 实现统一 dock 与 ask
 - [x] 修正 goal 状态与续跑（真实 jobs/agents 综合通知在对应模块接入后验收）
 - [ ] 接入 goal 状态栏摘要，验证原生 footer 与 pi-starship 布局
+- [ ] 统一工具规范：改名 ask/goal 已有参数，抽取共享 schema 与 wait
 - [ ] 注册 agent/job 活动数量，接入活动与已结束记录查看及手动停止
-- [ ] 融合 jobs 并验证同进程保活
-- [ ] 实现两级 tasks、精简批量接口与原生 agents 查看
+- [ ] 导入改造 jobs 并验证同进程保活、输出读取与监视
+- [ ] 导入改造两级 tasks、agents 及主从交互与扩展能力，原生 agents 查看
 - [ ] 按需确认并实施跨进程保活
 
 ## 验收方式
@@ -28,17 +29,21 @@
 ## 关联计划
 
 - [基线核对](upstream-baseline.md)
+- [上游导入](upstream-import.md)
+- [统一工具设计](tool-design.md)
 - [用户询问](ask/index.md)
 - [执行任务](jobs/index.md)
+- [子代理](agents/index.md)
 
 ## 10. 实施顺序与验收
 
 1. **建立基线。** 核对 Windows/Linux 实际 Pi 和扩展版本；记录源码来源、许可证；在两平台复现原问题，确定要保留的现有工具契约。Linux 不设发行版专项，不安装新的发行版。
 2. **统一 dock + ask。** 先解决手机显示挤压、聊天查阅和默认/禁用超时；这也是后续 tasks/agents/jobs 的 UI 基础。
 3. **goal 状态修正。** 区分目标状态和运行状态，验证 retry、compact、reload 的事件顺序和续跑次数；从同一状态派生 footer 摘要，验证原生状态栏与 pi-starship 联动。
-4. **融合 jobs。** 先完成同进程 reload/resume 保活和 Windows/Linux 两种后端，再统一通知、运行/历史查询、输入输出、耗时与手动停止，并提供活动数量。
-5. **两级 tasks + 原生 agents 查看器。** 任务提供查询与批量增删改、父级完成比例和自动折叠；agents 保留执行、已结束记录和手动停止能力，改用原生消息渲染并提供活动数量。
-6. **可选持久 supervisor。** 仅在需要跨 Pi 进程重新 attach 时实施。
+4. **统一工具规范。** 按 [统一工具设计](tool-design.md) 改名已注册的 ask/goal 参数，抽取共享 ID、列表、读取、等待和停止 schema，实现共享 wait 的接口与通知撤销规则。
+5. **融合 jobs。** 按 [上游导入](upstream-import.md) 导入 pi-background-jobs 与 pi-interactive-shell 的保留文件；先完成同进程 reload/resume 保活和 Windows/Linux 两种后端，再统一通知、运行/历史查询、输入输出、读取搜索与截断、监视与委派、耗时与手动停止，并提供活动数量。
+6. **两级 tasks + agents。** 任务提供查询与批量增删改、父级完成比例和自动折叠；agents 导入上游执行与扩展能力，增加提问转交与进度读取，保留已结束记录和手动停止，改用原生消息渲染并提供活动数量。
+7. **可选持久 supervisor。** 仅在需要跨 Pi 进程重新 attach 时实施。
 
 必要验收场景：
 
@@ -53,5 +58,11 @@
 - 用离线 faux provider 或可控桩验证模型生命周期，避免验收依赖付费模型和网络偶发行为。
 - subagent Markdown、代码块、thinking、工具调用/结果、折叠和实时输出；阅读位置稳定。
 - agent/job 活动数量按当前可见集合去重；等待、排队、停止中、清理未确认和已结束状态的口径一致，status/dock 不重复汇总，旧绑定不能覆盖新摘要。
+- 已注册工具的名称、参数、默认值、互斥规则与返回首行符合统一规范；上游旧工具名不再注册。
+- job 默认读取的头尾与关键行、偏移分页、正则搜索与上下文、PTY 可见文本；大日志与中文跨页边界。
+- wait 的 any/all、超时、取消与通知撤销；goal_wait 的 waitFor 只在指定对象结算后继续。
+- child 向父 agent 提问、agent_send 回答/引导/恢复、等待中提前返回问题、提问超时与嵌套不越级。
+- monitor 三种策略的触发、冷却与生命周期通知；hands-free 更新预算、dispatch 静默结束、用户接管与交还。
+- 自定义 agent 类型、@handle、定时调度、agent_workflow 与跨扩展 RPC 的开关和基本流程。
 
 设计阶段的静态源码核对不替代以上运行验收。

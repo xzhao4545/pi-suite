@@ -27,7 +27,7 @@
 ## 关联计划
 
 - [用户询问](ask/index.md)
-- [子代理查看](agents.md)
+- [子代理查看](agents/viewer.md)
 - [执行任务](jobs/index.md)
 - [goal 状态栏联动](goal-status.md)
 - [公共状态栏摘要与活动数量](status.md)

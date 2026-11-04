@@ -8,7 +8,7 @@
 
 约束：agent 会话与一次执行分开；查看历史不启动模型；停止级联取消其嵌套 subagent 和所属后台 job，使用真实运行句柄并保留已产生内容。
 
-相关当前文档：[项目当前状态](../../current/index.md)。
+相关当前文档：[项目当前状态](../../../current/index.md)。
 
 ## 任务列表
 
@@ -25,10 +25,12 @@
 
 ## 关联计划
 
-- [原生会话查看器](agents.md)
-- [活动数量状态](status.md)
-- [job 查询与控制](jobs/history-control.md)
-- [目标调度](goal.md)
+- [原生会话查看器](viewer.md)
+- [主从交互](interaction.md)
+- [活动数量状态](../status.md)
+- [job 查询与控制](../jobs/history-control.md)
+- [目标调度](../goal.md)
+- [统一工具设计](../tool-design.md)
 
 ## 运行记录与历史
 
@@ -36,9 +38,9 @@ agents 详情提供“活动 / 排队 / 已结束 / 全部”筛选。默认集�
 
 每项展示 agent ID、名称/类型、任务摘要、ownerSession/parentAgent、本次执行标识、状态、开始/结束时间、运行耗时、用量、结果摘要与错误；完整输入、assistant 回复和工具结果在 child transcript 中按需查看。
 
-活动执行可以实时查看；已结束执行仍可以读取结果并打开同一个原生消息查看器，保留 Markdown、代码块、thinking 和工具调用/结果折叠。关闭查看器只退出阅读。详细渲染规则继续维护在 [agents](agents.md)，不另建文本版历史渲染器。
+活动执行可以实时查看；已结束执行仍可以读取结果并打开同一个原生消息查看器，保留 Markdown、代码块、thinking 和工具调用/结果折叠。关闭查看器只退出阅读。详细渲染规则继续维护在 [原生会话查看器](viewer.md)，不另建文本版历史渲染器。
 
-复用 Pi SessionManager 与上游 subagents:record 的会话条目、child session 文件引用，避免另建一套会话数据库。默认保存完整 child session 和最终记录；内存对象释放后仍能通过引用查历史。主动选择不持久化的 agent 明确标记历史范围，不能承诺 Pi 退出后还能查看未保存的 transcript。
+复用 Pi SessionManager 与上游 subagents:record 的会话条目（本包类型名为 pi-suite:agent-record）、child session 文件引用，避免另建一套会话数据库。默认保存完整 child session 和最终记录；内存对象释放后仍能通过引用查历史。主动选择不持久化的 agent 明确标记历史范围，不能承诺 Pi 退出后还能查看未保存的 transcript。上游的嵌套 child 默认不持久化，保留该默认值并在记录中标注。
 
 历史不因面板折叠、完成通知已读或运行数量归零而删除。列表和模型结果读取默认返回摘要，完整结果与 transcript 按需分页/滚动；长时间没有被查看的内存对象可以释放，保存的会话仍可打开。
 
@@ -48,17 +50,16 @@ agent ID 用于稳定引用可恢复的会话；同一 agent 同时只保留一�
 
 ## 查询和控制接口
 
-保留上游的 Agent、get_subagent_result、steer_subagent 能力；查询、查看和停止各走 AgentManager 与同一个 child 记录。工具名最终在统一注册时确定，不为同一操作再暴露多套参数。
+保留上游 Agent、get_subagent_result、steer_subagent 的能力，按 [统一工具设计](../tool-design.md) 改为 agent_start、agent_list、agent_read、agent_send、agent_stop 与共享 wait；查询、查看和停止各走 AgentManager 与同一个 child 记录，不为同一操作暴露多套参数。主从消息、提问转交和进度读取的完整规则见 [主从交互](interaction.md)。
 
 | 入口 | 契约 |
 | --- | --- |
-| agents 列表 / agent_list | state? 为 active/queued/finished/all，默认 active；scope? 为 session/workspace，默认 session；cursor?/limit? 分页；返回短 ID、执行标识、状态、摘要和耗时，不附整段对话 |
-| get_subagent_result | 按 agent ID 获取当前或最近执行状态/结果；按需指定执行标识查看前次结果，结果分页；已完成、失败、停止记录仍可查询 |
+| agent_list | 无 id 时 state? 为 active/queued/finished/all，默认 active；scope? 为 session/workspace，默认 session；cursor?/limit? 分页；返回短 ID、执行标识、状态、摘要和耗时，不附整段对话。有 id 时返回该 agent 的进度详情 |
+| agent_read | id、runId?；stream 为 result（结算后默认）或 transcript（运行中默认）；offset/limitBytes/search/context 与 job_read 相同；已完成、失败、停止记录仍可读取 |
 | agents 查看器 | 按记录打开活动或历史 child transcript，历史绑定该次执行结束位置；只有在底部自动跟随活动输出 |
-| agent_stop | agent ID；默认停止该 agent 的当前执行、所属嵌套执行及它们创建的活动 job；可按需指定执行标识限定到对应运行子树；返回 child/job 的真实停止进度，保留会话、结果和日志 |
-| steer_subagent / 显式 resume | 继续使用既有向当前执行发消息和恢复已结束会话的语义；查看历史与这些动作分开 |
-
-get_subagent_result 的 wait 仅控制这次查询是否等待；取消查询或等待超时不停止后台 child，需要明确调用停止接口。
+| agent_stop | id、runId?；默认停止该 agent 的当前执行、所属嵌套执行及它们创建的活动 job；指定 runId 时限定到对应运行子树；返回 child/job 的真实停止进度，保留会话、结果和日志 |
+| agent_send | 运行中为引导消息，提问等待中为回答，已结束为恢复会话并开始新一次执行；返回实际 action；查看历史与这些动作分开 |
+| wait | ids 可包含 agent ID；仅控制本次调用是否等待，超时或取消不停止后台 child，需要明确调用 agent_stop |
 
 用户在 agents 列表或查看器选择目标后可执行“停止”，入口明确提示同时停止其嵌套 subagent 和所属后台 job；可复用上游查看器已有的 x 再 x 操作，但必须在新查看器中明确提示并同步操作说明。阅读时按 Esc 退出、关闭 overlay 或停止主 agent 当前回复不能被误当作选择了该 child 的停止动作。
 

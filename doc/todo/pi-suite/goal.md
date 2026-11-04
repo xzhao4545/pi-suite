@@ -16,6 +16,7 @@
 - [x] 按宿主最终结算判断错误或继续
 - [x] 处理 compact/reload/会话绑定与目标恢复
 - [ ] 统一 goal/job/agent 的继续请求和去重：公共协调器与合并契约已实现，待 jobs/agents 接入后验收实际通知
+- [ ] 按 [统一工具设计](tool-design.md) 改用 camelCase 参数，goal_wait 增加 waitFor
 - [x] 保留显式暂停、Esc、完成和预算的控制语义
 - [ ] 从目标与调度状态派生单条状态栏摘要，兼容 Pi 原生 footer 与 pi-starship：摘要、原生 footer 与 Starship 状态模块已验证，完整布局见关联专项
 
@@ -27,7 +28,8 @@
 
 - [执行任务生命周期](jobs/session-lifecycle.md)
 - [等待用户](ask/interaction.md)
-- [子代理](agents.md)
+- [子代理](agents/index.md)
+- [统一工具设计](tool-design.md)
 - [goal 状态栏联动](goal-status.md)
 
 ## 7. goal：目标状态与一次模型运行分开
@@ -64,3 +66,7 @@ goal 是持久的工作目标；一个 turn 被 abort，不等于用户放弃 go
 持久化 goal ID、目标、进度、预算和用量，compact 后重新注入必要目标摘要。续跑使用稳定的请求标识/代次去重；一个 goal 在一次结算边界最多请求一个继续，不能由 goal、job 和 subagent 分别发三次 follow-up。
 
 goal 的常驻摘要默认通过 Pi 的 setStatus 发布，由原生 footer 或 pi-starship 渲染；目标与调度状态仍由本模块统一维护。dock 不重复显示同一摘要，完整目标、预算和错误信息按需查看。接口、状态映射和窄屏边界见 [goal 状态栏联动](goal-status.md)。
+
+## 等待指定执行对象
+
+goal_wait 的 waitFor 为 job/agent ID 数组。指定时目标保持 waiting_jobs，直到其中全部对象结算或单次期限到达再请求继续；其他对象的结算通知照常合并，但不提前结束这次等待。child 向父 agent 提问也结束等待，使主 agent 能够回答。省略 waitFor 时保持现有语义：任一外部唤醒或期限恢复工作。waitFor 中不存在或已结算的 ID 在调用时明确报告，已全部结算时不进入等待。

@@ -2,7 +2,7 @@
 
 目标：将已核对的发布包信息转为可验证的导入基线。
 
-当前状态：Windows 实际 Pi 1.5.0 与 Linux 同版本 SDK 已核对；七个参考发布包的来源元数据已登记，ask 契约与许可证已落地。其他模块的实际问题复现及工具保留边界待实施。
+当前状态：Windows 实际 Pi 1.5.0 与 Linux 同版本 SDK 已核对；七个参考发布包的来源元数据已登记，ask 契约与许可证已落地。tasks、jobs、agents 的保留能力与按文件处置已核对并记录在 [上游导入](upstream-import.md)，工具契约统一见 [统一工具设计](tool-design.md)。实际问题复现待实施。
 
 影响范围：六个扩展来源、Pi 宿主版本和平台复现。
 
@@ -15,7 +15,7 @@
 - [x] 核对实际宿主版本和依赖作用域
 - [ ] 记录导入提交或 tarball integrity 与许可证
 - [ ] 在 Windows 和 Linux 复现相关问题
-- [ ] 确认各模块需要保留的工具契约和现有能力
+- [x] 确认各模块需要保留的工具契约和现有能力
 
 ## 验收方式
 
@@ -24,6 +24,8 @@
 ## 关联计划
 
 - [架构与发布](architecture.md)
+- [上游导入](upstream-import.md)
+- [统一工具设计](tool-design.md)
 - [上游来源登记](../../../third-party/UPSTREAM.md)
 
 ## 2. 已核对的上游现状
@@ -33,11 +35,11 @@
 | 扩展 | 核对版本 | 现有能力与缺口 |
 | --- | --- | --- |
 | `pi-ask-user` | 0.17.2 | 已有 `displayMode: inline`、默认 Alt+O 隐藏/恢复 overlay、单次 `timeout`。超时默认不启用；取消和超时均走 null；仍需统一高度和更清晰的超时语义。 |
-| `@tintinweb/pi-tasks` | 0.9.1 | 任务无 `parentId`。面板默认最多 10 项，按顶部/底部截取；只处理终端列宽，缺少按终端行数及其他面板占用调整的逻辑。 |
-| `pi-interactive-shell` | 0.18.0 | 已通过进程内全局 coordinator 保留 `/reload` 的活动任务；其他 `session_shutdown` 原因仍调用 `killAll()`。已有 PTY、交互输入、后台查看和监控，可选择保留需要的能力。 |
+| `@tintinweb/pi-tasks` | 0.9.1 | 任务无 `parentId`。面板默认最多 10 项，按顶部/底部截取；只处理终端列宽，缺少按终端行数及其他面板占用调整的逻辑。已有会话级存储锁、blockedBy 双向边、未更新提醒与执行任务的 subagent 关联；auto-clear 按轮次删除已完成任务。 |
+| `pi-interactive-shell` | 0.18.0 | 已通过进程内全局 coordinator 保留 `/reload` 的活动任务；其他 `session_shutdown` 原因仍调用 `killAll()`。已有 PTY、交互输入、后台查看和监控，可选择保留需要的能力。上游自述 macOS 实测、Linux 实验性；Windows 只终止 PTY 根进程，没有进程树停止。输出读取只有行数、字符上限和增量读取，没有搜索。 |
 | `@narumitw/pi-goal` | 0.54.15 | 已有 retry/compact 恢复逻辑，但在 `agent_end` 中仍将 assistant 的 `stopReason: aborted` 直接转为 goal paused。已有 setStatus 状态发布，稳定键为 goal。 |
-| `@tintinweb/pi-subagents` | 0.23.0 | 会话查看器已支持 assistant Markdown，默认开启；工具调用仍主要显示名称、工具结果主要按文本处理，并非主 agent 的完整消息组件。fleet 固定最多 5 个 agent 行，另有提示、main、空白和溢出行。已有 subagents 状态键、已结束结果持久条目及查看器 x 再 x 停止；完整历史取决于 child session 是否持久化。 |
-| `pi-background-jobs` | 0.1.3 | 已支持同一 Pi 进程内跨 reload/new/resume/fork 存活；仅 quit 执行退出清理。主要面向 Windows 的非交互任务。运行条仍是每个任务一行。已有运行/历史状态查询、stdout/stderr 分页、起止时间与停止/清理证据；交互输入需与 interactive-shell 融合。 |
+| `@tintinweb/pi-subagents` | 0.23.0 | 会话查看器已支持 assistant Markdown，默认开启；工具调用仍主要显示名称、工具结果主要按文本处理，并非主 agent 的完整消息组件。fleet 固定最多 5 个 agent 行，另有提示、main、空白和溢出行。已有 subagents 状态键、已结束结果持久条目及查看器 x 再 x 停止；完整历史取决于 child session 是否持久化。child 会话没有 UI，也没有向父 agent 或用户提问的工具，steer 是唯一父到子的通道；get_subagent_result 不分页。 |
+| `pi-background-jobs` | 0.1.3 | 已支持同一 Pi 进程内跨 reload/new/resume/fork 存活；仅 quit 执行退出清理。主要面向 Windows 的非交互任务。运行条仍是每个任务一行。已有运行/历史状态查询、stdout/stderr 分页、起止时间与停止/清理证据、any/all 等待；交互输入需与 interactive-shell 融合。停止与清理只支持 Windows，默认工作区独占。 |
 
 当前 npm 新作用域 Pi 核对版本是 `@earendil-works/pi-coding-agent@1.5.0`。旧 `@mariozechner/*` 和新作用域不能仅凭“latest”视作相同 API；实现时记录实际宿主版本和依赖作用域，先支持一个经验证的基线。
 
