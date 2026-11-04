@@ -19,8 +19,11 @@ export async function host(options: {
   contextWindow?: number; reserveTokens?: number;
   extend?: (pi: ExtensionAPI) => void;
   answer?: "confirm" | "cancel";
+  tools?: string[];
 } = {}) {
   const root = options.root ?? mkdtempSync(join(tmpdir(), "pi-suite-goal-"));
+  // The extension resolves its agent dir from the environment; keep it on the session's dir.
+  process.env.PI_CODING_AGENT_DIR = root;
   const faux = fauxProvider({ provider: `suite-test-${randomUUID()}`, models: [{ id: "offline", contextWindow: options.contextWindow }] });
   const settingsManager = SettingsManager.inMemory({
     retry: { enabled: options.retry ?? false, maxRetries: 1, baseDelayMs: 1 },
@@ -34,7 +37,7 @@ export async function host(options: {
   const { session, extensionsResult } = await createAgentSession({ cwd: root, agentDir: root,
     settingsManager, resourceLoader, sessionStartEvent: options.sessionStartEvent,
     sessionManager: options.sessionManager ?? (options.persisted ? SessionManager.create(root, join(root, "sessions")) : SessionManager.inMemory(root)),
-    model: faux.getModel(), tools: ["ask_user", "goal_complete", "goal_blocked", "goal_wait"] });
+    model: faux.getModel(), tools: ["ask_user", "goal_complete", "goal_blocked", "goal_wait", ...options.tools ?? []] });
   assert.deepEqual(extensionsResult.errors, []);
   const statuses = new Map<string, string | undefined>();
   const writes: (string | undefined)[] = [];

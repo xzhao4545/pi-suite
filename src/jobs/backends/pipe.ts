@@ -1,18 +1,15 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+// Adapted from pi-background-jobs 0.1.3 src/process.ts (MIT, third-party/licenses/pi-background-jobs.txt).
+// pi-suite changes: stdin stays open for job_write; POSIX children lead their own process group;
+// the result is the backend-neutral Tracked handle.
+import { spawn } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import type { FileHandle } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
-import { getShellConfig } from '@earendil-works/pi-coding-agent';
-import { captureIdentity, stopWindows, stopWindowsSync } from './windows-process.ts';
-import type { ProcessIdentity, ExitObservation, CleanupEvidence, StopReason } from './types.ts';
+import { performance } from 'node:perf_hooks';
+import type { ResolvedShellConfig } from '../terminal/shell.ts';
+import { trackIdentity, type Tracked } from './process.ts';
+import type { ExitObservation } from '../types.ts';
 
-export type RunningCommand = {
-  child: ChildProcess; spawnedAt: number; exited: Promise<ExitObservation>;
-  identity: Promise<ProcessIdentity | undefined>; knownResidual: boolean;
-  retainedScope?: ProcessIdentity[]; // Earlier observed identities veto unsafe retry confirmation; never used for killing.
-  exitObserved?: ExitObservation; rootIdentity?: ProcessIdentity; resourceError?: string;
-  cleanupDeadline?: number; cleanupSignal?: AbortSignal; identityController?: AbortController;
-};
 async function openOutput(path: string): Promise<FileHandle> {
   const target = resolve(path);
   for (let current = target; ; current = dirname(current)) {
@@ -33,54 +30,45 @@ async function openOutput(path: string): Promise<FileHandle> {
     return file;
   } catch (error) { await file.close().catch(() => {}); throw error; }
 }
-export async function launchCommand(input: { command: string; cwd: string; stdoutPath: string; stderrPath: string; shellPath?: string; signal?: AbortSignal; onSpawned?: (run: RunningCommand) => void }): Promise<RunningCommand> {
-  const shell = getShellConfig(input.shellPath);
-  // Windows append-only handles fail in MSYS Bash builtins.
+
+export async function launchPipe(input: { command: string; cwd: string; shell: ResolvedShellConfig; stdoutPath: string; stderrPath: string }): Promise<Tracked> {
+  // Windows append-only handles fail in MSYS Bash builtins, so outputs are plain verified files.
   const stdout = await openOutput(input.stdoutPath);
   let stderr: FileHandle;
   try { stderr = await openOutput(input.stderrPath); } catch (error) { await stdout.close().catch(() => {}); throw error; }
-  let transferred: RunningCommand | undefined;
   try {
-    if (input.signal?.aborted) throw new DOMException('Launch aborted before spawn', 'AbortError');
-    const spawnedAt = Date.now();
-    const byStdin = shell.commandTransport === 'stdin';
-    const child = spawn(shell.shell, byStdin ? shell.args : [...shell.args, input.command], {
-      cwd: input.cwd, env: { ...process.env }, windowsHide: true, detached: false,
-      stdio: [byStdin ? 'pipe' : 'ignore', stdout.fd, stderr.fd],
+    const byStdin = input.shell.commandTransport === 'stdin';
+    const child = spawn(input.shell.shell, byStdin ? [...input.shell.args] : [...input.shell.args, input.command], {
+      cwd: input.cwd, env: { ...process.env }, windowsHide: true, detached: process.platform !== 'win32',
+      stdio: ['pipe', stdout.fd, stderr.fd],
     });
-    let resolveExit!: (exit: ExitObservation) => void;
-    const exited = new Promise<ExitObservation>(resolve => { resolveExit = resolve; });
-    const run: RunningCommand = { child, spawnedAt, exited, identity: Promise.resolve(undefined), knownResidual: false };
+    const exit = Promise.withResolvers<ExitObservation>();
+    const started = Promise.withResolvers<void>();
     let inputError: string | undefined;
+    const run: Tracked = {
+      pid: 0, spawnedAt: Date.now(), startedMonotonic: performance.now(), exited: exit.promise,
+      identity: Promise.resolve(undefined), knownResidual: false,
+      write(data) { if (!child.stdin?.writable) throw new Error('Job no longer accepts input'); child.stdin.write(data); },
+      endInput() { child.stdin?.end(); },
+      dispose() { child.stdin?.destroy(); },
+    };
     const observe = (code: number | null, signal: string | null, error?: string) => {
       if (run.exitObserved) return;
       run.exitObserved = { code, signal, ...(error || inputError ? { error: error ?? inputError } : {}) };
-      resolveExit(run.exitObserved);
+      exit.resolve(run.exitObserved);
     };
     child.once('exit', (code, signal) => observe(code, signal));
-    child.once('error', error => observe(null, null, String(error)));
-    const started = new Promise<void>((resolve, reject) => {
-      child.once('spawn', resolve); child.once('error', reject);
-    });
-    child.stdin?.once('error', error => { inputError = String(error); });
+    child.once('error', error => { observe(null, null, String(error)); started.reject(error); });
+    child.once('spawn', () => started.resolve());
+    child.stdin?.on('error', error => { inputError = String(error); });
+    // Legacy WSL bash reads its script from stdin; such shells cannot also receive job input.
     if (byStdin) child.stdin?.end(input.command);
-    await started;
-    // Capture only a currently active root, never reclaim its PID after exit.
-    const latestStart = Date.now();
-    transferred = run;
-    input.onSpawned?.(run);
-    // Ownership callback supplies any already-shrunk cleanup budget before baseline query.
-    run.identity = captureIdentity(run, latestStart);
+    await started.promise;
+    run.pid = child.pid!;
+    trackIdentity(run);
     return run;
   } finally {
-    const closed = await Promise.allSettled([stdout.close(), stderr.close()]);
-    const errors = closed.filter(item => item.status === 'rejected').map(item => String(item.reason));
-    if (transferred && errors.length) transferred.resourceError = errors.join('; ');
+    // The child holds its own descriptors; the parent copies are no longer needed.
+    await Promise.allSettled([stdout.close(), stderr.close()]);
   }
-}
-export async function stopCommand(run: RunningCommand, _reason: StopReason, deadline: number): Promise<CleanupEvidence> {
-  return stopWindows(run, deadline);
-}
-export function stopCommandSync(run: RunningCommand, _reason: StopReason, deadline: number): CleanupEvidence {
-  return stopWindowsSync(run, deadline);
 }

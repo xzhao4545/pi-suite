@@ -10,7 +10,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-transform-types --test tests/ask/*.test.ts tests/runtime/*.test.ts tests/goal/*.test.ts"
+    "test": "node --experimental-transform-types --test tests/ask/*.test.ts tests/runtime/*.test.ts tests/goal/*.test.ts tests/jobs/*.test.ts"
   },
   "keywords": [
     "pi-package"
@@ -33,5 +33,10 @@
     "@types/node": "24.19.2",
     "typebox": "1.3.27",
     "typescript": "7.0.2"
+  },
+  "dependencies": {
+    "@xterm/addon-serialize": "0.13.0",
+    "@xterm/headless": "5.5.0",
+    "zigpty": "0.1.6"
   }
 }

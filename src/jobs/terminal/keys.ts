@@ -1,3 +1,5 @@
+// Imported from pi-interactive-shell 0.18.0 key-encoding.ts (MIT, third-party/licenses/pi-interactive-shell.txt).
+// pi-suite change: the Jev semantic-action encoder is removed with semantic supervision.
 /**
  * Terminal key encoding utilities for translating named keys and modifiers
  * into terminal escape sequences.
@@ -246,50 +248,6 @@ function editDistance(a: string, b: string): number {
 		prev = row;
 	}
 	return prev[b.length];
-}
-
-const SEMANTIC_DANGEROUS_KEYS = new Set([
-	"ctrl+c", "c-c", "ctrl+d", "c-d", "ctrl+q", "c-q", "ctrl+s", "c-s", "ctrl+z", "c-z", "ctrl+\\", "c-\\",
-]);
-const FORBIDDEN_SEMANTIC_BYTES = new Set([0x03, 0x04, 0x11, 0x13, 0x1a, 0x1c]);
-
-/** Strict, fail-closed named-key encoding for pre-authorized semantic actions. */
-export function encodeSemanticActionKeys(keys: readonly string[]): string {
-	let result = "";
-	for (const raw of keys) {
-		if (typeof raw !== "string" || raw !== raw.trim() || !raw) throw new Error("Semantic action keys must be non-empty canonical names");
-		const key = raw.toLowerCase();
-		if (SEMANTIC_DANGEROUS_KEYS.has(key)) throw new Error(`Dangerous semantic action key: ${raw}`);
-		if (!isKnownSemanticKey(key)) throw new Error(`Unknown semantic action key: ${raw}`);
-		const encoded = encodeKeyToken(key);
-		if (!encoded || encoded === raw) throw new Error(`Unknown semantic action key: ${raw}`);
-		if ([...encoded].some((char) => FORBIDDEN_SEMANTIC_BYTES.has(char.charCodeAt(0)))) throw new Error("Dangerous semantic action key");
-		result += encoded;
-	}
-	return result;
-}
-
-function isKnownSemanticKey(key: string): boolean {
-	if (Object.hasOwn(NAMED_KEYS, key) || Object.hasOwn(CTRL_KEYS, key)) return true;
-	let rest = key;
-	let ctrl = false; let alt = false; let shift = false;
-	while (rest.length > 2) {
-		if (rest.startsWith("ctrl+") || rest.startsWith("ctrl-")) { ctrl = true; rest = rest.slice(5); }
-		else if (rest.startsWith("alt+") || rest.startsWith("alt-")) { alt = true; rest = rest.slice(4); }
-		else if (rest.startsWith("shift+") || rest.startsWith("shift-")) { shift = true; rest = rest.slice(6); }
-		else if (rest.startsWith("c-")) { ctrl = true; rest = rest.slice(2); }
-		else if (rest.startsWith("m-")) { alt = true; rest = rest.slice(2); }
-		else if (rest.startsWith("s-")) { shift = true; rest = rest.slice(2); }
-		else break;
-	}
-	if (!(ctrl || alt || shift)) return false;
-	if (rest.length === 1) {
-		if (shift && !/[a-z]/.test(rest)) return false;
-		if (ctrl && !Object.hasOwn(CTRL_KEYS, `ctrl+${rest}`)) return false;
-		return true;
-	}
-	if (shift && rest === "tab") return true;
-	return Object.hasOwn(NAMED_KEYS, rest) && (MODIFIABLE_KEYS.has(rest) || alt);
 }
 
 export type InputSpec = string | { text?: string; keys?: string[]; paste?: string; hex?: string[] };

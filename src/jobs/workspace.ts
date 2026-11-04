@@ -1,3 +1,5 @@
+// Imported from pi-background-jobs 0.1.3 src/workspace.ts (MIT, third-party/licenses/pi-background-jobs.txt).
+// The workspace is the git toplevel when available so history follows the repository, not the subdirectory.
 import { realpath, stat } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';

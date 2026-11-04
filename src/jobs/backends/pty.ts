@@ -1,3 +1,6 @@
+// Imported from pi-interactive-shell 0.18.0 pty-process.ts (MIT, third-party/licenses/pi-interactive-shell.txt).
+// Linux uses openpty plus a process-group pin so the whole PTY workload can be signalled as a group;
+// other platforms use zigpty spawn (ConPTY on Windows). pi-suite stops Windows trees via windows-tree.
 import { closeSync, openSync, write } from "node:fs";
 import { constants as osConstants } from "node:os";
 import { spawn as spawnChild, type ChildProcess } from "node:child_process";
@@ -406,29 +409,26 @@ class LinuxPtyProcess implements PtyProcess {
 	}
 
 	private writeAll(bytes: Buffer): Promise<void> {
-		return new Promise((resolve, reject) => {
-			let offset = 0;
-			const next = (): void => {
-				if (this.closed || this.outputFinished) {
-					resolve();
+		const done = Promise.withResolvers<void>();
+		let offset = 0;
+		const next = (): void => {
+			if (this.closed || this.outputFinished) {
+				done.resolve();
+				return;
+			}
+			write(this.master, bytes, offset, bytes.length - offset, null, (error, written) => {
+				if (error) {
+					if (error.code === "EAGAIN" || error.code === "EWOULDBLOCK") setImmediate(next);
+					else done.reject(error);
 					return;
 				}
-				write(this.master, bytes, offset, bytes.length - offset, null, (error, written) => {
-					if (error) {
-						if (error.code === "EAGAIN" || error.code === "EWOULDBLOCK") {
-							setImmediate(next);
-							return;
-						}
-						reject(error);
-						return;
-					}
-					offset += written;
-					if (offset === bytes.length) resolve();
-					else setImmediate(next);
-				});
-			};
-			next();
-		});
+				offset += written;
+				if (offset === bytes.length) done.resolve();
+				else setImmediate(next);
+			});
+		};
+		next();
+		return done.promise;
 	}
 
 	private startNextResize(): void {
@@ -476,7 +476,9 @@ class LinuxPtyProcess implements PtyProcess {
 
 	private waitForResize(): Promise<void> {
 		if (this.resizeProcess === null && this.pendingResize === null) return Promise.resolve();
-		return new Promise((resolve) => this.resizeWaiters.push(resolve));
+		const done = Promise.withResolvers<void>();
+		this.resizeWaiters.push(done.resolve);
+		return done.promise;
 	}
 
 	private resolveResizeWaiters(): void {

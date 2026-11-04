@@ -1,726 +1,125 @@
-import { stripVTControlCharacters } from "node:util";
-import type { IBufferCell, Terminal as XtermTerminal } from "@xterm/headless";
-import xterm from "@xterm/headless";
-import { SerializeAddon } from "@xterm/addon-serialize";
-import { sliceLogOutput, trimRawOutput } from "./pty-log.ts";
-import {
-	buildCursorPositionResponse,
-	buildPrimaryDeviceAttributesResponse,
-	splitAroundDeviceQueries,
-} from "./pty-protocol.ts";
-import type { ResolvedShellConfig } from "./shell-resolution.ts";
-import { createPtyProcess, type PtyProcess } from "./pty-process.ts";
-import type { OutputCapture } from "./output-source-store.ts";
-
-const Terminal = xterm.Terminal;
-
-// Regex patterns for sanitizing terminal output (used by sanitizeLine for viewport rendering)
-const OSC_REGEX = /\x1b\][^\x07]*(?:\x07|\x1b\\)/g;
-const APC_REGEX = /\x1b_[^\x07\x1b]*(?:\x07|\x1b\\)/g;
-const DCS_REGEX = /\x1bP[^\x07\x1b]*(?:\x07|\x1b\\)/g;
-const CSI_REGEX = /\x1b\[[0-9;?]*[A-Za-z]/g;
-const ESC_SINGLE_REGEX = /\x1b[@-_]/g;
-const CONTROL_REGEX = /[\x00-\x08\x0B\x0C\x0E-\x1A\x1C-\x1F\x7F]/g;
-
-
-function sanitizeLine(line: string): string {
-	let out = line;
-	if (out.includes("\u001b")) {
-		out = out.replace(OSC_REGEX, "");
-		out = out.replace(APC_REGEX, "");
-		out = out.replace(DCS_REGEX, "");
-		out = out.replace(CSI_REGEX, (match) => (match.endsWith("m") ? match : ""));
-		out = out.replace(ESC_SINGLE_REGEX, "");
-	}
-	if (out.includes("\t")) {
-		out = out.replace(/\t/g, "   ");
-	}
-	if (out.includes("\r")) {
-		out = out.replace(/\r/g, "");
-	}
-	out = out.replace(CONTROL_REGEX, "");
-	return out;
-}
-
-type CellStyle = {
-	bold: boolean;
-	dim: boolean;
-	italic: boolean;
-	underline: boolean;
-	inverse: boolean;
-	invisible: boolean;
-	strikethrough: boolean;
-	fgMode: "default" | "palette" | "rgb";
-	fg: number;
-	bgMode: "default" | "palette" | "rgb";
-	bg: number;
-};
-
-function styleKey(style: CellStyle): string {
-	return [
-		style.bold ? "b" : "-",
-		style.dim ? "d" : "-",
-		style.italic ? "i" : "-",
-		style.underline ? "u" : "-",
-		style.inverse ? "v" : "-",
-		style.invisible ? "x" : "-",
-		style.strikethrough ? "s" : "-",
-		`fg:${style.fgMode}:${style.fg}`,
-		`bg:${style.bgMode}:${style.bg}`,
-	].join("");
-}
-
-function rgbToSgr(isFg: boolean, hex: number): string {
-	const r = (hex >> 16) & 0xff;
-	const g = (hex >> 8) & 0xff;
-	const b = hex & 0xff;
-	return isFg ? `38;2;${r};${g};${b}` : `48;2;${r};${g};${b}`;
-}
-
-function paletteToSgr(isFg: boolean, idx: number): string {
-	return isFg ? `38;5;${idx}` : `48;5;${idx}`;
-}
-
-function sgrForStyle(style: CellStyle): string {
-	const parts: string[] = ["0"];
-	if (style.bold) parts.push("1");
-	if (style.dim) parts.push("2");
-	if (style.italic) parts.push("3");
-	if (style.underline) parts.push("4");
-	if (style.inverse) parts.push("7");
-	if (style.invisible) parts.push("8");
-	if (style.strikethrough) parts.push("9");
-
-	if (style.fgMode === "rgb") parts.push(rgbToSgr(true, style.fg));
-	else if (style.fgMode === "palette") parts.push(paletteToSgr(true, style.fg));
-
-	if (style.bgMode === "rgb") parts.push(rgbToSgr(false, style.bg));
-	else if (style.bgMode === "palette") parts.push(paletteToSgr(false, style.bg));
-
-	return `\u001b[${parts.join(";")}m`;
-}
-
-function normalizePaletteColor(mode: "default" | "palette" | "rgb", value: number): { mode: "default" | "palette" | "rgb"; value: number } {
-	if (mode !== "palette") return { mode, value };
-	// xterm uses special palette values (>= 256) to represent defaults/specials; do not emit invalid 38;5;N codes.
-	if (value < 0 || value > 255) {
-		return { mode: "default", value: 0 };
-	}
-	return { mode: "palette", value };
-}
+// Adapted from pi-interactive-shell 0.18.0 pty-session.ts (MIT, third-party/licenses/pi-interactive-shell.txt).
+// pi-suite changes: output goes to the job's disk log instead of an in-memory raw buffer;
+// process-tree stops are owned by the job backend, so this class only signals for disposal.
+import xterm from '@xterm/headless';
+import type { Terminal as XtermTerminal } from '@xterm/headless';
+import { buildCursorPositionResponse, buildPrimaryDeviceAttributesResponse, splitAroundDeviceQueries } from './protocol.ts';
+import { renderLineFromCells, sanitizeLine } from './render.ts';
+import type { ResolvedShellConfig } from './shell.ts';
+import { createPtyProcess, type PtyProcess } from '../backends/pty.ts';
 
 export interface PtySessionOptions {
-	command: string;
-	shellConfig: ResolvedShellConfig;
-	cwd?: string;
-	env?: Record<string, string | undefined>;
-	cols?: number;
-	rows?: number;
-	scrollback?: number;
-	ansiReemit?: boolean;
-	outputCapture?: OutputCapture;
-}
-
-export interface PtySessionEvents {
-	onData?: (data: string) => void;
-	onExit?: (exitCode: number, signal?: number) => void;
-}
-
-// Simple write queue to ensure ordered writes to terminal
-class WriteQueue {
-	private queue = Promise.resolve();
-
-	enqueue(fn: () => Promise<void> | void): void {
-		this.queue = this.queue.then(() => fn()).catch((err) => {
-			console.error("WriteQueue error:", err);
-		});
-	}
-
-	async drain(): Promise<void> {
-		await this.queue;
-	}
+  command: string; shellConfig: ResolvedShellConfig; cwd: string;
+  cols?: number; rows?: number; scrollback?: number;
+  /** Receives program output in order, before listeners; the job log sink. */
+  sink: (data: string) => void;
 }
 
 export class PtyTerminalSession {
-	private ptyProcess: PtyProcess;
-	private xterm: XtermTerminal;
-	private serializer: SerializeAddon | null = null;
-	private _exited = false;
-	private _exitCode: number | null = null;
-	private _signal: number | undefined;
-	private _completing = false;
-	private _disposed = false;
-	private scrollOffset = 0;
-	private followBottom = true; // Auto-scroll to bottom when new data arrives
-
-	// Raw output buffer for incremental streaming
-	private rawOutput = "";
-	private lastStreamPosition = 0;
-
-	// Write queue for ordered terminal writes
-	private writeQueue = new WriteQueue();
-
-	private dataHandler: ((data: string) => void) | undefined;
-	private exitHandler: ((exitCode: number, signal?: number) => void) | undefined;
-	private additionalDataListeners: Array<(data: string) => void> = [];
-	private additionalExitListeners: Array<(exitCode: number, signal?: number) => void> = [];
-	private visualChangeListeners: Array<() => void> = [];
-	private _visualGeneration = 0;
-	private _inputGeneration = 0;
-	private forceKillTimer: ReturnType<typeof setTimeout> | null = null;
-	private outputCapture: OutputCapture | undefined;
-
-	// Trim raw output buffer if it exceeds max size
-	private trimRawOutputIfNeeded(): void {
-		const trimmed = trimRawOutput(this.rawOutput, this.lastStreamPosition);
-		this.rawOutput = trimmed.rawOutput;
-		this.lastStreamPosition = trimmed.lastStreamPosition;
-	}
-
-	constructor(options: PtySessionOptions, events: PtySessionEvents = {}) {
-		if (!options.shellConfig) {
-			throw new Error("A resolved Pi shell configuration is required before starting a PTY session.");
-		}
-
-		const {
-			command,
-			shellConfig,
-			cwd = process.cwd(),
-			env,
-			cols = 80,
-			rows = 24,
-			scrollback = 5000,
-			ansiReemit = true,
-			outputCapture,
-		} = options;
-		this.outputCapture = outputCapture;
-
-		this.dataHandler = events.onData;
-		this.exitHandler = events.onExit;
-
-		this.xterm = new Terminal({ cols, rows, scrollback, allowProposedApi: true, convertEol: true });
-		if (ansiReemit) {
-			this.serializer = new SerializeAddon();
-			this.xterm.loadAddon(this.serializer);
-		}
-
-		const shellArgs = [...shellConfig.args, command];
-
-		const mergedEnvRaw = env ? { ...process.env, ...env } : { ...process.env };
-		if (!mergedEnvRaw.TERM) mergedEnvRaw.TERM = "xterm-256color";
-		const mergedEnv: Record<string, string> = {};
-		for (const [key, value] of Object.entries(mergedEnvRaw)) {
-			if (value !== undefined) mergedEnv[key] = value;
-		}
-
-		this.ptyProcess = createPtyProcess(shellConfig.shell, shellArgs, {
-			name: "xterm-256color",
-			cols,
-			rows,
-			cwd,
-			env: mergedEnv,
-		});
-
-		this.ptyProcess.onData((data) => {
-			if (this._disposed) return;
-			const chunk = typeof data === "string" ? data : data.toString("utf8");
-			// Handle terminal queries in order: write preceding text to xterm, then respond.
-			const { segments, trailingText, hasQuery } = splitAroundDeviceQueries(chunk);
-
-			if (!hasQuery) {
-				this.writeQueue.enqueue(async () => {
-					if (this._disposed) return;
-					this.appendCapturedText(chunk);
-					this.rawOutput += chunk;
-					this.trimRawOutputIfNeeded();
-					await new Promise<void>((resolve) => {
-						this.xterm.write(chunk, () => resolve());
-					});
-					this.bumpVisualGeneration();
-					if (!this._disposed) this.notifyDataListeners(chunk);
-				});
-			} else {
-				for (const segment of segments) {
-					this.writeQueue.enqueue(async () => {
-						if (this._disposed) return;
-						if (segment.text) {
-							this.appendCapturedText(segment.text);
-							this.rawOutput += segment.text;
-							this.trimRawOutputIfNeeded();
-							await new Promise<void>((resolve) => {
-								this.xterm.write(segment.text, () => resolve());
-							});
-							this.bumpVisualGeneration();
-							if (!this._disposed) this.notifyDataListeners(segment.text);
-						}
-						if (this._disposed) return;
-						if (segment.queryAfter === "cursor-position") {
-							const buffer = this.xterm.buffer.active;
-							this.ptyProcess.write(buildCursorPositionResponse(buffer.cursorY + 1, buffer.cursorX + 1));
-						} else {
-							this.ptyProcess.write(buildPrimaryDeviceAttributesResponse());
-						}
-					});
-				}
-				if (trailingText) {
-					this.writeQueue.enqueue(async () => {
-						if (this._disposed) return;
-						this.appendCapturedText(trailingText);
-						this.rawOutput += trailingText;
-						this.trimRawOutputIfNeeded();
-						await new Promise<void>((resolve) => {
-							this.xterm.write(trailingText, () => resolve());
-						});
-						this.bumpVisualGeneration();
-						if (!this._disposed) this.notifyDataListeners(trailingText);
-					});
-				}
-			}
-		});
-
-		this.ptyProcess.onExit(({ exitCode, signal }) => {
-			if (this._disposed || this._completing) return;
-			this._completing = true;
-			this.clearForceKillTimer();
-
-			// Append the exit message only after the backend has delivered all PTY output.
-			const exitMsg = `\n[Process exited with code ${exitCode}${signal ? ` (signal: ${signal})` : ""}]\n`;
-			this.writeQueue.enqueue(async () => {
-				if (this._disposed) return;
-				this.rawOutput += exitMsg;
-				await new Promise<void>((resolve) => {
-					this.xterm.write(exitMsg, () => resolve());
-				});
-				this.bumpVisualGeneration();
-			});
-
-			// Public completion follows both PTY output completion and xterm rendering.
-			this.writeQueue.drain().then(async () => {
-				if (this._disposed) return;
-				try { await this.outputCapture?.finalize(); }
-				catch { /* capture failure never changes PTY completion */ }
-				this._exited = true;
-				this._exitCode = exitCode;
-				this._signal = signal;
-				this.notifyExitListeners(exitCode, signal);
-			});
-		});
-	}
-
-	private appendCapturedText(text: string): void {
-		try { this.outputCapture?.appendProcessText(text); }
-		catch { /* capture failure never changes terminal output */ }
-	}
-
-	markOutputCaptureIncomplete(reason: string): void {
-		try { void this.outputCapture?.markIncomplete(reason).catch(() => {}); }
-		catch { /* capture failure never changes lifecycle */ }
-	}
-
-	setEventHandlers(events: PtySessionEvents): void {
-		if (this._disposed) return;
-		this.dataHandler = events.onData;
-		this.exitHandler = events.onExit;
-	}
-
-	addDataListener(cb: (data: string) => void): () => void {
-		if (this._disposed) return () => {};
-		this.additionalDataListeners.push(cb);
-		return () => {
-			const idx = this.additionalDataListeners.indexOf(cb);
-			if (idx >= 0) this.additionalDataListeners.splice(idx, 1);
-		};
-	}
-
-	addExitListener(cb: (exitCode: number, signal?: number) => void): () => void {
-		if (this._disposed) return () => {};
-		this.additionalExitListeners.push(cb);
-		return () => {
-			const idx = this.additionalExitListeners.indexOf(cb);
-			if (idx >= 0) this.additionalExitListeners.splice(idx, 1);
-		};
-	}
-
-	addVisualChangeListener(cb: () => void): () => void {
-		if (this._disposed) return () => {};
-		this.visualChangeListeners.push(cb);
-		return () => {
-			const idx = this.visualChangeListeners.indexOf(cb);
-			if (idx >= 0) this.visualChangeListeners.splice(idx, 1);
-		};
-	}
-
-	private bumpVisualGeneration(): void {
-		this._visualGeneration += 1;
-		for (const listener of [...this.visualChangeListeners]) listener();
-	}
-
-	private notifyDataListeners(data: string): void {
-		this.dataHandler?.(data);
-		// Copy array to avoid issues if a listener unsubscribes during iteration
-		for (const listener of [...this.additionalDataListeners]) {
-			listener(data);
-		}
-	}
-
-	private notifyExitListeners(exitCode: number, signal?: number): void {
-		this.exitHandler?.(exitCode, signal);
-		// Copy array to avoid issues if a listener unsubscribes during iteration
-		for (const listener of [...this.additionalExitListeners]) {
-			listener(exitCode, signal);
-		}
-	}
-
-	private clearForceKillTimer(): void {
-		if (this.forceKillTimer) {
-			clearTimeout(this.forceKillTimer);
-			this.forceKillTimer = null;
-		}
-	}
-
-	get exited(): boolean {
-		return this._exited;
-	}
-	get exitCode(): number | null {
-		return this._exitCode;
-	}
-	get signal(): number | undefined {
-		return this._signal;
-	}
-	get pid(): number {
-		return this.ptyProcess.pid;
-	}
-	get cols(): number {
-		return this.xterm.cols;
-	}
-	get rows(): number {
-		return this.xterm.rows;
-	}
-	get visualGeneration(): number {
-		return this._visualGeneration;
-	}
-	/** Counts writes from the user, Pi, or a semantic action; automatic terminal query replies are excluded. */
-	get inputGeneration(): number {
-		return this._inputGeneration;
-	}
-
-	write(data: string): void {
-		if (!this._disposed && !this._completing) {
-			this.ptyProcess.write(data);
-			this._inputGeneration += 1;
-		}
-	}
-
-	/** Atomic active-state check and write for a pre-authorized semantic action. */
-	writeIfActive(data: string): boolean {
-		if (this._disposed || this._completing || this._exited || !data) return false;
-		this.ptyProcess.write(data);
-		this._inputGeneration += 1;
-		return true;
-	}
-
-	resize(cols: number, rows: number): void {
-		if (cols === this.xterm.cols && rows === this.xterm.rows) return;
-		if (cols < 1 || rows < 1) return;
-		this.xterm.resize(cols, rows);
-		this.bumpVisualGeneration();
-		if (!this._disposed && !this._completing) {
-			this.ptyProcess.resize(cols, rows);
-		}
-	}
-
-	private renderLineFromCells(lineIndex: number, cols: number): string {
-		const buffer = this.xterm.buffer.active;
-		const line = buffer.getLine(lineIndex);
-
-		let currentStyle: CellStyle = {
-			bold: false,
-			dim: false,
-			italic: false,
-			underline: false,
-			inverse: false,
-			invisible: false,
-			strikethrough: false,
-			fgMode: "default",
-			fg: 0,
-			bgMode: "default",
-			bg: 0,
-		};
-		let currentKey = styleKey(currentStyle);
-
-		let out = sgrForStyle(currentStyle);
-
-		for (let x = 0; x < cols; x++) {
-			const cell: IBufferCell | undefined = line?.getCell(x);
-			const width = cell?.getWidth() ?? 1;
-			if (width === 0) continue;
-
-			const chars = cell?.getChars() ?? " ";
-			const cellChars = chars.length === 0 ? " " : chars;
-
-			const rawFgMode: CellStyle["fgMode"] = cell?.isFgDefault()
-				? "default"
-				: cell?.isFgRGB()
-					? "rgb"
-					: cell?.isFgPalette()
-						? "palette"
-						: "default";
-			const rawBgMode: CellStyle["bgMode"] = cell?.isBgDefault()
-				? "default"
-				: cell?.isBgRGB()
-					? "rgb"
-					: cell?.isBgPalette()
-						? "palette"
-						: "default";
-
-			const fg = normalizePaletteColor(rawFgMode, cell?.getFgColor() ?? 0);
-			const bg = normalizePaletteColor(rawBgMode, cell?.getBgColor() ?? 0);
-
-			const nextStyle: CellStyle = {
-				bold: !!cell?.isBold(),
-				dim: !!cell?.isDim(),
-				italic: !!cell?.isItalic(),
-				underline: !!cell?.isUnderline(),
-				inverse: !!cell?.isInverse(),
-				invisible: !!cell?.isInvisible(),
-				strikethrough: !!cell?.isStrikethrough(),
-				fgMode: fg.mode,
-				fg: fg.value,
-				bgMode: bg.mode,
-				bg: bg.value,
-			};
-			const nextKey = styleKey(nextStyle);
-			if (nextKey !== currentKey) {
-				currentStyle = nextStyle;
-				currentKey = nextKey;
-				out += sgrForStyle(currentStyle);
-			}
-
-			out += cellChars;
-		}
-
-		return out + "\u001b[0m";
-	}
-
-	getViewportLines(options: { ansi?: boolean } = {}): string[] {
-		const buffer = this.xterm.buffer.active;
-		const lines: string[] = [];
-
-		const totalLines = buffer.length;
-		// If following bottom, reset scroll offset at render time (not on each data event)
-		// This prevents flickering from scroll position racing with buffer updates
-		if (this.followBottom) {
-			this.scrollOffset = 0;
-		}
-		const viewportStart = Math.max(0, totalLines - this.xterm.rows - this.scrollOffset);
-
-		const useAnsi = !!options.ansi;
-		if (useAnsi) {
-			for (let i = 0; i < this.xterm.rows; i++) {
-				const lineIndex = viewportStart + i;
-				const rendered = this.renderLineFromCells(lineIndex, this.xterm.cols);
-
-				// Safety fallback: if our cell->SGR renderer produces no visible non-space content
-				// but the buffer line contains text, fall back to plain translation. This prevents
-				// “blank screen” regressions on terminals that use special color encodings.
-				const plain = buffer.getLine(lineIndex)?.translateToString(true) ?? "";
-				const renderedPlain = rendered
-					.replace(/\x1b\[[0-9;]*m/g, "")
-					.replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "");
-				if (plain.trim().length > 0 && renderedPlain.trim().length === 0) {
-					lines.push(sanitizeLine(plain) + "\u001b[0m");
-				} else {
-					lines.push(rendered);
-				}
-			}
-			return lines;
-		}
-
-		for (let i = 0; i < this.xterm.rows; i++) {
-			const lineIndex = viewportStart + i;
-			if (lineIndex < totalLines) {
-				const line = buffer.getLine(lineIndex);
-				lines.push(sanitizeLine(line?.translateToString(true) ?? ""));
-			} else {
-				lines.push("");
-			}
-		}
-
-		return lines;
-	}
-
-	getTailLines(options: { lines: number; ansi?: boolean; maxChars?: number }): {
-		lines: string[];
-		totalLinesInBuffer: number;
-		truncatedByChars: boolean;
-	} {
-		const requested = Math.max(0, Math.trunc(options.lines));
-		const maxChars = options.maxChars !== undefined ? Math.max(0, Math.trunc(options.maxChars)) : undefined;
-		
-		const buffer = this.xterm.buffer.active;
-		const totalLinesInBuffer = buffer.length;
-		
-		if (requested === 0) {
-			return { lines: [], totalLinesInBuffer, truncatedByChars: false };
-		}
-
-		const start = Math.max(0, totalLinesInBuffer - requested);
-		const out: string[] = [];
-		let remainingChars = maxChars;
-		let truncatedByChars = false;
-
-		const serializer = options.ansi ? this.serializer : undefined;
-		if (serializer) {
-			const serialized = serializer.serialize();
-			const serializedLines = serialized.split(/\r?\n/);
-			if (serializedLines.length >= totalLinesInBuffer) {
-				for (let i = start; i < totalLinesInBuffer; i++) {
-					const raw = serializedLines[i] ?? "";
-					const line = sanitizeLine(raw) + "\u001b[0m";
-					if (remainingChars !== undefined) {
-						if (remainingChars <= 0) {
-							truncatedByChars = true;
-							break;
-						}
-						remainingChars -= line.length;
-					}
-					out.push(line);
-				}
-				return { lines: out, totalLinesInBuffer, truncatedByChars };
-			}
-		}
-
-		for (let i = start; i < totalLinesInBuffer; i++) {
-			const lineObj = buffer.getLine(i);
-			const line = sanitizeLine(lineObj?.translateToString(true) ?? "");
-			if (remainingChars !== undefined) {
-				if (remainingChars <= 0) {
-					truncatedByChars = true;
-					break;
-				}
-				remainingChars -= line.length;
-			}
-			out.push(line);
-		}
-
-		return { lines: out, totalLinesInBuffer, truncatedByChars };
-	}
-
-	/**
-	 * Get raw output stream with optional incremental reading.
-	 * @param options.sinceLast - If true, only return output since last call
-	 * @param options.stripAnsi - If true, strip ANSI escape codes (default: true)
-	 */
-	getRawStream(options: { sinceLast?: boolean; stripAnsi?: boolean } = {}): string {
-		let output: string;
-
-		if (options.sinceLast) {
-			output = this.rawOutput.substring(this.lastStreamPosition);
-			this.lastStreamPosition = this.rawOutput.length;
-		} else {
-			output = this.rawOutput;
-		}
-
-		// Strip ANSI codes and control characters by default using Node.js built-in
-		if (options.stripAnsi !== false && output) {
-			output = stripVTControlCharacters(output);
-		}
-
-		return output;
-	}
-
-	/**
-	 * Get a slice of log output with offset/limit pagination.
-	 * Similar to Clawdbot's sliceLogLines - enables reading specific ranges of output.
-	 * @param options.offset - Line number to start from (0-indexed). If omitted with limit, returns tail.
-	 * @param options.limit - Max number of lines to return
-	 * @param options.stripAnsi - If true, strip ANSI escape codes (default: true)
-	 */
-	getLogSlice(options: { offset?: number; limit?: number; stripAnsi?: boolean } = {}): {
-		slice: string;
-		totalLines: number;
-		totalChars: number;
-		sliceLineCount: number;
-	} {
-		return sliceLogOutput(this.rawOutput, options);
-	}
-
-	scrollUp(lines: number): void {
-		const buffer = this.xterm.buffer.active;
-		const maxScroll = Math.max(0, buffer.length - this.xterm.rows);
-		const previous = this.scrollOffset;
-		this.scrollOffset = Math.min(this.scrollOffset + lines, maxScroll);
-		this.followBottom = false; // User scrolled up, stop auto-following
-		if (this.scrollOffset !== previous) this.bumpVisualGeneration();
-	}
-
-	scrollDown(lines: number): void {
-		const previous = this.scrollOffset;
-		this.scrollOffset = Math.max(0, this.scrollOffset - lines);
-		// If scrolled to bottom, resume auto-following
-		if (this.scrollOffset === 0) {
-			this.followBottom = true;
-		}
-		if (this.scrollOffset !== previous) this.bumpVisualGeneration();
-	}
-
-	scrollToBottom(): void {
-		const changed = this.scrollOffset !== 0 || !this.followBottom;
-		this.scrollOffset = 0;
-		this.followBottom = true;
-		if (changed) this.bumpVisualGeneration();
-	}
-
-	isScrolledUp(): boolean {
-		return this.scrollOffset > 0;
-	}
-
-	kill(signal: NodeJS.Signals = "SIGTERM"): void {
-		if (this._disposed || this._completing || this._exited) return;
-		const escalationPending = this.forceKillTimer !== null;
-		const signaled = this.signalBackend(signal);
-
-		if (signal !== "SIGKILL") {
-			if (!this.forceKillTimer) this.scheduleForceKill();
-		} else if (signaled && escalationPending) {
-			this.clearForceKillTimer();
-		}
-	}
-
-	private signalBackend(signal: NodeJS.Signals): boolean {
-		try {
-			this.ptyProcess.kill(signal);
-			return true;
-		} catch (error) {
-			console.error(`interactive-shell: failed to signal PTY with ${signal}:`, error);
-			return false;
-		}
-	}
-
-	private scheduleForceKill(): void {
-		this.forceKillTimer = setTimeout(() => {
-			this.forceKillTimer = null;
-			if (!this._disposed && !this._completing && !this._exited) this.signalBackend("SIGKILL");
-		}, 250);
-		this.forceKillTimer.unref?.();
-	}
-
-	dispose(): void {
-		if (this._disposed) return;
-		this.markOutputCaptureIncomplete("disposed-before-exit");
-		this._disposed = true;
-		this.clearForceKillTimer();
-		this.signalBackend("SIGKILL");
-		try {
-			this.ptyProcess.close();
-		} catch (error) {
-			console.error("interactive-shell: failed to close PTY during disposal:", error);
-		}
-		this.dataHandler = undefined;
-		this.exitHandler = undefined;
-		this.additionalDataListeners.length = 0;
-		this.additionalExitListeners.length = 0;
-		this.visualChangeListeners.length = 0;
-		this.xterm.dispose();
-	}
+  private ptyProcess: PtyProcess;
+  private xterm: XtermTerminal;
+  private disposed = false;
+  private completing = false;
+  private scrollOffset = 0;
+  private followBottom = true;
+  // Ordered writes: xterm renders each chunk before device queries are answered and listeners run.
+  private queue = Promise.resolve();
+  private dataListeners = new Set<(data: string) => void>();
+  private visualListeners = new Set<() => void>();
+  readonly exit = Promise.withResolvers<{ exitCode: number; signal?: number }>();
+
+  constructor(private options: PtySessionOptions) {
+    if (options.shellConfig.commandTransport !== 'argv') {
+      throw new Error(`Pi selected "${options.shellConfig.shell}", which requires stdin command transport; PTY jobs need a Git Bash shellPath.`);
+    }
+    const { cols = 80, rows = 24, scrollback = 5000 } = options;
+    this.xterm = new xterm.Terminal({ cols, rows, scrollback, allowProposedApi: true, convertEol: true });
+    const env: Record<string, string> = {};
+    for (const [key, value] of Object.entries({ TERM: 'xterm-256color', ...process.env })) if (value !== undefined) env[key] = value;
+    this.ptyProcess = createPtyProcess(options.shellConfig.shell, [...options.shellConfig.args, options.command],
+      { name: 'xterm-256color', cols, rows, cwd: options.cwd, env });
+    this.ptyProcess.onData(data => {
+      if (this.disposed) return;
+      const { segments, trailingText } = splitAroundDeviceQueries(typeof data === 'string' ? data : data.toString('utf8'));
+      for (const segment of segments) this.enqueue(segment.text, segment.queryAfter);
+      if (trailingText) this.enqueue(trailingText);
+    });
+    this.ptyProcess.onExit(({ exitCode, signal }) => {
+      if (this.disposed || this.completing) return;
+      this.completing = true;
+      // The exit banner is shown in the terminal view only; the job log keeps program bytes.
+      this.queue = this.queue.then(() => this.render(`\n[Process exited with code ${exitCode}${signal ? ` (signal: ${signal})` : ''}]\n`))
+        .then(() => this.exit.resolve({ exitCode, signal: signal || undefined }));
+    });
+  }
+
+  private render(text: string): Promise<void> {
+    const rendered = Promise.withResolvers<void>();
+    this.xterm.write(text, () => rendered.resolve());
+    return rendered.promise.then(() => { for (const listener of [...this.visualListeners]) listener(); });
+  }
+  private enqueue(text: string, query?: 'cursor-position' | 'primary-device-attributes'): void {
+    this.queue = this.queue.then(async () => {
+      if (this.disposed) return;
+      if (text) {
+        this.options.sink(text);
+        await this.render(text);
+        for (const listener of [...this.dataListeners]) listener(text);
+      }
+      if (!query || this.disposed) return;
+      const buffer = this.xterm.buffer.active;
+      this.ptyProcess.write(query === 'cursor-position' ? buildCursorPositionResponse(buffer.cursorY + 1, buffer.cursorX + 1) : buildPrimaryDeviceAttributesResponse());
+    }).catch(error => { if (!this.disposed) this.options.sink(`\n[pi-suite: terminal render failed: ${String(error)}]\n`); });
+  }
+
+  onData(listener: (data: string) => void): () => void { this.dataListeners.add(listener); return () => this.dataListeners.delete(listener); }
+  onVisualChange(listener: () => void): () => void { this.visualListeners.add(listener); return () => this.visualListeners.delete(listener); }
+  get pid(): number { return this.ptyProcess.pid; }
+  get cols(): number { return this.xterm.cols; }
+  get rows(): number { return this.xterm.rows; }
+  get processExited(): boolean { return this.ptyProcess.processExited; }
+
+  write(data: string): void {
+    if (this.disposed || this.completing) throw new Error('Terminal no longer accepts input');
+    this.ptyProcess.write(data);
+  }
+  resize(cols: number, rows: number): void {
+    if ((cols === this.xterm.cols && rows === this.xterm.rows) || cols < 1 || rows < 1) return;
+    this.xterm.resize(cols, rows);
+    if (!this.disposed && !this.completing) this.ptyProcess.resize(cols, rows);
+    for (const listener of [...this.visualListeners]) listener();
+  }
+
+  /** Current screen; ANSI lines keep colors for the attach view, plain lines for transfer to the model. */
+  getViewportLines(options: { ansi?: boolean } = {}): string[] {
+    const buffer = this.xterm.buffer.active;
+    if (this.followBottom) this.scrollOffset = 0;
+    const start = Math.max(0, buffer.length - this.xterm.rows - this.scrollOffset);
+    const lines: string[] = [];
+    for (let i = 0; i < this.xterm.rows; i++) {
+      const line = buffer.getLine(start + i);
+      const plain = sanitizeLine(line?.translateToString(true) ?? '');
+      if (!options.ansi) { lines.push(plain); continue; }
+      const rendered = renderLineFromCells(line, this.xterm.cols);
+      // Fall back to plain text if special color encodings would render a visibly blank line.
+      lines.push(plain.trim() && !rendered.replace(/\x1b\[[0-9;]*m/g, '').trim() ? plain + '\u001b[0m' : rendered);
+    }
+    return lines;
+  }
+  scroll(lines: number): void {
+    const max = Math.max(0, this.xterm.buffer.active.length - this.xterm.rows);
+    this.scrollOffset = Math.max(0, Math.min(this.scrollOffset + lines, max));
+    this.followBottom = this.scrollOffset === 0;
+    for (const listener of [...this.visualListeners]) listener();
+  }
+
+  /** Signal only the PTY backend; the job backend performs group/tree stop and confirmation. */
+  kill(signal: NodeJS.Signals = 'SIGKILL'): void { if (!this.disposed) this.ptyProcess.kill(signal); }
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    try { this.ptyProcess.close(); } finally {
+      this.dataListeners.clear(); this.visualListeners.clear(); this.xterm.dispose();
+    }
+  }
 }

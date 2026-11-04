@@ -1,3 +1,5 @@
+// Imported from pi-interactive-shell 0.18.0 pty-protocol.ts (MIT, third-party/licenses/pi-interactive-shell.txt).
+// Full-screen programs block until these queries are answered, so the session replies in output order.
 // PTY control queries emitted by terminal applications.
 // Cursor position DSR: ESC[6n or ESC[?6n. Primary DA: ESC[c or ESC[0c.
 const DEVICE_QUERY_PATTERN = /\x1b\[(\??6n|0?c)/g;

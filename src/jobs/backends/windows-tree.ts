@@ -1,9 +1,12 @@
+// Imported from pi-background-jobs 0.1.3 src/windows-process.ts (MIT, third-party/licenses/pi-background-jobs.txt).
+// pi-suite change: operates on the backend-neutral Tracked handle (pid) so pipe and PTY jobs share it.
 import { execFile, spawnSync } from 'node:child_process';
 import { promisify } from 'node:util';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { join, win32 } from 'node:path';
 import { lstatSync, realpathSync } from 'node:fs';
-import type { RunningCommand } from './process.ts';
-import type { ProcessIdentity, CleanupEvidence } from './types.ts';
+import type { Tracked as RunningCommand } from './process.ts';
+import type { ProcessIdentity, CleanupEvidence } from '../types.ts';
 
 export type ProcessRow = ProcessIdentity & { parentPid: number };
 export type SystemCommands = {
@@ -85,7 +88,7 @@ export function selectScope(rows: ProcessRow[], root: ProcessIdentity): ProcessI
   return scope.map(({pid, createdAt}) => ({pid, createdAt}));
 }
 export async function captureIdentity(run: RunningCommand, latestStart: number): Promise<ProcessIdentity | undefined> {
-  if (run.exitObserved || run.child.pid === undefined) return undefined;
+  if (run.exitObserved || !run.pid) return undefined;
   try {
     const deadline=Math.min(Date.now()+3000,run.cleanupDeadline??Infinity);
     remaining(deadline);
@@ -95,9 +98,9 @@ export async function captureIdentity(run: RunningCommand, latestStart: number):
     run.cleanupSignal?.addEventListener('abort',abort,{once:true});
     if(run.cleanupSignal?.aborted)abort();
     let rows:ProcessRow[];
-    try{rows=await systemCommands.query(deadline,run.child.pid,run.identityController.signal);}
+    try{rows=await systemCommands.query(deadline,run.pid,run.identityController.signal);}
     finally{run.cleanupSignal?.removeEventListener('abort',abort);}
-    const row = rows.find(row => row.pid === run.child.pid);
+    const row = rows.find(row => row.pid === run.pid);
     if (run.exitObserved || !row || Date.parse(row.createdAt) < run.spawnedAt - 1000 || Date.parse(row.createdAt) > latestStart + 1000) return undefined;
     const identity = { pid: row.pid, createdAt: row.createdAt };
     run.rootIdentity = identity;
@@ -105,19 +108,17 @@ export async function captureIdentity(run: RunningCommand, latestStart: number):
   } catch { return undefined; }
 }
 async function beforeDeadline<T>(promise: Promise<T>, deadline: number, signal?: AbortSignal): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let abort: (()=>void)|undefined;
-  try {
-    return await Promise.race([promise, new Promise<never>((_, reject) => {
-      abort=()=>reject(new Error('Cleanup deadline exhausted'));
-      signal?.addEventListener('abort',abort,{once:true});
-      if(signal?.aborted)abort();
-      timer = setTimeout(abort, remaining(deadline));
-    })]);
-  } finally { if (timer) clearTimeout(timer);if(abort)signal?.removeEventListener('abort',abort); }
+  const delay = remaining(deadline);
+  const expired = Promise.withResolvers<never>();
+  const abort = () => expired.reject(new Error('Cleanup deadline exhausted'));
+  signal?.addEventListener('abort', abort, { once: true });
+  if (signal?.aborted) abort();
+  const timer = setTimeout(abort, delay);
+  try { return await Promise.race([promise, expired.promise]); }
+  finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
 }
 function requireRoot(run: RunningCommand, root: ProcessIdentity | undefined): asserts root is ProcessIdentity {
-  if (!root || root.pid !== run.child.pid) throw new Error('Root identity unavailable; PID stop refused');
+  if (!root || root.pid !== run.pid) throw new Error('Root identity unavailable; PID stop refused');
   if (run.exitObserved) throw new Error('Root already exited; cannot establish a reliable stop scope');
 }
 function scopeAbsent(scope: ProcessIdentity[], rows: ProcessRow[]): boolean {
@@ -149,7 +150,7 @@ export async function stopWindows(run: RunningCommand, deadline: number, command
     const confirmationScope = [...evidence.scope, ...(run.retainedScope ?? [])];
     let after = await commands.query(budget(), undefined, run.cleanupSignal);
     while (!scopeAbsent(confirmationScope, after) && budget() - Date.now() > 200) {
-      await beforeDeadline(new Promise(resolve => setTimeout(resolve, 50)), budget(), run.cleanupSignal);
+      await beforeDeadline(sleep(50), budget(), run.cleanupSignal);
       after = await commands.query(budget(), undefined, run.cleanupSignal);
     }
     if (!run.exitObserved && scopeAbsent(confirmationScope, after)) await beforeDeadline(run.exited, budget(), run.cleanupSignal);
