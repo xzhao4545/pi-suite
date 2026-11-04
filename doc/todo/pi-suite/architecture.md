@@ -49,7 +49,7 @@ src/
   ask/                         # 用户询问与超时策略
   tasks/                       # 两级任务管理与数据存储
   jobs/                        # interactive-shell + background-jobs
-    backends/                  # Windows / Ubuntu，PTY / pipe
+    backends/                  # Windows / Linux，PTY / pipe
   goal/                        # 目标状态、预算、续跑策略
   agents/                      # subagent 管理与原生会话查看
 third-party/

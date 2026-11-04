@@ -6,7 +6,7 @@
 
 影响范围：JobManager、pipe/PTY 后端、工具入口、日志和任务元数据。
 
-约束：pipe 与 PTY 保持各自语义；Windows 控制代码不能视作 Ubuntu 支持。
+约束：pipe 与 PTY 保持各自语义；Windows 控制代码不能视作 Linux 支持。
 
 相关当前文档：[项目当前状态](../../../current/index.md)。
 
@@ -16,7 +16,7 @@
 - [ ] 实现 pipe 与 PTY 两种执行模式
 - [ ] 实现输入、查看、attach/detach 和停止
 - [ ] 保留已结束 job 历史及起止时间、耗时，向共享状态栏提供活动数量
-- [ ] 分别验证 Windows 与 Ubuntu 平台后端
+- [ ] 分别验证 Windows 与 Linux 平台后端
 
 ## 验收方式
 
@@ -42,6 +42,6 @@ job 元数据统一包括 ID、workspace、ownerSession、可选 taskId、创建
 
 保留已有常用工具名作为适配入口，内部走同一个 manager。新功能可以集中到 `job_start/list/read/write/attach/detach/stop` 这样的接口，但第一版不要求一次性删除所有旧调用方式。
 
-平台后端：Windows 使用经过实际验证的 ConPTY 兼容 PTY 提供者和 Windows 进程停止实现；Ubuntu 使用原生 PTY 和 POSIX 进程组。`pi-background-jobs` 的 Windows 控制代码不能直接当作 Ubuntu 支持。
+平台后端：Windows 使用经过实际验证的 ConPTY 兼容 PTY 提供者和 Windows 进程停止实现；Linux 使用原生 PTY 和 POSIX 进程组。`pi-background-jobs` 的 Windows 控制代码不能直接当作 Linux 支持。
 
 运行中和已结束的 job 都可以查询和查看；命令、输入、输出、时间与退出结果按需读取，手动停止保留历史，detach 或关闭查看器不终止执行。完整契约见 [job 记录、输入输出与手动控制](history-control.md)。活动数量由 manager 提供给 [共享状态栏](../status.md)，不由独立 widget 各自计数。
