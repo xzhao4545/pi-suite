@@ -15,6 +15,7 @@
 - [ ] 建立可复现的宿主与上游基线
 - [ ] 实现统一 dock 与 ask
 - [ ] 修正 goal 状态与续跑
+- [ ] 接入 goal 状态栏摘要，验证原生 footer 与 pi-starship 布局
 - [ ] 融合 jobs 并验证同进程保活
 - [ ] 实现两级 tasks、精简批量接口与原生 agents 查看
 - [ ] 按需确认并实施跨进程保活
@@ -33,7 +34,7 @@
 
 1. **建立基线。** 核对 Windows/Ubuntu 实际 Pi 和扩展版本；记录源码来源、许可证；在两平台复现原问题，确定要保留的现有工具契约。
 2. **统一 dock + ask。** 先解决手机显示挤压、聊天查阅和默认/禁用超时；这也是后续 tasks/agents/jobs 的 UI 基础。
-3. **goal 状态修正。** 区分目标状态和运行状态，验证 retry、compact、reload 的事件顺序和续跑次数。
+3. **goal 状态修正。** 区分目标状态和运行状态，验证 retry、compact、reload 的事件顺序和续跑次数；从同一状态派生 footer 摘要，验证原生状态栏与 pi-starship 联动。
 4. **融合 jobs。** 先完成同进程 reload/resume 保活和 Windows/Ubuntu 两种后端，再统一通知和输出查询。
 5. **两级 tasks + 原生 agents 查看器。** 任务提供查询与批量增删改、父级完成比例和自动折叠；agents 保留执行能力，改用原生消息渲染。
 6. **可选持久 supervisor。** 仅在需要跨 Pi 进程重新 attach 时实施。
@@ -46,6 +47,7 @@
 - 真正运行受控长任务，在同一 Pi 进程执行 reload/new/resume/fork 后确认仍是原进程、日志继续且通知不串会话。
 - pipe/PTY 输入、终端缩放、attach/detach、退出码；Windows 和 Ubuntu 分别验证。
 - goal 在正常结束、请求错误、宿主重试成功/耗尽、手动/自动 compact、Esc、reload 时状态正确；不重复发起模型请求。
+- goal 状态栏同步运行、等待与终态；无目标和会话切换时清除旧摘要；status/dock 不重复展示。分别核对原生 footer 额外状态行，以及 pi-starship 的 extension_status 配置、数量上限和窄屏换行。
 - 用离线 faux provider 或可控桩验证模型生命周期，避免验收依赖付费模型和网络偶发行为。
 - subagent Markdown、代码块、thinking、工具调用/结果、折叠和实时输出；阅读位置稳定。
 

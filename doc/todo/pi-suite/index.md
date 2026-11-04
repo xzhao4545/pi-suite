@@ -19,6 +19,7 @@
 - [ ] [两级任务管理与动态调整](tasks.md)
 - [ ] [统一执行任务与保活](jobs/index.md)
 - [ ] [目标状态与续跑](goal.md)
+- [ ] [goal 状态栏联动与 pi-starship 兼容](goal-status.md)
 - [ ] [子代理原生会话查看](agents.md)
 - [ ] [实施顺序与验收](implementation.md)
 
