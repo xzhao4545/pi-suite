@@ -38,7 +38,7 @@
 | `pipe` | 构建、测试、批处理、日志采集 | stdout/stderr 文件与分页读取，不模拟终端 |
 | `pty` | REPL、交互程序、需要 TTY 的命令 | PTY、终端尺寸变化、输入、attach/detach |
 
-job 元数据统一包括 ID、workspace、ownerSession、可选 taskId/agentId、mode、status、创建/开始/结束时间、耗时、退出与停止/清理信息、输入记录和日志位置。通知按照原会话和分支引用投递；切换到其他会话不会把旧任务结果误发给新模型。
+job 元数据统一包括 ID、workspace、ownerSession、可选 taskId、创建 agentId/agentRunId 及可追溯父级执行链、mode、status、创建/开始/结束时间、耗时、退出与停止/清理信息、输入记录和日志位置。创建归属从运行上下文取得，用于 subagent 停止时级联清理；通知按照原会话和分支引用投递，切换到其他会话不会把旧任务结果误发给新模型。
 
 保留已有常用工具名作为适配入口，内部走同一个 manager。新功能可以集中到 `job_start/list/read/write/attach/detach/stop` 这样的接口，但第一版不要求一次性删除所有旧调用方式。
 

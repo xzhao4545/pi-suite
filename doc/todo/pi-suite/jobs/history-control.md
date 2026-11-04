@@ -17,11 +17,12 @@
 - [ ] 保存可查看的输入记录，区分 pipe 与 PTY 输出通道
 - [ ] 支持实时查看、历史分页、attach/detach 与明确停止
 - [ ] 验证停止竞争、重复停止、进程树清理及历史只读边界
+- [ ] 记录 child 创建归属，支持 subagent 停止时级联清理所属 job
 - [ ] 将活动数量提供给共享状态栏发布器
 
 ## 验收方式
 
-在 Windows 和 Ubuntu 分别核对运行中、自然完成、失败、手动停止与超时记录；查询命令、输入、输出、运行时间和退出结果。验证大日志分页、中文边界、敏感输入标记、PTY 合并输出、清理未确认、重复 stop 和停止/自然退出竞争。关闭详情、取消读取等待和 reload 不终止 job；已结束记录可继续读取，历史 PID 不作为停止目标。
+在 Windows 和 Ubuntu 分别核对运行中、自然完成、失败、手动停止与超时记录；查询命令、输入、输出、运行时间和退出结果。验证大日志分页、中文边界、敏感输入标记、PTY 合并输出、清理未确认、重复 stop 和停止/自然退出竞争。停止 subagent 时，其本人及嵌套 child 创建的 job 一并停止，包括已 detach 或 child 已结束的 job；验证停止与启动竞争和创建归属。关闭详情、取消读取等待和 reload 不终止 job；已结束记录可继续读取，历史 PID 不作为停止目标。
 
 ## 关联计划
 
@@ -39,7 +40,7 @@ jobs 详情提供“活动 / 已结束 / 全部”筛选。默认按当前主会
 | 信息 | 用途 |
 | --- | --- |
 | ID、名称、命令、cwd、mode | 识别启动了什么、在哪里执行及是否为 PTY |
-| workspace、ownerSession、可选 taskId/agentId | 关联会话、任务与 subagent |
+| workspace、ownerSession、可选 taskId、创建 agentId/agentRunId 及父级执行链 | 关联会话、任务与创建归属，确定 subagent 级联停止范围 |
 | createdAt、startedAt、endedAt、elapsedMs | 创建、开始、结束时间和实际运行耗时 |
 | status、exitCode、signal、stopReason | 区分成功、失败、手动停止、超时与启动失败 |
 | 输入/输出日志引用、可读取范围 | 分页查看执行记录 |
@@ -86,3 +87,7 @@ id 查询忽略列表筛选并返回详情；state/scope/cursor/limit 是列表�
 同时发生自然退出和停止请求时按真实退出观测结算，停止原因单独保留；不能把请求发送成功当作退出确认。当前 manager 中已结算的完成、失败或已停止对象再次 stop 返回既有结果。只有历史记录但无当前 manager 控制句柄时拒绝停止，不凭历史 PID 操作可能已复用的进程。
 
 停止 job 不删除历史，不自动把关联 task 标为 done，不停止其他 job 或主 agent。等待它的 subagent/goal 收到明确 stopped 结果，按用户要求处理后续工作；停止对象不由 manager 自动重启。
+
+subagent 发起的 job 由运行上下文自动记录创建归属；停止该 subagent 时，AgentManager 调用同一 JobManager 停止它及所属后代创建的活动 job，不需要模型逐项调用 job_stop。job 归属与 task/agent 的展示引用分开，执行已 detach 或创建 child 已完成仍参与级联清理。关闭视图、会话切换和 reload 仅改变绑定，不触发该停止流程。
+
+注册和启动 job 时检查创建执行是否已在停止，并先记录受管对象；若停止与启动同时发生，继续将该 job 纳入同一停止请求。停止返回 child/job 的真实结算信息，pending/unconfirmed 继续可查询，日志与历史保留。具体运行子树与执行标识规则见 [子代理停止边界](../agent-runs.md)。
