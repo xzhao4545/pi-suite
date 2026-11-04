@@ -2,7 +2,7 @@
 
 目标：融合交互 shell 和非交互后台任务，共用管理、日志与通知。
 
-当前状态：实施中；pipe 与 PTY 执行、记录、工具与通知已实现并在 Windows（Git Bash）和 Linux 通过检查，见 [执行任务](../../../current/jobs/index.md)。attach/detach 终端视图、终端缩放验证与 monitor 待实施。
+当前状态：实施中；pipe 与 PTY 执行、记录、工具与通知已实现并在 Windows（Git Bash）和 Linux 通过检查，见 [执行任务](../../../current/jobs/index.md)。attach 进行中：已写入但尚未接入入口、也没有测试的部分有 src/ui/terminal.ts 的 TerminalView、src/jobs/query.ts 的共享列表查询（job_list 仍用自身实现）、manager 的用户接管（userControl/returnControl，job_write 在接管时返回 USER_CONTROL）、PTY 结束后保留最后一屏，以及配置 jobs.detachKey/returnKey/transferKey（默认 ctrl+b、ctrl+g、ctrl+t）。待做：/jobs 命令、job_start 的 attach 参数、job_list 改用共享查询、Ctrl+T 发送屏幕、视图测试与文档；终端缩放验证与 monitor 待实施。
 
 影响范围：JobManager、pipe/PTY 后端、工具入口、日志和任务元数据。
 

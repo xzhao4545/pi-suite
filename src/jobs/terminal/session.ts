@@ -26,6 +26,7 @@ export class PtyTerminalSession {
   private queue = Promise.resolve();
   private dataListeners = new Set<(data: string) => void>();
   private visualListeners = new Set<() => void>();
+  private finalScreen: { ansi: string[]; plain: string[] } = { ansi: [], plain: [] };
   readonly exit = Promise.withResolvers<{ exitCode: number; signal?: number }>();
 
   constructor(private options: PtySessionOptions) {
@@ -84,7 +85,7 @@ export class PtyTerminalSession {
     this.ptyProcess.write(data);
   }
   resize(cols: number, rows: number): void {
-    if ((cols === this.xterm.cols && rows === this.xterm.rows) || cols < 1 || rows < 1) return;
+    if (this.disposed || (cols === this.xterm.cols && rows === this.xterm.rows) || cols < 1 || rows < 1) return;
     this.xterm.resize(cols, rows);
     if (!this.disposed && !this.completing) this.ptyProcess.resize(cols, rows);
     for (const listener of [...this.visualListeners]) listener();
@@ -92,6 +93,8 @@ export class PtyTerminalSession {
 
   /** Current screen; ANSI lines keep colors for the attach view, plain lines for transfer to the model. */
   getViewportLines(options: { ansi?: boolean } = {}): string[] {
+    // After disposal the xterm buffer is gone; the last screen captured at disposal remains.
+    if (this.disposed) return options.ansi ? this.finalScreen.ansi : this.finalScreen.plain;
     const buffer = this.xterm.buffer.active;
     if (this.followBottom) this.scrollOffset = 0;
     const start = Math.max(0, buffer.length - this.xterm.rows - this.scrollOffset);
@@ -107,6 +110,7 @@ export class PtyTerminalSession {
     return lines;
   }
   scroll(lines: number): void {
+    if (this.disposed) return;
     const max = Math.max(0, this.xterm.buffer.active.length - this.xterm.rows);
     this.scrollOffset = Math.max(0, Math.min(this.scrollOffset + lines, max));
     this.followBottom = this.scrollOffset === 0;
@@ -115,10 +119,13 @@ export class PtyTerminalSession {
 
   /** Signal only the PTY backend; the job backend performs group/tree stop and confirmation. */
   kill(signal: NodeJS.Signals = 'SIGKILL'): void { if (!this.disposed) this.ptyProcess.kill(signal); }
+  get closed(): boolean { return this.disposed; }
   dispose(): void {
     if (this.disposed) return;
+    this.finalScreen = { ansi: this.getViewportLines({ ansi: true }), plain: this.getViewportLines() };
     this.disposed = true;
     try { this.ptyProcess.close(); } finally {
+      for (const listener of [...this.visualListeners]) listener();
       this.dataListeners.clear(); this.visualListeners.clear(); this.xterm.dispose();
     }
   }

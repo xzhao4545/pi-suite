@@ -10,6 +10,7 @@ import { stopTracked, stopTrackedSync, type Tracked } from './backends/process.t
 import { launchPipe } from './backends/pipe.ts';
 import { launchPty } from './backends/pty-job.ts';
 import type { ResolvedShellConfig } from './terminal/shell.ts';
+import type { PtyTerminalSession } from './terminal/session.ts';
 import { errnoCode, JobError, LIMITS, type InputRecord, type JobSummary, type StartRequest, type StopReason, type StopResult, type Stream, type Workspace } from './types.ts';
 
 const JOB_ID = /^job_[a-f0-9]{8}$/;
@@ -20,6 +21,8 @@ type Owned = {
   timeoutTimer?: NodeJS.Timeout;
   saveQueue: Promise<void>; dirty?: boolean; saveAttempts?: number; retryAt?: number; persistenceError?: string;
   inputQueue: Promise<void>;
+  /** Set while the user types in the terminal view; model input is refused until control returns. */
+  userControl?: boolean;
 };
 const abortError = () => new DOMException('Operation aborted', 'AbortError');
 
@@ -241,7 +244,9 @@ export class JobManager {
   write(id: string, data: string, record: Omit<InputRecord, 'at' | 'bytes'>): JobSummary {
     const item = this.owned(id), job = item.job, run = item.run;
     if (!run || run.exitObserved || job.state !== 'running') throw new JobError('NOT_RUNNING', `${id} is ${job.state} and does not accept input`, id);
+    if (item.userControl && record.source !== 'user') throw new JobError('USER_CONTROL', `The user controls ${id} in the terminal view; wait until control returns`, id);
     try { run.write(data); } catch (error) { throw new JobError('NOT_RUNNING', String(error instanceof Error ? error.message : error), id); }
+    if (record.source === 'user' && !item.userControl) { item.userControl = true; this.changed(); }
     const entry: InputRecord = { at: new Date().toISOString(), ...record, bytes: Buffer.byteLength(data) };
     if (entry.sensitive) delete entry.text;
     item.inputQueue = item.inputQueue.then(() => this.store.appendInput(job, entry)).catch(error => { this.setError(item, `input record not saved: ${String(error)}`); this.changed(); });
@@ -255,7 +260,13 @@ export class JobManager {
     return this.view(item);
   }
   resize(id: string, cols: number, rows: number): void { this.owned(id).run?.resize?.(cols, rows); }
-  terminal(id: string) { return this.jobs.get(id)?.run?.terminal; }
+  terminal(id: string): PtyTerminalSession | undefined { return this.jobs.get(id)?.run?.terminal; }
+  userControlled(id: string): boolean { return !!this.jobs.get(id)?.userControl; }
+  /** Hand input back to the model (Ctrl+G or leaving the terminal view). */
+  returnControl(id: string): void {
+    const item = this.jobs.get(id);
+    if (item?.userControl) { item.userControl = false; this.changed(); }
+  }
 
   private owned(id: string): Owned {
     if (!JOB_ID.test(id)) throw new JobError('INVALID_ARGS', 'id must look like job_1a2b3c4d');
