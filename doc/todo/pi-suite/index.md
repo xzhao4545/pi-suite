@@ -1,10 +1,10 @@
 # Pi 自定义扩展包设计方案
 
-状态：设计建议，尚未 fork 仓库或实现扩展。
+状态：实施中；当前实现事实维护在 doc/current，各专项按验收进度归档。
 
 目标环境：Windows、Ubuntu；手机通过 SSH 终端使用；以最新 Pi 为目标，实现时锁定实际验证过的版本。
 
-当前状态：项目已建立 pnpm/TypeScript 扩展骨架；以下业务专项均待实施。此目录维护目标、约束、完整设计和验收计划。实现事实见 [doc/current](../../current/index.md)，完成专项记录见 [doc/finished](../../finished/index.md)。
+当前状态：公共界面、会话绑定和 ask 基础能力已实现；ask 默认答案与批量专项已完成，其余业务与综合验收继续实施。此目录维护目标、约束、完整设计和验收计划。实现事实见 [doc/current](../../current/index.md)，完成专项记录见 [doc/finished](../../finished/index.md)。
 
 影响范围：扩展入口、公共界面与运行时、ask、tasks、jobs、goal、agents，以及两个目标平台的验证与发布。
 

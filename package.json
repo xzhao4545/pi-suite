@@ -9,7 +9,8 @@
     "node": ">=24"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-transform-types --test tests/ask/*.test.ts tests/runtime/*.test.ts"
   },
   "keywords": [
     "pi-package"

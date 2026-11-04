@@ -7,9 +7,16 @@
 - 项目是单个 pnpm 包，包名为 pi-suite，package.json 设置 private: true。
 - Node.js 要求为 24 或更高，包管理器固定为 pnpm 12.6.0。
 - 源码使用 TypeScript 和 ESM；Pi 通过 package.json 的 pi.extensions 加载 src/index.ts。
-- src/index.ts 导出扩展函数，函数体为占位注释。
+- src/index.ts 是唯一扩展入口，注册 ask_user、/suite 及会话生命周期事件。
 - 源码目录按 ui、runtime、ask、tasks、jobs/backends、goal、agents 划分；上游来源登记位于 third-party/UPSTREAM.md。
 - Pi 开发依赖固定为 1.5.0，依赖解析记录在 pnpm-lock.yaml。
+
+## 模块文档
+
+- [公共运行时与配置](./runtime/index.md) — 会话绑定、统一通知、模块开关及配置优先级。
+- [统一界面](./ui/index.md) — dock 高度预算、状态发布与原生历史组件。
+- [ask 接口与操作](./ask/index.md) — 默认值、批量、多选、超时、搜索及焦点。
+- [基线与验证](./validation.md) — 依赖来源、目标平台和必要检查范围。
 
 ## 版本控制
 
@@ -24,6 +31,7 @@
 ```sh
 pnpm install
 pnpm typecheck
+pnpm test
 ```
 
 开发入口：
@@ -32,4 +40,4 @@ pnpm typecheck
 pi -e ./src/index.ts
 ```
 
-Pi 直接加载 TypeScript 扩展；类型检查使用 tsc --noEmit。
+Pi 直接加载 TypeScript 扩展；类型检查使用 tsc --noEmit。测试使用 Node 内置测试运行器和 TypeScript 转换，覆盖实际 Pi SDK 工具包装器及原生 TUI 组件。

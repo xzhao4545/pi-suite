@@ -2,7 +2,7 @@
 
 目标：在保留聊天查阅空间的前提下，支持超时、批量、多选、推荐、默认答案和长内容查阅。
 
-当前状态：待实施；当前扩展入口尚未注册 ask_user。
+当前状态：ask_user 已注册；批量、推荐与默认答案专项已完成。交互及详情已实现基础能力，仍需完成跨模块联动与综合运行验收。
 
 影响范围：ask 工具、ui 的布局和焦点、等待期间的运行时通知。
 
@@ -13,8 +13,8 @@
 ## 任务列表
 
 - [ ] [询问交互与超时](interaction.md)
-- [ ] [批量提问、多选与推荐](batch-selection.md)
-- [ ] [默认答案与预选项](default-answers.md)
+- [x] [批量提问、多选与推荐](../../../finished/pi-suite/ask/batch-selection.md)
+- [x] [默认答案与预选项](../../../finished/pi-suite/ask/default-answers.md)
 - [ ] [选项说明与滚动](details-scroll.md)
 
 ## 验收方式

@@ -1,0 +1,85 @@
+[
+  {
+    "name": "pi-ask-user",
+    "version": "0.17.2",
+    "integrity": "sha512-PByaeaZ5L2+a7GA26VtVzJAqgiOnvOJospXKfr7FFx6/bLT6MTI3Er2CMOyuv26dni2Gi0pSApzX0iVDUOKZ6A==",
+    "tarball": "https://registry.npmjs.org/pi-ask-user/-/pi-ask-user-0.17.2.tgz",
+    "license": "MIT",
+    "gitHead": "3d6a424ea65f0295ffe402eead3073c001a29468",
+    "repository": {
+      "url": "git+https://github.com/edlsh/pi-ask-user.git",
+      "type": "git"
+    }
+  },
+  {
+    "name": "@tintinweb/pi-tasks",
+    "version": "0.9.1",
+    "integrity": "sha512-nLcoUKrKoNXDR/Lzyj1zG/SlazNZpEpKwFKvy2urAbWAJm67kP1zDda4m45n5zgWs/7X3zNeVzTCi57jZH3ehw==",
+    "tarball": "https://registry.npmjs.org/@tintinweb/pi-tasks/-/pi-tasks-0.9.1.tgz",
+    "license": "MIT",
+    "gitHead": "c820715be1bf05db36d0739e88061b97b8c2c9d3",
+    "repository": {
+      "url": "git+https://github.com/tintinweb/pi-tasks.git",
+      "type": "git"
+    }
+  },
+  {
+    "name": "pi-interactive-shell",
+    "version": "0.18.0",
+    "integrity": "sha512-aSF1yo3U5q52F1WdKmqHV82DpxgIkoDtgq7aLL6GO+Gv/3yk59XDyjVxnJtMQ75f2CtvOn5SKc/N/3Ps9smo2w==",
+    "tarball": "https://registry.npmjs.org/pi-interactive-shell/-/pi-interactive-shell-0.18.0.tgz",
+    "license": "MIT",
+    "gitHead": "38236846c69c39eb552487ae32e1e3ef4773f480",
+    "repository": {
+      "url": "git+https://github.com/nicobailon/pi-interactive-shell.git",
+      "type": "git"
+    }
+  },
+  {
+    "name": "@narumitw/pi-goal",
+    "version": "0.54.15",
+    "integrity": "sha512-BuV7MCvW389fBELeKlcxfFJhPvrpJIV7HceEmiKqI9dsjX0eCX6S0t7N22dYSAKg2X1R7P40nCHkRKuBw0kVIg==",
+    "tarball": "https://registry.npmjs.org/@narumitw/pi-goal/-/pi-goal-0.54.15.tgz",
+    "license": "MIT",
+    "gitHead": null,
+    "repository": {
+      "url": "git+https://github.com/narumiruna/pi-extensions.git",
+      "type": "git",
+      "directory": "packages/pi-goal"
+    }
+  },
+  {
+    "name": "@tintinweb/pi-subagents",
+    "version": "0.23.0",
+    "integrity": "sha512-yidcaZqUjOOM+s++rGaBE17tjxD6b0ROfFrgdqbyaJINMdrAZUuErqT2Sx3NGAfA70jl+jvEqdKeU/IqhGUSPA==",
+    "tarball": "https://registry.npmjs.org/@tintinweb/pi-subagents/-/pi-subagents-0.23.0.tgz",
+    "license": "MIT",
+    "gitHead": "a60247c47f8b0a17bfe7208f9e248e464eda05f0",
+    "repository": {
+      "url": "git+https://github.com/tintinweb/pi-subagents.git",
+      "type": "git"
+    }
+  },
+  {
+    "name": "pi-background-jobs",
+    "version": "0.1.3",
+    "integrity": "sha512-N+HhrJj1SB1cgpowqFAKizqBYp5bHARHqtTRTG1P35jFQ0EdpoubFvsaprmA2Vn3t3LQbOSMAkWpCAC5rcv1zA==",
+    "tarball": "https://registry.npmjs.org/pi-background-jobs/-/pi-background-jobs-0.1.3.tgz",
+    "license": "MIT",
+    "gitHead": null,
+    "repository": null
+  },
+  {
+    "name": "@narumitw/pi-starship",
+    "version": "0.65.2",
+    "integrity": "sha512-MWYMpkiboQbnEx0eUTKEBQLvatChV2q6sL59OrDluJFSrMZquOYVAh5OrHHVYGfLPnfQcYkyn1jAS8rkUeLH2A==",
+    "tarball": "https://registry.npmjs.org/@narumitw/pi-starship/-/pi-starship-0.65.2.tgz",
+    "license": "MIT",
+    "gitHead": null,
+    "repository": {
+      "url": "git+https://github.com/narumiruna/pi-extensions.git",
+      "type": "git",
+      "directory": "packages/pi-starship"
+    }
+  }
+]
