@@ -46,10 +46,14 @@ function utf8Start(buffer: Buffer): number {
 function formatBytes(bytes: number): string {
   return bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KiB` : `${(bytes / 1048576).toFixed(1)} MiB`;
 }
+/** Invalid caller input to a read, such as a bad search pattern; tools map it to INVALID_ARGS. */
+export class ReadArgumentError extends Error {
+  readonly code = 'INVALID_ARGS';
+}
 function compileSearch(search: string): RegExp {
   const literal = /^\/(.*)\/([a-z]*)$/s.exec(search);
   try { return literal ? new RegExp(literal[1], literal[2].replace('g', '')) : new RegExp(search, 'i'); }
-  catch (error) { throw Object.assign(new Error(`Invalid search pattern: ${(error as Error).message}`), { code: 'INVALID_ARGS' }); }
+  catch (error) { throw new ReadArgumentError(`Invalid search pattern: ${error instanceof Error ? error.message : String(error)}`); }
 }
 
 /** Streams complete lines with their starting byte offsets from [from, to). */
@@ -138,6 +142,6 @@ async function search(source: ReadSource, request: ReadRequest, render: (raw: st
     } else if (after > 0) { out.push(`${lineNumber}  ${text}`); after--; lastPrinted = lineNumber; }
     else { before.push(text); if (before.length > context) before.shift(); }
   }
-  return { text: out.join('\n') || `No lines match ${request.search}`, offset: 0, nextOffset, totalBytes: source.size,
+  return { text: out.join('\n') || `No lines match ${request.search}`, offset: from, nextOffset, totalBytes: source.size,
     endOfStream: nextOffset >= source.size, matches };
 }

@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
-import { fileSource, readBounded, READ_LIMITS, type ReadPage } from '../runtime/read.ts';
+import { fileSource, readBounded, ReadArgumentError, READ_LIMITS, type ReadPage } from '../runtime/read.ts';
 import { translateInput } from './terminal/keys.ts';
 import { normalizeVisibleText, sanitizeText } from './terminal/visible-text.ts';
 import { resolvePiShell } from './terminal/shell.ts';
@@ -129,7 +129,7 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule): void {
       try {
         page = await readBounded(source, { offset: params.offset, limitBytes: params.limitBytes, search: params.search, context: params.context }, render);
       } catch (error) {
-        if (error instanceof SyntaxError) throw new JobError('INVALID_ARGS', `Invalid search pattern: ${error.message}`, job.id);
+        if (error instanceof ReadArgumentError) throw new JobError('INVALID_ARGS', error.message, job.id);
         throw error;
       } finally { await source.close(); }
       let stderrNote: string | undefined;

@@ -10,7 +10,7 @@ import { stopTracked, stopTrackedSync, type Tracked } from './backends/process.t
 import { launchPipe } from './backends/pipe.ts';
 import { launchPty } from './backends/pty-job.ts';
 import type { ResolvedShellConfig } from './terminal/shell.ts';
-import { JobError, LIMITS, type InputRecord, type JobSummary, type StartRequest, type StopReason, type StopResult, type Stream, type Workspace } from './types.ts';
+import { errnoCode, JobError, LIMITS, type InputRecord, type JobSummary, type StartRequest, type StopReason, type StopResult, type Stream, type Workspace } from './types.ts';
 
 const JOB_ID = /^job_[a-f0-9]{8}$/;
 type Owned = {
@@ -272,7 +272,7 @@ export class JobManager {
     if (item) return { job: this.view(item), live: true };
     try { return { job: await this.store.load(workspace, id), live: false }; }
     catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new JobError('NOT_FOUND', `No job ${id} in this workspace`, id);
+      if (errnoCode(error) === 'ENOENT') throw new JobError('NOT_FOUND', `No job ${id} in this workspace`, id);
       throw error;
     }
   }

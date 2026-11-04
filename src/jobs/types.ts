@@ -38,6 +38,10 @@ export class JobError extends Error {
     super(`${code}: ${message}`); this.name = 'JobError'; this.code = code; this.jobId = jobId;
   }
 }
+/** Node system error code, if the value carries one. */
+export function errnoCode(error: unknown): string | undefined {
+  return error instanceof Error && 'code' in error && typeof error.code === 'string' ? error.code : undefined;
+}
 export const LIMITS = {
   // timeoutMs is optional: an omitted timeout means no run-time limit.
   maxRunMs: 86400000,

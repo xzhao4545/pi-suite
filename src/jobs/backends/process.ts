@@ -1,6 +1,6 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import { stopWindows, stopWindowsSync, captureIdentity } from './windows-tree.ts';
-import { LIMITS, type CleanupEvidence, type ExitObservation, type ProcessIdentity } from '../types.ts';
+import { errnoCode, LIMITS, type CleanupEvidence, type ExitObservation, type ProcessIdentity } from '../types.ts';
 import type { PtyTerminalSession } from '../terminal/session.ts';
 
 /**
@@ -23,11 +23,11 @@ export function trackIdentity(run: Tracked): void {
 
 function groupAlive(pid: number): boolean {
   try { process.kill(-pid, 0); return true; }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false; throw error; }
+  catch (error) { if (errnoCode(error) === 'ESRCH') return false; throw error; }
 }
 function signalGroup(pid: number, signal: NodeJS.Signals): void {
   try { process.kill(-pid, signal); }
-  catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error; }
+  catch (error) { if (errnoCode(error) !== 'ESRCH') throw error; }
 }
 async function stopPosix(run: Tracked, deadline: number): Promise<CleanupEvidence> {
   const evidence: CleanupEvidence = { state: 'unconfirmed', scope: [{ pid: run.pid, createdAt: new Date(run.spawnedAt).toISOString() }], rootExited: !!run.exitObserved };

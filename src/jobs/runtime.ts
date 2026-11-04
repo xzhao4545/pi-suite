@@ -21,12 +21,17 @@ const key = Symbol.for('pi-suite.jobs.runtime');
 const globals = globalThis as typeof globalThis & { [key]?: Registration };
 
 function compatible(value: unknown, agentDir: string): value is Registration {
-  if (!value || typeof value !== 'object') return false;
-  const raw = value as Partial<Registration>;
-  return raw.protocolVersion === PROTOCOL_VERSION && raw.agentDir === agentDir && typeof raw.manager?.subscribe === 'function';
+  if (!value || typeof value !== 'object' || !('protocolVersion' in value) || !('agentDir' in value) || !('manager' in value)) return false;
+  const manager: unknown = value.manager;
+  return value.protocolVersion === PROTOCOL_VERSION && value.agentDir === agentDir &&
+    !!manager && typeof manager === 'object' && 'subscribe' in manager && typeof manager.subscribe === 'function';
 }
+/** An old registration of unknown shape counts as occupied unless it proves otherwise. */
 function occupied(value: unknown): boolean {
-  try { return (value as Registration).manager.hasOccupancy(); } catch { return true; }
+  if (!value || typeof value !== 'object' || !('manager' in value)) return true;
+  const manager: unknown = value.manager;
+  if (!manager || typeof manager !== 'object' || !('hasOccupancy' in manager) || typeof manager.hasOccupancy !== 'function') return true;
+  try { return manager.hasOccupancy() !== false; } catch { return true; }
 }
 
 export function acquireRuntime(agentDir: string): RuntimeHandle {
