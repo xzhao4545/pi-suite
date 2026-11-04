@@ -20,7 +20,9 @@
 - [ ] [统一执行任务与保活](jobs/index.md)
 - [ ] [目标状态与续跑](goal.md)
 - [ ] [goal 状态栏联动与 pi-starship 兼容](goal-status.md)
+- [ ] [公共状态栏摘要与活动数量](status.md)
 - [ ] [子代理原生会话查看](agents.md)
+- [ ] [子代理运行记录与手动控制](agent-runs.md)
 - [ ] [实施顺序与验收](implementation.md)
 
 ## 验收与维护

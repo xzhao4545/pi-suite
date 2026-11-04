@@ -13,11 +13,12 @@
 ## 任务列表
 
 - [ ] [统一执行任务管理](execution.md)
+- [ ] [运行与历史记录、输入输出及手动停止](history-control.md)
 - [ ] [同一 Pi 进程内保活](session-lifecycle.md)
 - [ ] [可选跨 Pi 进程保活](persistent-runtime.md)
 
 ## 验收方式
 
-Windows 和 Ubuntu 分别核对执行、输入、日志、退出和同进程会话操作；跨进程恢复只在确认实施后按其支持范围验收。
+Windows 和 Ubuntu 分别核对执行、输入、日志、耗时、已结束历史、手动停止和同进程会话操作；跨进程恢复只在确认实施后按其支持范围验收。
 
 [返回扩展包待办索引](../index.md)

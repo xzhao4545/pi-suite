@@ -36,8 +36,8 @@
 | `@tintinweb/pi-tasks` | 0.9.1 | 任务无 `parentId`。面板默认最多 10 项，按顶部/底部截取；只处理终端列宽，缺少按终端行数及其他面板占用调整的逻辑。 |
 | `pi-interactive-shell` | 0.18.0 | 已通过进程内全局 coordinator 保留 `/reload` 的活动任务；其他 `session_shutdown` 原因仍调用 `killAll()`。已有 PTY、交互输入、后台查看和监控，可选择保留需要的能力。 |
 | `@narumitw/pi-goal` | 0.54.15 | 已有 retry/compact 恢复逻辑，但在 `agent_end` 中仍将 assistant 的 `stopReason: aborted` 直接转为 goal paused。已有 setStatus 状态发布，稳定键为 goal。 |
-| `@tintinweb/pi-subagents` | 0.23.0 | 会话查看器已支持 assistant Markdown，默认开启；工具调用仍主要显示名称、工具结果主要按文本处理，并非主 agent 的完整消息组件。fleet 固定最多 5 个 agent 行，另有提示、main、空白和溢出行。 |
-| `pi-background-jobs` | 0.1.3 | 已支持同一 Pi 进程内跨 reload/new/resume/fork 存活；仅 quit 执行退出清理。主要面向 Windows 的非交互任务。运行条仍是每个任务一行。 |
+| `@tintinweb/pi-subagents` | 0.23.0 | 会话查看器已支持 assistant Markdown，默认开启；工具调用仍主要显示名称、工具结果主要按文本处理，并非主 agent 的完整消息组件。fleet 固定最多 5 个 agent 行，另有提示、main、空白和溢出行。已有 subagents 状态键、已结束结果持久条目及查看器 x 再 x 停止；完整历史取决于 child session 是否持久化。 |
+| `pi-background-jobs` | 0.1.3 | 已支持同一 Pi 进程内跨 reload/new/resume/fork 存活；仅 quit 执行退出清理。主要面向 Windows 的非交互任务。运行条仍是每个任务一行。已有运行/历史状态查询、stdout/stderr 分页、起止时间与停止/清理证据；交互输入需与 interactive-shell 融合。 |
 
 当前 npm 新作用域 Pi 核对版本是 `@earendil-works/pi-coding-agent@1.5.0`。旧 `@mariozechner/*` 和新作用域不能仅凭“latest”视作相同 API；实现时记录实际宿主版本和依赖作用域，先支持一个经验证的基线。
 
@@ -49,6 +49,8 @@
 - `pi-goal/dist/index.ts`：`agent_end` 对 aborted 的暂停分支。
 - `pi-subagents/src/ui/conversation-viewer.ts`：按角色手工提取文本；`src/ui/fleet-list.ts`：`MAX_AGENT_ROWS = 5`。
 - `pi-background-jobs/extensions/index.ts`、`src/runtime.ts`：可撤销通知绑定与进程内 runtime；README 的生命周期限制。
+- `pi-background-jobs/src/types.ts`、`src/tools.ts`、`src/panel.ts`：起止时间、历史、日志分页、停止与历史清理；`pi-interactive-shell/README.md` 的 kill 示例明确只确认本地 supervision 取消，不确认子进程已经退出。
+- `pi-subagents/src/ui/agent-widget.ts`：setStatus 的 subagents 键及活动计数；`src/agent-record-entry.ts`：已结束记录和 child session 引用；`src/ui/conversation-viewer.ts`：停止操作与只读历史边界。
 - Pi 的 `core/agent-session`：手动 `compact()` 先执行 `await this.abort()`；扩展类型声明提供 `agent_before_settle`、`agent_settled` 和带 reason 的 `session_shutdown`。
 
 ## 状态栏互操作基线
@@ -58,6 +60,8 @@
 `src/pi-starship.ts` 的 runtimeSnapshot 在渲染时读取 footerData 的扩展状态；wrapFormattedStatusline 会对整个 footer 自动换行。minimal 等预设未包含 extension_status，不能仅因已安装 pi-starship 就承诺显示 goal。
 
 Pi 1.5.0 的 setStatus 更新会请求界面刷新；原生 `modes/interactive/components/footer` 将扩展状态追加为一行，再按宽度截断。状态发布和第三方 footer 布局是两个职责，详见 [goal 状态栏联动](goal-status.md)。
+
+agent/job 活动数量计划由本包共享入口合成 pi-suite:runtime 状态，不重复加载上游的独立状态和面板；口径与会话范围见 [公共状态栏摘要](status.md)。
 
 ## 11. 参考来源
 
