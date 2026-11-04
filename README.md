@@ -1,6 +1,6 @@
 # pi-suite
 
-自定义 Pi 扩展包。使用 pnpm 管理依赖，按模块逐步实现询问、任务树、后台执行、goal 和 subagents 功能。
+自定义 Pi 扩展包。使用 pnpm 管理依赖，按模块逐步实现询问、两级任务管理、后台执行、goal 和 subagents 功能。
 
 当前已建立项目骨架和扩展入口，尚未实现具体功能。
 
@@ -29,7 +29,7 @@ src/
   ui/               面板布局、焦点与消息渲染
   runtime/          会话绑定与通知协调
   ask/              用户询问
-  tasks/            多级任务
+  tasks/            两级任务管理
   jobs/backends/    后台执行与平台后端
   goal/             目标与续跑
   agents/           subagent 管理与查看

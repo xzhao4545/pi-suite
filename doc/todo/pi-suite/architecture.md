@@ -46,7 +46,7 @@ src/
     binding.ts                 # 当前会话绑定及撤销
     notifications.ts           # 合并通知、去重、请求下一轮
   ask/                         # 用户询问与超时策略
-  tasks/                       # 多级任务树与数据存储
+  tasks/                       # 两级任务管理与数据存储
   jobs/                        # interactive-shell + background-jobs
     backends/                  # Windows / Ubuntu，PTY / pipe
   goal/                        # 目标状态、预算、续跑策略
