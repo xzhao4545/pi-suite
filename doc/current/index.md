@@ -11,6 +11,12 @@
 - 源码目录按 ui、runtime、ask、tasks、jobs/backends、goal、agents 划分；上游来源登记位于 third-party/UPSTREAM.md。
 - Pi 开发依赖固定为 1.5.0，依赖解析记录在 pnpm-lock.yaml。
 
+## 版本控制
+
+- 提交源码、目录占位文件、AGENTS.md、文档、上游来源与许可证，以及 package.json、pnpm-lock.yaml、pnpm-workspace.yaml、.npmrc 和 TypeScript 配置。
+- .gitignore 排除依赖、本地 pnpm 缓存、构建与测试产物、包根目录的打包文件、日志、临时文件、环境变量文件和编辑器本地状态。
+- .env.example 与 .env.*.example 可作为无凭据配置模板提交；VS Code 的 extensions.json、settings.json、tasks.json、launch.json 可作为共享项目配置提交。
+
 ## 开发与检查
 
 从包根目录运行：

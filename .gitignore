@@ -1,0 +1,41 @@
+# 依赖与 pnpm 本地缓存；pnpm-lock.yaml 保留在版本控制中
+node_modules/
+.pnpm-store/
+.cache/
+
+# 构建、测试与打包产物
+dist/
+build/
+coverage/
+.nyc_output/
+*.tsbuildinfo
+/*.tgz
+
+# 日志与临时文件
+*.log
+/tmp/
+/temp/
+*.tmp
+*.temp
+
+# 本地环境变量；无凭据的配置示例可以提交
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# 编辑器本地状态；允许共享 VS Code 项目配置
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+*.swp
+*.swo
+*~
+
+# Windows / Ubuntu 开发环境中的系统文件
+.DS_Store
+Thumbs.db
+Desktop.ini

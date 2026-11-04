@@ -1,0 +1,4 @@
+allowBuilds:
+  # Both published packages include prebuilt output; these scripts only print messages.
+  '@google/genai': false
+  protobufjs: false
