@@ -12,7 +12,7 @@ test("native Pi footer reads the goal status slot and budgets one visible status
       onBranchChange: () => () => {},
       getExtensionStatuses: () => new Map([...h.statuses].filter((entry): entry is [string, string] => entry[1] !== undefined)),
     });
-    h.faux.setResponses([context => fauxAssistantMessage(fauxToolCall("goal_wait", { goal_id: goalId(context), reason: "External event" }))]);
+    h.faux.setResponses([context => fauxAssistantMessage(fauxToolCall("goal_wait", { goalId: goalId(context), reason: "External event" }))]);
     await h.session.prompt("/goal Display waiting goal"); await h.idle();
     for (const width of [40, 60, 120]) {
       const lines = footer.render(width);

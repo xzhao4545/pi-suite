@@ -2,7 +2,7 @@
 
 目标：ask、goal、tasks、jobs、agents 的模型工具使用同一套命名、参数、返回和错误约定，减少模型记忆多种风格的负担。
 
-当前状态：待实施；用户已确认全部统一，包括重命名已实现的 goal 参数与 ask_user 的 timeout。ask_user 与 goal 工具已注册但仍是旧参数风格，tasks/jobs/agents 工具尚未注册。
+当前状态：实施中；ask_user 的 timeoutMs 与 goal 工具的 goalId、repeatedTurns、resumeAfterMs 已按本规范改名并通过检查。goal_wait 的 waitFor、共享 schema 与 tasks/jobs/agents 工具尚未实现。
 
 影响范围：src 下各模块的工具注册、共享参数 schema、工具描述、doc/current 的接口文档及上游工具名映射。
 
@@ -12,7 +12,7 @@
 
 ## 任务列表
 
-- [ ] 把 goal 工具参数改为 camelCase（goalId、repeatedTurns、resumeAfterMs），ask_user 的 timeout 改为 timeoutMs
+- [x] 把 goal 工具参数改为 camelCase（goalId、repeatedTurns、resumeAfterMs），ask_user 的 timeout 改为 timeoutMs
 - [ ] goal_wait 增加 waitFor，只在指定 job/agent 结算或期限到达时恢复目标
 - [ ] 抽取共享 schema：对象 ID、列表筛选与分页、输出读取、等待和停止结果
 - [ ] 按本规范注册 tasks、jobs、agents 工具与共享 wait

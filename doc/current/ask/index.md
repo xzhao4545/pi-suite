@@ -12,7 +12,7 @@ allowMultiple 默认 false，allowFreeform 默认 true。推荐标记只用于�
 
 ## 超时与结果
 
-timeout 单位为毫秒，省略使用配置默认 120000；0 不设期限。计时从第一次展示开始，排队期间不计时，查阅历史或说明不重置期限，整批问题共用一个期限。
+timeoutMs 单位为毫秒，省略使用配置 ask.timeout 的默认 120000；0 不设期限。计时从第一次展示开始，排队期间不计时，查阅历史或说明不重置期限，整批问题共用一个期限。
 
 返回 status 为 answered、timed_out 或 cancelled。超时与取消均不返回答案，不把默认值或推荐当作同意。非回答结果通过工具 terminate 结束当前宿主循环；归属当前目标时持久化 waiting_user，等待新的用户输入或 /goal resume。保留单题 question/context/options/response/cancelled 和批量 kind/heading/questions/answers/cancelled 字段；非回答结果的 cancelled 兼容标记为 true，具体原因以 status 为准。
 

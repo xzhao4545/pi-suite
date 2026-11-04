@@ -39,7 +39,7 @@ export class AskManager {
           const transcript = new Transcript(tui, ctx.cwd);
           transcript.setEntries(ctx.sessionManager.getBranch());
           this.active = new AskView(new AskForm(questions), tui, theme, this.dock, config, transcript,
-            done, params.timeout ?? config.ask.timeout, signal, params.allowComment, requester, params.questions ? params.question : undefined);
+            done, params.timeoutMs ?? config.ask.timeout, signal, params.allowComment, requester, params.questions ? params.question : undefined);
           return this.active;
         }, { blocked: { kind: "question", message: questions[0].question } });
       } finally {

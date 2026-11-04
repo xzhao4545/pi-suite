@@ -13,11 +13,11 @@
 
 目标文本最长 4000 字符；较长要求可引用文件。预算为正整数，省略时无限制。新用户输入可恢复 Esc 或询问未回答留下的 active 目标；明确 paused 等目标状态需使用 resume。
 
-目标工具使用当前提示中的精确 goal_id，并由运行归属校验：
+目标工具使用当前提示中的精确 goalId，并由运行归属校验：
 
-- goal_complete(goal_id, summary)：summary 提供逐项完成和验证证据；成功后 completed，并结束宿主循环。
-- goal_blocked(goal_id, reason, evidence, repeated_turns)：同一外部障碍至少连续三轮，必须提供具体原因与证据；成功后 blocked，结束宿主循环。
-- goal_wait(goal_id, reason, resume_after_ms?)：仅等待已安排的外部事件；可选 1–2147483647 毫秒单次期限；成功后 waiting_jobs，结束宿主循环。
+- goal_complete(goalId, summary)：summary 提供逐项完成和验证证据；成功后 completed，并结束宿主循环。
+- goal_blocked(goalId, reason, evidence, repeatedTurns)：同一外部障碍至少连续三轮，必须提供具体原因与证据；成功后 blocked，结束宿主循环。
+- goal_wait(goalId, reason, resumeAfterMs?)：仅等待已安排的外部事件；可选 1–2147483647 毫秒单次期限；成功后 waiting_jobs，结束宿主循环。
 
 完成判定仍需模型依据原目标逐项审计；运行归属与参数校验不能代替事实验收。普通未完成工作不能用 blocked 或 wait 替代推进。
 

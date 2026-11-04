@@ -188,7 +188,7 @@ export class GoalManager {
   }
   requireOwned(id: string, ctx: ExtensionContext): Goal {
     if (!this.goal || this.goal.id !== id || this.goal.status !== "active" || !this.owned || ctx.sessionManager.getSessionId() !== this.binding.current?.sessionId) {
-      throw new Error("The tool call does not own the active goal_id");
+      throw new Error("The tool call does not own the active goalId");
     }
     return this.goal;
   }

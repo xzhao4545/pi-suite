@@ -16,7 +16,7 @@ test("actual runtime new/resume/fork keeps goals branch-local and restores origi
   });
   try {
     current.faux.setResponses([context => fauxAssistantMessage(fauxToolCall("goal_wait", {
-      goal_id: goalId(context), reason: "Arranged external result",
+      goalId: goalId(context), reason: "Arranged external result",
     }))]);
     await current.session.prompt("/goal Keep original session goal"); await current.idle();
     const id = current.goal()!.id, originalPath = current.session.sessionFile!;

@@ -39,7 +39,7 @@ export function goalSummary(goal: Goal | undefined, schedule: Schedule, queued: 
 export function goalContract(goal: Goal): string {
   return `Active goal ${goal.id}: ${goal.text}\nProgress: ${goal.progress || "not yet recorded"}\n` +
     `Tokens: ${goal.usedTokens}${goal.budget ? `/${goal.budget}` : " (no configured limit)"}.\n` +
-    "Continue until every requirement is implemented and verified. Use goal_complete with the exact goal_id and verification evidence only after a requirement-by-requirement completion audit. " +
+    "Continue until every requirement is implemented and verified. Use goal_complete with the exact goalId and verification evidence only after a requirement-by-requirement completion audit. " +
     "Use goal_blocked only for the same evidenced external blocker repeated for at least three turns. " +
     "Use goal_wait only when an arranged external event or deadline must wake the work. " +
     "A timed_out/cancelled ask_user is not consent. Never replace the objective with an easier subset.";

@@ -22,8 +22,8 @@ test("default initialization preserves explicit deselection, edits and raw optio
 });
 
 test("external schemas and semantic normalization reject conflicting defaults and batch settings", () => {
-  for (const timeout of [-1, Infinity, 0.5, 2147483648]) assert.equal(Value.Check(askSchema, { question: "Q", timeout }), false);
-  assert.equal(Value.Check(askSchema, { question: "Q", timeout: 0 }), true);
+  for (const timeoutMs of [-1, Infinity, 0.5, 2147483648]) assert.equal(Value.Check(askSchema, { question: "Q", timeoutMs }), false);
+  assert.equal(Value.Check(askSchema, { question: "Q", timeoutMs: 0 }), true);
   for (const params of [
     { question: "Q", options: ["a"], defaultOptionId: "missing" },
     { question: "Q", options: ["a"], allowMultiple: true, defaultOptionId: "option-1" },

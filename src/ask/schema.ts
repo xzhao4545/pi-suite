@@ -14,7 +14,7 @@ export const askSchema = Type.Object({
   question: Type.Optional(Type.String({ minLength: 1 })), ...fields,
   questions: Type.Optional(Type.Array(Type.Object({ question: Type.String({ minLength: 1 }), ...fields }), { minItems: 2, maxItems: 4 })),
   allowComment: Type.Optional(Type.Boolean()),
-  timeout: Type.Optional(Type.Integer({ minimum: 0, maximum: 2147483647,
+  timeoutMs: Type.Optional(Type.Integer({ minimum: 0, maximum: 2147483647,
     description: "Milliseconds from display. Omit for configured default; 0 disables expiry. Expiry never submits defaults." })),
 }, { additionalProperties: false });
 export type AskParams = Static<typeof askSchema>;

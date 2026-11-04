@@ -19,7 +19,7 @@ function fixture(params: AskParams, rows = 24, columns = 40) {
   const transcript = new Transcript(tui, process.cwd());
   const results: AskResult[] = [];
   const form = new AskForm(normalize(params));
-  const view = new AskView(form, tui, theme, dock, defaults, transcript, result => results.push(result), params.timeout ?? defaults.ask.timeout);
+  const view = new AskView(form, tui, theme, dock, defaults, transcript, result => results.push(result), params.timeoutMs ?? defaults.ask.timeout);
   return { view, form, results, dock };
 }
 
@@ -27,7 +27,7 @@ test("inline layout fits all specified terminal sizes and preserves filtered sel
   for (const [columns, rows] of [[40, 24], [60, 30], [120, 40]]) {
     const { view, form, dock } = fixture({ question: "中文长标题🙂".repeat(15), allowMultiple: true,
       options: Array.from({ length: 40 }, (_, i) => ({ id: `${i}`, title: `选择${i}🙂`, description: "完整说明\n".repeat(100) + "说明末尾" })),
-      defaultOptionIds: ["30"], timeout: 0 }, rows, columns);
+      defaultOptionIds: ["30"], timeoutMs: 0 }, rows, columns);
     const lines = view.render(columns);
     assert.ok(lines.length <= dock.askBudget(rows));
     lines.forEach(line => assert.ok(visibleWidth(line) <= columns));
@@ -47,7 +47,7 @@ test("mixed batches require final confirmation and retain each question's indepe
     { question: "Database", options: [{ id: "pg", title: "Postgres", recommended: true }], defaultOptionId: "pg" },
     { question: "Checks", allowMultiple: true, options: ["types", "tests"], defaultOptionIds: ["option-1", "option-2"] },
     { question: "Branch", defaultAnswer: "feature/work" },
-  ], timeout: 0 });
+  ], timeoutMs: 0 });
   view.render(40); view.handleInput("\t"); view.handleInput("\r");
   assert.equal(form.index, 1); view.handleInput(" ");
   view.handleInput("\t"); view.handleInput("\r");
@@ -63,7 +63,7 @@ test("mixed batches require final confirmation and retain each question's indepe
 });
 
 test("history and answer share one view and focus changes retain text drafts", () => {
-  const { view, form } = fixture({ question: "Branch", defaultAnswer: "feature/a", timeout: 0 });
+  const { view, form } = fixture({ question: "Branch", defaultAnswer: "feature/a", timeoutMs: 0 });
   view.render(40); view.handleInput("\x08"); const history = view.render(40);
   assert.ok(history.some(line => line.includes("Branch")));
   view.handleInput("\t"); view.handleInput("x"); view.render(40);
@@ -72,14 +72,14 @@ test("history and answer share one view and focus changes retain text drafts", (
 });
 
 test("timeout starts at first render and never submits defaults; answer and expiry settle once", async () => {
-  const timed = fixture({ question: "Q", defaultAnswer: "yes", timeout: 15 });
+  const timed = fixture({ question: "Q", defaultAnswer: "yes", timeoutMs: 15 });
   await delay(25); assert.deepEqual(timed.results, []);
   timed.view.render(40); await delay(25);
   assert.deepEqual(timed.results, [{ status: "timed_out", responses: [] }]);
   timed.view.handleInput("\r"); assert.equal(timed.results.length, 1);
-  const answered = fixture({ question: "Q", defaultAnswer: "yes", timeout: 15 });
+  const answered = fixture({ question: "Q", defaultAnswer: "yes", timeoutMs: 15 });
   answered.view.render(40); answered.view.handleInput("\r"); await delay(25);
   assert.equal(answered.results.length, 1); assert.equal(answered.results[0].status, "answered");
-  const unlimited = fixture({ question: "Q", defaultAnswer: "yes", timeout: 0 });
+  const unlimited = fixture({ question: "Q", defaultAnswer: "yes", timeoutMs: 0 });
   unlimited.view.render(40); await delay(25); assert.deepEqual(unlimited.results, []); unlimited.view.cancel();
 });

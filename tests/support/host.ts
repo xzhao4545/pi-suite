@@ -74,5 +74,5 @@ export function goalId(context: TranscriptContext): string {
 }
 
 export const complete = (context: TranscriptContext) => fauxAssistantMessage(fauxToolCall("goal_complete", {
-  goal_id: goalId(context), summary: "All requested checks passed",
+  goalId: goalId(context), summary: "All requested checks passed",
 }));

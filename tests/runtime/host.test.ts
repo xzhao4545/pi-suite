@@ -36,7 +36,7 @@ test("actual Pi SDK registers one ask_user and executes typed results through it
     await session.bindExtensions({ uiContext, mode: "tui" });
     const tools = session.agent.state.tools.filter(tool => tool.name === "ask_user");
     assert.equal(tools.length, 1);
-    const result = await tools[0].execute("ask:1", { question: "Branch", defaultAnswer: "feature/test", timeout: 0 });
+    const result = await tools[0].execute("ask:1", { question: "Branch", defaultAnswer: "feature/test", timeoutMs: 0 });
     const details = result.details as { status: string; response: { kind: string; text: string }; cancelled: boolean };
     assert.equal(details.status, "answered"); assert.equal(details.cancelled, false);
     assert.deepEqual(details.response, { kind: "freeform", text: "feature/test" });

@@ -54,7 +54,7 @@ test("Esc preserves the goal, foreign work cannot resume it, and explicit resume
 test("unanswered native ask terminates without consent; new user input resumes goal work", { timeout: 15000 }, async () => {
   const h = await host({ answer: "cancel" });
   try {
-    h.faux.setResponses([() => fauxAssistantMessage(fauxToolCall("ask_user", { question: "Approve action?", timeout: 0 }))]);
+    h.faux.setResponses([() => fauxAssistantMessage(fauxToolCall("ask_user", { question: "Approve action?", timeoutMs: 0 }))]);
     await h.session.prompt("/goal Ask before acting"); await h.idle();
     assert.equal(h.faux.state.callCount, 1); assert.equal(h.goal()?.status, "active");
     assert.equal(h.goal()?.waiting, "user"); assert.equal(h.statuses.get("goal"), "goal 待答");
@@ -89,7 +89,7 @@ test("real host manual compact and overflow recovery keep one continuation and g
   try {
     h.faux.setResponses([fauxAssistantMessage("Initial context recorded")]);
     await h.session.prompt("Initial conversation context. ".repeat(100));
-    h.faux.setResponses([context => fauxAssistantMessage(fauxToolCall("goal_wait", { goal_id: goalId(context), reason: "Arranged external work" }))]);
+    h.faux.setResponses([context => fauxAssistantMessage(fauxToolCall("goal_wait", { goalId: goalId(context), reason: "Arranged external work" }))]);
     await h.session.prompt("/goal Preserve the goal through compaction"); await h.idle();
     const id = h.goal()!.id;
     await h.session.compact(); await h.idle();
@@ -111,7 +111,7 @@ test("reload preserves an arranged wait; branch navigation restores its own goal
   const h = await host();
   try {
     const emptyBranch = h.session.sessionManager.appendCustomEntry("test:anchor", {});
-    h.faux.setResponses([context => fauxAssistantMessage(fauxToolCall("goal_wait", { goal_id: goalId(context), reason: "Arranged deadline" }))]);
+    h.faux.setResponses([context => fauxAssistantMessage(fauxToolCall("goal_wait", { goalId: goalId(context), reason: "Arranged deadline" }))]);
     await h.session.prompt("/goal Restore selected branch"); await h.idle();
     const id = h.goal()!.id, leaf = h.session.sessionManager.getLeafId()!;
     await h.session.reload(); assert.equal(h.goal()?.id, id); assert.equal(h.goal()?.waiting, "jobs");
@@ -170,7 +170,7 @@ test("threshold compact preserves active work; cancelled compact leaves the targ
     await h.session.prompt("/goal Verify threshold recovery"); await h.idle();
     assert.ok(reasons.includes("threshold")); assert.equal(h.goal()?.status, "completed");
     h.faux.setResponses([context => fauxAssistantMessage(fauxToolCall("goal_wait", {
-      goal_id: goalId(context), reason: "External work",
+      goalId: goalId(context), reason: "External work",
     }))]);
     await h.session.prompt("/goal Verify cancelled compaction"); await h.idle();
     cancel = true; await assert.rejects(h.session.compact(), /Compaction cancelled/);
@@ -183,7 +183,7 @@ test("reload restores one deadline wakeup and does not leave a runnable stale ti
   const h = await host(); const resumed = Promise.withResolvers<void>();
   try {
     h.faux.setResponses([
-      context => fauxAssistantMessage(fauxToolCall("goal_wait", { goal_id: goalId(context), reason: "Arranged deadline", resume_after_ms: 200 })),
+      context => fauxAssistantMessage(fauxToolCall("goal_wait", { goalId: goalId(context), reason: "Arranged deadline", resumeAfterMs: 200 })),
       context => { resumed.resolve(); return complete(context); },
     ]);
     await h.session.prompt("/goal Wake after reload"); await h.idle();
