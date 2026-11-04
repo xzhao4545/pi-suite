@@ -21,7 +21,8 @@ function details(params: AskParams, questions: Question[], result: AskResult) {
 export class AskManager {
   private queue = new AskQueue();
   private active?: AskView;
-  constructor(private binding: SessionBinding, private notifications: Notifications, private dock: Dock) {}
+  constructor(private binding: SessionBinding, private notifications: Notifications, private dock: Dock,
+    private onResult?: (answered: boolean, ctx: ExtensionContext) => void) {}
   cancel(): void { this.active?.cancel(); }
 
   async ask(params: AskParams, ctx: ExtensionContext, config: SuiteConfig, signal?: AbortSignal, requester = "main"): Promise<{ result: AskResult; questions: Question[] }> {
@@ -45,6 +46,7 @@ export class AskManager {
         this.active?.dispose(); this.active = undefined; this.dock.setAsk(false); release();
       }
     }, signal);
+    if (this.binding.isCurrent(captured)) this.onResult?.(result.status === "answered", ctx);
     return { result, questions };
   }
 }
@@ -59,7 +61,8 @@ export function registerAsk(pi: ExtensionAPI, manager: AskManager, getConfig: ()
     async execute(_id, params, signal, _update, ctx) {
       const { result, questions } = await manager.ask(params, ctx, getConfig(), signal);
       const record = details(params, questions, result);
-      return { content: [{ type: "text", text: JSON.stringify(record) }], details: record };
+      return { content: [{ type: "text", text: JSON.stringify(record) }], details: record,
+        terminate: result.status !== "answered" };
     },
   });
 }

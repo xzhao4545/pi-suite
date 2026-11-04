@@ -35,7 +35,7 @@ coverage/
 *.swo
 *~
 
-# Windows / Ubuntu 开发环境中的系统文件
+# Windows / Linux 开发环境中的系统文件
 .DS_Store
 Thumbs.db
 Desktop.ini

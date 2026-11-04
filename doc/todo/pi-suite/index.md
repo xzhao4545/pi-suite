@@ -4,7 +4,7 @@
 
 目标环境：Windows、Linux；手机通过 SSH 终端使用；以最新 Pi 为目标，实现时锁定实际验证过的版本。Linux 按操作系统能力验证，不单独安排发行版专项，不安装新的发行版。
 
-当前状态：公共界面、会话绑定和 ask 基础能力已实现；ask 默认答案与批量专项已完成，其余业务与综合验收继续实施。此目录维护目标、约束、完整设计和验收计划。实现事实见 [doc/current](../../current/index.md)，完成专项记录见 [doc/finished](../../finished/index.md)。
+当前状态：公共界面、会话绑定、ask 与目标基础能力已实现；ask 默认答案、批量专项与目标生命周期基础阶段已完成，执行任务、子代理及综合验收仍待实施。此目录维护目标、约束、完整设计和验收计划。实现事实见 [doc/current](../../current/index.md)，完成专项记录见 [doc/finished](../../finished/index.md)。
 
 影响范围：扩展入口、公共界面与运行时、ask、tasks、jobs、goal、agents，以及两个目标平台的验证与发布。
 

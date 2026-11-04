@@ -10,6 +10,8 @@ Dock 是本包唯一常驻 widget，键为 pi-suite:dock。模块提交稳定 ID
 
 StatusPublisher 是 goal 与 pi-suite:runtime 两个槽位的唯一写入方，原生 setStatus 更新/清除摘要。活动 ID 使用集合去重；文本不变时不重复写入。status 模式的摘要不在 dock 重复展示，dock 模式清除状态槽位，hidden 不建立常驻摘要。绑定撤销时清除本包的两个槽位。
 
+goal 摘要从目标与调度状态派生；完成反馈显示 5 秒后清除，回调同时校验绑定与目标 ID。暂停、阻塞、请求失败与预算耗尽持续可见。Pi 原生 footer 读取 goal 键；pi-starship 0.65.2 使用 extension_status 模块读取同一键，其格式和数量上限由外部 footer 配置控制。目标详情通过 /goal 打开，复用 Markdown 与 ScrollView，并提供搜索和显式翻页操作。
+
 ## 原生会话查看
 
 Transcript 复用 Pi 的 UserMessageComponent、AssistantMessageComponent、ToolExecutionComponent、CustomMessageComponent 和压缩/分支摘要组件。已知内置工具采用 Pi 提供的 renderers；未知扩展工具使用原生通用工具呈现。工具调用与结果按 toolCallId 配对，不执行工具。thinking 与工具详情可切换展开，输出默认不传输终端图片。

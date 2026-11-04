@@ -7,7 +7,7 @@
 - 项目是单个 pnpm 包，包名为 pi-suite，package.json 设置 private: true。
 - Node.js 要求为 24 或更高，包管理器固定为 pnpm 12.6.0。
 - 源码使用 TypeScript 和 ESM；Pi 通过 package.json 的 pi.extensions 加载 src/index.ts。
-- src/index.ts 是唯一扩展入口，注册 ask_user、/suite 及会话生命周期事件。
+- src/index.ts 是唯一扩展入口，注册 ask_user、goal_complete/goal_blocked/goal_wait、/goal、/suite 及会话生命周期事件。
 - 源码目录按 ui、runtime、ask、tasks、jobs/backends、goal、agents 划分；上游来源登记位于 third-party/UPSTREAM.md。
 - Pi 开发依赖固定为 1.5.0，依赖解析记录在 pnpm-lock.yaml。
 
@@ -16,6 +16,7 @@
 - [公共运行时与配置](./runtime/index.md) — 会话绑定、统一通知、模块开关及配置优先级。
 - [统一界面](./ui/index.md) — dock 高度预算、状态发布与原生历史组件。
 - [ask 接口与操作](./ask/index.md) — 默认值、批量、多选、超时、搜索及焦点。
+- [目标管理](./goal/index.md) — 持久目标、运行调度、宿主恢复、预算和操作。
 - [基线与验证](./validation.md) — 依赖来源、目标平台和必要检查范围。
 
 ## 版本控制

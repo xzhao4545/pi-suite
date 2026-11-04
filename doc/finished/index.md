@@ -4,3 +4,4 @@
 
 - [ask 默认答案与预选项](./pi-suite/ask/default-answers.md) — 默认初始化、参数冲突和明确提交。
 - [ask 批量提问、多选与推荐](./pi-suite/ask/batch-selection.md) — 独立题型、稳定选项 ID 和整批确认。
+- [目标生命周期与状态摘要基础阶段](./pi-suite/goal-core.md) — 宿主恢复、用户控制、预算、分支归属与状态发布。

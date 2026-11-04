@@ -2,7 +2,7 @@
 
 目标：在 Pi 原生状态栏或 pi-starship 中显示准确、简短的 goal 状态，减少常驻面板占用。
 
-当前状态：待实施；已静态核对 Pi 1.5.0 和 @narumitw/pi-starship 0.65.2 的接口，尚未接入运行验收。
+当前状态：摘要发布、配置、会话归属与完成反馈已实现；Pi 1.5.0 原生 footer 及 @narumitw/pi-starship 0.65.2 实际 extension_status 模块通过离线检查。完整 Starship footer 与手机实机布局待验收，阶段记录见 [已完成阶段](../../finished/pi-suite/goal-core.md)。
 
 影响范围：goal 状态投影、当前会话绑定、ui 显示配置及外部 footer 互操作。
 
@@ -12,10 +12,10 @@
 
 ## 任务列表
 
-- [ ] 根据目标与调度状态生成单条简短摘要
-- [ ] 复用 setStatus 的 goal 键并在变化时更新或清除
-- [ ] 实现 status/dock/hidden 显示配置与重复显示控制
-- [ ] 验证会话切换、reload 和完成反馈不会串用旧 goal 状态
+- [x] 根据目标与调度状态生成单条简短摘要
+- [x] 复用 setStatus 的 goal 键并在变化时更新或清除
+- [x] 实现 status/dock/hidden 显示配置与重复显示控制
+- [x] 验证会话切换、reload 和完成反馈不会串用旧 goal 状态
 - [ ] 在原生 footer、pi-starship 和手机尺寸下核对状态可见性与占用
 
 ## 验收方式
@@ -38,7 +38,7 @@ ctx.ui.setStatus("goal", "goal 待答");
 ctx.ui.setStatus("goal", undefined); // 当前会话没有 goal 时清除
 ```
 
-以上为目标接口示例。goal 第一版只发布一条纯文本摘要，不调用 setFooter、不安装 pi-starship 依赖、不注册额外模型工具，也不轮询状态栏。状态栏只负责呈现；隐藏、换主题或切换 footer 不改变 goal 的状态、预算和续跑逻辑。
+以上为已实现的状态接口示例。goal 状态展示只发布一条纯文本摘要，不调用 setFooter、不安装 pi-starship 依赖、不为状态展示注册额外模型工具，也不轮询状态栏。状态栏只负责呈现；隐藏、换主题或切换 footer 不改变 goal 的状态、预算和续跑逻辑。
 
 摘要由既有目标状态与调度状态派生，不另存一份“状态栏状态”。目标更新、调度进入/退出等待、宿主恢复和绑定恢复时重新计算；文本不变时不重复发送。每个 token 不触发新的状态写入，预算摘要只在既有用量结算时更新。
 
