@@ -63,6 +63,7 @@ export class JobsModule implements Waitable {
   /** Monitor event count already handed to Notifications per job; a higher count re-enqueues. */
   private queuedEvents = new Map<string, number>();
   private queuedUpdates = new Map<string, number>();
+  private selectedJob?: string;
 
   constructor(private pi: ExtensionAPI, private binding: SessionBinding, private notifications: Notifications, private status: StatusPublisher,
     private creatorRoots: () => string[] = () => []) {}
@@ -105,6 +106,7 @@ export class JobsModule implements Waitable {
       query.scope === 'session' ? this.sessionScope(ctx) : undefined);
   }
   get executionAvailable(): boolean { return this.runtime().mode === 'active'; }
+  selectJob(id: string): void { this.selectedJob = id; this.refresh(); }
   bind(): void {
     this.detach();
     const handle = this.runtime();
@@ -123,6 +125,7 @@ export class JobsModule implements Waitable {
       for (const id of this.queuedUpdates.keys()) this.notifications.cancel(current.sessionId, `job:${id}:update`);
     }
     this.queued.clear(); this.queuedEvents.clear(); this.queuedUpdates.clear();
+    this.selectedJob = undefined;
     this.status.setActivities('jobs', []);
   }
   /** reload/new/resume/fork only detach; quit applies the stop-all policy. */
@@ -158,9 +161,23 @@ export class JobsModule implements Waitable {
     const current = this.binding.current;
     if (!this.handle || this.handle.mode === 'unavailable' || !current) return;
     const scope = this.sessionScope(current.ctx, this.handle.mode === 'restricted' && this.handle.control.version !== 3);
-    this.status.setActivities('jobs', scope.jobs().filter(job => scope.visible(job) && isActive(job)).map(job => job.id));
+    const jobs = [...new Map(scope.jobs().filter(scope.visible).map(job => [job.id, job])).values()];
+    this.status.setActivities('jobs', jobs.filter(isActive).map(job => job.id), jobs.flatMap(job => {
+      const cleanup = job.cleanup.state === 'pending' || job.cleanup.state === 'unconfirmed';
+      const failed = (job.state === 'failed' || job.state === 'timed_out') && !job.notified;
+      if (!isActive(job) && !cleanup && !failed) return [];
+      const selected = job.id === this.selectedJob;
+      return [{ id: job.id, text: `${selected ? '> ' : ''}job ${job.id.slice(-8)} ${displayName(job)}`,
+        suffix: cleanup ? `cleanup ${job.cleanup.state}` : job.state,
+        priority: cleanup ? 100 : failed ? 80 : job.state === 'stopping' ? 75 : selected ? 65 : 20 }];
+    }));
     if (this.handle.mode === 'restricted') return;
     const manager = this.handle.manager;
+    // Removing history also removes its pending result/event notices from this binding.
+    for (const [queued, suffix] of [[this.queued, ''], [this.queuedEvents, ':monitor']] as const) for (const id of queued.keys()) {
+      if (manager.isLive(id)) continue;
+      this.notifications.cancel(current.sessionId, `job:${id}${suffix}`); queued.delete(id);
+    }
     const updates = manager.unseenUpdates().filter(({ job }) => this.visible(job));
     // Takeover, stopping or exit invalidates progress already queued while the host was busy.
     for (const id of this.queuedUpdates.keys()) if (!updates.some(item => item.job.id === id)) {

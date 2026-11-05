@@ -19,6 +19,8 @@ export async function host(options: {
   root?: string; persisted?: boolean; sessionStartEvent?: SessionStartEvent;
   contextWindow?: number; reserveTokens?: number;
   extend?: (pi: ExtensionAPI) => void;
+  additionalExtensionPaths?: string[];
+  ui?: (ui: ExtensionUIContext) => ExtensionUIContext;
   answer?: "confirm" | "cancel";
   tools?: string[];
   /** Set before session_start, for turns the extension starts while binding. */
@@ -35,6 +37,7 @@ export async function host(options: {
   });
   const resourceLoader = new DefaultResourceLoader({ cwd: root, agentDir: root, settingsManager,
     noExtensions: true, noSkills: true, noPromptTemplates: true, noContextFiles: true,
+    additionalExtensionPaths: options.additionalExtensionPaths,
     extensionFactories: [pi => { pi.registerProvider(faux.provider); piSuite(pi); options.extend?.(pi); }],
   });
   await resourceLoader.reload();
@@ -63,7 +66,7 @@ export async function host(options: {
       });
     }),
   } as unknown as ExtensionUIContext;
-  await session.bindExtensions({ uiContext, mode: "tui" });
+  await session.bindExtensions({ uiContext: options.ui?.(uiContext) ?? uiContext, mode: "tui" });
   const goal = (): Goal | undefined => {
     const entry = session.sessionManager.getBranch().findLast(e => e.type === "custom" && e.customType === GOAL_ENTRY);
     return entry?.type === "custom" ? (entry.data as { goal: Goal | null }).goal ?? undefined : undefined;

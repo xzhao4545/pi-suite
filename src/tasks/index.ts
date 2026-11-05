@@ -8,7 +8,7 @@ import type { SessionBinding } from '../runtime/binding.ts';
 import { ToolError } from '../runtime/errors.ts';
 import { taskStore, type TaskStore } from './store.ts';
 import { taskViews } from './model.ts';
-import { queryTasks, taskLabel, taskTitle, type TaskQuery } from './query.ts';
+import { openBlockers, queryTasks, taskLabel, taskTitle, type TaskQuery } from './query.ts';
 import type { TaskChange, TaskData, TaskView } from './types.ts';
 
 export const taskPath = (cwd: string, id: string) => join(resolve(cwd), '.pi', 'tasks', `tasks-${id}.json`);
@@ -24,7 +24,7 @@ export class TasksModule {
   private lastUse = 0;
   private reminded = false;
   private selectedGroup?: string;
-  constructor(private binding: SessionBinding, private dock: Dock, private inheritedStore?: TaskStore) { dock.register('tasks', () => this.rows()); }
+  constructor(private binding: SessionBinding, private dock: Dock, private inheritedStore?: TaskStore) { dock.register('tasks', compact => this.rows(compact)); }
   async bind(ctx: ExtensionContext, event: Pick<SessionStartEvent, 'reason' | 'previousSessionFile'>): Promise<void> {
     const previous = this.store;
     this.detach(); this.turn = this.lastUse = 0; this.reminded = false;
@@ -82,26 +82,36 @@ export class TasksModule {
     }
     this.dock.invalidate();
   }
-  rows(): DockRow[] {
+  rows(compact = false): DockRow[] {
     if (!this.binding.current) return [];
     const groups = this.views.filter(task => task.progress), completed = groups.filter(task => task.status === 'done').length;
+    const views = new Map(this.views.map(task => [task.id, task])), leaves = this.views.filter(task => task.parentId);
+    const blocked = new Set(this.views.filter(task => task.status !== 'done' && openBlockers(task, views).length).map(task => task.id));
+    // Group rows are organization, so compact totals count execution tasks only.
+    if (compact) return groups.length ? [{id: 'tasks:summary', text: 'Tasks', priority: 30,
+      suffix: `${leaves.filter(task => task.status === 'done').length}/${leaves.length} · doing ${leaves.filter(task => task.status === 'doing').length} · blocked ${leaves.filter(task => blocked.has(task.id)).length}`}] : [];
     const rows: DockRow[] = [];
     const children = new Map<string, TaskView[]>();
     const recent = new Map(groups.map(group => [group.id, group.updatedAt]));
     for (const task of this.views) if (task.parentId) {
       recent.set(task.parentId, Math.max(recent.get(task.parentId)!, task.updatedAt));
-      if (task.status === 'doing' || this.feedback.has(task.id)) {
+      if (task.status === 'doing' || blocked.has(task.id) || this.feedback.has(task.id)) {
         const list = children.get(task.parentId) ?? []; list.push(task); children.set(task.parentId, list);
       }
     }
     groups.sort((a, b) => recent.get(b.id)! - recent.get(a.id)! || Number(a.id) - Number(b.id));
     for (const [index, group] of groups.entries()) {
       if (group.status === 'done' && !this.feedback.has(group.id)) continue;
-      const priority = (group.status === 'doing' ? 40 : this.feedback.has(group.id) ? 35 : 30)
-        + Number(group.id === this.selectedGroup) * 0.5 + (groups.length - index) / (groups.length + 1) * 0.25;
-      rows.push({ id: `task:${group.id}`, text: `#${group.id} ${taskTitle(group)}`, suffix: `${group.progress!.done}/${group.progress!.total} ${group.status}`, priority });
+      const selected = group.id === this.selectedGroup;
+      const blockedCount = Number(blocked.has(group.id)) + (children.get(group.id) ?? []).filter(task => blocked.has(task.id)).length;
+      const priority = (selected ? 50 : group.status === 'doing' ? 40 : blockedCount ? 38 : this.feedback.has(group.id) ? 35 : 30)
+        + (groups.length - index) / (groups.length + 1) * 0.25;
+      rows.push({ id: `task:${group.id}`, text: `${selected ? '> ' : ''}#${group.id} ${taskTitle(group)}`,
+        suffix: `${group.progress!.done}/${group.progress!.total} ${group.status}${blockedCount ? ` · blocked ${blockedCount}` : ''}`, priority });
       for (const task of children.get(group.id) ?? []) {
-        rows.push({ id: `task:${task.id}`, text: `  ${task.status === 'done' ? '✓' : '▶'} #${task.id} ${taskTitle(task)}`, priority });
+        rows.push({ id: `task:${task.id}`, parentId: `task:${group.id}`,
+          text: `  ${task.status === 'done' ? '✓' : blocked.has(task.id) ? '!' : '▶'} #${task.id} ${taskTitle(task)}`,
+          priority: task.status === 'doing' ? 40 : blocked.has(task.id) ? 38 : 35 });
       }
     }
     if (completed) rows.push({ id: 'tasks:finished', text: `Tasks · completed ${completed} groups`, priority: 10 });

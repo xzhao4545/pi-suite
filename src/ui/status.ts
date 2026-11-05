@@ -1,6 +1,6 @@
 import type { ExtensionUIContext } from "@earendil-works/pi-coding-agent";
 import type { DisplayMode } from "../runtime/config.ts";
-import type { Dock } from "./dock.ts";
+import type { Dock, DockRow } from "./dock.ts";
 
 export class StatusPublisher {
   private ui?: ExtensionUIContext;
@@ -8,6 +8,7 @@ export class StatusPublisher {
   private goal?: string;
   private agents = new Set<string>();
   private jobs = new Set<string>();
+  private details: Record<'agents' | 'jobs', DockRow[]> = { agents: [], jobs: [] };
   private ownsGoal = true;
   private modes: Record<"goal" | "agents" | "jobs", DisplayMode> = { goal: "status", agents: "status", jobs: "status" };
 
@@ -16,6 +17,7 @@ export class StatusPublisher {
       ...(this.modes.goal === "dock" && this.goal ? [{ id: "goal", text: this.goal, priority: 90 }] : []),
       ...(["agents", "jobs"] as const).flatMap(key => this.modes[key] === "dock" && this[key].size
         ? [{ id: key, text: `${key} ${this[key].size}`, priority: 70 }] : []),
+      ...(["agents", "jobs"] as const).flatMap(key => this.modes[key] === 'hidden' ? [] : this.details[key]),
     ]);
   }
 
@@ -27,18 +29,22 @@ export class StatusPublisher {
     this.ui?.setStatus("pi-suite:runtime", undefined);
     this.ui = undefined;
     this.goal = undefined; this.agents.clear(); this.jobs.clear();
+    this.details = { agents: [], jobs: [] };
     this.dock.setStatusRow(false);
   }
   setGoal(text?: string): void {
     if (text === this.goal) return;
     this.goal = text; this.flush();
   }
-  setActivities(kind: "agents" | "jobs", ids: Iterable<string>): void {
+  setActivities(kind: "agents" | "jobs", ids: Iterable<string>, details: DockRow[] = []): void {
     const next = new Set(ids), previousSize = this[kind].size;
     this[kind] = next;
-    // Both status and Dock display counts. Token updates and equal-sized identity
-    // changes leave that projection unchanged and must not request another render.
+    const changed = JSON.stringify(details) !== JSON.stringify(this.details[kind]);
+    this.details[kind] = details;
+    // Activity identity and token deltas need no redraw. A changed question or
+    // state does, even when the activity count stays the same.
     if (next.size !== previousSize) this.flush();
+    else if (changed && this.modes[kind] !== 'hidden') this.dock.invalidate();
   }
 
   private flush(): void {

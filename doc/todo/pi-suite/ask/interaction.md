@@ -2,7 +2,7 @@
 
 目标：回答时可以查阅聊天，并为询问提供可配置截止时间。
 
-当前状态：inline 询问、历史/回答焦点、默认与单次超时、排队及单次结算已实现；goal waiting_user 与后台完成通知的真实执行联动待验收。
+当前状态：inline 询问、历史/回答焦点、默认与单次超时、排队及单次结算已实现；goal waiting_user、两个 child 的父级提问与真实 job 完成通知暂存通过 Linux 真实 SDK 组合验收，见 [询问与后台通知协调阶段](../../../finished/pi-suite/ask/coordination.md)。Windows 组合与真实手机 SSH 操作仍待验收。
 
 影响范围：ask_user、历史查看、焦点及阻塞期间的通知。
 
@@ -16,7 +16,8 @@
 - [x] 实现历史与回答之间的查阅和焦点切换
 - [x] 实现默认超时、单次覆盖及不超时
 - [x] 区分回答、超时和取消，并处理排队计时
-- [ ] 验证 goal waiting_user、多个 agent 排队与真实 job 完成通知暂存
+- [x] 验证 goal waiting_user、多个 agent 排队与真实 job 完成通知暂存（Linux 真实 SDK；child 提问经父级通知协议，父级原生询问顺序展示）
+- [ ] 在 Windows 核对询问、goal 与后台执行通知的组合
 - [ ] 在真实手机 SSH 终端核对查阅与输入操作
 - [x] 按 [统一工具设计](../../../finished/pi-suite/tool-design.md) 使用毫秒单位的 timeoutMs
 - [x] subagent 会话中的 ask_user 转交父 agent，见 [主从交互](../../../finished/pi-suite/agents/interaction.md)
@@ -62,4 +63,4 @@
 
 返回状态区分 `answered`、`timed_out`、`cancelled`，同时保留旧 details 的兼容字段。超时不自动选择默认选项；依赖明确回答的工作进入 waiting_user，不能把超时当成同意。
 
-计时从问题真正展示开始，隐藏或查看历史不会重新计时；批量询问采用统一总期限。来自多个 agent 的询问排队展示，排队时间不消耗回答期限，显示提问者。回答期间主模型等待工具结果，后台进程可继续；完成通知暂存，不能打断询问或触发额外模型轮次。
+计时从问题真正展示开始，隐藏或查看历史不会重新计时；批量询问采用统一总期限。来自多个 agent 的提问先经父级协议与共享 Notifications 交给直接父级，父级调用的原生询问顺序展示，排队时间不消耗回答期限，通知保留提问者。child 提问自身的期限与原生 AskQueue 的展示期限分别管理。回答期间主模型等待工具结果，后台进程可继续；完成通知暂存，不能打断询问或触发额外模型轮次。

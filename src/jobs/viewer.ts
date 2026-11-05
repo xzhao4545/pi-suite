@@ -74,13 +74,15 @@ async function pickJob(ctx: ExtensionCommandContext, deps: ViewerDeps, state: Li
 }
 
 export async function jobActions(pi: ExtensionAPI, ctx: ExtensionContext, deps: ViewerDeps, id: string, readonly = false, cwd = ctx.cwd): Promise<void> {
+  deps.jobs.selectJob(id);
   const manager = deps.jobs.control();
   const release = deps.notifications.hold();
   try { for (;;) {
     const { job, live } = await manager.get(id, await resolveWorkspace(cwd));
     const attach = !readonly && deps.jobs.executionAvailable && live && job.mode === 'pty' && deps.jobs.manager().terminal(id) ? (isActive(job) ? 'Attach terminal' : 'View last screen') : undefined;
     const stop = !readonly && live && isActive(job) ? 'Stop job' : undefined;
-    const actions = [attach, 'Details', ...streamsOf(job).map(stream => `Read ${stream}`), stop, 'Back'].filter(item => item !== undefined);
+    const clear = !readonly && deps.jobs.executionAvailable && !isActive(job) && !['pending', 'unconfirmed'].includes(job.cleanup.state) ? 'Clear history' : undefined;
+    const actions = [attach, 'Details', ...streamsOf(job).map(stream => `Read ${stream}`), stop, clear, 'Back'].filter(item => item !== undefined);
     const choice = await ctx.ui.select(`${summaryLine(job)} · ${displayName(job)}`, actions);
     if (choice === undefined || choice === 'Back') return;
     if (choice === attach) {
@@ -94,6 +96,11 @@ export async function jobActions(pi: ExtensionAPI, ctx: ExtensionContext, deps: 
       const result = await manager.stop(id, 'user');
       ctx.ui.notify(`${summaryLine(result.job)}${result.job.cleanup.state === 'pending' || result.job.cleanup.state === 'unconfirmed' ? ' · cleanup not confirmed' : ''}`);
       continue;
+    }
+    if (choice === clear) {
+      if (!await ctx.ui.confirm('Delete history and logs?', `${job.id} · ${displayName(job)}\nThis permanently removes the saved record and every input/output log.`)) continue;
+      await deps.jobs.manager().clear(job.id, job.workspace);
+      ctx.ui.notify(`Deleted history and logs for ${job.id}`); return;
     }
     const stream = choice.startsWith('Read ') ? choice.slice(5) as Stream : undefined;
     if (stream) await showJobLog(ctx, deps.dock, manager, job, stream, live);

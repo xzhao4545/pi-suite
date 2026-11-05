@@ -9,6 +9,7 @@ import { SessionBinding } from "../../src/runtime/binding.ts";
 import { Notifications } from "../../src/runtime/notifications.ts";
 import { Dock } from "../../src/ui/dock.ts";
 import { StatusPublisher } from "../../src/ui/status.ts";
+import { terminal } from "../support/terminal.ts";
 
 test("configuration uses user defaults plus project section overrides and rejects malformed files", () => {
   const root = mkdtempSync(join(tmpdir(), "pi-suite-config-"));
@@ -59,4 +60,26 @@ test("status publishing deduplicates IDs, clears old bindings and honors status/
   publisher.bind(ui, {goal: "status", agents: "status", jobs: "status"}, false);
   publisher.setActivities("jobs", ["job"]); publisher.detach();
   assert.ok(writes.every(([key]) => key !== "goal"), 'a disabled goal module leaves another provider’s status untouched');
+
+  publisher.bind(ui, {goal: 'status', agents: 'status', jobs: 'hidden'});
+  const running = {id: 'agent:a', text: 'agent 中文'.repeat(20), suffix: 'running', priority: 25};
+  publisher.setActivities('agents', ['a'], [running]);
+  const countWrites = writes.length;
+  publisher.setActivities('agents', ['a'], [{...running, suffix: 'waiting(parent)', priority: 100}]);
+  assert.equal(writes.length, countWrites, 'state-only changes update details without rewriting counts');
+  publisher.setActivities('jobs', ['job'], [{id: 'job', text: 'hidden job', priority: 110}]);
+  dock.register('tasks', () => [
+    {id: 'parent', text: 'parent', priority: 40}, {id: 'child', parentId: 'parent', text: 'child', priority: 40},
+    {id: 'other', text: 'other', priority: 30},
+  ]);
+  const compact = dock.render(40);
+  assert.match(compact[0], /waiting\(parent\)/); assert.match(compact.at(-1)!, /\+2/);
+  assert.ok(compact.every(line => !line.includes('hidden job') && !line.includes('child')));
+  const tui = terminal(40, 40);
+  dock.bind({mode: 'tui', ui: {setWidget: (_key: string, factory: (tui: ReturnType<typeof terminal>) => unknown) => factory(tui)}} as unknown as ExtensionContext, 6);
+  assert.deepEqual(dock.render(40).map(line => line.includes('child') ? 'child' : line.includes('parent') && !line.includes('waiting') ? 'parent' : 'other'),
+    ['other', 'parent', 'child', 'other']);
+  dock.bind({mode: 'tui', ui: {setWidget: (_key: string, factory: (tui: ReturnType<typeof terminal>) => unknown) => factory(tui)}} as unknown as ExtensionContext, 1);
+  assert.deepEqual(dock.render(40), []); dock.setAsk(true); assert.equal(dock.askBudget(40), 1);
+  publisher.detach();
 });

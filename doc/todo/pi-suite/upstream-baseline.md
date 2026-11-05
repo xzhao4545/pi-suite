@@ -2,7 +2,7 @@
 
 目标：将已核对的发布包信息转为可验证的导入基线。
 
-当前状态：Windows 实际 Pi 1.5.0 与 Linux 同版本 SDK 已核对；七个参考发布包的来源元数据已登记，ask 契约与许可证已落地。tasks、jobs、agents 的保留能力与按文件处置已核对并记录在 [上游导入](upstream-import.md)，工具契约统一见 [统一工具设计](../../finished/pi-suite/tool-design.md)。实际问题复现待实施。
+当前状态：Windows 实际 Pi 1.5.0 与 Linux 同版本 SDK 已核对；七个参考发布包的来源元数据已登记，ask 契约与许可证已落地。tasks、jobs、agents 的保留能力与按文件处置已核对并记录在 [上游导入](upstream-import.md)，工具契约统一见 [统一工具设计](../../finished/pi-suite/tool-design.md)。Linux 真实 SDK/进程复现结论按各模块验收范围记录，完整 Starship 发布入口的组合见 [footer 联动阶段](../../finished/pi-suite/footer-integration.md)；Windows 原问题复现与综合组合继续实施。
 
 影响范围：六个扩展来源、Pi 宿主版本和平台复现。
 
@@ -13,7 +13,7 @@
 ## 任务列表
 
 - [x] 核对实际宿主版本和依赖作用域
-- [ ] 记录导入提交或 tarball integrity 与许可证
+- [x] 记录导入提交或 tarball integrity 与许可证（七个来源元数据、六个实际导入来源的完整 MIT 许可证；缺失 gitHead/repository 保持空值）
 - [ ] 在 Windows 和 Linux 复现相关问题
 - [x] 确认各模块需要保留的工具契约和现有能力
 

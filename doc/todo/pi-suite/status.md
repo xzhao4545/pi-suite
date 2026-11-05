@@ -2,7 +2,7 @@
 
 目标：统一发布 goal 状态、活动 subagent 数量和活动 job 数量，使手机终端能从简短状态栏了解执行情况。
 
-当前状态：共享发布器、goal 摘要、agents/jobs 数量、显示模式和去重已实现，原生 footer 与 pi-starship 接口已验证；workflow 的 Dock 进度和 child/gate 普通数量过滤已接入，见 [宿主接入阶段](../../finished/pi-suite/agents/workflow-host.md)。当前 owner/branch 的直属 job 与可见 agent run 子树已共用完整 session 列表/数量范围，包含跨 cwd 和回收后代的遗留 job；活动筛选保留真实清理边界，数量/goal 摘要未变时不刷新 Dock。Windows 与完整第三方 footer、真实手机综合布局待验收。
+当前状态：共享发布器、goal 摘要、agents/jobs 数量、显示模式和去重已实现，原生 footer 与完整 pi-starship 发布入口的 Linux 组合通过 [footer 联动阶段](../../finished/pi-suite/footer-integration.md) 验收；workflow 的 Dock 进度和 child/gate 普通数量过滤已接入，见 [宿主接入阶段](../../finished/pi-suite/agents/workflow-host.md)。当前 owner/branch 的直属 job 与可见 agent run 子树已共用完整 session 列表/数量范围，包含跨 cwd 和回收后代的遗留 job；必要详情走共享 StatusPublisher/Dock，数量变化写状态，问题、清理与选择变化单独刷新详情。Windows 与真实手机的可见集合、清理状态及用户实际 footer 配置继续验收。
 
 影响范围：ui/status、goal、AgentManager、JobManager、会话绑定与 dock 显示去重。
 
@@ -16,9 +16,11 @@
 - [x] 按当前会话可见集合派生数量，明确等待、排队、停止与终态的计数
 - [x] 按摘要变化投影生命周期更新，避免 token 级刷新和重复计数
 - [x] 协调 status/dock/hidden 模式及零数量隐藏
+- [x] 通过同一发布入口接入待答、清理、失败和选中执行的必要详情，按状态变化刷新共享 Dock
 - [x] workflow 提交共享 Dock 进度，child 与 gate 不重复计入普通 agents/jobs 数量
 - [x] 验证会话切换、reload、原生 footer 40/60/120 列及 pi-starship extension_status 模块
-- [ ] Windows 与完整第三方 footer、真实手机 SSH 复核可见集合、复杂清理状态与窄屏布局
+- [x] Linux 完整 Starship 发布入口与真实 goal/tasks/child/jobs/ask 并存验收数量上限、缺失模块和三尺寸布局
+- [ ] Windows 与真实手机 SSH 复核可见集合、复杂清理状态、用户实际 footer 与窄屏布局
 
 ## 验收方式
 
@@ -49,7 +51,7 @@ ctx.ui.setStatus("pi-suite:runtime", "agents 2 · jobs 3");
 
 数量合并在同一状态槽位，减少 Starship 的 max_statuses 槽位占用；某一类为零时省略该段，两个数量都为零时清除 pi-suite:runtime。goal 独立更新，不因数量归零被清除。
 
-所有模块提供既有状态或生命周期变化，只有本包共享入口写这些键，goal 键仅在本次激活实际启用 GoalManager 时持有；模块关闭时保留其他 provider 的 goal 状态，不随重绑配置值变化转移 ownership；不持久化冗余计数，不读取状态栏文字反推执行状态。创建、开始、进入/退出等待、停止请求、退出结算和会话绑定变更时更新；仅 goal 摘要或活动数量变化时刷新投影；等数量的 ID 变化更新集合而不重复 setStatus 或请求 Dock 重绘。无需模型调用、轮询或每个 token 刷新。
+所有模块提供既有状态或生命周期变化，只有本包共享入口写这些键，goal 键仅在本次激活实际启用 GoalManager 时持有；模块关闭时保留其他 provider 的 goal 状态，不随重绑配置值变化转移 ownership；不持久化冗余计数，不读取状态栏文字反推执行状态。创建、开始、进入/退出等待、停止请求、退出结算和会话绑定变更时更新；goal 摘要或活动数量变化时写状态，等数量的 ID 变化仍更新集合。必要详情通过 setActivities 一起提交，内容变化单独刷新 Dock，相同内容不重绘；token 增量和计时器不生成详情刷新。无需模型调用、轮询或每个 token 刷新。
 
 ## 计数范围与口径
 
@@ -69,7 +71,7 @@ ctx.ui.setStatus("pi-suite:runtime", "agents 2 · jobs 3");
 
 沿用统一配置优先级，agents.display 和 jobs.display 采用与 goal.display 相同的 status/dock/hidden 取值：默认 status；dock 时仅由统一面板显示对应计数；hidden 时不常驻显示该类计数。不同模块可以选择不同位置，共享发布器只合并选择 status 的数量。
 
-默认 status 模式下，dock 仍可按预算显示需要处理的 agent/job 详情行，但不重复纯数量汇总。用户进入详情可以查看完整状态；查看行为不改变运行或计数归属。
+默认 status 模式下，Dock 按预算显示需要处理的 agent/job 详情行，不重复纯数量汇总；hidden 同时隐藏该类常驻详情。待父级回答与 cleanup=pending/unconfirmed 优先，其后为未消费失败、停止中、查看入口选中的 run/job 和普通活动；已读取但尚未回答的问题继续显示，选择在绑定撤销时清除。用户进入详情可以查看完整状态；查看行为不改变运行或计数归属。
 
 pi-starship 继续通过 `$extension_status` 显示；图标和样式可按原始键 pi-suite:runtime 配置。例如在已有 extension_status 配置中使用：
 

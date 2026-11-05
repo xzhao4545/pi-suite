@@ -125,6 +125,7 @@ export function registerAgentsCommand(pi: ExtensionAPI, agents: AgentsModule, do
         : await ctx.ui.select('Select agent run', labels);
       if (!selected) return;
       const record = workspace ? records.find(record => record.runId === selected)! : records[labels.indexOf(selected)];
+      agents.selectRun(record.runId);
       const run = agents.manager.get(record.id, record.runId).run;
       // Discovery preserves ownership. Archived foreign branches can be read, while
       // live handles and the current branch keep their existing management contract.

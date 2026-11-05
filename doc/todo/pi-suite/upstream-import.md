@@ -12,11 +12,12 @@
 
 ## 任务列表
 
-- [ ] 将四个上游包的导入文件放入目标目录，文件头标注包名、版本与原路径
-- [ ] 删除丢弃范围的代码与依赖，拆分超限文件
-- [ ] 把上游 widget、状态、通知、配置和会话事件接入共享 dock、StatusPublisher、Notifications、SessionBinding 与配置
-- [ ] 登记许可证、导入文件清单与改动边界，更新 sources.json
-- [ ] 锁定并验证新增运行依赖：zigpty、@xterm/headless、@xterm/addon-serialize、croner
+- [x] 将四个上游包的导入文件放入目标目录，文件头标注包名、版本与原路径
+- [x] 删除丢弃范围的代码与依赖，拆分超限文件
+- [x] 把上游 widget、状态、通知、配置和会话事件接入共享 Dock、StatusPublisher、Notifications、SessionBinding 与配置（Linux 必要详情/询问组合通过，Windows 与真实手机由模块专项验收）
+- [x] 登记许可证、导入文件清单与改动边界，更新 sources.json
+- [x] 锁定并验证新增运行依赖：zigpty、@xterm/headless、@xterm/addon-serialize、croner（Linux；Windows 实际后端由平台专项验收）
+- [ ] 按新工具整理 interactive-shell 技能说明并在包中声明
 
 ## 验收方式
 
@@ -38,27 +39,33 @@
 
 保留范围由用户确认：subagents 保留核心启动、后台、恢复、嵌套、查看与停止，以及自定义 agent 类型、@handle 提及、定时调度、SubagentWorkflow 和跨扩展 RPC，不保留 git worktree 隔离。interactive-shell 保留 PTY、输入、attach/detach、停止，以及输出 monitor 与 hands-free/dispatch，不保留 Jev 语义监督与语义输出裁剪。child 提问转给父 agent。
 
-## 目标目录
+## 当前主要目录
 
 ```text
 src/
-  runtime/        binding、notifications、config、wait（共享等待）
-  ui/             dock、status、details、transcript、scroll、terminal（PTY 视图）
+  runtime/        binding、notifications、config、config-edit、tools、wait、read、json-store（共享运行框架）
+  ui/             dock、status、details、transcript、scroll、terminal、select（PTY 视图与原生值选择）
   tasks/          store、types、model、query、tools、viewer、index（会话与提醒）
   jobs/
-    backends/     pipe、pty、windows-tree、posix-group
+    backends/     pipe、pty、pty-job、process、windows-tree（POSIX 进程组共用 process）
     terminal/     session、protocol、keys、visible-text
-    monitors/     stream、poll-diff、file-watch、hands-free
-    manager、store、tools、commands、runtime、index
+    monitors/     compile、runtime、hands-free（stream、poll-diff、file-watch 编译与监督）
+    launch/       config、presets、authorize（CLI 预设与启动授权）
+    manager、store、query、tools、viewer、log-viewer、runtime、control、state、workspace、index
   agents/
-    core/         manager、queue、runner、session、nested、records
-    types/        agent-types、custom-agents、default-agents、invocation
-    context/      prompts、skills、memory、models、usage、structured-output
-    workflow/     runtime、worker-source、host、task、progress、journal、meta、saved
-    schedule/     scheduler、store
-    mention/      parse、clone、completion
-    ui/           viewer、workflow-card、workflow-dialog、menus
-    tools、commands、rpc、index
+    manager、runtime、runner、records、history、child、questions、parent（执行、队列、会话与嵌套）
+    catalog、defaults、models、model-editor、types（类型、配置与原生模型选择）
+    resources/    selectors、scope、loader、packages、context、prompts、memory（skills 与 usage 复用 Pi）
+    output/       schema、tool（structured-output）
+    workflow/     host、manager、task、journal、meta、saved、store、entry、tools、index
+      runtime/    types、helpers、run、index
+      worker/     bootstrap、scope、flow、index
+      progress/   types、model、format、index
+      ui/         progress、menu（workflow 查看与控制）
+    schedules/    parse、store、index、menu
+    mentions/     grammar、clone、provider、index（输入解析与补全）
+    rpc/          options、handlers、index
+    tools、viewer、index（工具、命令与查看入口）
 ```
 
 ## pi-background-jobs 0.1.3
@@ -87,8 +94,8 @@ src/
 | shell-resolution.ts | 43 | 导入，复用 Pi 的 Bash 选择；Windows 需要 Git Bash |
 | headless-monitor.ts | 488 | 导入改造为 monitors/hands-free，保留静默结束、宽限期、超时、trigger 匹配与冷却；删除语义挂钩 |
 | index.ts 中 monitor 编译与 file-watch/poll-diff 生成 | 约 330 | 导入到 monitors/，按 Bash 单引号转义规则保留 |
-| session-query.ts | 171 | 导入，查询限流默认值改为可配置并下调 |
-| handoff-utils.ts | 118 | 导入，完成日志落盘与 TTL 清理并入 job 历史 |
+| session-query.ts | 171 | 未按文件导入；PTY 设备查询应答由 terminal/session 的有序队列处理，job_read 读取共用 runtime/read 的字节与匹配上限。独立查询频率配置没有实现，不能作为已导入能力 |
+| handoff-utils.ts | 118 | 未按文件导入；终端输出直接写入 JobStore 日志，交还与退出由共享 TerminalView/JobManager 处理。历史清理接入 JobStore.remove 的原生操作，未实现 TTL 自动删除 |
 | launch-policy.ts | 37 | 导入，仅用户级配置可设置，deny 优先 |
 | spawn.ts | 358 | 导入 CLI agent 预设（pi、codex、claude、cursor 及自定义键）与参数拼装，删除 worktree 创建 |
 | session-manager.ts | 481 | 会话表、ID 生成与退出清理并入 JobManager；删除输出源相关部分 |
@@ -99,13 +106,13 @@ src/
 | tool-schema.ts | 486 | 不导入，作为参数参考；保留“kill 不确认退出”的描述口径 |
 | overlay-component.ts | 1133 | 只导入用户接管/交还、退出倒计时和 hands-free 更新预算的状态机，渲染由 ui/terminal 重写 |
 | output-selection-runtime.ts 的 normalizeSelectorVisibleText | 约 20 | 摘出到 terminal/visible-text，用于 PTY 回车覆写后的可见文本 |
-| terminal-observation.ts 的 sanitizeTerminalTextBuiltIn、containsSecretPromptText | 约 40 | 摘出，用于读取前清理控制序列及识别密码提示 |
-| skills/interactive-shell | 280 | 按新工具重写为本包技能说明，删除 jev 与 output-selection 参考 |
+| terminal-observation.ts 的 sanitizeTerminalTextBuiltIn、containsSecretPromptText | 约 40 | 未按函数直接摘入；输出清理与 PTY 可见文本由共享读取/terminal/visible-text 处理。原生 attach 的用户按键统一记录为 sensitive，模型写入可显式设置 sensitive；没有密码提示识别函数 |
+| skills/interactive-shell | 280 | 待核对保留范围；仓库尚无对应技能与 package skills 声明，不能记为已重写。接入时需使用本包工具并删除 jev 与 output-selection 参考 |
 | jev-client、semantic-*、selector-*、output-source-store、output-selector、scripts/、examples/ | 约 2800 | 丢弃：外发终端内容到付费接口及其评估资产 |
 | reattach-overlay.ts | 448 | 丢弃：与主 overlay 重复的第二套界面 |
 | background-widget.ts | 106 | 丢弃实现，由统一 dock 显示 |
 
-依赖：zigpty（上游声明 ^0.1.6，当前发布 0.2.1，按实际验证版本锁定）、@xterm/headless、@xterm/addon-serialize；丢弃 @typesafe-ai/sdk 与 re2js。
+依赖：zigpty 0.1.6、@xterm/headless 5.5.0、@xterm/addon-serialize 0.13.0 按实际验证版本锁定；丢弃 interactive-shell 的 @typesafe-ai/sdk 与 re2js 运行依赖。开发验收依赖 pi-starship 的 formatter 自身使用 re2js，由其依赖树管理。
 
 ## @tintinweb/pi-subagents 0.23.0
 
@@ -116,9 +123,9 @@ src/
 | 文件 | 行数 | 处置 |
 | --- | --- | --- |
 | src/agent-manager.ts | 1735 | 按机制拆分适配记录与生命周期、两个并发池与队列、停止与回收。保留 isTopLevelAgent、启动时记录 chargedPool、dequeue 释放等待者、排队项的父级 abort；增加执行 ID 与 job 级联停止；每 60 秒回收结束超过 10 分钟的 Execution，完整 record/result 留在已有 histories，通知/reader/workflow 引用保留，停止只合并进行中请求；真实前台调用转后台时转移收费池、释放调用等待并继续通知 |
-| src/agent-runner.ts | 1468 | 导入并拆分为会话构建、工具范围、恢复与引导。删除 worktree；child 会话注入转交父 agent 的 ask_user |
-| src/nested-tools.ts | 426 | 导入，工具改为 agent_* 规范名；maxDepth 默认 3，包含顶级及两层嵌套 |
-| src/agent-types.ts、custom-agents.ts、default-agents.ts、invocation-config.ts | 346、452、125、155 | 导入，删除 isolation 参数；invocation-config 的 model 与 thinking 改为参数优先于 TUI 类型配置、再优先于 frontmatter，见 [模型与 thinking 配置](agents/models.md) |
+| src/agent-runner.ts | 1468 | 按上游机制重构为 Pi SDK 会话构建、工具范围、恢复与引导，具体文件见来源登记。删除 worktree；child 会话注入转交父 agent 的 ask_user |
+| src/nested-tools.ts | 426 | 嵌套范围按职责适配到 child/questions，工具改为 agent_* 规范名；maxDepth 默认 3，包含顶级及两层嵌套 |
+| src/agent-types.ts、custom-agents.ts、default-agents.ts、invocation-config.ts | 346、452、125、155 | 类型/frontmatter/调用优先级按职责适配到 catalog/models，内置类型描述直接导入 defaults；删除 isolation 参数；model 与 thinking 改为参数优先于 TUI 类型配置、再优先于 frontmatter，见 [模型与 thinking 配置](agents/models.md) |
 | src/agent-record-entry.ts | 138 | 导入，条目类型改为 pi-suite:agent-record，保留 reopenTarget 拒绝规则 |
 | src/completion-outbox.ts、group-join.ts | 116、141 | 规则并入共享 Notifications：一个边界一条消息、已读取结果撤销通知；不保留 group 参数 |
 | src/mention.ts、mention-clone.ts、ui/agent-mention.ts | 141、195、216 | 已按职责导入 @handle 输入、原生补全与克隆启动；handle/alias 并入 run 记录、工具和通知复用公共模块，取消随主绑定生命周期 |
@@ -127,15 +134,15 @@ src/
 | src/ui/workflow-card.ts、workflow-dialog.ts、workflow-menu.ts | 470、1115、193 | 按展示字段与完整控制范围重构到 workflow/ui，非逐行导入；原生 Text、DetailsView/ScrollView/值选择、child Transcript 和 job 日志查看器共用，显示行接入 Dock |
 | src/cross-extension-rpc.ts | 221 | 按职责导入到 agents/rpc，保留五通道与版本 2；会话注册、模型、归属、启动等待和消费接入共享框架；未知与内部参数报错，生命周期从公共 Manager/SDK 发出 |
 | src/settings.ts | 650 | 设置项并入共享配置 agents 节；不导入独立设置界面，仅按类型的模型与 thinking 由 /agents 写回配置，见 [模型与 thinking 配置](agents/models.md) |
-| src/memory.ts、usage.ts、prompts.ts、skill-loader.ts、context.ts、env.ts、structured-output.ts、status-note.ts | 179、167、171、102、58、33、130、90 | 导入 |
-| src/model-resolver.ts、model-scope.ts、enabled-models.ts | 118、70、180 | 导入；model-resolver 对配置与参数中不可用的模型报错并指出来源，不换成其他 provider 的同名模型 |
-| src/package-resources.ts | 652 | 导入，保留项目信任判断 |
+| src/memory.ts、usage.ts、prompts.ts、skill-loader.ts、context.ts、env.ts、structured-output.ts、status-note.ts | 179、167、171、102、58、33、130、90 | memory/prompts 正文与 context 按职责保留在 resources，结构化协议接入 output；技能发现复用 Pi getSkills，用量复用 Pi SessionStats，环境与通知进入公共 runner/Notifications，不复制独立扫描、统计或状态系统 |
+| src/model-resolver.ts、model-scope.ts、enabled-models.ts | 118、70、180 | 匹配/优先级按职责适配到 models/catalog，认证与启用模型复用 Pi 公共目录；配置与参数中不可用的模型报错并指出来源，不换成其他 provider 的同名模型 |
+| src/package-resources.ts | 652 | manifest、目录/单文件、精确排除与真实根按职责适配到 resources/packages，保留项目信任判断；使用 Pi 已安装根与公共加载器 |
 | src/agent-color.ts、agent-source-badge.ts | 161、75 | 列表颜色与来源显示范围继续按原生查看器专项评估 |
 | src/agent-file-toggle.ts | 297 | 类型启用/禁用/使用定义的操作语义适配到共享 agents.types.enabled 与 catalog；原生类型菜单使用现有 SelectList/config 写回，不导入独立 Markdown 改写系统 |
-| src/child-context.ts、abortable.ts、xml.ts、types.ts | 15、43、13、404 | 导入，types 删除 worktree 字段 |
+| src/child-context.ts、abortable.ts、xml.ts、types.ts | 15、43、13、404 | 子级上下文与撤销接入 parent/runner 和 Pi 公共 signal，提示与类型按本包职责组织；不保留重复上下文或 XML 工具模块，types 删除 worktree 字段 |
 | src/ui/conversation-viewer.ts | 790 | 不导入渲染；x 两次停止、Enter 消息输入、b 真实前台转后台的操作语义接入共享 DetailsView/Transcript，按所选 runId 和父级归属控制，输入/模型往返保留 reader 与 run 引用 |
 | src/ui/agent-widget.ts、fleet-list.ts | 661、559 | 丢弃实现；计数由 StatusPublisher 发布，详情行交给 dock |
-| src/ui/select-item.ts、viewer-keys.ts | 45、39 | 导入 |
+| src/ui/select-item.ts、viewer-keys.ts | 45、39 | 操作范围复用 Pi 原生 SelectList、键盘事件与公共 DetailsView/ScrollView，不导入独立选择器或键盘框架 |
 | src/worktree.ts | 205 | 丢弃 |
 | src/output-file.ts | 164 | 丢弃：Claude Code 兼容 JSONL 副本，agent_read 直接读取 child 会话 |
 | src/index.ts | 4367 | 不整体导入；按职责拆入 agents/tools、commands、rpc、index，保留会话关闭的停止顺序与 ctrl+b 转后台 |

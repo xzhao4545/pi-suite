@@ -25,6 +25,7 @@ type Owned = {
   stopDeadline?: number; stopController?: AbortController; stopTimer?: NodeJS.Timeout;
   timeoutTimer?: NodeJS.Timeout;
   saveQueue: Promise<void>; dirty?: boolean; saveAttempts?: number; retryAt?: number; persistenceError?: string;
+  deleting?: boolean;
   inputQueue: Promise<void>;
   /** Set while the user types in the terminal view; model input is refused until control returns. */
   userControl?: boolean;
@@ -80,6 +81,8 @@ export class JobManager {
   }
   private persist(item: Owned): Promise<void> {
     item.dirty = true;
+    // History deletion owns the final disk state; late notice consumption must not recreate it.
+    if (item.deleting) return item.saveQueue;
     item.saveQueue = item.saveQueue.then(async () => {
       if (!item.dirty) return;
       item.dirty = false;
@@ -363,6 +366,24 @@ export class JobManager {
       throw error;
     }
   }
+  /** Delete settled history and logs; this operation never controls historical processes. */
+  async clear(id: string, workspace: Workspace): Promise<void> {
+    const {job} = await this.get(id, workspace), item = this.jobs.get(id);
+    if (item && (!item.launched || item.stopPromise && !item.stopDone || item.deleting)
+      || !isTerminal(job.state) || ['pending', 'unconfirmed'].includes(job.cleanup.state)) {
+      throw new ToolError('JOB_OCCUPIED', 'Cannot delete an active, pending or unconfirmed job', id);
+    }
+    if (item) item.deleting = true;
+    try {
+      await item?.settlement;
+      await item?.inputQueue;
+      await item?.saveQueue;
+      // Retry an unsaved terminal result before removal; failed writes remain explicit.
+      if (item?.dirty) await this.store.save(item.job);
+      await this.store.remove(job);
+      this.jobs.delete(id); this.quietWakes.delete(id); this.changed();
+    } finally { if (item) item.deleting = false; }
+  }
   async list(workspace: Workspace): Promise<{ jobs: { job: JobSummary; live: boolean }[]; errors: string[] }> {
     const stored = await this.store.list(workspace);
     const all = new Map(stored.jobs.map(job => [job.id, { job, live: false }]));
@@ -454,6 +475,6 @@ export class JobManager {
     }
   }
   hasOccupancy(): boolean {
-    return [...this.jobs.values()].some(item => !item.launched || item.dirty || isActive(item.job));
+    return [...this.jobs.values()].some(item => item.deleting || !item.launched || item.dirty || isActive(item.job));
   }
 }

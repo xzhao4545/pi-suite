@@ -17,13 +17,15 @@ pnpm typecheck
 pnpm test
 ```
 
-模块准入的 1 项 Linux（Node 24.22.2）真实 SDK 聚合检查通过，覆盖与 process.cwd 不同的 ctx.cwd 项目配置、工具/命令注册和手动 active-tool 选择、首次 mentions 补全、new/resume/fork/tree 重绑与 reload 重新准入、child 配置根与实际工具目录分离。goal 模块未实际创建时，startup/重绑/reload/quit 保留其他 provider 的 goal 状态；活动摘要未变时不重复写入或请求 Dock 重绘。全禁用模块的 reload 保留既有 job、SDK child 和 workflow Worker，quit 通过既有 owner 注册等待 child/session、Worker、job/gate 的真实结算与清理，不创建新的运行时。
+模块准入的 1 项 Linux（Node 24.22.2）真实 SDK 聚合检查通过，覆盖与 process.cwd 不同的 ctx.cwd 项目配置、工具/命令注册和手动 active-tool 选择、首次 mentions 补全、new/resume/fork/tree 重绑与 reload 重新准入、child 配置根与实际工具目录分离。goal 模块未实际创建时，startup/重绑/reload/quit 保留其他 provider 的 goal 状态；活动摘要与必要详情未变时不重复写入或请求 Dock 重绘。全禁用模块的 reload 保留既有 job、SDK child 和 workflow Worker，quit 通过既有 owner 注册等待 child/session、Worker、job/gate 的真实结算与清理，不创建新的运行时。
 
-Node 内置测试运行器使用 experimental-transform-types 加载 TypeScript。检查包括外部参数契约、混合批量最终确认、预选/推荐身份、排队及超时竞态、配置覆盖、会话撤销、通知合并、状态去重和原生消息呈现；相同 goal 摘要或等数量的活动 ID 变化不重复写状态或请求 Dock 重绘。实际 Pi SDK 通过原生工具包装器验证注册及结果；TUI 组件检查 40×24、60×30、120×40 的询问高度和可见宽度。目标检查使用 SDK 自带 faux provider，通过真实宿主核对正常继续、重试成功/耗尽、手动与阈值/溢出压缩、压缩取消、Esc、未回答询问、预算、reload、新建/恢复/fork、树切换和期限恢复；压缩摘要由公共 hook 提供。原生 footer 核对 40、60、120 列的状态行与宽度。
+Node 内置测试运行器使用 experimental-transform-types 加载 TypeScript。检查包括外部参数契约、混合批量最终确认、预选/推荐身份、排队及超时竞态、配置覆盖、会话撤销、通知合并、状态去重和原生消息呈现；相同 goal 摘要不重复写状态；等数量的活动 ID 变化更新集合，必要详情相同时不请求 Dock 重绘，问题/清理/选择变化则单独刷新详情。实际 Pi SDK 通过原生工具包装器验证注册及结果；TUI 组件检查 40×24、60×30、120×40 的询问高度和可见宽度。目标检查使用 SDK 自带 faux provider，通过真实宿主核对正常继续、重试成功/耗尽、手动与阈值/溢出压缩、压缩取消、Esc、未回答询问、预算、reload、新建/恢复/fork、树切换和期限恢复；压缩摘要由公共 hook 提供。原生 footer 核对 40、60、120 列的状态行与宽度。
 
 jobs 检查使用真实进程：pipe 的 stdout/stderr、退出码与耗时，stdin 输入与 sensitive 记录，进程树停止确认、重复停止与已结算不再停止，timeoutMs，另一 manager 只读历史，按创建归属级联停止及停止期间的启动，quit 停止与准入关闭，PTY 输入与合并输出；并通过真实宿主核对 wait 撤销通知、轮后结算恰好唤醒一次、状态计数清除、列表筛选与参数冲突、job_stop 结果和不支持的通道。同进程保活用 SDK 的 AgentSessionRuntime 与 reload 核对：job 运行中执行 new、resume、fork 与 reload，仍是原进程且日志连续，只有所属会话收到一次结果。输出读取核对小日志全量、1 MiB 与 100 MiB 日志的头尾与中段关键行截断及续读范围、中文与 emoji 分页边界、搜索上下文与匹配上限续读、无效正则，以及 PTY 回车覆写与重复行折叠。Windows 用 Git Bash 运行（测试在临时 agentDir 的 settings.json 设置 shellPath），Linux 用系统 bash。
 
 共享 wait 用内存来源核对其他对象结算、未在 ids 中的 child 提问、等待中与等待前的用户插话、超时，以及 mode all 的部分结算不返回；真实宿主核对等待一个 job 时另一 job 结算提前返回且不再通知、用户 steer 结束等待且不停止 job。goal_wait 的 waitFor 通过真实宿主核对其他 job 结算不结束等待、恢复时合并送达，以及已结算 ID 不进入等待。终端视图在真实 PTY job 上核对用户按键接管后模型写入返回 USER_CONTROL、Ctrl+G 交还、Ctrl+T 带回含用户与模型输入结果的屏幕、Ctrl+B 离开后 job 仍在运行。monitor 用真实进程核对 literal 与阈值 trigger、同行去重、冷却、detector 丢弃与改名，poll-diff 在样本变化时触发，file-watch 不带 command 运行并在文件事件时触发；真实宿主核对 monitor 事件使等待其自身 job 的 wait 提前返回、events 通道读取，以及已返回事件不再唤醒。
+
+询问协调的 1 项 Linux（Node 24.22.2）真实 SDK 聚合检查通过，使用公共 UI 包装器与 AskView 键盘输入核对 answered、timed_out、cancelled；两个真实 child 的父级问题与实际 pipe job 完成在原生询问期间暂存，恢复边界和 goal 请求合并为一条消息。超时或取消后目标等待新的用户 prompt；父级原生询问依次展示，排队不启动第二题期限，回答后两个 child 实际完成，已消费消息不再次唤醒。child 问题的父级协议期限独立管理。该检查通过受控 UI 上下文驱动实际组件和定时器，Windows 组合与真实手机 SSH 由 [询问待办](../todo/pi-suite/ask/index.md) 管理。
 
 hands-free 的 4 项检查覆盖静默/定时增量更新、单次与总输出预算、暂停与释放、真实 PTY 的宽限期与用户接管、静默终止的进程组清理证据、总运行超时与自行退出，以及 wait 返回更新后去重和 reload 后 goal_wait 恢复。该范围在 Linux（Node 24.22.2）通过，Windows 监督验收由对应待办管理。
 
@@ -31,11 +33,15 @@ CLI 启动的 6 项检查覆盖预设字段合并、用户级策略与精确命�
 
 日志查看的 3 项检查在 Linux 使用真实 pipe job，覆盖底部实时跟随、滚动与搜索保留位置、UTF-8 分次写入、关闭详情后进程继续及退出后补读最终输出；历史核对有界尾窗、前后字节翻页、字面量 Markdown 与 40/60/120 列渲染，列表核对同一筛选集合插入新记录后的游标稳定、会话/workspace 范围与已结束详情。Windows 与完整 /jobs 交互选择流程继续由历史控制专项验收。
 
+历史主动清理的 1 项 Linux（Node 24.22.2）真实 SDK/进程聚合检查通过，覆盖活动/磁盘未确认拒绝、settlement/inputQueue/saveQueue 后删除元数据及全部日志、晚消费不重建、阻塞期间未读通知撤销、原生取消/确认与 foreign 历史删除。只读 agents 历史及受限执行协议隐藏删除入口；Windows 综合流程由 [历史控制专项](../todo/pi-suite/jobs/history-control.md) 验收。
+
 升级控制边界的 2 项检查在 Linux 使用真实宿主 reload 与受控进程，核对执行协议不兼容时查询/日志/停止/指定 ID 等待、活动计数和 quit 可用，新启动与写入明确拒绝，占用注册与退出监听保留，以及空闲替换和历史只读。不同 agentDir 与缺少兼容控制桥的占用注册保持不可接管。创建归属查询核对完整 owned 集合、跨 cwd/owner/branch 与返回副本；v3 控制桥提供完整 sessionJobs/createdBy 查询，v2 保留 createdBy，v1 明确拒绝创建归属查询；v1/v2 显式拒绝完整 session 列表，状态只投影当前分支直属活动 job 并提示一次范围，workspace 读取、停止与 quit 保留。另以真实 monitor detector 延迟最终结算，核对已观测自然退出时重复 stop 等待完整事件、requested:false、退出码 0 和 completed 状态。Windows 升级边界与停止竞争由对应专项验收。
 
 会话 job 可见集的 1 项 Linux（Node 24.22.2）真实 SDK 聚合检查通过，核对当前 owner/branch 的直属执行、可见 agent 全部 run 根与回收后代的所属 job，在不同 cwd 的 session 列表、状态数量和稳定分页中使用同一集合；workspace 不扩大目录范围。存储 await 期间的结算以返回时 owned 副本为准；主级可见 child job 不转移结果通知 owner，agents 禁用后仍从当前分支保存记录保留遗留 job，v2 受限计数/完整 session 查询拒绝边界通过。平台组合由 [状态栏待办](../todo/pi-suite/status.md) 管理。
 
 tasks 的 8 项检查在 Linux 覆盖两级批量原子编辑、稳定短 ID、移动与重新打开后的派生进度、依赖反向关系及警告、两个真实进程并发写入同一文件、异步锁等待、无效文件与取消不覆盖。真实 SDK 核对 new/resume/fork/reload 清单独立、内存模式与 job 引用；临时提醒不进入持久 transcript，doing 间隔与项目关闭配置生效。40/60/120 列核对 Dock 完成比例保留、完成反馈与共享详情阅读状态。Windows 与真实手机的界面、并发组合由任务专项管理。
+
+任务界面的现有聚合同时核对父行先分配、余预算 child 相邻展开、blocked 完成与重新打开、选中稳定 ID 及询问期间按实际子任务计数。共享发布器同时接收必要 agent/job 详情，数量不变时的问题、清理和选择变化仍刷新详情，相同内容保持去重。
 
 子代理任务集成的 2 项 Linux 真实 SDK 聚合检查通过，覆盖多 child 同时读写同一 TaskStore 后保留 status/description/owner 与派生进度，以及持久主会话 reload/fork 期间存活 child 的原清单、fork 独立副本、回到原 owner 的回收后 agent_send 恢复和 stable agent/task 引用。完成或停止不自动把任务改为 done；Windows 与真实手机组合由 [任务待办](../todo/pi-suite/tasks.md) 管理。
 
@@ -67,8 +73,10 @@ Workflow 宿主的 5 项 Linux（Node 24.22.2）真实 SDK/faux 与进程检查�
 
 持久历史的 5 项 Linux（Node 24.22.2）检查覆盖默认/类型配置目录的冷启动发现、目标 cwd 与 configCwd 归属、普通/workflow 保存引用、多次 run 的结束叶子、稳定分页及原生只读菜单；真实 SDK 核对直接父级发送准入、当前可见结束记录的模型与清理入口、跨工作区文件缓存及外部 child 引用、磁盘更新和本地编辑/真实 Execution 优先。只读存储核对缺失/未来 header、损坏 JSONL、无效记录、错误叶子与缺失文件、中断 owner 的 failed 规范化，以及读取前后原文件内容和 mtime 保持。该范围通过，发现边界见 [持久历史](agents/history.md)，平台与真实手机组合由 [扩展专项](../todo/pi-suite/agents/extensions.md) 管理。
 
-公共基础的 46 项离线检查及类型检查在 Windows（Node 24.22.2）和 Linux（已有 WSL/nvm 环境，Node 24.14.0）通过，日常检查在 5 分钟内。共享 wait 提前返回、goal_wait waitFor、终端视图与 monitor 的 11 项检查目前只在 Linux 通过，Windows 待复核。另在 Windows 执行 pi-starship 0.65.2 实际 extension_status 模块，验证 goal/runtime 槽位读取、数量上限与空状态。这些检查证明当前询问、目标、执行任务及共享组件的契约；终端缩放、/jobs 交互选择流程、真实手机 SSH 输入、完整第三方 footer 布局和后续业务模块综合生命周期由 [完整实施计划](../todo/pi-suite/implementation.md) 管理。
+公共基础的 46 项离线检查及类型检查在 Windows（Node 24.22.2）和 Linux（已有 WSL/nvm 环境，Node 24.14.0）通过，日常检查在 5 分钟内。共享 wait 提前返回、goal_wait waitFor、终端视图与 monitor 的 11 项检查目前只在 Linux 通过，Windows 待复核。另在 Windows 执行 pi-starship 0.65.2 实际 extension_status 模块，验证 goal/runtime 槽位读取、数量上限与空状态。这些检查证明当前询问、目标、执行任务及共享组件的契约；Windows 的 /jobs 综合交互、真实手机 SSH 输入与终端缩放、用户实际第三方 footer 配置和业务模块平台综合生命周期由 [完整实施计划](../todo/pi-suite/implementation.md) 管理。
 
-当前 Linux（Node 24.22.2）检查集共 149 项，全量检查通过，无跳过或取消项，耗时 13.88 秒，类型检查通过；日常检查耗时在 5 分钟内。检查覆盖询问、目标、任务、执行、子代理、workflow 和共享组件的当前契约。平台适用范围按上述各专项结论区分。
+当前 Linux（Node 24.22.2）检查集共 152 项，全量检查通过，无跳过或取消项，耗时 14.1 秒，类型检查通过；日常检查耗时在 5 分钟内。检查覆盖询问、目标、任务、执行、子代理、workflow 和共享组件的当前契约。平台适用范围按上述各专项结论区分。
+
+完整 Starship 的 1 项 Linux SDK 聚合从开发依赖加载 0.65.2 实际发布入口，核对 goal_wait、tasks、运行 child、两个 job 与主询问在 40×24、60×30、120×40 并存，实际 emoji/24 位样式、max_statuses 插入顺序、disabled/缺失 extension_status、整体换行和显式 Dock 显示。询问期间实际 job 结算不增加模型调用。终端尺寸由受控 fixture 驱动；当前布局满足本包预算，任意用户 footer format 无可靠公共高度反馈，Windows 与真实手机组合按 [footer 联动范围](../finished/pi-suite/footer-integration.md) 的边界继续验收。
 
 [返回当前文档](./index.md)

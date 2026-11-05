@@ -2,7 +2,7 @@
 
 目标：避免 retry、compact 和会话切换误中断 goal。
 
-当前状态：目标生命周期与摘要基础阶段已实现并通过 Windows/Linux 离线验收，记录见 [已完成阶段](../../finished/pi-suite/goal-core.md)。真实 jobs/agents 完成通知与完整外部 footer 布局仍需综合验收。
+当前状态：目标生命周期与摘要基础阶段已实现并通过 Windows/Linux 离线验收，记录见 [已完成阶段](../../finished/pi-suite/goal-core.md)。真实询问、两个 child 父级问题与 pipe job 完成通知的 Linux 组合通过 [协调阶段](../../finished/pi-suite/ask/coordination.md) 验收；完整 Starship 发布入口的 Linux 三尺寸组合见 [footer 联动阶段](../../finished/pi-suite/footer-integration.md)；Windows 组合、真实手机 SSH 与用户实际 footer 配置仍需综合验收。
 
 影响范围：goal 状态、运行调度、预算、宿主事件、通知协调及状态栏摘要。
 
@@ -15,10 +15,11 @@
 - [x] 拆分持久目标与调度状态
 - [x] 按宿主最终结算判断错误或继续
 - [x] 处理 compact/reload/会话绑定与目标恢复
-- [ ] 统一 goal/job/agent 的继续请求和去重：公共协调器与合并契约已实现，待 jobs/agents 接入后验收实际通知
+- [x] 统一 goal/job/agent 的继续请求和去重（Linux 真实询问、child 父级问题、job 完成及 goal 请求一次边界合并）
+- [ ] 在 Windows 核对 goal、询问和 jobs/agents 的真实通知组合
 - [x] 按 [统一工具设计](../../finished/pi-suite/tool-design.md) 改用 camelCase 参数，goal_wait 增加 waitFor
 - [x] 保留显式暂停、Esc、完成和预算的控制语义
-- [ ] 从目标与调度状态派生单条状态栏摘要，兼容 Pi 原生 footer 与 pi-starship：摘要、原生 footer 与 Starship 状态模块已验证，完整布局见关联专项
+- [x] 从目标与调度状态派生单条状态栏摘要，兼容 Pi 原生 footer 与完整 pi-starship 发布入口（Linux 三尺寸与真实多模块并存；平台边界见关联专项）
 
 ## 验收方式
 
@@ -69,6 +70,6 @@ goal 的常驻摘要默认通过 Pi 的 setStatus 发布，由原生 footer 或 
 
 ## 等待指定执行对象
 
-goal_wait 的 waitFor 为 job/agent ID 数组。指定时目标保持 waiting_jobs，直到其中全部对象结算或单次期限到达再请求继续；其他对象的结算通知照常排队，在恢复时合并为一条消息，但不提前结束这次等待。当前会话任一直接 child 提问（请求 ID `agent:<agentId>:<runId>:ask`）不受 waitFor 限制，立即唤醒主 agent，这次运行同时结束等待；主 agent 回答后可重新调用 goal_wait。waitFor 中 job 的 monitor 事件（请求 ID `job:<id>:monitor`）或 hands-free 更新（请求 ID `job:<id>:update`）同样恢复目标，因为模型配置监督就是为了被它唤醒。用户新输入照常开始新一轮并结束等待。省略 waitFor 时保持现有语义：任一外部唤醒或期限恢复工作。waitFor 中不存在的 ID 在调用时报错，已结算的 ID 在结果中列出，已全部结算时不进入等待。Pi 重启后只剩历史记录、或所属模块已关闭的 ID 不再阻挡恢复。
+goal_wait 的 waitFor 为 job、agent 或 workflow ID 数组（job_、agent_、wf_）。指定时目标保持 waiting_jobs，直到其中全部对象结算或单次期限到达再请求继续；其他对象的结算通知照常排队，在恢复时合并为一条消息，但不提前结束这次等待。当前会话任一直接 child 提问（请求 ID `agent:<agentId>:<runId>:ask`）不受 waitFor 限制，立即唤醒主 agent，这次运行同时结束等待；主 agent 回答后可重新调用 goal_wait。waitFor 中 job 的 monitor 事件（请求 ID `job:<id>:monitor`）或 hands-free 更新（请求 ID `job:<id>:update`）同样恢复目标，因为模型配置监督就是为了被它唤醒。用户新输入照常开始新一轮并结束等待。省略 waitFor 时保持现有语义：任一外部唤醒或期限恢复工作。waitFor 中不存在的 ID 在调用时报错，已结算的 ID 在结果中列出，已全部结算时不进入等待。Pi 重启后只剩历史记录、或所属模块已关闭的 ID 不再阻挡恢复。
 
 与共享 wait 的区别：wait 是本轮内的阻塞调用，其他对象结算、monitor 事件、hands-free 更新、child 提问和用户插话都会让它提前返回；goal_wait 结束本轮，只有 waitFor 对象的结算与监督事件、child 提问、期限和用户输入能恢复目标。

@@ -2,6 +2,7 @@ import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-a
 import type { SessionBinding } from '../runtime/binding.ts';
 import type { Notifications } from '../runtime/notifications.ts';
 import type { StatusPublisher } from '../ui/status.ts';
+import type { DockRow } from '../ui/dock.ts';
 import type { Settlement, Waitable } from '../runtime/wait.ts';
 import { sanitizeText } from '../runtime/text.ts';
 import { active, executing, type AgentRecord, type Execution, type ParentScope } from './types.ts';
@@ -32,6 +33,7 @@ export class AgentsModule implements Waitable {
   private unsubscribe?: () => void;
   private queued = new Set<string>();
   private saved = new Map<string, string>();
+  private selectedRun?: string;
   constructor(private pi: ExtensionAPI, private binding: SessionBinding, private notifications: Notifications,
     private status: StatusPublisher, private tasks?: TasksModule, private parentRun?: Execution, manager?: AgentManager) {
     this.manager = manager ?? agentRuntime();
@@ -54,14 +56,31 @@ export class AgentsModule implements Waitable {
     this.unsubscribe?.(); this.unsubscribe = undefined;
     const current = this.binding.current;
     if (current) for (const request of this.queued) this.notifications.cancel(current.sessionId, request);
-    this.queued.clear(); this.saved.clear(); this.status.setActivities('agents', []);
+    this.queued.clear(); this.saved.clear(); this.selectedRun = undefined; this.status.setActivities('agents', []);
+  }
+  selectRun(runId: string): void { this.selectedRun = runId; this.refresh(); }
+  private rows(records: AgentRecord[], scope: ParentScope): DockRow[] {
+    // A consumed question is still awaiting its answer. Include workflow questions
+    // visible to this parent without exposing unrelated runs or nested descendants.
+    const visible = new Map(records.map(record => [record.runId, record]));
+    for (const run of this.manager.runs.values()) if (run.question && this.manager.questionVisible(run.record, scope)) {
+      visible.set(run.record.runId, this.manager.view(run));
+    }
+    return [...visible.values()].flatMap(record => {
+      const run = this.manager.runs.get(record.runId), question = Boolean(run?.question), selected = record.runId === this.selectedRun;
+      const failed = ['failed', 'limited'].includes(record.state) && run && !run.consumed;
+      if (!active(record.state) && !failed) return [];
+      return [{ id: `agent:${record.runId}`, text: `${selected ? '> ' : ''}agent ${record.id.slice(-8)} ${sanitizeText(record.name).replace(/[\r\n\t]/g, ' ')}`,
+        suffix: question ? 'waiting(parent)' : record.state,
+        priority: question ? 100 : failed ? 80 : record.state === 'stopping' ? 75 : selected ? 65 : record.state === 'queued' ? 15 : 25 }];
+    });
   }
   private revision(record: AgentRecord): string { return `${record.state}:${record.background}:${record.sessionFile ?? ''}:${record.endedAt ?? ''}:${record.model}:${record.thinking}:${JSON.stringify(record.individual)}`; }
   private refresh(): void {
     const current = this.binding.current;
     if (!current) return;
     const scope = this.scope(current.ctx), records = this.manager.records().filter(record => this.manager.visible(record, scope));
-    this.status.setActivities('agents', records.filter(record => executing(record.state)).map(record => record.id));
+    this.status.setActivities('agents', records.filter(record => executing(record.state)).map(record => record.id), this.rows(records, scope));
     const unread = this.unread();
     for (const request of this.queued) if (!unread.some(item => this.request(item) === request)) {
       this.notifications.cancel(current.sessionId, request); this.queued.delete(request);
@@ -109,5 +128,6 @@ export class AgentsModule implements Waitable {
     const current = this.binding.current, request = this.request(item);
     if (current) this.notifications.cancel(current.sessionId, request);
     this.queued.delete(request);
+    this.refresh();
   }
 }
