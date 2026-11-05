@@ -6,15 +6,16 @@ import { Transcript } from '../ui/transcript.ts';
 import { active, executing } from './types.ts';
 import { transcript } from './records.ts';
 import { AgentsModule, summaryLine } from './index.ts';
-import { editAgentModel, editTypeModel } from './model-editor.ts';
+import { editAgentModel, showAgentTypes } from './model-editor.ts';
 import type { SuiteConfig } from '../runtime/config.ts';
 import type { ScrollView } from '../ui/scroll.ts';
 import type { AgentScheduler } from './schedules/index.ts';
 import { showSchedules } from './schedules/menu.ts';
 
 export async function showAgent(ctx: ExtensionContext, agents: AgentsModule, dock: Dock, id: string, runId: string, config: () => SuiteConfig): Promise<void> {
+  const release = agents.manager.retain(runId);
   let content: Transcript | undefined, reader: ScrollView | undefined;
-  for (;;) {
+  try { for (;;) {
     dock.setDetail(true);
     let editing = false;
     try {
@@ -44,7 +45,7 @@ export async function showAgent(ctx: ExtensionContext, agents: AgentsModule, doc
     } finally { dock.setDetail(false); }
     if (!editing) return;
     await editAgentModel(ctx, agents.manager, id, config());
-  }
+  } } finally { release(); }
 }
 export function registerAgentsCommand(pi: ExtensionAPI, agents: AgentsModule, dock: Dock, notices: Notifications, config: () => SuiteConfig, reload: (cwd: string) => void, scheduler?: AgentScheduler,
   workflows?: {available(): boolean; show(ctx: ExtensionContext): Promise<void>}): void {
@@ -52,11 +53,11 @@ export function registerAgentsCommand(pi: ExtensionAPI, agents: AgentsModule, do
     if (ctx.mode !== 'tui') { ctx.ui.notify('Use agent_list and agent_read outside the terminal UI'); return; }
     const release = notices.hold();
     try {
-      const state = args.trim() || await ctx.ui.select('Agents', ['active', 'queued', 'finished', 'all', 'Types · model / thinking', ...scheduler?.isActive ? ['Scheduled agents'] : [], ...workflows?.available() ? ['Workflows'] : []]);
+      const state = args.trim() || await ctx.ui.select('Agents', ['active', 'queued', 'finished', 'all', 'Types · enable / model / thinking', ...scheduler?.isActive ? ['Scheduled agents'] : [], ...workflows?.available() ? ['Workflows'] : []]);
       if (!state) return;
       if (state === 'workflows' || state === 'Workflows') { await workflows?.show(ctx); return; }
       if (state === 'schedules' || state === 'Scheduled agents') { if (scheduler) await showSchedules(ctx, scheduler); return; }
-      if (state === 'Types · model / thinking' || state === 'types') { await editTypeModel(ctx, config(), reload); return; }
+      if (state === 'Types · enable / model / thinking' || state === 'types') { await showAgentTypes(ctx, config(), reload); return; }
       const scope = agents.scope(ctx);
       const records = agents.manager.records().filter(record => agents.manager.visible(record, scope))
         .filter(record => state === 'all' || state === 'active' && executing(record.state) || state === 'queued' && record.state === 'queued' || state === 'finished' && !active(record.state))

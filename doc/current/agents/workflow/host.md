@@ -4,11 +4,11 @@ WorkflowManager 按 agentDir 保存在进程级运行时中；WorkflowsModule �
 
 ## Child 与 gate
 
-workflow child 使用公共 AgentManager 和 Pi SDK 会话，记录带 workflowId，恢复沿用原类型、模型、thinking、schema、工具选择与配置。结构化 child 的续接仍使用原 CompiledSchema 验证，并在脚本 realm 内解析为对象。它们由 workflow 自身的并发控制调度，不占普通前台/后台池，也不出现在普通 agents 列表和状态数量中。顶层 workflow child 的 ask_user 通过公共父级问答路径交给主会话；agent_send 可回答该问题，普通引导与会话恢复由 workflow 控制。
+workflow child 使用公共 AgentManager 和 Pi SDK 会话，记录带 workflowId，新 child 使用统一 catalog 的 enabled 准入，固定 child resume 沿用原类型、模型、thinking、schema、工具选择与配置。结构化 child 的续接仍使用原 CompiledSchema 验证，并在脚本 realm 内解析为对象。它们由 workflow 自身的并发控制调度，不占普通前台/后台池，也不出现在普通 agents 列表和状态数量中。顶层 workflow child 的 ask_user 通过公共父级问答路径交给主会话；agent_send 可回答该问题，普通引导与会话恢复由 workflow 控制。活动 host 保留自己的 child Execution 引用，结束后释放，详见 [执行引用回收](../runtime.md#执行引用回收)。
 
 gate 使用公共 JobManager 的 pipe 执行、Pi shell 解析、cwd、所属会话和 workflow creator，默认期限 10 分钟，启动后关闭 stdin。stdout/stderr 保存在 job 日志中，结果使用共享有界读取规则；失败作为 agent 进度错误返回，保留已经发生的 child 用量。gate 不进入普通 jobs 列表、状态数量与结果通知，可从 workflow 详情读取日志。
 
-停止、跳过、重试和 quit 使用同一 child/job 取消路径。JobManager 按本次传入的 run/workflow ID 与 ancestors 确定清理范围，累计关闭的 creator 仅用于拒绝后续准入；同级运行的 job 不进入本次清理结果。运行的终态通知在 Worker 终止、child 与所属 job 清理、结果写入和快照保存后发出；清理未确认或写入失败显示错误。
+停止、跳过、重试和 quit 使用同一 child/job 取消路径。JobManager 按本次传入的 run/workflow ID 与 ancestors 确定清理范围，累计关闭的 creator 仅用于拒绝后续准入；同级运行的 job 不进入本次清理结果。host.close 等待全部 child stop 后汇总清理错误，失败时保留 AgentRecord 身份供 owner 再次清理，并在 finally 释放 Execution 保留引用。运行的终态通知在 Worker 终止、child 与所属 job 清理、结果写入和快照保存后发出；清理未确认或写入失败显示错误。
 
 ## 保存资源
 

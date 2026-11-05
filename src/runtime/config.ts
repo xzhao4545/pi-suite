@@ -6,7 +6,7 @@ import { Value } from "typebox/value";
 import { Key, type KeyId } from "@earendil-works/pi-tui";
 import { compileLaunchPolicy, mergePresets, policySchema, presetsSchema, type LaunchDecision, type Preset } from "../jobs/launch/config.ts";
 import { thinkingSchema } from "../agents/catalog.ts";
-import type { Thinking } from "../agents/types.ts";
+import type { AgentTypeSettings } from "../agents/types.ts";
 
 const keyNames = Object.values(Key).flatMap(key => typeof key === "string"
   ? [key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")] : []);
@@ -32,7 +32,7 @@ export const configSchema = Type.Object({
     maxDepth: Type.Optional(Type.Integer({ minimum: 1 })), persistSessions: Type.Optional(Type.Boolean()),
     defaultModel: Type.Optional(Type.String({ minLength: 1 })),
     types: Type.Optional(Type.Record(Type.String(), Type.Object({ model: Type.Optional(Type.String({ minLength: 1 })),
-      thinking: Type.Optional(thinkingSchema) }, { additionalProperties: false }))),
+      thinking: Type.Optional(thinkingSchema), enabled: Type.Optional(Type.Boolean()) }, { additionalProperties: false }))),
     packageAgents: Type.Optional(Type.Union([Type.Boolean(), Type.Array(Type.String({ minLength: 1 }))])),
     mentions: Type.Optional(Type.Boolean()),
     scheduling: Type.Optional(Type.Boolean()),
@@ -58,7 +58,7 @@ export interface SuiteConfig {
   tasks: { reminders: boolean };
   agents: { display: DisplayMode; maxConcurrent: number; maxConcurrentForeground: number;
     maxDepth: number; persistSessions: boolean; defaultModel?: string;
-    types: Record<string, { model?: string; thinking?: Thinking }>; packageAgents?: boolean | string[];
+    types: Record<string, AgentTypeSettings>; packageAgents?: boolean | string[];
     mentions: boolean; scheduling: boolean; workflows: boolean; packageWorkflows?: boolean | string[] };
   /** Terminal view keys: leave the view, hand input back to the model, send the screen to the model. */
   jobs: { display: DisplayMode; detachKey: KeyId; returnKey: KeyId; transferKey: KeyId;

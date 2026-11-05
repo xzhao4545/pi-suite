@@ -2,10 +2,11 @@ import type { Model } from '@earendil-works/pi-ai';
 import { getSupportedThinkingLevels } from '@earendil-works/pi-ai';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { SuiteConfig } from '../runtime/config.ts';
-import { agentTypeLocations, agentTypeModelAfterClear, writeAgentType } from '../runtime/config-edit.ts';
+import { agentTypeLocations, agentTypeModelAfterClear, writeAgentType, writeAgentTypeEnabled } from '../runtime/config-edit.ts';
 import { resolveModel, resolveSettings } from './models.ts';
-import { agentTypes, resolveType } from './catalog.ts';
-import { active, type ModelOverrides } from './types.ts';
+import { agentTypes } from './catalog.ts';
+import { active, type AgentType, type ModelOverrides } from './types.ts';
+import { ToolError } from '../runtime/errors.ts';
 import type { AgentManager } from './manager.ts';
 import { selectValue } from '../ui/select.ts';
 import { getAgentDir } from '@earendil-works/pi-coding-agent';
@@ -25,11 +26,33 @@ export async function chooseModelSettings(ctx: ExtensionContext, title: string, 
   return { model, thinking: thinking ? thinking as ModelOverrides['thinking'] : undefined };
 }
 
-export async function editTypeModel(ctx: ExtensionContext, config: SuiteConfig, reload: (cwd: string) => void): Promise<void> {
-  const options = { trusted: ctx.isProjectTrusted(), packageGate: config.agents.packageAgents };
-  const types = agentTypes(ctx.cwd, getAgentDir(), options), selected = await ctx.ui.select('Select agent type', types.map(type => type.name));
+export async function showAgentTypes(ctx: ExtensionContext, config: SuiteConfig, reload: (cwd: string) => void): Promise<void> {
+  const types = agentTypes(ctx.cwd, getAgentDir(), { trusted: ctx.isProjectTrusted(), packageGate: config.agents.packageAgents, typeSettings: config.agents.types });
+  const selected = await selectValue(ctx, 'Agent types', types.map(type => ({ value: type.name,
+    label: `${type.name} · ${type.enabled === false ? 'disabled' : 'enabled'}` })));
   if (selected === undefined) return;
-  const type = resolveType(ctx.cwd, selected, options), initial = config.agents.types[type.name] ?? {};
+  const type = types.find(type => type.name === selected)!;
+  const override = config.agents.types[type.name]?.enabled;
+  const action = await selectValue(ctx, `${type.name} · ${override === undefined ? 'definition' : 'configuration'} · ${type.enabled === false ? 'disabled' : 'enabled'}`, [
+    { value: 'enable', label: 'Enable' }, { value: 'disable', label: 'Disable' },
+    { value: 'definition', label: 'Use definition' }, { value: 'model', label: 'Model / thinking' },
+  ], type.enabled === false ? 'enable' : 'disable');
+  if (action === undefined) return;
+  if (action === 'model') { await editTypeModel(ctx, config, reload, type); return; }
+  try { writeAgentTypeEnabled(ctx.cwd, type.name, action === 'definition' ? undefined : action === 'enable'); }
+  finally { reload(ctx.cwd); }
+  ctx.ui.notify(`${type.name}: ${action === 'definition' ? 'using definition' : action === 'enable' ? 'enabled' : 'disabled'} for new executions`);
+}
+
+export async function editTypeModel(ctx: ExtensionContext, config: SuiteConfig, reload: (cwd: string) => void, selectedType?: AgentType): Promise<void> {
+  let type = selectedType;
+  if (!type) {
+    const types = agentTypes(ctx.cwd, getAgentDir(), { trusted: ctx.isProjectTrusted(), packageGate: config.agents.packageAgents });
+    const selected = await ctx.ui.select('Select agent type', types.map(type => type.name));
+    if (selected === undefined) return;
+    type = types.find(type => type.name === selected)!;
+  }
+  const initial = config.agents.types[type.name] ?? {};
   const locations = agentTypeLocations(ctx.cwd, type.name);
   ctx.ui.notify(`${type.name} · model: ${locations.model}\nthinking: ${locations.thinking}`);
   const fallback = () => resolveSettings(ctx, type, { prompt: '' }, { ...config, agents: { ...config.agents,
@@ -70,8 +93,13 @@ export async function updateAgentModel(manager: AgentManager, ctx: ExtensionCont
 
 export async function editAgentModel(ctx: ExtensionContext, manager: AgentManager, id: string, config: SuiteConfig): Promise<void> {
   const { record, run } = manager.get(id);
-  const inherited = () => resolveSettings(run?.parent.ctx ?? ctx, run?.type ?? resolveType(ctx.cwd, record.type, { trusted: ctx.isProjectTrusted(), packageGate: config.agents.packageAgents }),
-    run?.request ?? { prompt: '' }, run?.config ?? config).model;
+  const inherited = () => {
+    // Historical records remain editable after disabling their type; admission is enforced
+    // by Manager when a new execution starts, not while inspecting the existing contract.
+    const type = run?.type ?? agentTypes(ctx.cwd, getAgentDir(), { trusted: ctx.isProjectTrusted(), packageGate: config.agents.packageAgents }).find(type => type.name === record.type);
+    if (!type) throw new ToolError('AGENT_TYPE', `Unknown agent type: ${record.type}`);
+    return resolveSettings(run?.parent.ctx ?? ctx, type, run?.request ?? { prompt: '' }, run?.config ?? config).model;
+  };
   const changes = await chooseModelSettings(ctx, `${id} · next request`, record.individual ?? {}, inherited);
   if (!changes) return;
   await updateAgentModel(manager, ctx, id, changes);

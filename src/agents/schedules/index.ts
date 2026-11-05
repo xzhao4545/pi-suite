@@ -61,7 +61,9 @@ export class AgentScheduler {
     const activation = this.activation;
     if (!activation || !this.current(activation) || ctx.sessionManager.getSessionId() !== activation.binding.sessionId) throw new ToolError('STALE_BINDING', 'Scheduler is not bound to this session');
     if (request.background === false || request.inheritContext !== undefined) throw new ToolError('INVALID_ARGS', 'schedule cannot be combined with background:false or inheritContext');
-    const type = resolveType(ctx.cwd, request.type ?? 'general-purpose', { trusted: ctx.isProjectTrusted(), packageGate: this.config().agents.packageAgents });
+    const config = this.config();
+    const type = resolveType(ctx.cwd, request.type ?? 'general-purpose', { trusted: ctx.isProjectTrusted(),
+      packageGate: config.agents.packageAgents, typeSettings: config.agents.types });
     const spec = parseSchedule(schedule), now = Date.now();
     const { background: _background, inheritContext: _context, ...options } = request;
     const job: ScheduledAgent = { id: `schedule_${randomBytes(4).toString('hex')}`, name: request.name?.trim() || `${type.name}: ${request.prompt.replace(/\s+/g, ' ').slice(0, 40)}`.slice(0, 80),

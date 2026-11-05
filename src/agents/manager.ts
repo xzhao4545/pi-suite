@@ -27,6 +27,8 @@ export class AgentManager {
   private eventListeners = new Set<(kind: AgentEventKind, run: Execution, details: Record<string, unknown>) => void>();
   private closedRuns = new Set<string>();
   private stops = new Map<string, Promise<StopOutcome>>();
+  private retained = new Map<string, number>();
+  private cleanupTimer?: NodeJS.Timeout;
   constructor(private execute: (run: Execution) => Promise<void>, private stopJobs: (ids: string[]) => Promise<StopOutcome['affected']>) {}
   get closed(): boolean { return this.closing; }
   configure(config: SuiteConfig): void {
@@ -49,6 +51,32 @@ export class AgentManager {
   }
   restore(records: AgentRecord[]): void {
     for (const record of records) if (!this.runs.has(record.runId)) this.histories.set(record.runId, hydrate(record));
+  }
+  /** Readers and workflow continuations keep their in-memory SDK tree until they close. */
+  retain(runId: string): () => void {
+    this.retained.set(runId, (this.retained.get(runId) ?? 0) + 1);
+    return () => {
+      const remaining = this.retained.get(runId)! - 1;
+      if (remaining) this.retained.set(runId, remaining);
+      else this.retained.delete(runId);
+    };
+  }
+  /** Adapt upstream's ten-minute sweep to the existing history and notification owners. */
+  sweep(now = Date.now()): void {
+    let changed = false;
+    for (const [runId, run] of this.runs) {
+      if (!run.settled || this.retained.has(runId) || Date.parse(run.record.endedAt!) >= now - 10 * 60_000) continue;
+      const parent = run.record.parentRunId ? this.runs.get(run.record.parentRunId) : undefined;
+      // The host consumes top-level workflow results; a closed nested parent cannot receive notices.
+      // Ordinary unread results must survive even when their parent UI is detached.
+      const unread = !run.consumed && (run.record.background || run.notifyResult)
+        && (run.record.parentRunId ? parent && !parent.settled : !run.record.workflowId);
+      if (unread) continue;
+      this.histories.set(runId, this.view(run));
+      this.runs.delete(runId); this.closedRuns.delete(runId); changed = true;
+    }
+    if (!this.runs.size) { clearInterval(this.cleanupTimer); this.cleanupTimer = undefined; }
+    if (changed) this.changed();
   }
   records(): AgentRecord[] {
     return [...this.histories.values(), ...[...this.runs.values()].map(run => this.view(run))];
@@ -87,7 +115,8 @@ export class AgentManager {
     // A target-directory child reports its tools' cwd as untrusted. Carry the opened
     // project's distinct trust with its config root through every nested generation.
     const configTrusted = scope.run?.configTrusted ?? scope.ctx.isProjectTrusted();
-    const type = continuation?.type ?? resolveType(configCwd, previous?.type ?? request.type ?? 'general-purpose', { trusted: configTrusted, packageGate: config.agents.packageAgents });
+    const type = continuation?.type ?? resolveType(configCwd, previous?.type ?? request.type ?? 'general-purpose', {
+      trusted: configTrusted, packageGate: config.agents.packageAgents, typeSettings: config.agents.types });
     if (scope.run) {
       if (scope.run.isolated) throw new ToolError('AGENT_TYPE', 'An isolated child cannot start nested agents');
       const allowed = scope.run.type.allowedSubagents;
@@ -104,7 +133,7 @@ export class AgentManager {
     }
     // Recheck after task I/O: stop closes subtree admission before awaiting any abort/job cleanup.
     options.signal?.throwIfAborted();
-    if (this.closing || scope.run && this.closedRuns.has(scope.run.record.runId)) throw new ToolError('NOT_RUNNING', 'Parent run is stopping');
+    if (this.closing || scope.run && (!active(scope.run.record.state) || this.closedRuns.has(scope.run.record.runId))) throw new ToolError('NOT_RUNNING', 'Parent run is stopping');
     const id = previous?.id ?? allocate('agent');
     if ([...this.runs.values()].some(run => run.record.id === id && !run.settled)) throw new ToolError('ALREADY_RUNNING', `${id} already has an unsettled execution`, id);
     // Handles and user aliases share a namespace across this owner's runs. Persisting them
@@ -132,10 +161,12 @@ export class AgentManager {
       inheritedContext: !continuation && !options.scheduleId && (type.inheritContext ?? request.inheritContext) ? buildParentContext(scope.ctx) : undefined };
     // Preserve a non-persisted transcript for same-process resume using the SDK's session tree.
     if (previous && !previous.sessionFile) {
-      run.entries = transcript(previous, this.runs.get(previous.runId));
-      run.sessionManager = this.runs.get(previous.runId)?.sessionManager;
+      const prior = continuation ?? this.runs.get(previous.runId);
+      run.entries = transcript(previous, prior);
+      run.sessionManager = prior?.sessionManager;
     }
     this.runs.set(record.runId, run); this.queue.push(run);
+    this.cleanupTimer ??= setInterval(() => this.sweep(), 60_000).unref();
     this.event('created', run);
     try { options.onSpawned?.(id); }
     catch (error) { await this.stop(id, record.runId); throw error; }
@@ -242,18 +273,22 @@ export class AgentManager {
     }
     this.changed();
     const operation = (async () => {
-      const jobs = await this.stopJobs(roots);
-      await Promise.all(targets.map(target => target.done.promise));
+      // Job cleanup can fail independently of model abort. Still join every child before
+      // reporting that failure, so callers cannot publish a settled parent prematurely.
+      const [jobsResult] = await Promise.allSettled([this.stopJobs(roots), Promise.all(targets.map(target => target.done.promise))]);
+      if (jobsResult.status === 'rejected') throw jobsResult.reason;
+      const jobs = jobsResult.value;
       const affected = [...targets.map(target => ({ id: target.record.id, state: target.record.state })), ...jobs];
       this.drain();
       return { requested: requested || jobs.length > 0, state: this.get(id, record.runId).record.state,
         cleanup: jobs.some(job => job.cleanup === 'unconfirmed' || job.cleanup === 'pending') ? 'unconfirmed' : 'confirmed', affected };
-    })();
+    })().finally(() => this.stops.delete(stopKey));
     this.stops.set(stopKey, operation);
     return operation;
   }
   async shutdown(): Promise<void> {
     this.closing = true;
+    clearInterval(this.cleanupTimer); this.cleanupTimer = undefined;
     await Promise.all([...new Set(this.records().filter(record => active(record.state)).map(record => record.id))].map(id => this.stop(id)));
   }
 }

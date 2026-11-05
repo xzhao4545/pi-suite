@@ -2,7 +2,7 @@
 
 目标：保留上游 pi-subagents 的自定义 agent 类型、@handle 提及、定时调度、SubagentWorkflow 和跨扩展 RPC，接入本包统一工具、配置与界面。
 
-当前状态：完整保留 frontmatter、类型与包发现、扩展选择/动态工具范围、技能预加载、memory、父级上下文与会话目录已接入，4 项 Linux SDK 契约检查通过，见 [资源基础阶段](../../../finished/pi-suite/agents/resources-core.md)。@handle 输入、补全与会话克隆启动通过 3 项 Linux 检查，见 [提及基础阶段](../../../finished/pi-suite/agents/mentions-core.md)。定时调度与查看取消已接入，见 [调度基础阶段](../../../finished/pi-suite/agents/schedules-core.md)。RPC 五通道、会话归属与结果消费已接入，见 [RPC 基础阶段](../../../finished/pi-suite/agents/rpc-core.md)。workflow 编排核心见 [核心阶段](../../../finished/pi-suite/agents/workflow-core.md)，宿主、保存资源、工具、通知/等待与原生控制入口见 [宿主接入阶段](../../../finished/pi-suite/agents/workflow-host.md)；类型开关、Windows、真实手机/MCP 和资源组合继续验收。保留范围已由用户确认，不保留 git worktree 隔离。导入文件与改造边界见 [上游导入](../upstream-import.md)。
+当前状态：完整保留 frontmatter、类型与包发现、扩展选择/动态工具范围、技能预加载、memory、父级上下文与会话目录已接入，4 项 Linux SDK 契约检查通过，见 [资源基础阶段](../../../finished/pi-suite/agents/resources-core.md)。@handle 输入、补全与会话克隆启动通过 3 项 Linux 检查，见 [提及基础阶段](../../../finished/pi-suite/agents/mentions-core.md)。定时调度与查看取消已接入，见 [调度基础阶段](../../../finished/pi-suite/agents/schedules-core.md)。RPC 五通道、会话归属与结果消费已接入，见 [RPC 基础阶段](../../../finished/pi-suite/agents/rpc-core.md)。workflow 编排核心见 [核心阶段](../../../finished/pi-suite/agents/workflow-core.md)，宿主、保存资源、工具、通知/等待与原生控制入口见 [宿主接入阶段](../../../finished/pi-suite/agents/workflow-host.md)。类型开关菜单和 Execution 回收见 [类型与回收阶段](../../../finished/pi-suite/agents/types-retention.md)；Windows、真实手机/MCP 和资源组合继续验收。保留范围已由用户确认，不保留 git worktree 隔离。导入文件与改造边界见 [上游导入](../upstream-import.md)。
 
 影响范围：agents 类型注册、输入拦截、调度存储、workflow worker、pi.events 通道、/agents 菜单、配置 agents 节。
 
@@ -18,7 +18,7 @@
 - [x] 导入 workflow Worker 编排核心、进度、控制与 journal，保留并发、嵌套、结构化结果、预算和上限
 - [x] 实现 agent_workflow 及其查看界面，gate 在 cwd 执行，见 [宿主接入阶段](../../../finished/pi-suite/agents/workflow-host.md)
 - [x] 注册 subagents:rpc:* 通道并保持协议版本 2
-- [ ] /agents 菜单汇总记录、类型开关、按类型的模型与 thinking 配置（见 [模型与 thinking 配置](models.md)）、调度与 workflow，同步操作说明
+- [x] /agents 菜单汇总记录、类型开关、按类型的模型与 thinking 配置（见 [模型与 thinking 配置](models.md)）、调度与 workflow，同步操作说明，见 [类型与回收阶段](../../../finished/pi-suite/agents/types-retention.md)
 - [ ] Windows 与实际外部扩展组合复核 RPC 注册、启动/停止/引导/消费、生命周期与目录/结构化结果
 - [ ] Windows 与实际 MCP 服务复核资源组合、晚注册与 MCP 桥接、包根/符号链接及类型/技能目录的信任边界
 - [ ] Windows 与真实手机 SSH 复核 @handle/文件补全、活动引导、结束恢复、克隆启动与会话切换
@@ -43,7 +43,7 @@
 
 删除 isolation（worktree 隔离不保留）与 output_transcript（不另写 JSONL 副本）。文件中出现这两个字段时报告未支持字段，不静默忽略。
 
-当前加载规则与字段事实见 [类型与资源](../../../current/agents/resources.md)。extensions/skills 使用 Pi 公共加载器，项目资源继承父级信任；包类型仅来自已安装且显式声明的资源，packageAgents 提供包门控。直接与嵌套工具调用使用同一动态范围，前台与 isolated 按 frontmatter 优先规则决定，达到深度上限时不注入不可用的嵌套工具。
+当前加载规则与字段事实见 [类型与资源](../../../current/agents/resources.md)。agents.types.<规范类型名>.enabled 覆盖 frontmatter 与默认 true；/agents types 保留 disabled 类型，Enable/Disable/Use definition 只修改 enabled，保存后立即刷新 @类型 补全与 workflow 说明。普通新执行、普通恢复、嵌套、调度、workflow 新 child 与 RPC 使用统一 catalog 准入；已准入执行与 workflow 固定 child resume 保持原契约。extensions/skills 使用 Pi 公共加载器，项目资源继承父级信任；包类型仅来自已安装且显式声明的资源，packageAgents 提供包门控。直接与嵌套工具调用使用同一动态范围，前台与 isolated 按 frontmatter 优先规则决定，达到深度上限时不注入不可用的嵌套工具。
 
 ## @handle 提及
 

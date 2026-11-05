@@ -2,7 +2,7 @@
 
 目标：查看活动和已结束的 subagent，保留结果及原生会话历史，并允许用户停止指定 subagent 的当前执行。
 
-当前状态：基础执行、结果/会话引用、独立 runId、恢复、历史结束叶子、列表、真实取消、嵌套与遗留 job 清理已接入；workspace 全量持久记录发现、回收及更广的启动/停止竞争验收待完成，见 [基础阶段](../../../finished/pi-suite/agents/core.md)。
+当前状态：基础执行、结果/会话引用、独立 runId、恢复、历史结束叶子、列表、真实取消、嵌套与遗留 job 清理已接入，见 [基础阶段](../../../finished/pi-suite/agents/core.md)。Execution 定期回收、通知与 reader/workflow 保留引用、持久/非持久历史边界见 [类型与回收阶段](../../../finished/pi-suite/agents/types-retention.md)；workspace 全量持久记录发现及更广的启动/停止竞争验收待完成。
 
 影响范围：AgentManager、Pi child session、持久结果引用、agents 列表/查看器、停止信号及状态栏数量。
 
@@ -18,6 +18,7 @@
 - [x] 将手动停止接入 child 的 abort 与工具取消、等待最终结算
 - [ ] 级联停止嵌套 child 及其启动的后台 job，处理启动竞争和多次执行边界
 - [x] 将活动数量提供给共享状态栏发布器
+- [x] 回收结束超过 10 分钟的 Execution，保留完整历史记录、结果、通知/reader/workflow 引用和遗留 job 归属
 
 ## 验收方式
 

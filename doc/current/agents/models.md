@@ -1,18 +1,18 @@
-# 模型与 thinking 配置
+# 类型、模型与 thinking 配置
 
-`/agents types` 或 `/agents` 的 Types · model / thinking 入口配置类型；记录菜单和 Transcript 的 Model / thinking 操作配置单个 agent。依次选择模型与 thinking，任一步 Esc 取消整次修改。
+`/agents types` 或 `/agents` 的类型入口配置启用状态、模型与 thinking；记录菜单和 Transcript 的 Model / thinking 操作配置单个 agent。模型修改依次选择模型与 thinking，任一步 Esc 取消整次修改。
 
 模型列表来自 Pi 的 `modelRegistry.getAvailable()`，包含全部已认证模型，不受父会话 scoped models 限制。共享选择器复用 Pi 原生 SelectList，显示 provider/modelId，长行按可见宽度截断，完整值保持独立；↑↓ 和 PageUp/PageDown 移动，Enter 提交。thinking 使用 pi-ai 的模型能力列表，非推理模型仅提供 No override 与 off。
 
 ## 类型配置与写入
 
-类型覆盖保存在 `pi-suite.json` 的 `agents.types.<类型>.model/thinking`，模型写入精确的 provider/modelId，不修改 agent Markdown 文件。配置逐类型逐字段合并。
+类型覆盖保存在 `pi-suite.json` 的 `agents.types.<规范类型名>.enabled/model/thinking`，模型写入精确的 provider/modelId，不修改 agent Markdown 文件。配置逐类型逐字段合并，启用状态与模型/thinking 单独写入，互相保留。
 
 ```json
 {
   "agents": {
     "types": {
-      "Explore": { "model": "anthropic/claude-haiku-4-5", "thinking": "low" }
+      "Explore": { "enabled": true, "model": "anthropic/claude-haiku-4-5", "thinking": "low" }
     }
   }
 }
@@ -22,7 +22,15 @@ model 与 thinking 分别定位写入文件：项目 `.pi/pi-suite.json` 已设�
 
 No override 删除对应位置的字段；删除项目字段后，用户级对应值可以生效。模型选择的 No override 按删除后实际生效的模型提供 thinking 选项。
 
-保存后立即更新共享内存配置，之后的新执行和恢复直接读取，无需 /reload。已开始与已排队的执行保留启动配置。会话重新绑定时读取外部修改的配置。
+保存后立即更新共享内存配置，之后的新执行和普通会话恢复直接读取，无需 /reload。已准入执行保留当时解析的类型、模型与 thinking，workflow 固定 child resume 沿用原契约。普通 child 的操作配置在实际开始执行时读取，见 [执行与记录](runtime.md)。会话重新绑定时读取外部修改的配置。
+
+## 类型启用状态
+
+类型列表包含当前信任与包门控范围内的内置、包、项目和用户定义的全部类型，包括 disabled 类型。选择类型后可使用 Enable、Disable、Use definition 或 Model / thinking。Enable/Disable 写入 enabled：项目已经设置该字段时写项目配置，否则写用户配置；Use definition 删除用户和项目两层的 enabled，回到 frontmatter 的 enabled 或默认 true，不修改 model/thinking。
+
+启用状态按项目配置、用户配置、frontmatter、默认 true 解析，配置键使用 catalog 的规范类型名。普通新执行、普通会话恢复、嵌套、调度、workflow 新 child 和 RPC 共用 catalog 准入；已准入执行继续运行，workflow 的固定 child resume 沿用其原契约。
+
+保存后立即刷新当前 @类型 补全和 workflow 的动态类型说明，无需 /reload；禁用类型保留在类型菜单中，便于重新启用。禁用类型不删除已有 agent 的 handle、历史记录或阅读入口；对话内容的可读范围遵循 [回收规则](runtime.md#执行引用回收)。
 
 ## 单个 agent
 

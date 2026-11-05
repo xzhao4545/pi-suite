@@ -14,24 +14,34 @@
 
 普通 child 的模块与操作配置在实际开始执行时从 configCwd 读取并写入 run.config；资源与注入工具使用同一配置快照。类型、模型和 thinking 在准入时解析，排队期间不重新解析。workflow child 保留其原配置快照，续接继续沿用。
 
+父执行的既有工具与资源范围保持当前契约；通过 agent_start 或结束会话的 agent_send 创建新嵌套执行时，从 configCwd 读取当前类型、模型与启用配置。workflow 的每次新 child 同样读取当前配置，固定 child resume 使用原配置。
+
 [RPC 分离启动](rpc.md) 使用同一队列与 run 生命周期：非后台的分离运行不占前台槽位，后台与绕过队列的运行保持实际收费归属。SDK 就绪与最终结算使用独立通知点；完成事件的同步消费在公共通知准入之前执行。
 
 ## 取消与 job 归属
 
 停止先关闭对应运行子树的准入，再取消真实 child 会话与工具信号、等待结算，并调用 JobManager.stopCreatedBy 清理所属活动 job。child 的 job_start 自动携带 agentId、runId 和 ancestors；模型不维护归属名单。JobManager 在异步授权与启动期间仍识别已关闭的 creator，防止停止期间启动遗漏的进程。
 
-agent_stop 不指定 runId 时覆盖该 agent 各次运行及其后代创建的活动 job；指定时限定该次运行子树。已结束 child 留下的 job 也参与清理。同一范围的重复停止加入原操作，不影响同级或主会话创建的 job。JobManager 的本次清理结果只匹配传入 run ID 及 ancestors，累计关闭的 creator 仅用于后续准入。父 child 结算会取消尚未结束的直接嵌套 child。
+agent_stop 不指定 runId 时覆盖该 agent 各次运行及其后代创建的活动 job；指定时限定该次运行子树。已结束 child 留下的 job 也参与清理。同一范围的重复停止加入正在进行的原操作，不影响同级或主会话创建的 job。job 清理失败时仍等待 child 完成结算后再报告错误，后续 stop 可以重新清理。JobManager 的本次清理结果只匹配传入 run ID 及 ancestors，累计关闭的 creator 仅用于后续准入。父 child 结算会取消尚未结束的直接嵌套 child。
 
 ## 会话与历史
 
 默认顶级 child 使用 SessionManager 保存完整 Pi 会话，嵌套默认内存会话，可由类型 persist_session 覆盖。父级和 child 保存 `pi-suite:agent-record` custom entry；记录包含输入、结果、错误、状态、时间、用量、模型来源、单独模型覆盖 individual 和 child sessionFile。父级离开后，历史读取仍可从 startup 引用解析 child 的最终记录。
 
-每次结算保存 endLeafId。该次 transcript 从对应叶子读取，后续恢复新增消息属于新 run。内存会话在同一 Pi 进程内可读取和恢复；进程退出后仅持久引用可用。
+每次结算保存 endLeafId。该次 transcript 从对应叶子读取，后续恢复新增消息属于新 run。非持久会话在其 Execution 回收前可于同一 Pi 进程读取和恢复；进程退出后仅持久引用可用。
 
 Pi 1.5.0 的 ExtensionContext 提供 ModelRegistry，而 createAgentSession 只接受 ModelRuntime。执行层沿用上游在该边界读取 registry.runtime，保持父级认证、Provider 和虚拟模型路由；此访问集中在 runner，公共 context.modelRuntime 可用时替换。
 
 child 的 task_list/task_edit、taskId 与 job 引用使用父级捕获的 TaskStore，嵌套逐级沿用。agent 恢复保持任务关联；删除任务不停止执行，child 结算不自动修改任务完成状态。
 
 指定目标 cwd 的运行记录保存实际工具目录与 configCwd；工作区列表与手动停止按配置目录归属，类型与资源使用父级配置目录，嵌套沿用同一配置根。结构化运行将验证后的 JSON 保存为 structuredJson 与 result，模型后续文本不覆盖该结果；会话读取与恢复仍通过普通 run 记录。
+
+## 执行引用回收
+
+AgentManager 每 60 秒检查已结算的 Execution，endedAt 超过 10 分钟且没有保留引用时移入已有 histories。完整 record、result、endLeafId、ancestors、handle/alias 和 job 归属继续保留。SDK 会话在执行结算时完成 shutdown/dispose；定期回收释放会话树、父级上下文、控制器及内存 transcript 的执行引用，不建立第二套历史存储。
+
+尚未消费且需要通知的结果、正在阅读的 reader retain 引用和活动 workflow host 引用阻止回收。普通顶级结果在主会话离开期间继续保留；嵌套结果在父执行尚未结算、能够接收通知时保留，workflow 嵌套同样遵守该规则，顶层 workflow child 的结果由 host 消费。公共查看器在阅读期间保留对应 run，workflow 在运行期间保留自己的 child，用于查看、续接和清理；退出相应作用域时释放引用。
+
+持久 child transcript 在回收后仍按 sessionFile/endLeafId 读取并可恢复；非持久 transcript 回收后返回 HISTORY_UNAVAILABLE，不能恢复该会话。记录与结果仍可查询，所属遗留 job 仍按 run/ancestor 清理。重复 stop 仅加入正在进行的操作，操作结束后的 stop 重新查询该范围的遗留 job。
 
 [返回 agents](index.md)

@@ -2,7 +2,7 @@
 
 目标：tasks、jobs、agents 以上游发布包源码为基础导入改造，保留已解决的平台与并发边界，按文件记录导入、改造和丢弃范围。
 
-当前状态：实施中；四个上游发布包已下载核对，jobs 的后端、长期管理、PTY、monitor、hands-free 与 CLI 预设，tasks 的两级存储、依赖、会话与提醒，以及 agents 的基础执行、队列、记录、交互与资源基础能力已按职责导入改造并登记来源；类型与单 agent 模型配置已实现，@handle 输入、补全与克隆启动已导入，定时调度与 RPC 五通道、生命周期、cwd 和结构化结果已接入，workflow Worker、宿主、保存资源、工具与原生控制已接入，类型菜单、回收与完整资源组合待验收。task 的 agent 执行恢复关联已接入，综合场景待验收。本文件记录完整按文件处置结论。ask 与 goal 已按上游契约重写并通过两平台检查，不再改为导入。
+当前状态：实施中；四个上游发布包已下载核对，jobs 的后端、长期管理、PTY、monitor、hands-free 与 CLI 预设，tasks 的两级存储、依赖、会话与提醒，以及 agents 的基础执行、队列、记录、交互与资源基础能力已按职责导入改造并登记来源；类型与单 agent 模型配置已实现，@handle 输入、补全与克隆启动已导入，定时调度与 RPC 五通道、生命周期、cwd 和结构化结果已接入，workflow Worker、宿主、保存资源、工具与原生控制已接入。类型开关与 Execution 回收已按统一 catalog/config/history 适配，workspace 全量历史、平台与完整资源组合待验收。task 的 agent 执行恢复关联已接入，综合场景待验收。本文件记录完整按文件处置结论。ask 与 goal 已按上游契约重写并通过两平台检查，不再改为导入。
 
 影响范围：src/tasks、src/jobs、src/agents 与共享 runtime/ui，third-party 来源登记与许可证，package.json 运行依赖。
 
@@ -109,11 +109,11 @@ src/
 
 ## @tintinweb/pi-subagents 0.23.0
 
-基础执行、队列、run 记录、类型、父级交互与任务/job 关联已导入改造，见 [基础阶段](../../finished/pi-suite/agents/core.md) 与 [来源登记](../../../third-party/UPSTREAM.md)。类型与单 agent 模型配置见 [模型基础阶段](../../finished/pi-suite/agents/models-core.md)，资源选择、技能、memory 与上下文见 [资源基础阶段](../../finished/pi-suite/agents/resources-core.md)。@handle 输入与克隆启动见 [提及基础阶段](../../finished/pi-suite/agents/mentions-core.md)。定时调度见 [调度基础阶段](../../finished/pi-suite/agents/schedules-core.md)。RPC 见 [RPC 基础阶段](../../finished/pi-suite/agents/rpc-core.md)。workflow Worker、控制与 journal 见 [核心阶段](../../finished/pi-suite/agents/workflow-core.md)，宿主、保存资源、工具与原生控制见 [宿主接入阶段](../../finished/pi-suite/agents/workflow-host.md)。下表保留完整处置范围；类型菜单、回收和平台资源组合继续执行。
+基础执行、队列、run 记录、类型、父级交互与任务/job 关联已导入改造，见 [基础阶段](../../finished/pi-suite/agents/core.md) 与 [来源登记](../../../third-party/UPSTREAM.md)。类型与单 agent 模型配置见 [模型基础阶段](../../finished/pi-suite/agents/models-core.md)，资源选择、技能、memory 与上下文见 [资源基础阶段](../../finished/pi-suite/agents/resources-core.md)。@handle 输入与克隆启动见 [提及基础阶段](../../finished/pi-suite/agents/mentions-core.md)。定时调度见 [调度基础阶段](../../finished/pi-suite/agents/schedules-core.md)。RPC 见 [RPC 基础阶段](../../finished/pi-suite/agents/rpc-core.md)。workflow Worker、控制与 journal 见 [核心阶段](../../finished/pi-suite/agents/workflow-core.md)，宿主、保存资源、工具与原生控制见 [宿主接入阶段](../../finished/pi-suite/agents/workflow-host.md)，类型开关和 Execution 回收见 [类型与回收阶段](../../finished/pi-suite/agents/types-retention.md)。下表保留完整处置范围；workspace 全量历史和平台资源组合继续执行。
 
 | 文件 | 行数 | 处置 |
 | --- | --- | --- |
-| src/agent-manager.ts | 1735 | 导入并拆分为记录与生命周期、两个并发池与队列、停止与回收。保留 isTopLevelAgent、启动时记录 chargedPool、dequeue 释放等待者、排队项的父级 abort；增加执行 ID 与 job 级联停止 |
+| src/agent-manager.ts | 1735 | 按机制拆分适配记录与生命周期、两个并发池与队列、停止与回收。保留 isTopLevelAgent、启动时记录 chargedPool、dequeue 释放等待者、排队项的父级 abort；增加执行 ID 与 job 级联停止；每 60 秒回收结束超过 10 分钟的 Execution，完整 record/result 留在已有 histories，通知/reader/workflow 引用保留，停止只合并进行中请求 |
 | src/agent-runner.ts | 1468 | 导入并拆分为会话构建、工具范围、恢复与引导。删除 worktree；child 会话注入转交父 agent 的 ask_user |
 | src/nested-tools.ts | 426 | 导入，工具改为 agent_* 规范名；maxDepth 默认 3，包含顶级及两层嵌套 |
 | src/agent-types.ts、custom-agents.ts、default-agents.ts、invocation-config.ts | 346、452、125、155 | 导入，删除 isolation 参数；invocation-config 的 model 与 thinking 改为参数优先于 TUI 类型配置、再优先于 frontmatter，见 [模型与 thinking 配置](agents/models.md) |
@@ -128,7 +128,8 @@ src/
 | src/memory.ts、usage.ts、prompts.ts、skill-loader.ts、context.ts、env.ts、structured-output.ts、status-note.ts | 179、167、171、102、58、33、130、90 | 导入 |
 | src/model-resolver.ts、model-scope.ts、enabled-models.ts | 118、70、180 | 导入；model-resolver 对配置与参数中不可用的模型报错并指出来源，不换成其他 provider 的同名模型 |
 | src/package-resources.ts | 652 | 导入，保留项目信任判断 |
-| src/agent-color.ts、agent-source-badge.ts、agent-file-toggle.ts | 161、75、297 | 导入，用于 /agents 列表与类型开关 |
+| src/agent-color.ts、agent-source-badge.ts | 161、75 | 列表颜色与来源显示范围继续按原生查看器专项评估 |
+| src/agent-file-toggle.ts | 297 | 类型启用/禁用/使用定义的操作语义适配到共享 agents.types.enabled 与 catalog；原生类型菜单使用现有 SelectList/config 写回，不导入独立 Markdown 改写系统 |
 | src/child-context.ts、abortable.ts、xml.ts、types.ts | 15、43、13、404 | 导入，types 删除 worktree 字段 |
 | src/ui/conversation-viewer.ts | 790 | 不导入渲染；保留 x 两次停止、Enter 引导输入、b 转后台的操作语义，查看器复用共享 transcript |
 | src/ui/agent-widget.ts、fleet-list.ts | 661、559 | 丢弃实现；计数由 StatusPublisher 发布，详情行交给 dock |

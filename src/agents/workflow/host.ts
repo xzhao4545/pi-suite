@@ -24,7 +24,8 @@ export function createWorkflowHost(deps: {
 }): WorkflowHost & {close(): Promise<void>} {
   const scope = captureParent(deps.scope), manager = deps.manager;
   const records = new Map<string, Execution>(), controllers = new Map<string, AbortController>();
-  const executions = new Set<Execution>(), pending = new Set<Promise<WorkflowSpawnResult>>();
+  const executions = new Set<AgentRecord>(), pending = new Set<Promise<WorkflowSpawnResult>>();
+  const retained = new Set<() => void>();
   const signalFor = (id: string) => {
     const controller = new AbortController(); controllers.set(id, controller);
     return AbortSignal.any([controller.signal, deps.signal]);
@@ -41,7 +42,8 @@ export function createWorkflowHost(deps: {
     pending.add(operation); void operation.then(() => pending.delete(operation)); return operation;
   }
   async function waitForRun(run: Execution, callback: WorkflowSpawnRequest['onResolved']): Promise<WorkflowSpawnResult> {
-    executions.add(run);
+    executions.add(run.record);
+    retained.add(manager.retain(run.record.runId));
     const off = manager.subscribeEvents((kind, current) => { if (kind === 'started' && current === run) report(run, callback); });
     try {
       if (run.session) report(run, callback);
@@ -94,11 +96,22 @@ export function createWorkflowHost(deps: {
     },
     async close() {
       for (const controller of controllers.values()) controller.abort();
-      await Promise.all([...pending]);
-      const outcomes = await Promise.all([...executions].map(run => manager.stop(run.record.id, run.record.runId)));
-      const gateJobs = await deps.jobs().stopCreatedBy([deps.workflowId]);
-      if (outcomes.some(outcome => outcome.cleanup !== 'confirmed') || gateJobs.some(({job}) => ['pending', 'unconfirmed'].includes(job.cleanup.state))) {
-        throw new Error('Workflow execution cleanup remains unconfirmed');
+      try {
+        await Promise.all([...pending]);
+        // Each stop joins its child even if job cleanup fails. Join every request before
+        // publishing failure, and keep record identities for the owner's cleanup retry.
+        const results = await Promise.allSettled([...executions].map(record => manager.stop(record.id, record.runId)));
+        const gateJobs = await deps.jobs().stopCreatedBy([deps.workflowId]);
+        const failures = results.filter(result => result.status === 'rejected').map(result => result.reason);
+        if (failures.length) throw new AggregateError(failures, `Workflow child cleanup failed: ${failures.map(String).join('; ')}`);
+        const outcomes = results.filter(result => result.status === 'fulfilled').map(result => result.value);
+        if (outcomes.some(outcome => outcome.cleanup !== 'confirmed') || gateJobs.some(({job}) => ['pending', 'unconfirmed'].includes(job.cleanup.state))) {
+          throw new Error('Workflow execution cleanup remains unconfirmed');
+        }
+        executions.clear();
+      } finally {
+        for (const release of retained) release();
+        retained.clear(); records.clear(); controllers.clear();
       }
     },
   };

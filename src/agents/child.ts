@@ -15,6 +15,7 @@ import { AgentsModule } from './index.ts';
 import { registerAgentTools } from './tools.ts';
 import type { AgentManager } from './manager.ts';
 import type { Execution } from './types.ts';
+import { loadConfig } from '../runtime/config.ts';
 
 /** Child tools use the owner's task list and real run ancestry; the model cannot forge creators. */
 export function childSuite(pi: ExtensionAPI, run: Execution, manager: AgentManager): void {
@@ -39,7 +40,9 @@ export function childSuite(pi: ExtensionAPI, run: Execution, manager: AgentManag
         ancestors: [...run.record.ancestors, ...run.record.workflowId ? [run.record.workflowId] : []] } });
     waits.register(jobs);
   }
-  if (run.type.allowedSubagents && !run.isolated && run.record.ancestors.length + 1 < config.agents.maxDepth) registerAgentTools(pi, agents, waits, () => config);
+  // A type toggle changes admission for newly requested descendants, even while their
+  // parent keeps the tools/resources with which it already started.
+  if (run.type.allowedSubagents && !run.isolated && run.record.ancestors.length + 1 < config.agents.maxDepth) registerAgentTools(pi, agents, waits, () => loadConfig(run.configCwd));
   waits.register(agents); registerWait(pi, waits);
   pi.on('session_start', async (_event, ctx) => {
     binding.bind(ctx);

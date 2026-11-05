@@ -40,18 +40,21 @@ export function registerWorkflowTool(pi: ExtensionAPI, workflows: WorkflowsModul
     return new WorkflowProgress(workflows.manager.tasks.get(data.id) ?? taskFromEntry(data), false);
   });
   if (enabled) { pi.registerTool(tool); registered = true; }
+  const refreshTypes = (ctx: ExtensionContext) => {
+    if (!registered) return;
+    const description = fullWorkflowToolDescription.replace('{{typeList}}', agentTypes(ctx.cwd, getAgentDir(), {
+      trusted: ctx.isProjectTrusted(), packageGate: config().agents.packageAgents, typeSettings: config().agents.types,
+    }).filter(type => type.enabled !== false).map(type => `${type.name}: ${type.description}`).join('\n'));
+    if (description !== tool.description) { tool.description = description; registerBoundTool(pi, tool); }
+  };
   return {
     get enabled() { return enabled; },
+    refreshTypes,
     bind(ctx: ExtensionContext) {
       enabled = config().agents.workflows;
       if (enabled && !registered) { registerBoundTool(pi, tool, true); registered = true; }
       if (!registered) return;
-      const description = fullWorkflowToolDescription.replace('{{typeList}}', agentTypes(ctx.cwd, getAgentDir(), {
-        trusted: ctx.isProjectTrusted(), packageGate: config().agents.packageAgents,
-      }).filter(type => type.enabled !== false).map(type => `${type.name}: ${type.description}`).join('\n'));
-      if (description !== tool.description) {
-        tool.description = description; registerBoundTool(pi, tool);
-      }
+      refreshTypes(ctx);
       const pinned = (readConfig(join(ctx.cwd, '.pi', 'pi-suite.json')).agents?.workflows
         ?? readConfig(join(getAgentDir(), 'pi-suite.json')).agents?.workflows) === true;
       const collision = decideWorkflowCollision({tools: pi.getAllTools(), ownDescription: tool.description, pinned});

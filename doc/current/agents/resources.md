@@ -1,6 +1,6 @@
 # 类型与资源
 
-类型按内置默认、Pi 已安装包的显式声明、用户 `<agentDir>/agents`、工作区 `.agents/agents`、项目 `.pi/agents` 加载；同名定义由后者覆盖。项目包与两个项目类型目录只在 `ctx.isProjectTrusted()` 为 true 时参与。精确名称优先，大小写匹配必须唯一；enabled=false 禁止启动，未知字段和无效文件报告错误。
+类型按内置默认、Pi 已安装包的显式声明、用户 `<agentDir>/agents`、工作区 `.agents/agents`、项目 `.pi/agents` 加载；同名定义由后者覆盖。项目包与两个项目类型目录只在 `ctx.isProjectTrusted()` 为 true 时参与。精确名称优先，大小写匹配必须唯一；`agents.types.<规范类型名>.enabled` 覆盖 frontmatter 的 enabled 与默认 true，最终 enabled=false 禁止新准入，未知字段和无效文件报告错误。类型菜单保留 disabled 类型，写回与操作见 [类型配置](models.md)。
 
 ## Frontmatter
 

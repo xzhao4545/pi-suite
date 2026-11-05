@@ -44,6 +44,8 @@ test('SDK child persists a bounded run leaf, resumes with a fresh run ID and ret
     assert.ok(finished.sessionFile);
     const saved = SessionManager.open(finished.sessionFile!);
     assert.equal(recordsIn(saved.getEntries())[0].runId, finished.runId);
+    h.manager.sweep(Date.now() + 10 * 60_000 + 1);
+    assert.equal(h.manager.get(finished.id).run, undefined, 'durable history survives execution collection');
     const resumed = await h.manager.send(finished.id, 'second task', { ctx: h.ctx }, h.config);
     assert.equal(resumed.action, 'resumed');
     const second = await resumed.run.done.promise;
@@ -130,6 +132,11 @@ test('stop cascades to a child-created job after child settlement, joins repeate
     assert.ok(outcome.affected.some(item => item.id === owned.id && item.state === 'stopped'));
     assert.equal(runtime.manager.peek(owned.id).cleanup.rootExited, true);
     assert.equal(runtime.manager.peek(sibling.id).state, 'running');
+    h.manager.sweep(Date.now() + 10 * 60_000 + 1);
+    assert.equal(h.manager.get(done.id).run, undefined);
+    const again = await h.manager.stop(done.id);
+    assert.notStrictEqual(again, outcome, 'only pending stops are shared; historical stops recheck owned jobs');
+    assert.equal(again.cleanup, 'confirmed');
   } finally { await h.cleanup(); }
 });
 

@@ -77,9 +77,11 @@ test('real workflow tool is background, shares schema/gates/wait and restores ch
 
 test('workflow child resume preserves its original schema/model/type/tools and parent wait can answer its question', {timeout: 15000}, async () => {
   const h = await setup(), typePath = join(h.root, '.pi', 'agents', 'fixed.md');
-  file(typePath, '---\nname: fixed\ntools: [read]\n---\nFIXED_CONTRACT');
+  file(typePath, '---\nname: fixed\ntools: [read]\npersist_session: false\n---\nFIXED_CONTRACT');
   const off = h.agents.subscribeEvents((kind, run) => {
     if (kind === 'completed' && run.record.workflowId && run.record.prompt === 'FIRST') {
+      h.agents.sweep(Date.now() + 10 * 60_000 + 1);
+      assert.strictEqual(h.agents.get(run.record.id).run, run, 'active workflow retains its memory-only continuation');
       file(typePath, '---\nname: fixed\ntools: [bash]\n---\nCHANGED_CONTRACT');
       file(join(h.root, 'pi-suite.json'), '{"agents":{"defaultModel":"missing/model"}}');
     }
@@ -108,6 +110,11 @@ test('workflow child resume preserves its original schema/model/type/tools and p
     assert.deepEqual(activeTools, ['StructuredOutput', 'ask_user', 'read']);
     assert.equal(task.status, 'completed', task.error); assert.deepEqual(task.value, {answer: 'continued'});
     assert.deepEqual(records[0].options.structuredOutput, records[1].options.structuredOutput);
+    h.agents.sweep(Date.now() + 10 * 60_000 + 1);
+    for (const run of records) {
+      assert.equal(h.agents.get(run.record.id, run.record.runId).run, undefined, 'workflow close releases its child executions');
+      assert.ok(h.agents.get(run.record.id, run.record.runId).record.result);
+    }
   } finally { off(); await h.cleanup(); }
 });
 

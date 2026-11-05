@@ -4,6 +4,8 @@
 
 当前状态：共享原生 Transcript、独立详情、thinking/工具折叠、流式消息和部分结果、底部跟随及历史叶子已接入；组件缓存已扩展，完整流式/窄屏验收及上游快捷控制待完成。
 
+查看期间使用 Manager 的 run retain 引用阻止 Execution 回收，退出后释放；非持久 transcript 的回收边界与完整记录保留见 [类型与回收阶段](../../../finished/pi-suite/agents/types-retention.md)。
+
 workflow 详情使用相同原生详情、阅读与值选择框架；child Transcript、gate 日志、暂停/恢复/停止、跳过/重试和 journal 重放的接入见 [宿主接入阶段](../../../finished/pi-suite/agents/workflow-host.md)，Windows 与真实手机 SSH 由 [扩展专项](extensions.md) 验收。
 
 影响范围：child session、消息组件、工具渲染、流式更新、运行/历史查看、手动停止与常驻摘要。

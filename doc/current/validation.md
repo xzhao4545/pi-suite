@@ -45,8 +45,10 @@ Workflow 编排核心的 6 项 Linux 检查使用真实 Worker，覆盖流水线
 
 Workflow 宿主的 5 项 Linux（Node 24.22.2）真实 SDK/faux 与进程检查覆盖后台工具、结构化 child、cwd gate/短退出/EOF、普通列表与数量隐藏、共享等待消费、journal 重放与 SDK 引用恢复；固定 schema/model/type/tools 续接、实际父模型 wait/agent_send 回答问题、workflow 与排队 agent 的 reload/new/resume owner、quit 等待真实 gate 清理通过。保存资源优先级/信任/包门控、源码互斥、高优先级无效资源、truncated/损坏 journal 与明确持久化错误、工具开关撤销/恢复和手动禁用保持、模型使用动态类型描述、原生 40/60/120 列、精确阶段/unphased 分组、暂停返回的阅读与搜索状态通过。6 项 Worker 核心检查和类型检查通过。Windows、真实手机 SSH 和 shell/资源/MCP 组合按 [扩展专项](../todo/pi-suite/agents/extensions.md) 继续验收。
 
+类型开关与回收的 5 项 Linux（Node 24.22.2）检查覆盖 enabled 逐字段来源、规范类型身份、定义恢复和模型字段保持；真实 SDK 核对普通/嵌套/恢复/workflow 新调用准入、已准入执行与固定 child 续接、原生 40/120 列菜单、即时补全与动态工具说明。回收核对活动执行、未消费通知、多 reader 引用、非持久历史与祖先归属，以及 job 清理失败仍等待 child 结算、后续 stop 重试；既有 runtime/workflow-host 用例同时核对持久历史回收后读取与恢复、遗留 job 清理和 host 失败重试时释放执行引用。该范围及类型检查通过，Windows 与综合生命周期竞争由 [agents 待办](../todo/pi-suite/agents/index.md) 管理。
+
 公共基础的 46 项离线检查及类型检查在 Windows（Node 24.22.2）和 Linux（已有 WSL/nvm 环境，Node 24.14.0）通过，日常检查在 5 分钟内。共享 wait 提前返回、goal_wait waitFor、终端视图与 monitor 的 11 项检查目前只在 Linux 通过，Windows 待复核。另在 Windows 执行 pi-starship 0.65.2 实际 extension_status 模块，验证 goal/runtime 槽位读取、数量上限与空状态。这些检查证明当前询问、目标、执行任务及共享组件的契约；终端缩放、/jobs 交互选择流程、真实手机 SSH 输入、完整第三方 footer 布局和后续业务模块综合生命周期由 [完整实施计划](../todo/pi-suite/implementation.md) 管理。
 
-当前 Linux（Node 24.22.2）检查集共 120 项，均已通过全量检查或变更影响范围复核，类型检查通过；覆盖询问、目标、任务、执行、子代理、workflow 和共享组件的当前契约。平台适用范围按上述各专项结论区分。
+当前 Linux（Node 24.22.2）检查集共 125 项，全量检查通过，耗时 12.51 秒，类型检查通过；覆盖询问、目标、任务、执行、子代理、workflow 和共享组件的当前契约。平台适用范围按上述各专项结论区分。
 
 [返回当前文档](./index.md)

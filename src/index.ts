@@ -50,12 +50,16 @@ export default function piSuite(pi: ExtensionAPI): void {
   const workflowTool = workflows && agents ? registerWorkflowTool(pi, workflows, agents, () => config) : undefined;
   if (workflows) waits.register(workflows);
   let startTool: ReturnType<typeof registerAgentTools> | undefined;
+  let mentions: ReturnType<typeof registerAgentMentions> | undefined;
   if (agents) {
     startTool = registerAgentTools(pi, agents, waits, () => config, schedules);
-    registerAgentsCommand(pi, agents, dock, notifications, () => config, cwd => { config = loadConfig(cwd); }, schedules,
+    registerAgentsCommand(pi, agents, dock, notifications, () => config, cwd => {
+      config = loadConfig(cwd); mentions?.refreshTypes();
+      if (binding.current) workflowTool?.refreshTypes(binding.current.ctx);
+    }, schedules,
       workflows && workflowTool ? {available: () => workflowTool.enabled,
         show: ctx => showWorkflows(ctx, {workflows, agents, dock, config: () => config})} : undefined); waits.register(agents);
-    registerAgentMentions(pi, agents, binding, () => config, startTool);
+    mentions = registerAgentMentions(pi, agents, binding, () => config, startTool);
   }
   if (jobs || agents) {
     registerWait(pi, waits);

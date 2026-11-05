@@ -14,7 +14,7 @@
 
 ## /agents
 
-`/agents` 选择 active、queued、finished 或 all；也可使用 `/agents all` 等直接指定筛选。选择一条 run 后可查看 Transcript、修改该 agent 的 Model / thinking，或选择“Stop child, nested agents and jobs”停止该运行范围。菜单的 Types · model / thinking 和 `/agents types` 配置类型，写回位置和作用范围见 [模型配置](models.md)。
+`/agents` 选择 active、queued、finished 或 all；也可使用 `/agents all` 等直接指定筛选。选择一条 run 后可查看 Transcript、修改该 agent 的 Model / thinking，或选择“Stop child, nested agents and jobs”停止该运行范围。Types · enable / model / thinking 和 `/agents types` 显示全部类型，包括 disabled 类型；Enable、Disable、Use definition 与 Model / thinking 配置类型，写回位置和作用范围见 [类型配置](models.md)。
 
 Scheduled agents 与 `/agents schedules` 查看当前会话的调度，选择一项后可确认取消；创建使用 agent_start 的 schedule，规则、开关、时间与已触发运行的控制见 [定时调度](schedules.md)。
 
@@ -27,6 +27,8 @@ Workflows 与 `/agents workflows` 查看当前会话与分支的编排、保存�
 - ←→ 选择 Tools、Thinking、Model / thinking 或 Back；Enter 执行动作；Esc 返回。模型选择返回后保留阅读与搜索位置。
 
 进入查看器持有公共通知阻塞令牌；关闭后恢复通知投递，主会话保持原绑定。关闭查看器只结束阅读。
+
+打开会话期间保留其内存 transcript，阅读期间不会回收。关闭后，结束超过 10 分钟的内存对话内容可以释放，记录、结果与持久会话仍保留；非持久 transcript 释放后不可阅读或恢复，边界见 [执行引用回收](runtime.md#执行引用回收)。
 
 ## @handle 提及
 
@@ -46,7 +48,7 @@ message 与选项 ID/标题精确匹配时返回 selection，否则在 allowFree
 
 ## 类型与模型
 
-类型依次加载 Pi 包声明、用户 `<agentDir>/agents`、项目 `.agents/agents`、项目 `.pi/agents`；后加载的同名类型覆盖前者，项目目录与项目包只在父级已信任时参与。精确名称优先，大小写匹配必须唯一，enabled=false 禁止启动。支持 name、display_name、description、color、tools、disallowedTools/disallowed_tools、model、thinking、max_turns、persist_session、session_dir、allowed_subagents、prompt_mode、extensions/exclude_extensions、skills、inherit_context、run_in_background、isolated、memory 和 enabled。正文为系统提示词；allowed_subagents 默认不开放嵌套，可为 all 或类型名单。字段、包与资源操作见 [类型与资源](resources.md)。
+类型依次加载 Pi 包声明、用户 `<agentDir>/agents`、项目 `.agents/agents`、项目 `.pi/agents`；后加载的同名类型覆盖前者，项目目录与项目包只在父级已信任时参与。精确名称优先，大小写匹配必须唯一；agents.types 中规范类型名的 enabled 覆盖 frontmatter 与默认 true，最终 false 禁止新准入。支持 name、display_name、description、color、tools、disallowedTools/disallowed_tools、model、thinking、max_turns、persist_session、session_dir、allowed_subagents、prompt_mode、extensions/exclude_extensions、skills、inherit_context、run_in_background、isolated、memory 和 enabled。正文为系统提示词；allowed_subagents 默认不开放嵌套，可为 all 或类型名单。字段、包与资源操作见 [类型与资源](resources.md)。
 
 模型与 thinking 分别按调用参数、该 agent 的 individual、agents.types 的对应字段、frontmatter、agents.defaultModel（仅模型）、父级当前值解析。配置逐类型逐字段合并；显式 provider/modelId 在认证目录中不可用时报错指出来源，不跨 Provider 替换；调用参数和 frontmatter 的模糊名仅在匹配唯一时接受。实际 thinking 由 Pi 按模型能力收紧。单独修改从下一次请求生效，结束后的修改用于恢复，详细规则见 [模型配置](models.md)。
 

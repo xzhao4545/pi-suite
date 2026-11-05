@@ -2,7 +2,7 @@
 
 目标：在 TUI 内配置 subagent 的模型和 thinking，从已配置认证的模型中直接选择，修改立即生效，不需要编辑文件或 /reload。
 
-当前状态：共享 agents.types 配置、逐字段写回、类型选择界面、单 agent 下一请求修改与持久恢复、模型来源和认证错误已接入；5 项 Linux 契约检查覆盖实际 SDK 请求与原生选择组件，见 [模型配置基础阶段](../../../finished/pi-suite/agents/models-core.md)。Windows 与后续调度/workflow/@handle 入口的综合验收待完成。需求与取舍已由用户确认。
+当前状态：共享 agents.types 配置、逐字段写回、类型选择界面、单 agent 下一请求修改与持久恢复、模型来源和认证错误已接入；5 项 Linux 契约检查覆盖实际 SDK 请求与原生选择组件，见 [模型配置基础阶段](../../../finished/pi-suite/agents/models-core.md)。enabled 的配置优先级、完整类型菜单、Enable/Disable/Use definition 与即时 @类型/workflow 刷新见 [类型与回收阶段](../../../finished/pi-suite/agents/types-retention.md)。Windows 与调度/workflow/@handle 入口的综合验收待完成。需求与取舍已由用户确认。
 
 影响范围：/agents 菜单、subagent 查看器与列表、共享配置加载与写入、AgentManager 启动参数解析、agent 记录与 agent_list 详情。
 
@@ -18,6 +18,7 @@
 - [x] 启动时按优先级解析模型与 thinking，记录实际值及来源
 - [x] 配置的模型不可用时报错并指出配置来源
 - [x] 同步操作说明与 doc/current 配置文档
+- [x] agents.types 增加 enabled，类型菜单保留 disabled 项并提供 Enable/Disable/Use definition，独立于 model/thinking 写回
 - [ ] Windows 核对 40/120 列的原生选择与类型写回、运行中修改、恢复；后续调度/workflow/@handle 入口接入时复核同一解析路径
 
 ## 验收方式

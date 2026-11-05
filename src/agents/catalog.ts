@@ -6,7 +6,7 @@ import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { ToolError } from '../runtime/errors.ts';
 import { defaultTypes } from './defaults.ts';
-import type { AgentType } from './types.ts';
+import type { AgentType, AgentTypeSettings } from './types.ts';
 import { packageResources, type PackageGate } from './resources/packages.ts';
 
 export const thinkingSchema = Type.Union([Type.Literal('off'), Type.Literal('minimal'), Type.Literal('low'), Type.Literal('medium'), Type.Literal('high'), Type.Literal('xhigh'), Type.Literal('max')]);
@@ -34,7 +34,7 @@ function csv(value: string | string[] | undefined): string[] | undefined {
 function resourceChoice(value: boolean | string | string[] | undefined): boolean | string[] {
   return value === undefined || value === true ? true : value === false ? false : csv(value) ?? false;
 }
-export type CatalogOptions = { trusted?: boolean; packageGate?: PackageGate };
+export type CatalogOptions = { trusted?: boolean; packageGate?: PackageGate; typeSettings?: Record<string, AgentTypeSettings> };
 export function agentTypes(cwd: string, agentDir = getAgentDir(), options: CatalogOptions = {}): AgentType[] {
   const types = new Map(defaultTypes.map(type => [type.name, type]));
   const sources = packageResources(cwd, 'agents', options.trusted ?? false, options.packageGate, agentDir);
@@ -67,7 +67,10 @@ export function agentTypes(cwd: string, agentDir = getAgentDir(), options: Catal
       isolated: raw.isolated, memory: raw.memory, color: raw.color,
       enabled: raw.enabled, sourcePath: path, packageName });
   }
-  return [...types.values()];
+  // Configuration uses exact catalog identities, as model/thinking pins do. Keep definition
+  // objects untouched so another caller's launch snapshot cannot inherit a later toggle.
+  return [...types.values()].map(type => options.typeSettings?.[type.name]?.enabled === undefined
+    ? type : { ...type, enabled: options.typeSettings[type.name].enabled });
 }
 export function resolveType(cwd: string, name: string, options: CatalogOptions = {}): AgentType {
   const types = agentTypes(cwd, getAgentDir(), options), exact = types.find(type => type.name === name);

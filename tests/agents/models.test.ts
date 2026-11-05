@@ -118,7 +118,7 @@ test('/agents type edit applies to new tool launches without reload and leaves e
     }]);
     const original = await h.manager.start({ type: 'Explore', prompt: 'old task', background: false }, { ctx: h.ctx }, h.config);
     await entered.promise;
-    const ctx = picker(h.ctx, ['suite-model-test/reasoning', 'high']);
+    const ctx = picker(h.ctx, ['Explore · enabled', 'Model / thinking', 'suite-model-test/reasoning', 'high']);
     ctx.ui.select = async (_title, values) => values.find(value => value === 'Explore');
     await h.session.extensionRunner.getCommand('agents')!.handler('types', ctx as ExtensionCommandContext);
     assert.equal(original.session?.model?.id, 'offline'); assert.equal(original.record.modelSource, 'inherited');

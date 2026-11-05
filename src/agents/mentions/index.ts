@@ -11,12 +11,12 @@ import type { registerAgentTools } from '../tools.ts';
 import type { AgentType } from '../types.ts';
 
 export function registerAgentMentions(pi: ExtensionAPI, agents: AgentsModule, binding: SessionBinding,
-  config: () => SuiteConfig, startTool: ReturnType<typeof registerAgentTools>): void {
+  config: () => SuiteConfig, startTool: ReturnType<typeof registerAgentTools>) {
   const clones = new Set<AbortController>();
   let providerRegistered = false, types: AgentType[] = [];
   const enabled = () => config().agents.mentions;
-  const loadTypes = (ctx: Parameters<AgentsModule['scope']>[0], packageGate = config().agents.packageAgents) => {
-    types = agentTypes(ctx.cwd, undefined, { trusted: ctx.isProjectTrusted(), packageGate });
+  const loadTypes = (ctx: Parameters<AgentsModule['scope']>[0], settings = config()) => {
+    types = agentTypes(ctx.cwd, undefined, { trusted: ctx.isProjectTrusted(), packageGate: settings.agents.packageAgents, typeSettings: settings.agents.types });
   };
   const roster = () => {
     const current = binding.current;
@@ -30,7 +30,7 @@ export function registerAgentMentions(pi: ExtensionAPI, agents: AgentsModule, bi
     cancel();
     // A session switch retains the host's provider stack; reload replaces the activation.
     // Discover types at bind/dispatch, rather than reading every markdown/package per key.
-    loadTypes(ctx, loadConfig(ctx.cwd).agents.packageAgents);
+    loadTypes(ctx, loadConfig(ctx.cwd));
     if (ctx.mode !== 'tui' || providerRegistered) return;
     providerRegistered = true;
     ctx.ui.addAutocompleteProvider(current => createMentionProvider(current, roster, enabled, error => {
@@ -69,4 +69,5 @@ export function registerAgentMentions(pi: ExtensionAPI, agents: AgentsModule, bi
       .finally(() => { clones.delete(controller); });
     return { action: 'handled' };
   });
+  return { refreshTypes() { if (binding.current) loadTypes(binding.current.ctx); } };
 }

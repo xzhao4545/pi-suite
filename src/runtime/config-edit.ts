@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { getAgentDir } from '@earendil-works/pi-coding-agent';
 import { Value } from 'typebox/value';
 import { configSchema, loadConfig, readConfig } from './config.ts';
-import type { ModelOverrides } from '../agents/types.ts';
+import type { AgentTypeSettings, ModelOverrides } from '../agents/types.ts';
 
 const fields = ['model', 'thinking'] as const;
 /** A project field must be edited at its source, or a user-level update would remain hidden. */
@@ -19,17 +19,26 @@ export function agentTypeModelAfterClear(cwd: string, type: string, agentDir = g
     ? readConfig(join(agentDir, 'pi-suite.json')).agents?.types?.[type]?.model : undefined;
 }
 export function writeAgentType(cwd: string, type: string, changes: ModelOverrides, agentDir = getAgentDir()): void {
+  writeTypeFields(cwd, type, changes, fields, agentDir);
+}
+/** Use definition removes both configuration layers, rather than revealing another toggle. */
+export function writeAgentTypeEnabled(cwd: string, type: string, enabled: boolean | undefined, agentDir = getAgentDir()): void {
+  writeTypeFields(cwd, type, { enabled }, ['enabled'], agentDir, enabled === undefined);
+}
+function writeTypeFields(cwd: string, type: string, changes: AgentTypeSettings, selectedFields: readonly (keyof AgentTypeSettings)[], agentDir: string, clearLayers = false): void {
   loadConfig(cwd, agentDir);
-  const locations = agentTypeLocations(cwd, type, agentDir);
-  const updates = [...new Set(Object.values(locations))].map(path => {
+  const user = join(agentDir, 'pi-suite.json'), project = join(cwd, '.pi', 'pi-suite.json');
+  const projectType = readConfig(project).agents?.types?.[type];
+  const locations = Object.fromEntries(selectedFields.map(field => [field, projectType && Object.hasOwn(projectType, field) ? project : user]));
+  const updates = [...new Set(clearLayers ? [user, project] : Object.values(locations))].map(path => {
     const data = readConfig(path);
     return { path, data, before: JSON.stringify(data) };
   });
   for (const { path, data } of updates) {
-    if (!data.agents?.types?.[type] && fields.every(field => locations[field] !== path || changes[field] === undefined)) continue;
+    if (!data.agents?.types?.[type] && selectedFields.every(field => locations[field] !== path || changes[field] === undefined)) continue;
     data.agents ??= {}; data.agents.types ??= {};
     const override = data.agents.types[type] ??= {};
-    for (const field of fields) if (locations[field] === path) {
+    for (const field of selectedFields) if (clearLayers || locations[field] === path) {
       if (changes[field] === undefined) delete override[field];
       else Object.assign(override, { [field]: changes[field] });
     }

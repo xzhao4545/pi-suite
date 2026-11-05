@@ -22,6 +22,7 @@ export interface AgentType {
 }
 export type ModelSource = 'parameter' | 'type' | 'frontmatter' | 'default' | 'inherited' | 'individual';
 export type ModelOverrides = { model?: string; thinking?: Thinking };
+export type AgentTypeSettings = ModelOverrides & { enabled?: boolean };
 export interface AgentRecord {
   version: 1; id: string; runId: string; type: string; name: string; prompt: string; cwd: string; configCwd?: string;
   ownerSessionId: string; anchorEntryId: string | null; parentAgentId?: string; parentRunId?: string;
