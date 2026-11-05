@@ -39,7 +39,9 @@ agents 的 8 项 Linux 离线检查使用真实 Pi SDK child 与 faux provider�
 
 定时调度的 4 项 Linux 检查使用真实 SDK/faux、计时器与原生选择器，覆盖六字段 cron、周期与相对/ISO 单次、无效时间、远期延时、文件竞争只准入一次与损坏文件保留；原生 agent_start 核对参数互斥、长名称取消和 40/120 列、关闭后的 schema。实际 once/interval/cron 在普通池满时立即启动并保持计数，触发时使用更新的类型选项，普通 run 的结果通过统一通知；实际 new/resume/reload 按 owner 恢复期限，模型不可用时保存和通知错误且不替换。公共 JSON 存储沿用 tasks 的真实多进程锁、取消/无效文件与宿主会话验收。Windows、实际 CLI/手机 SSH 和本地时区的综合调度场景按扩展专项继续验收。
 
-RPC 的 4 项 Linux 检查使用真实 SDK/faux 与公共事件总线，覆盖五通道和版本 2、工厂后的注册、重复绑定、reload 撤销/恢复、生命周期与用量、同步消费不触发父级请求、待发通知撤销、已结束引导拒绝、启动错误与显式模型/参数校验；排队即时返回、信号取消、满池绕过、普通级联停止和会话/嵌套/workflow 归属拒绝通过。指定 cwd 保留父级配置/扩展并隔离目标信任，结构化工具验证、纠正提示、JSON 结果及父工作区列表通过。当前类型检查、105 项既有检查与 4 项 RPC 检查通过，日常完整检查约 10 秒；Windows 与实际外部扩展组合按扩展专项继续验收。
+RPC 的 4 项 Linux 检查使用真实 SDK/faux 与公共事件总线，覆盖五通道和版本 2、工厂后的注册、重复绑定、reload 撤销/恢复、生命周期与用量、同步消费不触发父级请求、待发通知撤销、已结束引导拒绝、启动错误与显式模型/参数校验；排队即时返回、信号取消、满池绕过、普通级联停止和会话/嵌套/workflow 归属拒绝通过。指定 cwd 保留父级配置/扩展并隔离目标信任，结构化工具验证、纠正提示、JSON 结果及父工作区列表通过。Windows 与实际外部扩展组合按扩展专项继续验收。
+
+Workflow 编排核心的 6 项 Linux 检查使用真实 Worker，覆盖流水线独立推进、parallel、嵌套阶段和共享并发/预算、结构化返回与 gate、排队期间暂停/跳过/重试及全部尝试用量。journal 成功且未改变的前缀、失败/变化后执行、schema 重检、含 child resume 的整段执行、文件损坏与明确 I/O 错误通过；JSON、metadata 纯字面量、确定性 globals、未支持选项、agent/item/nested 上限、未等待调用与无限循环 Worker 实际终止通过。当前 115 项完整 Linux 检查及类型检查通过，日常完整检查约 10 秒。公开工具、宿主、资源与原生界面接入及 Windows 验收由 [扩展专项](../todo/pi-suite/agents/extensions.md) 管理。
 
 以上 46 项离线检查及类型检查在 Windows（Node 24.22.2）和 Linux（已有 WSL/nvm 环境，Node 24.14.0）通过，日常检查在 5 分钟内。共享 wait 提前返回、goal_wait waitFor、终端视图与 monitor 的 11 项检查目前只在 Linux 通过，Windows 待复核。另在 Windows 执行 pi-starship 0.65.2 实际 extension_status 模块，验证 goal/runtime 槽位读取、数量上限与空状态。这些检查证明当前询问、目标、执行任务及共享组件的契约；终端缩放、/jobs 交互选择流程、真实手机 SSH 输入、完整第三方 footer 布局和后续业务模块综合生命周期由 [完整实施计划](../todo/pi-suite/implementation.md) 管理。
 

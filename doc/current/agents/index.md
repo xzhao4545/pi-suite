@@ -8,6 +8,7 @@ agents 使用同进程 Pi child 会话。执行层、两池队列、类型发现
 - [类型与资源](resources.md) — 包声明、信任、扩展工具范围、技能、上下文和 memory。
 - [定时调度](schedules.md) — cron、单次与周期、按会话存储、普通 child 和查看取消。
 - [跨扩展 RPC](rpc.md) — 五通道、版本 2、会话与归属、同步消费、cwd 与结构化结果。
+- [Workflow 编排核心](workflow/index.md) — Worker、并发、结构化结果、控制、预算和 journal 边界。
 
 内置 general-purpose、Explore 和 Plan；后二者使用上游的完整只读提示词及 read/bash/grep/find/ls 白名单。默认后台执行，后台并发上限 10，前台上限 0 表示不限。嵌套 child 不占两池槽位，最大会话层数默认 3（顶级与两层嵌套）。
 

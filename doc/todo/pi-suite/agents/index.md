@@ -2,7 +2,7 @@
 
 目标：以上游 pi-subagents 为基础导入改造 subagent 执行、记录、查看、主从交互与扩展能力，接入统一工具、界面和通知。
 
-当前状态：实施中；同进程执行、两池队列、核心类型、run 记录、恢复、工具/查看器、父级提问、任务共享与 job 级联停止已接入，Linux 8 项契约验收通过，见 [基础阶段](../../../finished/pi-suite/agents/core.md)；类型模型写回与单 agent 实时配置见 [模型基础阶段](../../../finished/pi-suite/agents/models-core.md)，扩展、技能、包资源与 memory 见 [资源基础阶段](../../../finished/pi-suite/agents/resources-core.md)。@handle 输入与克隆启动见 [提及基础阶段](../../../finished/pi-suite/agents/mentions-core.md)。定时调度见 [调度基础阶段](../../../finished/pi-suite/agents/schedules-core.md)。RPC 五通道见 [RPC 基础阶段](../../../finished/pi-suite/agents/rpc-core.md)。workflow 与回收待导入，平台与复杂竞争待验收。保留范围与按文件处置见 [上游导入](../upstream-import.md)。
+当前状态：实施中；同进程执行、两池队列、核心类型、run 记录、恢复、工具/查看器、父级提问、任务共享与 job 级联停止已接入，Linux 8 项契约验收通过，见 [基础阶段](../../../finished/pi-suite/agents/core.md)；类型模型写回与单 agent 实时配置见 [模型基础阶段](../../../finished/pi-suite/agents/models-core.md)，扩展、技能、包资源与 memory 见 [资源基础阶段](../../../finished/pi-suite/agents/resources-core.md)。@handle 输入与克隆启动见 [提及基础阶段](../../../finished/pi-suite/agents/mentions-core.md)。定时调度见 [调度基础阶段](../../../finished/pi-suite/agents/schedules-core.md)。RPC 五通道见 [RPC 基础阶段](../../../finished/pi-suite/agents/rpc-core.md)。workflow 编排核心见 [核心阶段](../../../finished/pi-suite/agents/workflow-core.md)，宿主/工具/查看入口与回收待接入，平台与复杂竞争待验收。保留范围与按文件处置见 [上游导入](../upstream-import.md)。
 
 影响范围：AgentManager、child 会话、agent_* 工具、/agents 命令、统一 dock、状态栏与通知。
 
