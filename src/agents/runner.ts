@@ -1,4 +1,4 @@
-// Same-process SDK lifecycle adapted from pi-subagents agent-runner.ts (MIT).
+// Same-process SDK lifecycle adapted from @tintinweb/pi-subagents 0.23.0 src/agent-runner.ts (MIT).
 import { createAgentSession, DefaultResourceLoader, getAgentDir, SessionManager, SettingsManager, type ExtensionFactory, type ModelRuntime } from '@earendil-works/pi-coding-agent';
 import type { SuiteConfig } from '../runtime/config.ts';
 import type { Execution } from './types.ts';
@@ -28,6 +28,10 @@ export async function executeAgent(run: Execution, config: SuiteConfig, factory:
       ...(run.type.allowedSubagents ? ['agent_start', 'agent_list', 'agent_read', 'agent_send', 'agent_stop', 'wait'] : [])],
     excludeTools: run.type.excludeTools });
   run.session = session; run.sessionManager = manager; record.sessionFile = manager.getSessionFile();
+  // Creation awaits SDK/resource startup. An individual edit accepted during that await must
+  // reach the first request even when the SDK was initially constructed with the earlier value.
+  if (session.model?.provider !== run.model.provider || session.model?.id !== run.model.id) await session.setModel(run.model, { persist: false });
+  session.setThinkingLevel(record.thinking, { persist: false });
   record.thinking = session.thinkingLevel;
   session.setSessionName(`${record.name} · ${record.id}`);
   const errors: string[] = extensionsResult.errors.map(error => `${error.path}: ${error.error}`);

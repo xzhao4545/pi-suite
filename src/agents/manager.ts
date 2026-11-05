@@ -1,4 +1,4 @@
-// Two-pool charging/FIFO and run lifecycle adapted from pi-subagents agent-manager.ts (MIT).
+// Two-pool charging/FIFO and run lifecycle adapted from @tintinweb/pi-subagents 0.23.0 src/agent-manager.ts (MIT).
 import { randomBytes } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
@@ -64,7 +64,7 @@ export class AgentManager {
       if (!allowed || allowed !== 'all' && !allowed.includes(type.name)) throw new ToolError('AGENT_TYPE', `${scope.run.record.type} cannot start ${type.name}`);
       if (scope.run.record.ancestors.length + 1 >= config.agents.maxDepth) throw new ToolError('AGENT_DEPTH', 'agents.maxDepth reached');
     }
-    const settings = resolveSettings(scope.ctx, type, request, config);
+    const settings = resolveSettings(scope.ctx, type, request, config, previous?.individual);
     const taskStore = scope.taskStore;
     if (request.taskId && taskStore) {
       const task = (await taskStore.snapshot()).tasks.find(task => task.id === request.taskId);
@@ -83,9 +83,9 @@ export class AgentManager {
       model: `${settings.model.provider}/${settings.model.id}`, modelSource: settings.modelSource,
       thinking: settings.thinking, thinkingSource: settings.thinkingSource,
       persisted: previous?.persisted ?? type.persistSession ?? (!scope.run && config.agents.persistSessions), sessionFile: previous?.sessionFile,
-      taskId: request.taskId ?? previous?.taskId };
+      taskId: request.taskId ?? previous?.taskId, individual: previous?.individual };
     const run: Execution = { record, type, model: settings.model, parent: scope, controller: new AbortController(),
-      done: Promise.withResolvers(), pendingMessages: [], consumed: false, maxTurns: type.maxTurns ?? request.maxTurns };
+      done: Promise.withResolvers(), pendingMessages: [], consumed: false, maxTurns: type.maxTurns ?? request.maxTurns, request, config };
     // Preserve a non-persisted transcript for same-process resume using the SDK's session tree.
     if (previous && !previous.sessionFile) {
       run.entries = transcript(previous, this.runs.get(previous.runId));

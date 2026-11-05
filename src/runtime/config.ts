@@ -13,7 +13,7 @@ const keyNames = Object.values(Key).flatMap(key => typeof key === "string"
 const keyPattern = `^(?:(?:ctrl|alt|shift|super)\\+)*(?:[a-z0-9]|${keyNames.join("|")})$`;
 
 const display = Type.String({ enum: ["status", "dock", "hidden"] });
-const schema = Type.Object({
+export const configSchema = Type.Object({
   modules: Type.Optional(Type.Object({
     ask: Type.Optional(Type.Boolean()), tasks: Type.Optional(Type.Boolean()),
     jobs: Type.Optional(Type.Boolean()), goal: Type.Optional(Type.Boolean()),
@@ -68,7 +68,7 @@ export const defaults: SuiteConfig = {
     agents: mergePresets(), launchPolicy: compileLaunchPolicy([]) },
 };
 
-function readConfig(path: string): Static<typeof schema> {
+export function readConfig(path: string): Static<typeof configSchema> {
   let raw: string;
   try { raw = readFileSync(path, "utf8"); }
   catch (error) {
@@ -77,7 +77,7 @@ function readConfig(path: string): Static<typeof schema> {
     throw error;
   }
   const value: unknown = JSON.parse(raw);
-  if (!Value.Check(schema, value)) throw new Error(`Invalid pi-suite configuration: ${path}`);
+  if (!Value.Check(configSchema, value)) throw new Error(`Invalid pi-suite configuration: ${path}`);
   return value;
 }
 

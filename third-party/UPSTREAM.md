@@ -53,6 +53,6 @@ agents 按职责导入改造 @tintinweb/pi-subagents 0.23.0，保留 [完整 MIT
 | src/agents/runner.ts、records.ts | src/agent-runner.ts、agent-record-entry.ts | Pi SDK 会话创建、绑定、prompt/abort/dispose 与 custom entry；删除 worktree，记录按 run 的结束叶子，使用父级 ModelRuntime |
 | src/agents/child.ts、questions.ts | src/nested-tools.ts 的嵌套范围 | 工具改为 agent_*；共享 TaskStore、wait、Notifications 与 ask schema，新增只交直接父级的挂起提问 |
 
-工具与通知不导入上游实现，按本包规范重写。agents 查看复用共享原生 Transcript，扩展 child renderers、部分工具输出与稳定消息缓存。其余资源选择、配置界面、@handle、调度/workflow/RPC 与回收按 [上游导入](../doc/todo/pi-suite/upstream-import.md) 和 [agents 待办](../doc/todo/pi-suite/agents/index.md) 继续导入。pi-starship 0.65.2 用于外部 footer 契约参考及实际 extension_status 模块验证，不是本包依赖。导入其他模块时同步记录路径、许可证及具体重构边界。
+工具与通知不导入上游实现，按本包规范重写。agents 查看复用共享原生 Transcript，扩展 child renderers、部分工具输出与稳定消息缓存。src/agents/model-editor.ts、src/runtime/config-edit.ts 和 src/ui/select.ts 为本项目类型/单 agent 模型配置需求编写，直接复用 Pi 的认证目录、模型能力、原生 SelectList、会话修改接口和共享配置；这些文件不计作上游源码导入。其余资源选择、@handle、调度/workflow/RPC 与回收按 [上游导入](../doc/todo/pi-suite/upstream-import.md) 和 [agents 待办](../doc/todo/pi-suite/agents/index.md) 继续导入。pi-starship 0.65.2 用于外部 footer 契约参考及实际 extension_status 模块验证，不是本包依赖。导入其他模块时同步记录路径、许可证及具体重构边界。
 
 更新时先取得指定版本的 npm 发布包，与登记的 tarball integrity 对照来源；检查工具契约及公共宿主 API 差异，局部吸收所需改动，更新 sources.json、许可证及本登记，再运行对应契约与宿主检查。来源校验用于确保版权和基线可追踪，不以构建产物哈希代替功能验证。

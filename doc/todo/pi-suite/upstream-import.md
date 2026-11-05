@@ -2,7 +2,7 @@
 
 目标：tasks、jobs、agents 以上游发布包源码为基础导入改造，保留已解决的平台与并发边界，按文件记录导入、改造和丢弃范围。
 
-当前状态：实施中；四个上游发布包已下载核对，jobs 的后端、长期管理、PTY、monitor、hands-free 与 CLI 预设，以及 tasks 的两级存储、依赖、会话与提醒已按文件导入改造并登记来源，agents 待实施，task 的 agent 执行恢复关联随其接入。本文件记录完整按文件处置结论。ask 与 goal 已按上游契约重写并通过两平台检查，不再改为导入。
+当前状态：实施中；四个上游发布包已下载核对，jobs 的后端、长期管理、PTY、monitor、hands-free 与 CLI 预设，tasks 的两级存储、依赖、会话与提醒，以及 agents 的基础执行、队列、记录与交互已按职责导入改造并登记来源；类型与单 agent 模型配置已实现，agents 的完整资源与高级入口继续导入。task 的 agent 执行恢复关联已接入，综合场景待验收。本文件记录完整按文件处置结论。ask 与 goal 已按上游契约重写并通过两平台检查，不再改为导入。
 
 影响范围：src/tasks、src/jobs、src/agents 与共享 runtime/ui，third-party 来源登记与许可证，package.json 运行依赖。
 
@@ -109,7 +109,7 @@ src/
 
 ## @tintinweb/pi-subagents 0.23.0
 
-基础执行、队列、run 记录、核心类型、父级交互与任务/job 关联已导入改造，见 [基础阶段](../../finished/pi-suite/agents/core.md) 与 [来源登记](../../../third-party/UPSTREAM.md)。下表保留完整处置范围；资源选择、配置界面、@handle、调度/workflow/RPC 和回收仍需继续执行。
+基础执行、队列、run 记录、核心类型、父级交互与任务/job 关联已导入改造，见 [基础阶段](../../finished/pi-suite/agents/core.md) 与 [来源登记](../../../third-party/UPSTREAM.md)。类型与单 agent 模型配置见 [模型基础阶段](../../finished/pi-suite/agents/models-core.md)。下表保留完整处置范围；资源选择、@handle、调度/workflow/RPC 和回收仍需继续执行。
 
 | 文件 | 行数 | 处置 |
 | --- | --- | --- |

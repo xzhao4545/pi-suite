@@ -2,6 +2,7 @@ import type { AgentSession, ExtensionContext, SessionEntry, SessionManager, Sess
 import type { Model } from '@earendil-works/pi-ai';
 import type { AskParams, AskResult, Question } from '../ask/schema.ts';
 import type { TaskStore } from '../tasks/store.ts';
+import type { SuiteConfig } from '../runtime/config.ts';
 
 export type Thinking = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 export type AgentState = 'queued' | 'starting' | 'running' | 'waiting' | 'stopping' | 'completed' | 'failed' | 'stopped' | 'limited';
@@ -15,6 +16,7 @@ export interface AgentType {
   enabled?: boolean; sourcePath?: string;
 }
 export type ModelSource = 'parameter' | 'type' | 'frontmatter' | 'default' | 'inherited' | 'individual';
+export type ModelOverrides = { model?: string; thinking?: Thinking };
 export interface AgentRecord {
   version: 1; id: string; runId: string; type: string; name: string; prompt: string; cwd: string;
   ownerSessionId: string; anchorEntryId: string | null; parentAgentId?: string; parentRunId?: string;
@@ -25,6 +27,7 @@ export interface AgentRecord {
   result?: string; error?: string; usage?: Pick<SessionStats, 'tokens' | 'cost'>;
   taskId?: string;
   turns?: number; toolUses?: number; activity?: string; lastUpdateAt?: string;
+  individual?: ModelOverrides;
 }
 export type StartAgent = {
   type?: string; prompt: string; name?: string; background?: boolean; model?: string; thinking?: Thinking;
@@ -44,4 +47,5 @@ export interface Execution {
   settled?: boolean; terminated?: boolean; streamingEntry?: SessionEntry;
   liveResults?: Map<string, SessionEntry>; renderers?: Map<string, ToolRenderers>;
   pendingMessages: string[]; consumed: boolean; notifyResult?: boolean; maxTurns?: number;
+  request: StartAgent; config: SuiteConfig;
 }

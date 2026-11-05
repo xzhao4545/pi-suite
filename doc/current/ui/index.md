@@ -20,4 +20,6 @@ ScrollView 为历史与每个选项详情分别保存滚动位置及搜索内容
 
 DetailsView 提供统一标题、滚动正文、搜索与可配置操作栏；静态 Markdown、tasks 快照、jobs 动态日志与 agents transcript使用同一框架。ScrollView 支持替换正文并保留阅读状态，调用方可要求下次渲染跟随底部；用户在渲染前滚动或开始搜索会取消该次跟随。日志只缓存当前字节窗口，具体操作见 [执行任务](../jobs/index.md#用户操作) 与 [任务操作](../tasks/operations.md)。
 
+公共 selectValue 复用 Pi 原生 SelectList 与主题，按终端高度限制可见选项，支持按键分页；值和显示标签独立，长行只在显示时截断。agent 模型与 thinking 使用该选择器；临时关闭并重开 DetailsView 时可以沿用同一 ScrollView，保留滚动与搜索状态。
+
 [返回当前文档](../index.md)

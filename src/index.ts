@@ -39,7 +39,7 @@ export default function piSuite(pi: ExtensionAPI): void {
   }
   const agents = config.modules.agents ? new AgentsModule(pi, binding, notifications, status, tasks) : undefined;
   if (agents) {
-    registerAgentTools(pi, agents, waits, () => config); registerAgentsCommand(pi, agents, dock, notifications); waits.register(agents);
+    registerAgentTools(pi, agents, waits, () => config); registerAgentsCommand(pi, agents, dock, notifications, () => config, cwd => { config = loadConfig(cwd); }); waits.register(agents);
   }
   if (jobs || agents) {
     registerWait(pi, waits);

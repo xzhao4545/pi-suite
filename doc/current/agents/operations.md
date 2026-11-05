@@ -13,13 +13,13 @@
 
 ## /agents
 
-`/agents` 选择 active、queued、finished 或 all；也可使用 `/agents all` 等直接指定筛选。选择一条 run 后可查看 Transcript，或选择“Stop child, nested agents and jobs”停止该运行范围。
+`/agents` 选择 active、queued、finished 或 all；也可使用 `/agents all` 等直接指定筛选。选择一条 run 后可查看 Transcript、修改该 agent 的 Model / thinking，或选择“Stop child, nested agents and jobs”停止该运行范围。菜单的 Types · model / thinking 和 `/agents types` 配置类型，写回位置和作用范围见 [模型配置](models.md)。
 
 查看器复用共享 Transcript 与 DetailsView；Markdown、thinking、工具调用/结果由 Pi 原生组件渲染。工具优先使用对应 child 的渲染定义，持久历史缺少定义时使用 Pi 标准渲染。稳定消息缓存组件及宽度渲染，活动尾部与工具部分输出随事件更新；在底部时跟随，向上阅读保留位置。
 
 - ↑↓、PageUp/PageDown、Home/End 滚动；鼠标滚轮滚动。
 - `/` 搜索；n/N 查下一个/上一个；搜索内 Esc 退出搜索。
-- ←→ 选择 Tools、Thinking 或 Back；Enter 执行动作；Esc 返回。
+- ←→ 选择 Tools、Thinking、Model / thinking 或 Back；Enter 执行动作；Esc 返回。模型选择返回后保留阅读与搜索位置。
 
 进入查看器持有公共通知阻塞令牌；关闭后恢复通知投递，主会话保持原绑定。关闭查看器只结束阅读。
 
@@ -33,6 +33,6 @@ message 与选项 ID/标题精确匹配时返回 selection，否则在 allowFree
 
 核心类型文件依次加载用户 `<agentDir>/agents`、项目 `.agents/agents`、项目 `.pi/agents`；后加载的同名类型覆盖前者，精确名称优先，大小写匹配必须唯一，enabled=false 禁止启动。支持 name、display_name、description、tools、disallowedTools/disallowed_tools、model、thinking、max_turns、persist_session、allowed_subagents、prompt_mode 和 enabled。正文为系统提示词；allowed_subagents 默认不开放嵌套，可为 all 或类型名单。
 
-模型与 thinking 分别按调用参数、agents.types 的对应字段、frontmatter、agents.defaultModel（仅模型）、父级当前值解析。配置逐类型逐字段合并；显式 provider/modelId 在认证目录中不可用时报错指出来源，不跨 Provider 替换；调用参数和 frontmatter 的模糊名仅在匹配唯一时接受。实际 thinking 由 Pi 按模型能力收紧。
+模型与 thinking 分别按调用参数、该 agent 的 individual、agents.types 的对应字段、frontmatter、agents.defaultModel（仅模型）、父级当前值解析。配置逐类型逐字段合并；显式 provider/modelId 在认证目录中不可用时报错指出来源，不跨 Provider 替换；调用参数和 frontmatter 的模糊名仅在匹配唯一时接受。实际 thinking 由 Pi 按模型能力收紧。单独修改从下一次请求生效，结束后的修改用于恢复，详细规则见 [模型配置](models.md)。
 
 [返回 agents](index.md)

@@ -24,7 +24,7 @@ jobs.agents 配置 CLI 键对应的 command 与 args，按键和字段合并用�
 
 runtime/text.ts 提供安全字面量文本转换，供任务说明、pipe 日志与 monitor 事件共用；终端回车覆写等 PTY 语义由 jobs 的终端模块处理。
 
-agents.maxConcurrent 限制后台池，maxConcurrentForeground=0 表示前台不限；maxDepth 为包含顶级的会话层数。persistSessions 控制顶级默认持久化；defaultModel 和 types.<类型>.model/thinking 提供逐字段覆盖。模型来源、认证要求和操作见 [agents](../agents/operations.md)。
+agents.maxConcurrent 限制后台池，maxConcurrentForeground=0 表示前台不限；maxDepth 为包含顶级的会话层数。persistSessions 控制顶级默认持久化；defaultModel 和 types.<类型>.model/thinking 提供逐字段覆盖。`/agents types` 按字段定位写入用户或项目配置，保存后立即更新内存，只影响新执行；写入复用共享 schema 与最新文件内容，无效文件拒绝覆盖。模型来源、认证要求和单 agent 操作见 [模型配置](../agents/models.md)。
 
 ## 会话和通知
 

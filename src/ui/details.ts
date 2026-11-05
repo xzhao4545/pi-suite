@@ -10,8 +10,8 @@ export class DetailsView implements Component {
   private action: number;
   private height = 1;
   readonly actions: DetailAction[];
-  constructor(private tui: TUI, private title: () => string, content: Component, done: () => void, actions?: DetailAction[]) {
-    this.reader = new ScrollView(content);
+  constructor(private tui: TUI, private title: () => string, content: Component, done: () => void, actions?: DetailAction[], reader?: ScrollView) {
+    this.reader = reader ?? new ScrollView(content);
     this.actions = [...actions ?? [
       { label: "Previous page", run: () => this.reader.scroll(-this.height) },
       { label: "Next page", run: () => this.reader.scroll(this.height) },

@@ -18,7 +18,7 @@ agent_stop 不指定 runId 时覆盖该 agent 各次运行及其后代创建的�
 
 ## 会话与历史
 
-默认顶级 child 使用 SessionManager 保存完整 Pi 会话，嵌套默认内存会话，可由类型 persist_session 覆盖。父级和 child 保存 `pi-suite:agent-record` custom entry；记录包含输入、结果、错误、状态、时间、用量、模型来源和 child sessionFile。父级离开后，历史读取仍可从 startup 引用解析 child 的最终记录。
+默认顶级 child 使用 SessionManager 保存完整 Pi 会话，嵌套默认内存会话，可由类型 persist_session 覆盖。父级和 child 保存 `pi-suite:agent-record` custom entry；记录包含输入、结果、错误、状态、时间、用量、模型来源、单独模型覆盖 individual 和 child sessionFile。父级离开后，历史读取仍可从 startup 引用解析 child 的最终记录。
 
 每次结算保存 endLeafId。该次 transcript 从对应叶子读取，后续恢复新增消息属于新 run。内存会话在同一 Pi 进程内可读取和恢复；进程退出后仅持久引用可用。
 
