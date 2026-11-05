@@ -18,6 +18,8 @@ Workflows 菜单显示当前会话与分支的运行，按开始时间倒序排�
 | Children / gates → Retry | 停止当前运行尝试并重跑，脚本继续等待原调用 |
 | Replay journal | 对结束运行使用保存脚本和原 args 创建新运行，复用成功且未改变的前缀 |
 
+Child Transcript 中的 Message 仅用于回答当前主会话可见的挂起问题，回答后普通引导与恢复由 workflow 控制；x 两次停止所选 child run 及其所属运行子树，搜索与输入中的文字按键不触发停止。workflow child 不提供 b 转后台；完整阅读键位及输入/模型选择的状态保留见 [agents 操作](../operations.md#agents)。
+
 resumeFromRunId 限定当前主会话和分支，目标必须结束并具有 journal。恢复先检查文件，未完成末行的 truncated 前缀在运行日志中明确提示；中间损坏和读取错误拒绝启动。含 child 会话 resume 的 journal 按完整执行规则处理，见 [编排与 journal](index.md)。
 
 查看器复用原生 Text、DetailsView、ScrollView 和值选择。↑↓、PageUp/PageDown、Home/End 阅读；`/` 搜索，n/N 查下一/上一项；←→ 选择动作，Enter 执行，Esc 返回。返回 child 会话、gate 日志或控制操作后保留详情阅读与搜索位置。菜单值使用运行 ID 与 agent index，长名称的显示截断不改变选择身份。浏览期间由公共通知阻塞令牌保持阅读。

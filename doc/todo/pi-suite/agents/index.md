@@ -12,7 +12,7 @@
 
 ## 任务列表
 
-- [ ] [原生会话查看](viewer.md)
+- [x] [原生会话查看与快捷控制](../../../finished/pi-suite/agents/viewer-controls.md)
 - [ ] [运行记录与手动控制](runs.md)
 - [ ] [主从交互](interaction.md)
 - [ ] [扩展能力](extensions.md)
@@ -27,6 +27,8 @@
 沿用上游的两个并发池与一个共享队列：后台池上限默认 10，前台池默认不限；队列按各自池的空位取最早项，避免前台饱和阻塞后台。槽位在启动时记录所属池，运行中修改上限不导致计数错乱；离开队列必须释放等待者。嵌套与 workflow 的 child 不占用池，避免父执行等待自己的 child 时死锁；调度触发绕过队列但计入运行数量。
 
 默认后台运行：agent_start 立即返回 ID，结算后统一通知；background:false 时等待结算，期间父执行被 Esc 中断会停止该前台 child，后台 child 不受父执行 Esc 影响。每 60 秒回收结束超过 10 分钟且没有通知/reader/workflow 保留引用的 Execution，完整记录与结果移入既有 histories；持久会话仍可读取与恢复，非持久 transcript 释放后不可恢复，见 [当前回收规则](../../../current/agents/runtime.md#执行引用回收)。
+
+原生查看与快捷控制通过 Linux 离线验收，消息输入、两次停止、真实前台调用转后台、流式工具配对和组件缓存见 [查看器阶段](../../../finished/pi-suite/agents/viewer-controls.md)；平台与实际手机组合留在 [扩展专项](extensions.md)。
 
 配置并入共享配置 agents 节：display、maxConcurrent、maxConcurrentForeground、maxDepth、persistSessions、scheduling、workflows、defaultModel、types（按规范类型名的 enabled、model、thinking，由 TUI 写入，见 [模型与 thinking 配置](models.md)）等，按用户级默认与项目级覆盖合并。
 

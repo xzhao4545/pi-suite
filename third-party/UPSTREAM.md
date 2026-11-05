@@ -49,7 +49,8 @@ agents 以 @tintinweb/pi-subagents 0.23.0 的源码与契约为来源，分别�
 | --- | --- | --- |
 | src/agents/defaults.ts | src/default-agents.ts | 保留内置类型的完整描述、提示词与只读工具集合，配置类型并入本包 |
 | src/agents/catalog.ts、models.ts | src/custom-agents.ts、agent-types.ts、model-resolver.ts、invocation-config.ts | 核心 frontmatter、来源优先级和精确/唯一大小写匹配；调用参数优先的 model/thinking，显式不可用模型报错，复用 Pi 认证目录；类型 enabled 由共享配置逐类型覆盖，普通/恢复/嵌套/调度/workflow/RPC 新调用共用 catalog 准入 |
-| src/agents/manager.ts、runtime.ts | src/agent-manager.ts | 按上游机制重构：拆分同进程生命周期、两池共享 FIFO 与 chargedPool；增加 run ID、父级准入关闭与 job 级联，reload 保持执行 owner；适配上游每 60 秒、结束 10 分钟的回收，完整 record/result 移入已有 histories，以通知/reader/workflow 引用保留 Execution；不复制 tombstone 记录系统，停止只合并进行中请求 |
+| src/agents/manager.ts、runtime.ts | src/agent-manager.ts | 按上游机制重构：拆分同进程生命周期、两池共享 FIFO 与 chargedPool；增加 run ID、父级准入关闭与 job 级联，reload 保持执行 owner；适配上游每 60 秒、结束 10 分钟的回收，完整 record/result 移入已有 histories，以通知/reader/workflow 引用保留 Execution；不复制 tombstone 记录系统，停止只合并进行中请求；前台转后台保留单向交接，按真实调用契约转移 chargedPool、释放等待并继续通知 |
+| src/agents/viewer.ts、src/ui/details.ts 的动作扩展 | src/ui/conversation-viewer.ts 的操作语义 | 按机制适配 x 两次停止、Enter 消息输入、b 转后台；复用公共原生 Transcript/DetailsView、选中 runId 与直接父级准入，搜索/输入拥有文字键，输入和模型往返保留 reader 与执行引用；不导入上游文本渲染实现 |
 | src/agents/runner.ts、records.ts | src/agent-runner.ts、agent-record-entry.ts | 按上游机制重构：Pi SDK 会话创建、绑定、prompt/abort/dispose 与 custom entry；删除 worktree，记录按 run 的结束叶子，使用父级 ModelRuntime |
 | src/agents/child.ts、questions.ts | src/nested-tools.ts 的嵌套范围 | 工具改为 agent_*；共享 TaskStore、wait、Notifications 与 ask schema，新增只交直接父级的挂起提问 |
 | src/agents/resources/selectors.ts、scope.ts、loader.ts | src/agent-runner.ts 的扩展分类、工具范围与资源加载 | 保留名称/包别名、晚注册、exposure/defaultActive、MCP 模式与直接/嵌套检查；公共包管理器先筛选路径，再用 Pi loader 加载，避免排除工厂和重复 suite；作用域统一接入本包工具与禁用通配 |

@@ -20,15 +20,20 @@ Scheduled agents 与 `/agents schedules` 查看当前会话的调度，选择一
 
 Workflows 与 `/agents workflows` 查看当前会话与分支的编排、保存资源、阶段、日志和结果，提供暂停/恢复/停止、child 会话和 gate 日志、跳过/重试与 journal 重放；控制条件、开关和按键见 [Workflow 操作](workflow/operations.md)。
 
-查看器复用共享 Transcript 与 DetailsView；Markdown、thinking、工具调用/结果由 Pi 原生组件渲染。工具优先使用对应 child 的渲染定义，持久历史缺少定义时使用 Pi 标准渲染。稳定消息缓存组件及宽度渲染，活动尾部与工具部分输出随事件更新；在底部时跟随，向上阅读保留位置。
+查看器复用共享 Transcript 与 DetailsView；Markdown、thinking、工具调用/结果由 Pi 原生组件渲染，使用所选 child 的实际工作目录。工具优先使用对应 child 的渲染定义，持久历史缺少定义时使用 Pi 标准渲染；调用、流式部分输出和最终结果按 toolCallId 配对。稳定消息缓存组件及宽度渲染，每条变化的流式消息和工具部分输出随事件更新；在底部时跟随，向上阅读保留位置。
 
 - ↑↓、PageUp/PageDown、Home/End 滚动；鼠标滚轮滚动。
 - `/` 搜索；n/N 查下一个/上一个；搜索内 Esc 退出搜索。
-- ←→ 选择 Tools、Thinking、Model / thinking 或 Back；Enter 执行动作；Esc 返回。模型选择返回后保留阅读与搜索位置。
+- ←→ 选择当前可用的 Message、Tools、Thinking、Model / thinking、Background、Stop subtree 或 Back；Enter 执行动作；Esc 返回。
+- 可接收消息的运行默认选中 Message，Enter 打开输入。提交后按 agent_send 返回 answered、steered 或 queued；空输入或取消返回阅读。输入结束时重新检查所选 run，已结束、结算中或同一 agent 的旧 run 不发送，也不隐式恢复。
+- x 按两次停止所选 run 及其嵌套 child/所属 job；第一次提示“再按 x 停止”，其他按键取消确认。已结束或结算中的 run 隐藏快捷停止；从操作栏选中 Stop subtree 后 Enter 同样进入确认。
+- b 将正在等待真实 agent_start 前台调用返回的顶级普通运行转为后台，立即释放前台调用；排队、停止中、已结束、嵌套、workflow、RPC 和普通恢复运行不提供此操作。后台池已满时仍可转入，后续启动继续按池上限排队。转入后父级 Esc 不停止该 child，最终结果通过统一通知送达。
+
+Message 输入与 Model / thinking 选择在关闭当前详情后打开，返回后保留滚动、搜索和展开状态。搜索框和输入框拥有文字按键，输入 x 或 b 只输入文字。普通消息限当前主会话的直接 child；workflow 查看器只允许回答当前可见且已挂起的问题，普通引导与恢复由 workflow 控制。
 
 进入查看器持有公共通知阻塞令牌；关闭后恢复通知投递，主会话保持原绑定。关闭查看器只结束阅读。
 
-打开会话期间保留其内存 transcript，阅读期间不会回收。关闭后，结束超过 10 分钟的内存对话内容可以释放，记录、结果与持久会话仍保留；非持久 transcript 释放后不可阅读或恢复，边界见 [执行引用回收](runtime.md#执行引用回收)。
+打开会话及其消息输入、模型选择往返期间保留其内存 transcript，阅读期间不会回收。关闭后，结束超过 10 分钟的内存对话内容可以释放，记录、结果与持久会话仍保留；非持久 transcript 释放后不可阅读或恢复，边界见 [执行引用回收](runtime.md#执行引用回收)。
 
 ## @handle 提及
 

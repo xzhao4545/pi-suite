@@ -36,7 +36,7 @@ No override 删除对应位置的字段；删除项目字段后，用户级对�
 
 运行中通过 child 的 `setModel(..., {persist:false})` 与 `setThinkingLevel(..., {persist:false})` 修改下一次请求，当前请求不中断；不修改主会话、其他 agent 或 Pi 全局默认。尚未建立 child 会话的执行在第一请求前应用修改，thinking 由 Pi 按实际模型能力收紧。
 
-覆盖保存在既有 `pi-suite:agent-record` 的 individual 字段。已结束记录保持该次运行的实际模型与 thinking，编辑只改变之后恢复使用的覆盖。取消单独覆盖时，活动执行恢复其启动参数与启动配置；查看器打开选择器前关闭当前 custom UI，返回后保留原生 transcript 的滚动、搜索和展开状态。
+覆盖保存在既有 `pi-suite:agent-record` 的 individual 字段。已结束记录保持该次运行的实际模型与 thinking，编辑只改变之后恢复使用的覆盖。取消单独覆盖时，活动执行恢复其启动参数与启动配置；查看器打开选择器前关闭当前 custom UI，返回后保留原生 transcript 的滚动、搜索和展开状态。所选 run 的 retain 引用覆盖整次详情、输入与模型选择往返，直到最终退出阅读后释放。
 
 ## 解析与来源
 

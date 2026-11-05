@@ -48,19 +48,30 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
       if (run.record.background || !_id) return text([summaryLine(agents.manager.view(run)), `read: agent_read({"id":"${run.record.id}"})`], { agent: agentSummary(agents.manager.view(run)) });
       // Esc cancels only the active foreground call. Returning for a question removes this
       // listener, so answering the parent later can continue the same child in the background.
-      const abort = () => { void agents.manager.stop(run.record.id, run.record.runId); };
+      const abort = () => { if (!run.record.background) void agents.manager.stop(run.record.id, run.record.runId); };
+      const waiter = new AbortController();
+      run.foreground = Promise.withResolvers<undefined>();
+      const waitSignal = signal ? AbortSignal.any([signal, waiter.signal]) : waiter.signal;
       signal?.addEventListener('abort', abort, { once: true });
       try {
         if (signal?.aborted) { await agents.manager.stop(run.record.id, run.record.runId); throw signal.reason; }
         let waiting;
-        do { waiting = await waits.wait([run.record.id], 'all', 3600000, signal); }
+        do {
+          waiting = await Promise.race([waits.wait([run.record.id], 'all', 3600000, waitSignal), run.foreground.promise]);
+          if (!waiting) return text([summaryLine(agents.manager.view(run)), 'Continuing in background; the result will be notified.',
+            `read: agent_read({"id":"${run.record.id}"})`], { agent: agentSummary(agents.manager.view(run)), backgrounded: true });
+        }
         while ((waiting.reason === 'other' || waiting.reason === 'event') && active(run.record.state));
         const record = agents.manager.view(run);
         if (!active(record.state)) agents.consume({ ...agents.settlement(record.id), runId: record.runId });
         else { run.notifyResult = true; agents.manager.changed(); }
         return text([summaryLine(record), record.result?.slice(0, 500), record.error, ...waiting.others.map(item => item.summary),
           waiting.results.find(item => item.question)?.summary, `read: agent_read({"id":"${record.id}"})`], { agent: agentSummary(record), wait: waiting });
-      } finally { signal?.removeEventListener('abort', abort); }
+      } finally {
+        run.foreground = undefined;
+        waiter.abort(new Error('Foreground caller released its wait'));
+        signal?.removeEventListener('abort', abort);
+      }
     } };
   pi.registerTool(startTool);
   pi.registerTool({ name: 'agent_list', label: 'List agents',

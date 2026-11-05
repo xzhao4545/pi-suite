@@ -68,4 +68,5 @@ export interface Execution {
   pendingMessages: string[]; consumed: boolean; notifyResult?: boolean; maxTurns?: number;
   request: StartAgent; config: SuiteConfig; isolated?: boolean; inheritedContext?: string; bypassQueue?: boolean;
   configCwd: string; configTrusted: boolean; options: StartOptions; startup?: PromiseWithResolvers<string | undefined>; detachAbort?: () => void;
+  foreground?: PromiseWithResolvers<undefined>;
 }

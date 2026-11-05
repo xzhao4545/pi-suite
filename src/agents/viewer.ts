@@ -12,39 +12,67 @@ import type { ScrollView } from '../ui/scroll.ts';
 import type { AgentScheduler } from './schedules/index.ts';
 import { showSchedules } from './schedules/menu.ts';
 
-export async function showAgent(ctx: ExtensionContext, agents: AgentsModule, dock: Dock, id: string, runId: string, config: () => SuiteConfig): Promise<void> {
+export async function showAgent(ctx: ExtensionContext, agents: Pick<AgentsModule, 'manager' | 'scope'>, dock: Dock, id: string, runId: string, config: () => SuiteConfig): Promise<void> {
   const release = agents.manager.retain(runId);
   let content: Transcript | undefined, reader: ScrollView | undefined;
+  const get = () => agents.manager.get(id, runId);
+  const canStop = () => { const run = get().run; return Boolean(run && !run.settled && active(run.record.state) && run.record.state !== 'stopping'); };
+  const canMessage = () => {
+    const { record, run } = get(), scope = agents.scope(ctx);
+    if (!canStop() || agents.manager.get(id).record.runId !== runId) return false;
+    return run?.question ? agents.manager.questionVisible(record, scope) : agents.manager.visible(record, scope);
+  };
   try { for (;;) {
     dock.setDetail(true);
-    let editing = false;
+    let action: 'model' | 'message' | 'stop' | undefined;
     try {
       await ctx.ui.custom<void>((tui, _theme, _keys, done) => {
-        const get = () => agents.manager.get(id, runId);
-        content ??= new Transcript(tui, ctx.cwd, name => get().run?.renderers?.get(name));
+        content ??= new Transcript(tui, get().record.cwd, name => get().run?.renderers?.get(name));
         content.setEntries(transcript(get().record, get().run));
         const view = new DetailsView(tui, () => `${summaryLine(get().record)} · ${get().record.model} (${get().record.modelSource}) · thinking ${get().record.thinking} (${get().record.thinkingSource})`, content, done, [
+          { label: 'Message', available: canMessage, run: () => { action = 'message'; done(); } },
           { label: 'Tools', run: () => { content!.toggleTools(); view.invalidate(); } },
           { label: 'Thinking', run: () => { content!.toggleThinking(); view.invalidate(); } },
-          { label: 'Model / thinking', run: () => { editing = true; done(); } },
-        ], reader);
+          { label: 'Model / thinking', run: () => { action = 'model'; done(); } },
+          { label: 'Background', key: 'b', available: () => agents.manager.canSendToBackground(id, runId), run: () => { agents.manager.sendToBackground(id, runId); } },
+          { label: 'Stop subtree', key: 'x', confirm: '再按 x 停止', available: canStop, run: () => { action = 'stop'; done(); } },
+        ], reader, canMessage() ? 'Message' : undefined);
         view.reader.setContent(content, reader ? reader.atBottom : active(get().record.state));
         reader = view.reader;
-        let revision = '';
+        let revision = transcript(get().record, get().run);
         const refresh = () => {
           const { record, run } = get(), entries = transcript(record, run);
-          const next = `${entries.length}:${record.state}:${JSON.stringify(entries.at(-1))}`;
-          if (next === revision) return;
-          revision = next;
-          const follow = view.reader.atBottom;
-          content!.setEntries(entries); view.reader.setContent(content!, follow); tui.requestRender();
+          // Several tools can stream concurrently. Compare every immutable entry identity,
+          // since an unchanged last tool result says nothing about an earlier live tail.
+          if (entries.length !== revision.length || entries.some((entry, index) => entry !== revision[index])) {
+            revision = entries;
+            const follow = view.reader.atBottom;
+            content!.setEntries(entries); view.reader.setContent(content!, follow);
+          }
+          tui.requestRender();
         };
         const unsubscribe = agents.manager.subscribe(refresh);
         return Object.assign(view, { dispose: unsubscribe });
       });
     } finally { dock.setDetail(false); }
-    if (!editing) return;
-    await editAgentModel(ctx, agents.manager, id, config());
+    if (!action) return;
+    // Close custom UI before opening an editor or awaiting lifecycle control. The same
+    // reader survives these trips, while its run stays retained throughout.
+    try {
+      if (action === 'model') await editAgentModel(ctx, agents.manager, id, config());
+      else if (action === 'message') {
+        const message = (await ctx.ui.input(get().run?.question ? 'Answer parent question' : 'Message agent'))?.trim();
+        if (!message) continue;
+        // Input may outlive this execution. Never turn a late submit into an implicit
+        // resume, or route an old transcript's text into the newest run of the same ID.
+        if (!canMessage()) { ctx.ui.notify('This run no longer accepts messages'); continue; }
+        const result = await agents.manager.send(id, message, agents.scope(ctx), config());
+        ctx.ui.notify(`${id}: ${result.action}`);
+      } else if (canStop()) {
+        const outcome = await agents.manager.stop(id, runId);
+        ctx.ui.notify(`${id} ${outcome.state} · cleanup ${outcome.cleanup}`);
+      }
+    } catch (error) { ctx.ui.notify(error instanceof Error ? error.message : String(error), 'error'); }
   } } finally { release(); }
 }
 export function registerAgentsCommand(pi: ExtensionAPI, agents: AgentsModule, dock: Dock, notices: Notifications, config: () => SuiteConfig, reload: (cwd: string) => void, scheduler?: AgentScheduler,

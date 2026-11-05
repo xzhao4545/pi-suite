@@ -44,7 +44,7 @@ export class AgentsModule implements Waitable {
     if (current) for (const request of this.queued) this.notifications.cancel(current.sessionId, request);
     this.queued.clear(); this.saved.clear(); this.status.setActivities('agents', []);
   }
-  private revision(record: AgentRecord): string { return `${record.state}:${record.sessionFile ?? ''}:${record.endedAt ?? ''}:${record.model}:${record.thinking}:${JSON.stringify(record.individual)}`; }
+  private revision(record: AgentRecord): string { return `${record.state}:${record.background}:${record.sessionFile ?? ''}:${record.endedAt ?? ''}:${record.model}:${record.thinking}:${JSON.stringify(record.individual)}`; }
   private refresh(): void {
     const current = this.binding.current;
     if (!current) return;

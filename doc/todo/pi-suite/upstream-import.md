@@ -111,9 +111,11 @@ src/
 
 基础执行、队列、run 记录、类型、父级交互与任务/job 关联已导入改造，见 [基础阶段](../../finished/pi-suite/agents/core.md) 与 [来源登记](../../../third-party/UPSTREAM.md)。类型与单 agent 模型配置见 [模型基础阶段](../../finished/pi-suite/agents/models-core.md)，资源选择、技能、memory 与上下文见 [资源基础阶段](../../finished/pi-suite/agents/resources-core.md)。@handle 输入与克隆启动见 [提及基础阶段](../../finished/pi-suite/agents/mentions-core.md)。定时调度见 [调度基础阶段](../../finished/pi-suite/agents/schedules-core.md)。RPC 见 [RPC 基础阶段](../../finished/pi-suite/agents/rpc-core.md)。workflow Worker、控制与 journal 见 [核心阶段](../../finished/pi-suite/agents/workflow-core.md)，宿主、保存资源、工具与原生控制见 [宿主接入阶段](../../finished/pi-suite/agents/workflow-host.md)，类型开关和 Execution 回收见 [类型与回收阶段](../../finished/pi-suite/agents/types-retention.md)。下表保留完整处置范围；workspace 全量历史和平台资源组合继续执行。
 
+原生查看、流式工具配对与组件缓存、消息输入、两次停止和真实前台转后台通过 Linux 离线验收，见 [查看器阶段](../../finished/pi-suite/agents/viewer-controls.md)；查看器渲染复用公共 Pi 消息组件，操作语义按上游 conversation-viewer 适配。
+
 | 文件 | 行数 | 处置 |
 | --- | --- | --- |
-| src/agent-manager.ts | 1735 | 按机制拆分适配记录与生命周期、两个并发池与队列、停止与回收。保留 isTopLevelAgent、启动时记录 chargedPool、dequeue 释放等待者、排队项的父级 abort；增加执行 ID 与 job 级联停止；每 60 秒回收结束超过 10 分钟的 Execution，完整 record/result 留在已有 histories，通知/reader/workflow 引用保留，停止只合并进行中请求 |
+| src/agent-manager.ts | 1735 | 按机制拆分适配记录与生命周期、两个并发池与队列、停止与回收。保留 isTopLevelAgent、启动时记录 chargedPool、dequeue 释放等待者、排队项的父级 abort；增加执行 ID 与 job 级联停止；每 60 秒回收结束超过 10 分钟的 Execution，完整 record/result 留在已有 histories，通知/reader/workflow 引用保留，停止只合并进行中请求；真实前台调用转后台时转移收费池、释放调用等待并继续通知 |
 | src/agent-runner.ts | 1468 | 导入并拆分为会话构建、工具范围、恢复与引导。删除 worktree；child 会话注入转交父 agent 的 ask_user |
 | src/nested-tools.ts | 426 | 导入，工具改为 agent_* 规范名；maxDepth 默认 3，包含顶级及两层嵌套 |
 | src/agent-types.ts、custom-agents.ts、default-agents.ts、invocation-config.ts | 346、452、125、155 | 导入，删除 isolation 参数；invocation-config 的 model 与 thinking 改为参数优先于 TUI 类型配置、再优先于 frontmatter，见 [模型与 thinking 配置](agents/models.md) |
@@ -131,7 +133,7 @@ src/
 | src/agent-color.ts、agent-source-badge.ts | 161、75 | 列表颜色与来源显示范围继续按原生查看器专项评估 |
 | src/agent-file-toggle.ts | 297 | 类型启用/禁用/使用定义的操作语义适配到共享 agents.types.enabled 与 catalog；原生类型菜单使用现有 SelectList/config 写回，不导入独立 Markdown 改写系统 |
 | src/child-context.ts、abortable.ts、xml.ts、types.ts | 15、43、13、404 | 导入，types 删除 worktree 字段 |
-| src/ui/conversation-viewer.ts | 790 | 不导入渲染；保留 x 两次停止、Enter 引导输入、b 转后台的操作语义，查看器复用共享 transcript |
+| src/ui/conversation-viewer.ts | 790 | 不导入渲染；x 两次停止、Enter 消息输入、b 真实前台转后台的操作语义接入共享 DetailsView/Transcript，按所选 runId 和父级归属控制，输入/模型往返保留 reader 与 run 引用 |
 | src/ui/agent-widget.ts、fleet-list.ts | 661、559 | 丢弃实现；计数由 StatusPublisher 发布，详情行交给 dock |
 | src/ui/select-item.ts、viewer-keys.ts | 45、39 | 导入 |
 | src/worktree.ts | 205 | 丢弃 |

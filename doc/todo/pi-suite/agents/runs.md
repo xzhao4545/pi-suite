@@ -26,7 +26,7 @@
 
 ## 关联计划
 
-- [原生会话查看器](viewer.md)
+- [原生会话查看器](../../../finished/pi-suite/agents/viewer-controls.md)
 - [主从交互](interaction.md)
 - [活动数量状态](../status.md)
 - [job 查询与控制](../jobs/history-control.md)
@@ -39,7 +39,7 @@ agents 详情提供“活动 / 排队 / 已结束 / 全部”筛选。默认集�
 
 每项展示 agent ID、名称/类型、任务摘要、ownerSession/parentAgent、本次执行标识、状态、开始/结束时间、运行耗时、用量、结果摘要与错误；完整输入、assistant 回复和工具结果在 child transcript 中按需查看。
 
-活动执行可以实时查看；已结束执行仍可以读取结果并打开同一个原生消息查看器，保留 Markdown、代码块、thinking 和工具调用/结果折叠。关闭查看器只退出阅读。详细渲染规则继续维护在 [原生会话查看器](viewer.md)，不另建文本版历史渲染器。
+活动执行可以实时查看；已结束执行仍可以读取结果并打开同一个原生消息查看器，保留 Markdown、代码块、thinking 和工具调用/结果折叠。关闭查看器只退出阅读。详细渲染规则维护在 [当前操作](../../../current/agents/operations.md)，专项设计与验收见 [原生会话查看器](../../../finished/pi-suite/agents/viewer-controls.md)，不另建文本版历史渲染器。
 
 复用 Pi SessionManager 与上游 subagents:record 的会话条目（本包类型名为 pi-suite:agent-record）、child session 文件引用，避免另建一套会话数据库。默认保存完整 child session 和最终记录；内存对象释放后仍能通过引用查历史。主动选择不持久化的 agent 明确标记历史范围，不能承诺 Pi 退出后还能查看未保存的 transcript。上游的嵌套 child 默认不持久化，保留该默认值并在记录中标注。
 

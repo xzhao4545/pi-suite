@@ -18,4 +18,5 @@
 - [子代理 Workflow 编排核心阶段](./pi-suite/agents/workflow-core.md) — 上游 Worker、流水线、嵌套共享并发、控制与预算、journal 前缀恢复；Linux 离线验收。
 - [子代理 Workflow 宿主接入阶段](./pi-suite/agents/workflow-host.md) — 保存资源、共享执行/存储/等待/通知、固定 child 续接与原生控制；Linux SDK/进程验收。
 - [子代理类型开关与执行引用回收阶段](./pi-suite/agents/types-retention.md) — 统一 enabled 准入、原生类型菜单、完整历史与通知/reader/workflow 引用保留。
+- [子代理原生会话查看与快捷控制](./pi-suite/agents/viewer-controls.md) — toolCallId 流式配对与组件缓存、消息输入、两次停止、真实前台转后台和阅读状态；Linux 离线验收。
 - [两级任务基础阶段](./pi-suite/tasks/core.md) — 原子批量编辑、派生进度、统一存储、会话与提醒、共享详情和 job 引用；Linux 离线验收。

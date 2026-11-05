@@ -193,6 +193,23 @@ export class AgentManager {
     if (!run.sessionManager && !run.record.sessionFile) throw new ToolError('HISTORY_READ_ONLY', 'No workflow child session to continue', run.record.id);
     return this.start({ ...run.request, prompt }, run.parent, run.config, run.record, { ...run.options, signal, onSpawned }, run);
   }
+  /** Only an actual waiting caller can release a foreground run; RPC and resumed runs cannot. */
+  canSendToBackground(id: string, runId?: string): boolean {
+    const { record, run } = this.get(id, runId);
+    return Boolean(run?.foreground && !run.settled && isTopLevelAgent(record) && !record.background
+      && active(run.record.state) && !['queued', 'stopping'].includes(run.record.state));
+  }
+  /** Adapt upstream's one-way handoff, including pool charging and caller wake-up. */
+  sendToBackground(id: string, runId?: string): boolean {
+    if (!this.canSendToBackground(id, runId)) return false;
+    const run = this.get(id, runId).run!;
+    if (run.chargedPool) {
+      this.counts[run.chargedPool]--; run.chargedPool = 'background'; this.counts.background++;
+    }
+    run.record.background = true; run.consumed = false;
+    run.foreground!.resolve(undefined);
+    this.changed(); this.drain(); return true;
+  }
   private room(pool: Pool): boolean { return !this.limits[pool] || this.counts[pool] < this.limits[pool]; }
   private pool(run: Execution): Pool | undefined {
     if (!isTopLevelAgent(run.record) || run.options.detached && !run.record.background) return;

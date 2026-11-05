@@ -10,6 +10,8 @@
 
 后台启动立即返回 ID。前台启动等待最终结果，当前父级的任一直接 child 提问都会使其提前返回；提前返回后的最终结果进入统一通知。父级 Esc 取消尚未返回的前台调用与其 child，后台 child 继续运行。reload、会话切换和树导航更换监听绑定，执行 owner 保持稳定；quit 取消活动执行。
 
+正在等待真实 agent_start 前台调用的顶级普通 child 可从查看器单向转为后台；queued、stopping、已结算、嵌套、workflow、RPC 与普通恢复运行不具备该调用契约。Manager 将 chargedPool 从 foreground 转为 background，释放前台槽位并唤醒队列；后台池已满也允许既有执行转入，实际占用计数仍参与后续排队。前台工具返回 backgrounded:true，撤销其等待和 abort 绑定，父级后续取消不停止该 child；background 写入既有 run 记录，最终结果由统一通知消费。
+
 准入时捕获父级 cwd、模型目录、thinking、信任、系统提示、owner 和 anchor，排队与 workflow 的后续调用不读取被 reload 撤销的 ExtensionContext。workflow child 的会话 resume 沿用原类型、模型、thinking、schema、工具与配置，普通 agent_send 恢复仍按模型配置规则解析。
 
 普通 child 的模块与操作配置在实际开始执行时从 configCwd 读取并写入 run.config；资源与注入工具使用同一配置快照。类型、模型和 thinking 在准入时解析，排队期间不重新解析。workflow child 保留其原配置快照，续接继续沿用。
