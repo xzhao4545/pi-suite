@@ -2,7 +2,7 @@
 
 目标：tasks、jobs、agents 以上游发布包源码为基础导入改造，保留已解决的平台与并发边界，按文件记录导入、改造和丢弃范围。
 
-当前状态：实施中；四个上游发布包已下载核对，jobs 的后端、长期管理、PTY、monitor、hands-free 与 CLI 预设，tasks 的两级存储、依赖、会话与提醒，以及 agents 的基础执行、队列、记录、交互与资源基础能力已按职责导入改造并登记来源；类型与单 agent 模型配置已实现，agents 的高级入口继续导入，完整资源组合待验收。task 的 agent 执行恢复关联已接入，综合场景待验收。本文件记录完整按文件处置结论。ask 与 goal 已按上游契约重写并通过两平台检查，不再改为导入。
+当前状态：实施中；四个上游发布包已下载核对，jobs 的后端、长期管理、PTY、monitor、hands-free 与 CLI 预设，tasks 的两级存储、依赖、会话与提醒，以及 agents 的基础执行、队列、记录、交互与资源基础能力已按职责导入改造并登记来源；类型与单 agent 模型配置已实现，@handle 输入、补全与克隆启动已导入，agents 的调度/workflow/RPC 高级入口继续导入，完整资源组合待验收。task 的 agent 执行恢复关联已接入，综合场景待验收。本文件记录完整按文件处置结论。ask 与 goal 已按上游契约重写并通过两平台检查，不再改为导入。
 
 影响范围：src/tasks、src/jobs、src/agents 与共享 runtime/ui，third-party 来源登记与许可证，package.json 运行依赖。
 
@@ -109,17 +109,17 @@ src/
 
 ## @tintinweb/pi-subagents 0.23.0
 
-基础执行、队列、run 记录、类型、父级交互与任务/job 关联已导入改造，见 [基础阶段](../../finished/pi-suite/agents/core.md) 与 [来源登记](../../../third-party/UPSTREAM.md)。类型与单 agent 模型配置见 [模型基础阶段](../../finished/pi-suite/agents/models-core.md)，资源选择、技能、memory 与上下文见 [资源基础阶段](../../finished/pi-suite/agents/resources-core.md)。下表保留完整处置范围；@handle、调度/workflow/RPC 和回收仍需继续执行。
+基础执行、队列、run 记录、类型、父级交互与任务/job 关联已导入改造，见 [基础阶段](../../finished/pi-suite/agents/core.md) 与 [来源登记](../../../third-party/UPSTREAM.md)。类型与单 agent 模型配置见 [模型基础阶段](../../finished/pi-suite/agents/models-core.md)，资源选择、技能、memory 与上下文见 [资源基础阶段](../../finished/pi-suite/agents/resources-core.md)。@handle 输入与克隆启动见 [提及基础阶段](../../finished/pi-suite/agents/mentions-core.md)。下表保留完整处置范围；调度/workflow/RPC 和回收仍需继续执行。
 
 | 文件 | 行数 | 处置 |
 | --- | --- | --- |
 | src/agent-manager.ts | 1735 | 导入并拆分为记录与生命周期、两个并发池与队列、停止与回收。保留 isTopLevelAgent、启动时记录 chargedPool、dequeue 释放等待者、排队项的父级 abort；增加执行 ID 与 job 级联停止 |
 | src/agent-runner.ts | 1468 | 导入并拆分为会话构建、工具范围、恢复与引导。删除 worktree；child 会话注入转交父 agent 的 ask_user |
-| src/nested-tools.ts | 426 | 导入，工具改为 agent_* 规范名；嵌套深度默认 2 |
+| src/nested-tools.ts | 426 | 导入，工具改为 agent_* 规范名；maxDepth 默认 3，包含顶级及两层嵌套 |
 | src/agent-types.ts、custom-agents.ts、default-agents.ts、invocation-config.ts | 346、452、125、155 | 导入，删除 isolation 参数；invocation-config 的 model 与 thinking 改为参数优先于 TUI 类型配置、再优先于 frontmatter，见 [模型与 thinking 配置](agents/models.md) |
 | src/agent-record-entry.ts | 138 | 导入，条目类型改为 pi-suite:agent-record，保留 reopenTarget 拒绝规则 |
 | src/completion-outbox.ts、group-join.ts | 116、141 | 规则并入共享 Notifications：一个边界一条消息、已读取结果撤销通知；不保留 group 参数 |
-| src/mention.ts、mention-clone.ts、ui/agent-mention.ts | 141、195、216 | 导入 @handle 输入与补全 |
+| src/mention.ts、mention-clone.ts、ui/agent-mention.ts | 141、195、216 | 已按职责导入 @handle 输入、原生补全与克隆启动；handle/alias 并入 run 记录、工具和通知复用公共模块，取消随主绑定生命周期 |
 | src/schedule.ts、schedule-store.ts、ui/schedule-menu.ts | 386、153、105 | 导入，存储路径改为本包目录 |
 | src/workflow/* | 4307 | 导入；runtime.ts 1219 行拆分；gate 在 cwd 执行，不再依赖 worktree；工具名 agent_workflow |
 | src/ui/workflow-card.ts、workflow-dialog.ts、workflow-menu.ts | 470、1115、193 | 导入，workflow-dialog 拆分；显示行接入 dock |

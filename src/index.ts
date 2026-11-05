@@ -19,6 +19,7 @@ import { registerTasksCommand } from "./tasks/viewer.ts";
 import { AgentsModule } from "./agents/index.ts";
 import { registerAgentTools } from "./agents/tools.ts";
 import { registerAgentsCommand } from "./agents/viewer.ts";
+import { registerAgentMentions } from "./agents/mentions/index.ts";
 
 export default function piSuite(pi: ExtensionAPI): void {
   let config = loadConfig(process.cwd());
@@ -39,7 +40,9 @@ export default function piSuite(pi: ExtensionAPI): void {
   }
   const agents = config.modules.agents ? new AgentsModule(pi, binding, notifications, status, tasks) : undefined;
   if (agents) {
-    registerAgentTools(pi, agents, waits, () => config); registerAgentsCommand(pi, agents, dock, notifications, () => config, cwd => { config = loadConfig(cwd); }); waits.register(agents);
+    const startTool = registerAgentTools(pi, agents, waits, () => config);
+    registerAgentsCommand(pi, agents, dock, notifications, () => config, cwd => { config = loadConfig(cwd); }); waits.register(agents);
+    registerAgentMentions(pi, agents, binding, () => config, startTool);
   }
   if (jobs || agents) {
     registerWait(pi, waits);

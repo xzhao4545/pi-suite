@@ -2,7 +2,7 @@
 
 目标：保留上游 pi-subagents 的自定义 agent 类型、@handle 提及、定时调度、SubagentWorkflow 和跨扩展 RPC，接入本包统一工具、配置与界面。
 
-当前状态：完整保留 frontmatter、类型与包发现、扩展选择/动态工具范围、技能预加载、memory、父级上下文与会话目录已接入，4 项 Linux SDK 契约检查通过，见 [资源基础阶段](../../../finished/pi-suite/agents/resources-core.md)。@handle、调度、workflow、RPC 与类型开关待导入，Windows、真实 MCP 和资源组合继续验收。保留范围已由用户确认，不保留 git worktree 隔离。导入文件与改造边界见 [上游导入](../upstream-import.md)。
+当前状态：完整保留 frontmatter、类型与包发现、扩展选择/动态工具范围、技能预加载、memory、父级上下文与会话目录已接入，4 项 Linux SDK 契约检查通过，见 [资源基础阶段](../../../finished/pi-suite/agents/resources-core.md)。@handle 输入、补全与会话克隆启动通过 3 项 Linux 检查，见 [提及基础阶段](../../../finished/pi-suite/agents/mentions-core.md)。调度、workflow、RPC 与类型开关待导入，Windows、真实 MCP 和资源组合继续验收。保留范围已由用户确认，不保留 git worktree 隔离。导入文件与改造边界见 [上游导入](../upstream-import.md)。
 
 影响范围：agents 类型注册、输入拦截、调度存储、workflow worker、pi.events 通道、/agents 菜单、配置 agents 节。
 
@@ -13,12 +13,13 @@
 ## 任务列表
 
 - [x] 加载自定义 agent 类型，删除 isolation 与 output_transcript 字段
-- [ ] 实现 @handle 输入拦截与补全，按 agent_send 语义投递
+- [x] 实现 @handle 输入拦截与补全，按 agent_send 语义投递
 - [ ] 实现 agent_start 的 schedule 参数、调度存储与 /agents 调度列表
 - [ ] 实现 agent_workflow 及其查看界面，gate 在 cwd 执行
 - [ ] 注册 subagents:rpc:* 通道并保持协议版本 2
 - [ ] /agents 菜单汇总记录、类型开关、按类型的模型与 thinking 配置（见 [模型与 thinking 配置](models.md)）、调度与 workflow，同步操作说明
 - [ ] Windows 与实际 MCP 服务复核资源组合、晚注册与 MCP 桥接、包根/符号链接及类型/技能目录的信任边界
+- [ ] Windows 与真实手机 SSH 复核 @handle/文件补全、活动引导、结束恢复、克隆启动与会话切换
 
 ## 验收方式
 
@@ -34,7 +35,7 @@
 
 类型来自内置默认、已安装 pi 包声明的 agent、用户目录与项目 `.pi/agents/*.md`、工作区 `.agents/agents/`，后者覆盖前者；包提供的类型优先级最低，项目资源受 Pi 的项目信任判断约束。文件名或 frontmatter 的 name 为类型名。
 
-保留的 frontmatter：name、display_name、color、description、tools、disallowed_tools、extensions/exclude_extensions、skills、model、thinking、max_turns、persist_session、session_dir、allowed_subagents、prompt_mode、inherit_context、run_in_background、isolated、memory、enabled。正文为系统提示。frontmatter 优先于工具参数，model 与 thinking 除外：二者按 agent_start 参数、TUI 类型配置、frontmatter 的顺序取值，见 [模型与 thinking 配置](models.md)。allowed_subagents 为空时不注入嵌套工具，嵌套深度默认 2。
+保留的 frontmatter：name、display_name、color、description、tools、disallowed_tools、extensions/exclude_extensions、skills、model、thinking、max_turns、persist_session、session_dir、allowed_subagents、prompt_mode、inherit_context、run_in_background、isolated、memory、enabled。正文为系统提示。frontmatter 优先于工具参数，model 与 thinking 除外：二者按 agent_start 参数、TUI 类型配置、frontmatter 的顺序取值，见 [模型与 thinking 配置](models.md)。allowed_subagents 为空时不注入嵌套工具，maxDepth 默认 3，包含顶级及两层嵌套。
 
 删除 isolation（worktree 隔离不保留）与 output_transcript（不另写 JSONL 副本）。文件中出现这两个字段时报告未支持字段，不静默忽略。
 
@@ -42,7 +43,7 @@
 
 ## @handle 提及
 
-用户输入 `@名字 消息` 时，消息按 agent_send 语义投递给对应 agent：运行中为引导，已结束为恢复。提及未知 agent 类型时，按上游 mention-clone 以当前会话克隆启动该类型。输入框提供活动 agent、最近结束 agent 与类型的补全。该能力只处理用户输入，不注册模型工具。
+用户输入 `@名字 消息` 时，消息按 agent_send 语义投递给对应 agent：运行中为引导，已结束为恢复。提及尚无实例的已知类型时，按上游 mention-clone 以当前会话克隆启动该类型。输入框提供活动 agent、最近结束 agent 与类型的补全。该能力只处理用户输入，不注册模型工具。当前实现和开关见 [操作说明](../../../current/agents/operations.md)，Linux 验收见 [提及基础阶段](../../../finished/pi-suite/agents/mentions-core.md)。
 
 ## 定时调度
 

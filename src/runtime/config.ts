@@ -34,6 +34,7 @@ export const configSchema = Type.Object({
     types: Type.Optional(Type.Record(Type.String(), Type.Object({ model: Type.Optional(Type.String({ minLength: 1 })),
       thinking: Type.Optional(thinkingSchema) }, { additionalProperties: false }))),
     packageAgents: Type.Optional(Type.Union([Type.Boolean(), Type.Array(Type.String({ minLength: 1 }))])),
+    mentions: Type.Optional(Type.Boolean()),
   }, { additionalProperties: false })),
   jobs: Type.Optional(Type.Object({
     display: Type.Optional(display),
@@ -54,7 +55,7 @@ export interface SuiteConfig {
   tasks: { reminders: boolean };
   agents: { display: DisplayMode; maxConcurrent: number; maxConcurrentForeground: number;
     maxDepth: number; persistSessions: boolean; defaultModel?: string;
-    types: Record<string, { model?: string; thinking?: Thinking }>; packageAgents?: boolean | string[] };
+    types: Record<string, { model?: string; thinking?: Thinking }>; packageAgents?: boolean | string[]; mentions: boolean };
   /** Terminal view keys: leave the view, hand input back to the model, send the screen to the model. */
   jobs: { display: DisplayMode; detachKey: KeyId; returnKey: KeyId; transferKey: KeyId;
     agents: Record<string, Preset>; launchPolicy: (command: string) => LaunchDecision };
@@ -63,7 +64,7 @@ export const defaults: SuiteConfig = {
   modules: { ask: true, tasks: true, jobs: true, goal: true, agents: true },
   ui: { maxRows: 6 }, ask: { timeout: 120000, historyKey: "ctrl+h" },
   goal: { display: "status" }, agents: { display: "status", maxConcurrent: 10, maxConcurrentForeground: 0,
-    maxDepth: 3, persistSessions: true, types: {} },
+    maxDepth: 3, persistSessions: true, types: {}, mentions: true },
   tasks: { reminders: true },
   jobs: { display: "status", detachKey: "ctrl+b", returnKey: "ctrl+g", transferKey: "ctrl+t",
     agents: mergePresets(), launchPolicy: compileLaunchPolicy([]) },

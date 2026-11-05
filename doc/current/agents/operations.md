@@ -23,6 +23,16 @@
 
 进入查看器持有公共通知阻塞令牌；关闭后恢复通知投递，主会话保持原绑定。关闭查看器只结束阅读。
 
+## @handle 提及
+
+TUI 输入 `@explore 消息` 或 `@agent-explore 消息` 可以发送给 Explore 实例；正在执行时引导，排队/创建期间暂存，等待父级回答时作为回答，结束后沿用其会话恢复。直接父级和分支归属与 agent_send 相同。停止中的运行报告不可发送。
+
+顶级 agent 的 handle 从类型名生成小写字母、数字、下划线与短横线标识；同一 owner 会话中重名分配 `-2`、`-3` 后缀。agent_start 的 name 同时生成 alias，与 handle 共用名称空间；补全显示 alias，两种名称均可投递。handle/alias 保存在 run 记录中，恢复保持不变；嵌套 child 使用父级工具操作。
+
+尚无实例的类型使用当前分支、系统提示、模型与 thinking 的内存克隆生成任务。克隆只允许一次 agent_start，使用真实父级的注册工具与归属；其推理和工具调用留在内存克隆中。类型 frontmatter 仍决定执行选项，结果通过统一通知送达，包括选择前台执行的类型。克隆无法启动时明确报错；会话切换、树导航、reload 与 shutdown 取消未完成克隆。
+
+输入框在 `@` 后提供活动实例、结束实例与启用类型的前缀补全，并保留 Pi 的文件与命令补全。补全使用绑定/投递时发现的类型快照，实例状态从 Manager 动态读取；发送时重新发现类型。`@main 消息` 将消息交给主会话并保留附件。裸 handle、文件路径、普通文本中的提及、未知名称和带图片的 agent 提及走主会话输入；print/RPC 与扩展提交的文本采用宿主原有输入流程。agents.mentions 默认 true，设为 false 关闭此入口与 agent 补全。
+
 ## 父级回答
 
 child ask_user 使用共享 schema 与 response/details，工具挂起期间为 waiting(parent)。问题只交给直接父级，包含选项 ID、标题和 agent_send 提示；顶级通过统一 Notifications，嵌套通过父 child 的通知边界/共享等待返回。

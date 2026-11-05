@@ -9,6 +9,7 @@ import {
   type ExtensionAPI, type ExtensionUIContext, type Theme, type SessionStartEvent,
 } from "@earendil-works/pi-coding-agent";
 import piSuite from "../../src/index.ts";
+import type { AutocompleteProvider } from "@earendil-works/pi-tui";
 import { terminal } from "./terminal.ts";
 import { GOAL_ENTRY, type Goal } from "../../src/goal/state.ts";
 
@@ -43,11 +44,14 @@ export async function host(options: {
     model: faux.getModel(), tools: ["ask_user", "goal_complete", "goal_blocked", "goal_wait", ...options.tools ?? []] });
   assert.deepEqual(extensionsResult.errors, []);
   const statuses = new Map<string, string | undefined>();
+  const autocomplete: ((current: AutocompleteProvider) => AutocompleteProvider)[] = [];
+  const notices: { text: string; type?: string }[] = [];
   const writes: (string | undefined)[] = [];
   const theme = globalThis[Symbol.for("@earendil-works/pi-coding-agent:theme") as unknown as keyof typeof globalThis] as unknown as Theme;
   const uiContext = {
     theme, setStatus(key: string, text?: string) { statuses.set(key, text); if (key === "goal") writes.push(text); },
-    setWidget() {}, notify() {}, confirm: async () => true,
+    setWidget() {}, notify(text: string, type?: string) { notices.push({ text, type }); }, confirm: async () => true,
+    addAutocompleteProvider(factory: (current: AutocompleteProvider) => AutocompleteProvider) { autocomplete.push(factory); },
     custom: async (factory: Parameters<ExtensionUIContext["custom"]>[0]) => new Promise(resolve => {
       Promise.resolve(factory(terminal(), theme, {} as never, resolve)).then(view => {
         view.render(40);
@@ -64,7 +68,7 @@ export async function host(options: {
     const entry = session.sessionManager.getBranch().findLast(e => e.type === "custom" && e.customType === GOAL_ENTRY);
     return entry?.type === "custom" ? (entry.data as { goal: Goal | null }).goal ?? undefined : undefined;
   };
-  return { session, extensionsResult, faux, goal, statuses, writes,
+  return { session, extensionsResult, faux, goal, statuses, writes, autocomplete, notices,
     services: { cwd: root, agentDir: root, modelRuntime: session.modelRuntime, settingsManager, resourceLoader, diagnostics: [] },
     async idle() { await session.waitForIdle(); },
     async dispose() {

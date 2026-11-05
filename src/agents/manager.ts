@@ -11,6 +11,7 @@ import { hydrate, transcript } from './records.ts';
 import { answerParent } from './questions.ts';
 import { closeAgent } from './runner.ts';
 import { buildParentContext } from './resources/context.ts';
+import { assignHandle, handleBase } from './mentions/grammar.ts';
 import { active, type AgentRecord, type Execution, type ParentScope, type Pool, type StartAgent } from './types.ts';
 
 const allocate = (prefix: string) => `${prefix}_${randomBytes(4).toString('hex')}`;
@@ -76,7 +77,14 @@ export class AgentManager {
     if (this.closing || scope.run && this.closedRuns.has(scope.run.record.runId)) throw new ToolError('NOT_RUNNING', 'Parent run is stopping');
     const id = previous?.id ?? allocate('agent');
     if ([...this.runs.values()].some(run => run.record.id === id && !run.settled)) throw new ToolError('ALREADY_RUNNING', `${id} already has an unsettled execution`, id);
-    const record: AgentRecord = { version: 1, id, runId: allocate('run'), type: type.name, name: request.name ?? previous?.name ?? type.displayName ?? type.name,
+    // Handles and user aliases share a namespace across this owner's runs. Persisting them
+    // keeps a completed/resumed agent addressable without renumbering after reload or /tree.
+    const taken = new Set(this.records().filter(record => record.ownerSessionId === scope.ctx.sessionManager.getSessionId() && record.id !== id)
+      .flatMap(record => [record.handle, record.alias].filter((name): name is string => name !== undefined)));
+    const handle = scope.run ? undefined : previous?.handle ?? assignHandle(handleBase(type.name), taken);
+    if (handle) taken.add(handle);
+    const alias = scope.run ? undefined : previous?.alias ?? (request.name ? assignHandle(handleBase(request.name), taken) : undefined);
+    const record: AgentRecord = { version: 1, id, runId: allocate('run'), type: type.name, name: request.name ?? previous?.name ?? type.displayName ?? type.name, handle, alias,
       prompt: request.prompt, cwd: scope.ctx.cwd, ownerSessionId: scope.run?.record.ownerSessionId ?? scope.ctx.sessionManager.getSessionId(),
       anchorEntryId: scope.run?.record.anchorEntryId ?? scope.ctx.sessionManager.getLeafId(),
       parentAgentId: scope.run?.record.id, parentRunId: scope.run?.record.runId,
@@ -144,7 +152,7 @@ export class AgentManager {
     if (!this.visible(record, scope)) throw new ToolError('NOT_OWNER', `${id} is not a direct child of this session`, id);
     if (run?.question) { answerParent(run, message); return { action: 'answered' as const, run }; }
     if (run && !run.settled && !active(run.record.state)) throw new ToolError('NOT_RUNNING', `${id} is settling`, id);
-    if (record.state === 'stopping' || record.state === 'queued') throw new ToolError('NOT_RUNNING', `${id} is ${record.state}`, id);
+    if (record.state === 'stopping') throw new ToolError('NOT_RUNNING', `${id} is ${record.state}`, id);
     if (run && active(record.state)) {
       if (!run.session || !run.session.isStreaming) { run.pendingMessages.push(message); return { action: 'queued' as const, run }; }
       await run.session.steer(message); return { action: 'steered' as const, run };

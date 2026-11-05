@@ -29,7 +29,7 @@ export interface AgentRecord {
   model: string; modelSource: ModelSource; thinking: Thinking; thinkingSource: ModelSource;
   sessionFile?: string; endLeafId?: string | null; persisted: boolean;
   result?: string; error?: string; usage?: Pick<SessionStats, 'tokens' | 'cost'>;
-  taskId?: string;
+  taskId?: string; handle?: string; alias?: string;
   turns?: number; toolUses?: number; activity?: string; lastUpdateAt?: string;
   individual?: ModelOverrides;
 }
