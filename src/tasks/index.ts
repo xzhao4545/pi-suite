@@ -24,13 +24,13 @@ export class TasksModule {
   private lastUse = 0;
   private reminded = false;
   private selectedGroup?: string;
-  constructor(private binding: SessionBinding, private dock: Dock) { dock.register('tasks', () => this.rows()); }
+  constructor(private binding: SessionBinding, private dock: Dock, private inheritedStore?: TaskStore) { dock.register('tasks', () => this.rows()); }
   async bind(ctx: ExtensionContext, event: Pick<SessionStartEvent, 'reason' | 'previousSessionFile'>): Promise<void> {
     const previous = this.store;
     this.detach(); this.turn = this.lastUse = 0; this.reminded = false;
     const persisted = !!ctx.sessionManager.getSessionFile();
     const path = persisted ? taskPath(ctx.cwd, ctx.sessionManager.getSessionId()) : undefined;
-    const store = taskStore(path ?? `memory:${resolve(ctx.cwd)}:${ctx.sessionManager.getSessionId()}`, path);
+    const store = this.inheritedStore ?? taskStore(path ?? `memory:${resolve(ctx.cwd)}:${ctx.sessionManager.getSessionId()}`, path);
     this.store = store;
     this.unsubscribe = store.subscribe(() => this.refresh());
     try {
@@ -52,6 +52,7 @@ export class TasksModule {
   }
   /** Capture the owner list, so a later session switch cannot redirect a pending job link. */
   scope(ctx: ExtensionContext): TaskStore {
+    if (this.inheritedStore) return this.inheritedStore;
     const path = ctx.sessionManager.getSessionFile() ? taskPath(ctx.cwd, ctx.sessionManager.getSessionId()) : undefined;
     return taskStore(path ?? `memory:${resolve(ctx.cwd)}:${ctx.sessionManager.getSessionId()}`, path);
   }

@@ -16,6 +16,9 @@ import { WaitRegistry, registerWait } from "./runtime/wait.ts";
 import { TasksModule } from "./tasks/index.ts";
 import { registerTaskTools } from "./tasks/tools.ts";
 import { registerTasksCommand } from "./tasks/viewer.ts";
+import { AgentsModule } from "./agents/index.ts";
+import { registerAgentTools } from "./agents/tools.ts";
+import { registerAgentsCommand } from "./agents/viewer.ts";
 
 export default function piSuite(pi: ExtensionAPI): void {
   let config = loadConfig(process.cwd());
@@ -34,7 +37,11 @@ export default function piSuite(pi: ExtensionAPI): void {
     const viewer = { jobs, dock, notifications, keys: () => config.jobs };
     registerJobTools(pi, jobs, viewer, { ask, config: () => config, tasks }); registerJobsCommand(pi, viewer); waits.register(jobs);
   }
-  if (jobs) {
+  const agents = config.modules.agents ? new AgentsModule(pi, binding, notifications, status, tasks) : undefined;
+  if (agents) {
+    registerAgentTools(pi, agents, waits, () => config); registerAgentsCommand(pi, agents, dock, notifications); waits.register(agents);
+  }
+  if (jobs || agents) {
     registerWait(pi, waits);
     // Extension-sent messages (our own notices) are not the user and must not end a wait.
     pi.on("input", event => { if (event.streamingBehavior === "steer" && event.source !== "extension") waits.userSteered(); });
@@ -47,7 +54,7 @@ export default function piSuite(pi: ExtensionAPI): void {
   const bindSession = async (ctx: Parameters<SessionBinding["bind"]>[0], reason: "startup" | "reload" | "new" | "resume" | "fork", previousSessionFile?: string) => {
     // Tree navigation has no shutdown event. Revoke the old readers and timers before
     // rebinding, without appending their state into the branch the host just selected.
-    ask.cancel(); goal?.detach(); jobs?.detach(); notifications.detach();
+    ask.cancel(); goal?.detach(); jobs?.detach(); agents?.detach(); notifications.detach();
     config = loadConfig(ctx.cwd);
     binding.bind(ctx);
     dock.bind(ctx, config.ui.maxRows);
@@ -55,6 +62,7 @@ export default function piSuite(pi: ExtensionAPI): void {
     goal?.restore(ctx, reason);
     jobs?.bind();
     await tasks?.bind(ctx, { reason, previousSessionFile });
+    agents?.manager.configure(config); agents?.bind();
     notifications.flush();
   };
   pi.on("session_start", (event, ctx) => bindSession(ctx, event.reason, event.previousSessionFile));
@@ -64,8 +72,10 @@ export default function piSuite(pi: ExtensionAPI): void {
     tasks?.detach();
     // Detach before revoking so pending job notices are cancelled under the old session ID.
     const quit = jobs?.shutdown(event.reason);
+    const agentQuit = event.reason === 'quit' ? agents?.manager.shutdown() : undefined;
+    agents?.detach();
     notifications.detach(); status.detach(); dock.detach(binding.current?.ctx); binding.revoke();
-    return quit;
+    return Promise.all([quit, agentQuit]).then(() => {});
   });
   pi.on("agent_before_settle", event => { goal?.beforeSettle(event); return notifications.beforeSettle(event); });
   pi.on("agent_settled", event => {
@@ -76,7 +86,7 @@ export default function piSuite(pi: ExtensionAPI): void {
   pi.registerCommand("suite", {
     description: "Show pi-suite settings and implemented modules",
     handler: async (_args, ctx) => {
-      ctx.ui.notify(`pi-suite · ask_user ${config.modules.ask ? "enabled" : "disabled"} · tasks ${tasks ? "enabled" : "disabled"} · jobs ${jobs ? "enabled" : "disabled"} · timeout ${config.ask.timeout}ms · maxRows ${config.ui.maxRows}`);
+      ctx.ui.notify(`pi-suite · ask_user ${config.modules.ask ? "enabled" : "disabled"} · tasks ${tasks ? "enabled" : "disabled"} · agents ${agents ? "enabled" : "disabled"} · jobs ${jobs ? "enabled" : "disabled"} · timeout ${config.ask.timeout}ms · maxRows ${config.ui.maxRows}`);
     },
   });
 }

@@ -15,8 +15,10 @@ export class Transcript implements Component {
   private thinking = false;
   private entries: SessionEntry[] = [];
   private builtins: Map<string, ToolRenderers>;
+  private cache = new Map<string, { entry: SessionEntry; components: Component[]; calls: Map<string, ToolExecutionComponent> }>();
+  private results = new WeakMap<ToolExecutionComponent, SessionEntry>();
 
-  constructor(private tui: TUI, private cwd: string) {
+  constructor(private tui: TUI, private cwd: string, private renderer?: (name: string) => ToolRenderers | undefined) {
     this.builtins = new Map([
       createReadToolDefinition(cwd), createWriteToolDefinition(cwd), createEditToolDefinition(cwd),
       createBashToolDefinition(cwd), createPowerShellToolDefinition(cwd), createGrepToolDefinition(cwd),
@@ -25,14 +27,25 @@ export class Transcript implements Component {
     ].map(tool => [tool.name, tool as unknown as ToolRenderers]));
   }
   setEntries(entries: SessionEntry[]): void { this.entries = entries; this.rebuild(); }
-  toggleTools(): void { this.expanded = !this.expanded; this.rebuild(); }
-  toggleThinking(): void { this.thinking = !this.thinking; this.rebuild(); }
+  toggleTools(): void { this.expanded = !this.expanded; this.cache.clear(); this.rebuild(); }
+  toggleThinking(): void { this.thinking = !this.thinking; this.cache.clear(); this.rebuild(); }
 
   private rebuild(): void {
     const theme = getMarkdownTheme();
     const components: Component[] = [];
     const calls = new Map<string, ToolExecutionComponent>();
+    const retained = new Set<string>();
     for (const entry of this.entries) {
+      retained.add(entry.id);
+      const cached = this.cache.get(entry.id);
+      const result = entry.type === 'message' && entry.message.role === 'toolResult';
+      // Canonical Pi entries are immutable after append. Streaming tails are fresh synthetic
+      // entries, so their components update while stable Markdown/tools retain width caches.
+      if (cached?.entry === entry && !result) {
+        components.push(...cached.components); for (const [id, tool] of cached.calls) calls.set(id, tool);
+        continue;
+      }
+      const start = components.length, ownCalls = new Map<string, ToolExecutionComponent>();
       const timestamp = Date.parse(entry.timestamp);
       if (entry.type === "compaction") {
         const component = new CompactionSummaryMessageComponent({ role: "compactionSummary", summary: entry.summary, tokensBefore: entry.tokensBefore, timestamp }, theme, 0);
@@ -52,18 +65,19 @@ export class Transcript implements Component {
           components.push(new AssistantMessageComponent(message, !this.thinking, theme, undefined, 0));
           for (const block of message.content) {
             if (block.type !== "toolCall") continue;
-            const tool = new ToolExecutionComponent(block.name, block.id, block.arguments, { showImages: false, outputPad: 0 }, this.builtins.get(block.name), this.tui, this.cwd);
-            tool.setArgsComplete(); tool.markExecutionStarted(); tool.setExpanded(this.expanded);
+            const tool = new ToolExecutionComponent(block.name, block.id, block.arguments, { showImages: false, outputPad: 0 }, this.renderer?.(block.name) ?? this.builtins.get(block.name), this.tui, this.cwd);
+            if (!entry.id.startsWith('stream:')) { tool.setArgsComplete(); tool.markExecutionStarted(); }
+            tool.setExpanded(this.expanded); ownCalls.set(block.id, tool);
             calls.set(block.id, tool); components.push(tool);
           }
         } else if (message.role === "toolResult") {
           let tool = calls.get(message.toolCallId);
           if (!tool) {
             // A branch can retain a result after its call was compacted away.
-            tool = new ToolExecutionComponent(message.toolName, message.toolCallId, {}, { showImages: false, outputPad: 0 }, this.builtins.get(message.toolName), this.tui, this.cwd);
+            tool = cached?.components[0] as ToolExecutionComponent | undefined ?? new ToolExecutionComponent(message.toolName, message.toolCallId, {}, { showImages: false, outputPad: 0 }, this.renderer?.(message.toolName) ?? this.builtins.get(message.toolName), this.tui, this.cwd);
             tool.setExpanded(this.expanded); components.push(tool);
           }
-          tool.updateResult(message);
+          if (this.results.get(tool) !== entry) { tool.updateResult(message, entry.id.startsWith('stream:')); this.results.set(tool, entry); }
         } else if (message.role === "custom" && message.display) {
           components.push(new CustomMessageComponent(message, undefined, theme, 0));
         } else if (message.role === "bashExecution") {
@@ -73,7 +87,9 @@ export class Transcript implements Component {
           component.setExpanded(this.expanded); components.push(component);
         }
       }
+      this.cache.set(entry.id, { entry, components: components.slice(start), calls: ownCalls });
     }
+    for (const id of this.cache.keys()) if (!retained.has(id)) this.cache.delete(id);
     this.components = components;
   }
   render(width: number): string[] { return this.components.flatMap(component => component.render(width)); }

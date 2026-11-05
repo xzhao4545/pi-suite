@@ -5,6 +5,8 @@ import { Type, type Static } from "typebox";
 import { Value } from "typebox/value";
 import { Key, type KeyId } from "@earendil-works/pi-tui";
 import { compileLaunchPolicy, mergePresets, policySchema, presetsSchema, type LaunchDecision, type Preset } from "../jobs/launch/config.ts";
+import { thinkingSchema } from "../agents/catalog.ts";
+import type { Thinking } from "../agents/types.ts";
 
 const keyNames = Object.values(Key).flatMap(key => typeof key === "string"
   ? [key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")] : []);
@@ -24,7 +26,14 @@ const schema = Type.Object({
   }, { additionalProperties: false })),
   goal: Type.Optional(Type.Object({ display: Type.Optional(display) }, { additionalProperties: false })),
   tasks: Type.Optional(Type.Object({ reminders: Type.Optional(Type.Boolean()) }, { additionalProperties: false })),
-  agents: Type.Optional(Type.Object({ display: Type.Optional(display) }, { additionalProperties: false })),
+  agents: Type.Optional(Type.Object({
+    display: Type.Optional(display), maxConcurrent: Type.Optional(Type.Integer({ minimum: 1 })),
+    maxConcurrentForeground: Type.Optional(Type.Integer({ minimum: 0 })),
+    maxDepth: Type.Optional(Type.Integer({ minimum: 1 })), persistSessions: Type.Optional(Type.Boolean()),
+    defaultModel: Type.Optional(Type.String({ minLength: 1 })),
+    types: Type.Optional(Type.Record(Type.String(), Type.Object({ model: Type.Optional(Type.String({ minLength: 1 })),
+      thinking: Type.Optional(thinkingSchema) }, { additionalProperties: false }))),
+  }, { additionalProperties: false })),
   jobs: Type.Optional(Type.Object({
     display: Type.Optional(display),
     detachKey: Type.Optional(Type.String({ pattern: keyPattern })),
@@ -42,7 +51,9 @@ export interface SuiteConfig {
   ask: { timeout: number; historyKey: KeyId };
   goal: { display: DisplayMode };
   tasks: { reminders: boolean };
-  agents: { display: DisplayMode };
+  agents: { display: DisplayMode; maxConcurrent: number; maxConcurrentForeground: number;
+    maxDepth: number; persistSessions: boolean; defaultModel?: string;
+    types: Record<string, { model?: string; thinking?: Thinking }> };
   /** Terminal view keys: leave the view, hand input back to the model, send the screen to the model. */
   jobs: { display: DisplayMode; detachKey: KeyId; returnKey: KeyId; transferKey: KeyId;
     agents: Record<string, Preset>; launchPolicy: (command: string) => LaunchDecision };
@@ -50,7 +61,8 @@ export interface SuiteConfig {
 export const defaults: SuiteConfig = {
   modules: { ask: true, tasks: true, jobs: true, goal: true, agents: true },
   ui: { maxRows: 6 }, ask: { timeout: 120000, historyKey: "ctrl+h" },
-  goal: { display: "status" }, agents: { display: "status" },
+  goal: { display: "status" }, agents: { display: "status", maxConcurrent: 10, maxConcurrentForeground: 0,
+    maxDepth: 3, persistSessions: true, types: {} },
   tasks: { reminders: true },
   jobs: { display: "status", detachKey: "ctrl+b", returnKey: "ctrl+g", transferKey: "ctrl+t",
     agents: mergePresets(), launchPolicy: compileLaunchPolicy([]) },
@@ -78,6 +90,8 @@ export function loadConfig(cwd: string, agentDir = getAgentDir()): SuiteConfig {
     key, { ...value, ...user[key as keyof typeof user], ...project[key as keyof typeof project] },
   ])) as unknown as SuiteConfig;
   config.jobs.agents = mergePresets(user.jobs?.agents, project.jobs?.agents);
+  config.agents.types = Object.fromEntries([...new Set([...Object.keys(user.agents?.types ?? {}), ...Object.keys(project.agents?.types ?? {})])]
+    .map(type => [type, { ...user.agents?.types?.[type], ...project.agents?.types?.[type] }]));
   config.jobs.launchPolicy = compileLaunchPolicy(user.jobs?.launchPolicy ?? []);
   return config;
 }

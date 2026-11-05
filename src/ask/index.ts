@@ -9,7 +9,7 @@ import { AskQueue, cancelled } from "./queue.ts";
 import { askSchema, normalize, type AskParams, type AskResult, type Question } from "./schema.ts";
 import { AskView } from "./view.ts";
 
-function details(params: AskParams, questions: Question[], result: AskResult) {
+export function askDetails(params: AskParams, questions: Question[], result: AskResult) {
   // Keep the upstream non-answer flag while status distinguishes expiry from cancellation.
   const common = { status: result.status, cancelled: result.status !== "answered" };
   return params.questions ? {
@@ -62,7 +62,7 @@ export function registerAsk(pi: ExtensionAPI, manager: AskManager, getConfig: ()
     parameters: askSchema, executionMode: "sequential",
     async execute(_id, params, signal, _update, ctx) {
       const { result, questions } = await manager.ask(params, ctx, getConfig(), signal);
-      const record = details(params, questions, result);
+      const record = askDetails(params, questions, result);
       return { content: [{ type: "text", text: JSON.stringify(record) }], details: record,
         terminate: result.status !== "answered" };
     },

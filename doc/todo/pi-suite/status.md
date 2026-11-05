@@ -2,7 +2,7 @@
 
 目标：统一发布 goal 状态、活动 subagent 数量和活动 job 数量，使手机终端能从简短状态栏了解执行情况。
 
-当前状态：待实施；Pi 与 pi-starship 的状态接口已静态核对，本包尚未注册业务状态。
+当前状态：共享发布器、goal 摘要、agents/jobs 数量、显示模式和去重已实现，原生 footer 与 pi-starship 接口已验证；所属 child job 的主级聚合计数、复杂清理状态与平台综合布局待完成。
 
 影响范围：ui/status、goal、AgentManager、JobManager、会话绑定与 dock 显示去重。
 
@@ -12,10 +12,10 @@
 
 ## 任务列表
 
-- [ ] 通过共享发布入口维护 goal 和活动数量两个状态槽位
+- [x] 通过共享发布入口维护 goal 和活动数量两个状态槽位
 - [ ] 按当前会话可见集合派生数量，明确等待、排队、停止与终态的计数
 - [ ] 合并生命周期更新，避免 token 级刷新和重复计数
-- [ ] 协调 status/dock/hidden 模式及零数量隐藏
+- [x] 协调 status/dock/hidden 模式及零数量隐藏
 - [ ] 验证会话切换、reload、原生 footer 和 pi-starship 窄屏布局
 
 ## 验收方式

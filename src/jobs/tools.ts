@@ -13,7 +13,7 @@ import { jobDetail, listJobs, readJobLog } from './query.ts';
 import { attachJob, screenMessage, type ViewerDeps } from './viewer.ts';
 import { monitorSchema } from './monitors/compile.ts';
 import { handsFreeSchema } from './monitors/hands-free.ts';
-import type { InputRecord, JobSummary, Stream } from './types.ts';
+import type { Creator, InputRecord, JobSummary, Stream } from './types.ts';
 import type { AskManager } from '../ask/index.ts';
 import type { SuiteConfig } from '../runtime/config.ts';
 import { agentSchema, agentCommand } from './launch/presets.ts';
@@ -23,7 +23,7 @@ import { taskId as taskIdSchema } from '../tasks/types.ts';
 
 const id = objectId('job', 'job_3fa1c2d0');
 
-export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: ViewerDeps, launch: { ask: AskManager; config: () => SuiteConfig; tasks?: TasksModule }): void {
+export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: ViewerDeps, launch: { ask: Pick<AskManager, 'ask'>; config: () => SuiteConfig; tasks?: TasksModule; creator?: Creator; parentQuestions?: boolean }): void {
   pi.registerTool({
     name: 'job_start', label: 'Start Job',
     description: 'Start a command as a background job and return at once. mode=pipe (default) records stdout/stderr for builds, tests and batch work; mode=pty runs it in a terminal for REPLs and interactive programs. ' +
@@ -59,8 +59,8 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: Vie
       const taskStore = params.taskId && launch.tasks ? await launch.tasks.executionTask(ctx, params.taskId) : undefined;
       let job: JobSummary;
       try {
-        job = await manager.start({ ...request, command, cwd, ...owner }, shell, signal,
-          finalCommand => authorizeLaunch(finalCommand, cwd, ctx, config, launch.ask, signal));
+        job = await manager.start({ ...request, command, cwd, ...owner, creator: launch.creator }, shell, signal,
+          finalCommand => authorizeLaunch(finalCommand, cwd, ctx, config, launch.ask, signal, launch.parentQuestions));
       } catch (error) {
         // Timeout/cancellation is an unanswered question, so end this model run as ask_user does.
         if (error instanceof ToolError && error.code === 'LAUNCH_NOT_CONFIRMED') return {

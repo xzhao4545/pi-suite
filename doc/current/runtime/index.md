@@ -1,6 +1,6 @@
 # 公共运行时与配置
 
-唯一扩展入口为 src/index.ts；工具、命令和宿主事件由入口与对应模块注册。当前工具为 ask_user、goal_complete、goal_blocked、goal_wait、task_list、task_edit、job_start、job_list、job_read、job_write、job_stop 和共享 wait，命令为 /goal、/tasks、/jobs、/suite。
+唯一扩展入口为 src/index.ts；工具、命令和宿主事件由入口与对应模块注册。当前工具为 ask_user、goal_complete、goal_blocked、goal_wait、task_list、task_edit、job_start、job_list、job_read、job_write、job_stop、agent_start、agent_list、agent_read、agent_send、agent_stop 和共享 wait，命令为 /goal、/tasks、/jobs、/agents、/suite。
 
 ## 配置
 
@@ -13,16 +13,18 @@
   "ask": { "timeout": 120000, "historyKey": "ctrl+h" },
   "goal": { "display": "status" },
   "tasks": { "reminders": true },
-  "agents": { "display": "status" },
+  "agents": { "display": "status", "maxConcurrent": 10, "maxConcurrentForeground": 0, "maxDepth": 3, "persistSessions": true, "types": {} },
   "jobs": { "display": "status", "detachKey": "ctrl+b", "returnKey": "ctrl+g", "transferKey": "ctrl+t" }
 }
 ```
 
-modules.ask、modules.goal、modules.tasks 与 modules.jobs 在扩展加载时决定是否注册对应模块；改变开关后使用 /reload。会话绑定时重新读取配置。maxRows 范围为 1–6；timeout 为 0–2147483647 的整数毫秒，0 不设期限。historyKey 与 jobs 终端视图的 detachKey（离开视图）、returnKey（交还模型）、transferKey（发送屏幕）使用 Pi 的按键标识。公共显示配置接受 status/dock/hidden，不接管 footer。tasks.reminders 控制临时任务提醒，默认 true；任务摘要共用 Dock，见 [任务操作](../tasks/operations.md)。
+modules.ask、modules.goal、modules.tasks、modules.jobs 与 modules.agents 在扩展加载时决定是否注册对应模块；改变开关后使用 /reload。会话绑定时重新读取配置。maxRows 范围为 1–6；timeout 为 0–2147483647 的整数毫秒，0 不设期限。historyKey 与 jobs 终端视图的 detachKey（离开视图）、returnKey（交还模型）、transferKey（发送屏幕）使用 Pi 的按键标识。公共显示配置接受 status/dock/hidden，不接管 footer。tasks.reminders 控制临时任务提醒，默认 true；任务摘要共用 Dock，见 [任务操作](../tasks/operations.md)。
 
 jobs.agents 配置 CLI 键对应的 command 与 args，按键和字段合并用户/项目覆盖。jobs.launchPolicy 为 `{command, decision}` 数组，仅用户文件可设置，project 文件出现该字段时报错；精确命令未匹配时默认询问，即使未设置规则也如此。规则与操作见 [CLI 预设与启动授权](../jobs/launch.md)。启动授权复用内部 AskManager，不受 modules.ask 是否注册 ask_user 工具影响。
 
 runtime/text.ts 提供安全字面量文本转换，供任务说明、pipe 日志与 monitor 事件共用；终端回车覆写等 PTY 语义由 jobs 的终端模块处理。
+
+agents.maxConcurrent 限制后台池，maxConcurrentForeground=0 表示前台不限；maxDepth 为包含顶级的会话层数。persistSessions 控制顶级默认持久化；defaultModel 和 types.<类型>.model/thinking 提供逐字段覆盖。模型来源、认证要求和操作见 [agents](../agents/operations.md)。
 
 ## 会话和通知
 

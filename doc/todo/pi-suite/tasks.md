@@ -2,7 +2,7 @@
 
 目标：支持父任务和子任务两级管理、动态调整及自动折叠，通过精简工具参数和返回内容降低模型的 token 消耗与操作负担。
 
-当前状态：实施中；两级结构、批量编辑、进度派生、版本化存储与锁、共享 Dock/详情、会话 fork/reload、提醒及 job 引用已实现，Linux 的 8 项检查通过，见 [两级任务基础阶段](../../finished/pi-suite/tasks/core.md) 与 [当前任务文档](../../current/tasks/index.md)。Windows、手机综合布局、agents 多 child 更新与恢复关联仍待验收。存储与会话处理以上游 @tintinweb/pi-tasks 0.9.1 导入改造，按文件处置见 [上游导入](upstream-import.md)。
+当前状态：实施中；两级结构、批量编辑、进度派生、版本化存储与锁、共享 Dock/详情、会话 fork/reload、提醒及 job 引用已实现，Linux 的 8 项检查通过，见 [两级任务基础阶段](../../finished/pi-suite/tasks/core.md) 与 [当前任务文档](../../current/tasks/index.md)。Windows、手机综合布局、agents 已捕获同一 TaskStore，单 child 更新与恢复使用稳定 agent 引用；多 child/平台综合验收仍待完成。存储与会话处理以上游 @tintinweb/pi-tasks 0.9.1 导入改造，按文件处置见 [上游导入](upstream-import.md)。
 
 影响范围：两级任务模型、存储、查询与批量修改工具、常驻面板及 agent/job 引用。
 
@@ -17,7 +17,7 @@
 - [x] 实现增删、移动、重新打开后的父级完成比例重算
 - [x] 实现未完成组和已完成项的自动折叠、显示筛选及详情查看
 - [x] 实现版本化存储及多个 child 的统一写入入口（真实跨进程并发通过，agents 接入待验收）
-- [ ] 保留上游存储锁、会话切换、未更新提醒与执行任务关联（存储/会话/提醒/job 关联已实现；agents 运行及恢复关联待接入）
+- [ ] 保留上游存储锁、会话切换、未更新提醒与执行任务关联（存储/会话/提醒/job 关联及 agents 同清单执行已实现；多 child 与恢复综合验收待完成）
 - [ ] Windows 与手机终端综合验收任务界面和 agents 并发更新
 
 ## 验收方式

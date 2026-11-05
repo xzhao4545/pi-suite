@@ -2,7 +2,7 @@
 
 目标：主 agent 可以启动、等待、查看进度、发送消息、回答提问并强制停止 subagent；child 需要信息时可以向父 agent 提问。
 
-当前状态：待实施；上游只有父到子的 steer 和一次性结果，child 会话没有 UI，也没有向父 agent 或用户提问的工具。用户已确认 child 提问转给父 agent。
+当前状态：共享 ask schema 的父级提问、agent_send、wait/前台提前返回及统一通知已接入；Linux 离线链路通过，嵌套提问、流式进度与多 child 综合场景继续验收，见 [基础阶段](../../../finished/pi-suite/agents/core.md)。
 
 影响范围：AgentManager、child 会话工具注入、共享 Notifications 与 wait、agent_* 工具、状态栏计数和 goal 调度。
 
@@ -12,11 +12,11 @@
 
 ## 任务列表
 
-- [ ] child 会话注册转交父 agent 的 ask_user，提问期间状态为 waiting(parent)
-- [ ] agent_send 按 child 状态回答提问、引导运行或恢复会话，并返回实际 action
+- [x] child 会话注册转交父 agent 的 ask_user，提问期间状态为 waiting(parent)
+- [x] agent_send 按 child 状态回答提问、引导运行或恢复会话，并返回实际 action
 - [ ] agent_list(id) 返回进度详情，agent_read 读取运行中与已结束的 transcript 和结果
 - [ ] 完成、失败、停止与提问经统一 Notifications 投递，已读取结果撤销通知
-- [ ] wait 与前台 agent_start 在当前会话任一直接 child 提问时提前返回问题（共享 wait 已按此实现，待 agents 接入 unread 后验收）
+- [x] wait 与前台 agent_start 在当前会话任一直接 child 提问时提前返回问题（agents 已接入 unread，原生前台链路通过）
 - [ ] 嵌套 child 的提问只交给其直接父 agent
 
 ## 验收方式

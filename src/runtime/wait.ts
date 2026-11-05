@@ -11,7 +11,7 @@ import { ToolError } from './errors.ts';
  * event/update: newest monitor event or hands-free update reported. Separate counters keep a
  * monitor and supervision on the same job independent; consuming progress leaves its result pending.
  */
-export type Settlement = { id: string; state: string; summary: string; settled: boolean; question?: boolean; event?: number; update?: number };
+export type Settlement = { id: string; runId?: string; state: string; summary: string; settled: boolean; question?: boolean; event?: number; update?: number };
 export interface Waitable {
   readonly prefix: string;
   settlement(id: string): Settlement;

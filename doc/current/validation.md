@@ -31,6 +31,8 @@ CLI 启动的 6 项检查覆盖预设字段合并、用户级策略与精确命�
 
 tasks 的 8 项检查在 Linux 覆盖两级批量原子编辑、稳定短 ID、移动与重新打开后的派生进度、依赖反向关系及警告、两个真实进程并发写入同一文件、异步锁等待、无效文件与取消不覆盖。真实 SDK 核对 new/resume/fork/reload 清单独立、内存模式与 job 引用；临时提醒不进入持久 transcript，doing 间隔与项目关闭配置生效。40/60/120 列核对 Dock 完成比例保留、完成反馈与共享详情阅读状态。Windows 与 agents 多 child 更新/恢复关联由任务专项管理。
 
+agents 的 8 项 Linux 离线检查使用真实 Pi SDK child 与 faux provider，覆盖两池队列与排队停止、原生前台问题/回答、嵌套免占位、共享 TaskStore、run 恢复与结束叶子、配置模型来源、真实 abort 与问题超时；真实 pipe job 核对已结束 child 的遗留 job 清理且同级 job 保持运行。类型检查与全量 89 项检查通过，约 10 秒完成。扩展资源、界面配置、更多竞争及平台验收按 agents 专项继续执行。
+
 以上 46 项离线检查及类型检查在 Windows（Node 24.22.2）和 Linux（已有 WSL/nvm 环境，Node 24.14.0）通过，日常检查在 5 分钟内。共享 wait 提前返回、goal_wait waitFor、终端视图与 monitor 的 11 项检查目前只在 Linux 通过，Windows 待复核。另在 Windows 执行 pi-starship 0.65.2 实际 extension_status 模块，验证 goal/runtime 槽位读取、数量上限与空状态。这些检查证明当前询问、目标、执行任务及共享组件的契约；终端缩放、/jobs 交互选择流程、真实手机 SSH 输入、完整第三方 footer 布局和后续业务模块综合生命周期由 [完整实施计划](../todo/pi-suite/implementation.md) 管理。
 
 [返回当前文档](./index.md)

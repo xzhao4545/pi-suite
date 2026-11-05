@@ -109,6 +109,8 @@ src/
 
 ## @tintinweb/pi-subagents 0.23.0
 
+基础执行、队列、run 记录、核心类型、父级交互与任务/job 关联已导入改造，见 [基础阶段](../../finished/pi-suite/agents/core.md) 与 [来源登记](../../../third-party/UPSTREAM.md)。下表保留完整处置范围；资源选择、配置界面、@handle、调度/workflow/RPC 和回收仍需继续执行。
+
 | 文件 | 行数 | 处置 |
 | --- | --- | --- |
 | src/agent-manager.ts | 1735 | 导入并拆分为记录与生命周期、两个并发池与队列、停止与回收。保留 isTopLevelAgent、启动时记录 chargedPool、dequeue 释放等待者、排队项的父级 abort；增加执行 ID 与 job 级联停止 |
