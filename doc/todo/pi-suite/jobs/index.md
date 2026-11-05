@@ -4,6 +4,8 @@
 
 当前状态：实施中；执行工具、长期 manager、pipe/PTY 后端、记录、通知、同进程保活、monitor、hands-free/dispatch、CLI 预设与有界实时日志查看已实现。基础后端通过 Windows/Linux 离线检查，监督、预设与日志查看通过 Linux 离线检查；各专项仍保留尚未完成的平台与综合验收。实现以上游 pi-background-jobs 与 pi-interactive-shell 源码导入改造，按文件处置见 [上游导入](../upstream-import.md)。
 
+输出密码回显隐藏、横向重绘、全屏提示与有限完成预览、实际 Pi CLI 和包技能已通过 Linux 分阶段验收，见 [输出组合](../../../finished/pi-suite/jobs/output-core.md)、[实际 Pi CLI](../../../finished/pi-suite/jobs/pi-cli.md) 与 [技能发布](../../../finished/pi-suite/jobs/skill.md)。大单逻辑行、垂直光标历史还原、Pi leading @ 原样支持、其他 CLI 及平台组合继续保留在对应专项。
+
 影响范围：jobs、Windows/Linux 后端、日志、会话绑定和通知协调。
 
 约束：pipe 与 PTY 分别处理；第一阶段只承诺同一 Pi 进程内保活，独立 supervisor 属于后续可选专项；工具按 [统一工具设计](../../../finished/pi-suite/tool-design.md)。

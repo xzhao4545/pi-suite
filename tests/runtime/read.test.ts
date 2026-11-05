@@ -37,8 +37,15 @@ for (const [label, bytes] of [["1 MiB", 1 << 20], ["100 MiB", 100 << 20]] as con
       assert.match(page.text, /^progress/); assert.match(page.text, /final result: 3 failed\n?$/);
       assert.match(page.text, /> ERROR: first failure here/); assert.match(page.text, /> Traceback/);
       assert.match(page.text, /omitted \(bytes \d+–\d+\), 2 matching lines/);
-      const { head, tail, omittedBytes } = page.truncated!;
+      const { head, keys, tail, omittedBytes } = page.truncated!;
       assert.equal(head[0], 0); assert.equal(tail[1], source.size); assert.equal(omittedBytes, tail[0] - head[1]);
+      assert.equal(keys.length, 2);
+      for (const [start, end] of keys) {
+        assert.ok(start >= head[1] && end <= tail[0]);
+        const context = (await source.read(start, end - start)).toString('utf8').trimEnd().split('\n');
+        assert.equal(context.length, 3, 'each matching raw range contains one preceding and following line');
+        assert.match(context[1], /ERROR|Traceback/); assert.ok(page.text.includes(context[0].trim()) && page.text.includes(context[2].trim()));
+      }
       const resumed = await readBounded(source, { offset: head[1], limitBytes: 200 }, plain);
       assert.equal(resumed.offset, head[1]); assert.match(resumed.text, /^progress/);
       if (bytes > 1 << 20) assert.ok(Date.now() - started < 60000, "100 MiB default read finishes within a minute");
@@ -72,6 +79,19 @@ test("search returns line numbers, byte offsets and context, and resumes after t
   assert.equal(first.matches! + second.matches!, 67); assert.equal(second.endOfStream, true);
   const insensitive = await readBounded(textSource("A\nERROR x\n"), { search: "error" }, plain);
   assert.equal(insensitive.matches, 1);
+  for (const request of [{ limitBytes: 1024 }, { search: 'ERROR', limitBytes: 1024 }]) {
+    const page = await readBounded(textSource('head\nERROR ' + '字'.repeat(6000) + '\ntail\n'), request, plain);
+    assert.ok(Buffer.byteLength(page.text) <= 1024 + (request.search ? 0 : 512));
+    assert.match(page.text, /ERROR/); assert.match(page.text, /truncated/); assert.ok(!page.text.includes('\uFFFD'));
+  }
+  const contexts = await readBounded(textSource('x'.repeat(2048) + '\nERROR\n' + 'y'.repeat(2048) + '\nNEXT ERROR\n'),
+    { search: 'ERROR', context: 1, limitBytes: 1024 }, plain);
+  assert.ok(Buffer.byteLength(contexts.text) <= 1024); assert.match(contexts.text, /ERROR/);
+  assert.equal(contexts.endOfStream, false);
+  const continued = await readBounded(textSource('x'.repeat(2048) + '\nERROR\n' + 'y'.repeat(2048) + '\nNEXT ERROR\n'),
+    { search: 'ERROR', offset: contexts.nextOffset }, plain);
+  assert.match(continued.text, /NEXT ERROR/); assert.equal(contexts.matches! + continued.matches!, 2);
+  assert.equal((await readBounded(textSource('warn one\nwarn two\nwarn three\n'), { search: '/warn/y' }, plain)).matches, 3);
   await assert.rejects(readBounded(source, { search: "(" }, plain), (error: { code?: string }) => error.code === "INVALID_ARGS");
 });
 

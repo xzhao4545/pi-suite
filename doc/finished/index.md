@@ -12,6 +12,9 @@
 - [目标生命周期与状态摘要基础阶段](./pi-suite/goal-core.md) — 宿主恢复、用户控制、预算、分支归属与状态发布。
 - [PTY hands-free 与 dispatch 基础阶段](./pi-suite/jobs/hands-free-core.md) — 增量预算、静默终止、用户接管、共享等待与 reload 后目标唤醒；Linux 离线验收。
 - [CLI 预设与启动授权基础阶段](./pi-suite/jobs/cli-launch-core.md) — 内置/自定义预设、Pi fork 参数、字面量 prompt、用户级 launchPolicy 与共享 ask；Linux 离线验收。
+- [实际 Pi CLI 与终端接管阶段](./pi-suite/jobs/pi-cli.md) — 真实离线 Pi fork、复杂 prompt、公共 PTY 接管/交还/离开及上游 @ 边界。
+- [jobs 技能发布阶段](./pi-suite/jobs/skill.md) — 包声明、实际 Pi 资源发现/加载、原生调用与模块关闭行为。
+- [输出读取与真实 PTY 组合阶段](./pi-suite/jobs/output-core.md) — 预算、原始范围与续读提示，密码回显隐藏、横向重绘、全屏提示及同条完成预览；Linux 验收。
 - [日志实时查看与历史分页基础阶段](./pi-suite/jobs/log-viewer-core.md) — 有界字节窗口、底部跟随、搜索位置保留、最终输出与列表游标；Linux 离线验收。
 - [同进程升级控制基础阶段](./pi-suite/jobs/runtime-control-core.md) — 独立版本控制桥、受限查询与停止、quit、空闲替换与自然退出竞争；Linux 离线验收。
 - [job 历史主动清理阶段](./pi-suite/jobs/history-clear.md) — 原生确认、终态磁盘复核、写入队列、通知撤销和只读边界；Linux SDK/进程验收。

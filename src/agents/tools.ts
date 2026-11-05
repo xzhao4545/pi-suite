@@ -2,7 +2,7 @@ import type { ExtensionAPI, ToolDefinition } from '@earendil-works/pi-coding-age
 import { Type } from 'typebox';
 import type { SuiteConfig } from '../runtime/config.ts';
 import { ToolError } from '../runtime/errors.ts';
-import { readBounded, textSource } from '../runtime/read.ts';
+import { readBounded, readContinuation, textSource } from '../runtime/read.ts';
 import { sanitizeText } from '../runtime/text.ts';
 import { LIST_LIMITS, listFields, newestFirst, objectId, paginate, readFields, registerBoundTool, rejectContextWithoutSearch, rejectListWithId, textResult as text } from '../runtime/tools.ts';
 import type { WaitRegistry } from '../runtime/wait.ts';
@@ -125,7 +125,7 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
       const page = await readBounded(textSource(output), params, sanitizeText);
       if (!active(record.state)) agents.consume({ id: record.id, runId: record.runId, state: record.state, summary: summaryLine(record), settled: true });
       return text([`${summaryLine(record)} · ${stream} bytes ${page.offset}-${page.nextOffset} of ${page.totalBytes}`, page.text,
-        page.endOfStream ? undefined : `more: agent_read({"id":"${record.id}","runId":"${record.runId}","stream":"${stream}","offset":${page.nextOffset}})`], { ...page, stream, agent: agentSummary(record) });
+        page.endOfStream ? undefined : `more: agent_read(${JSON.stringify({ id: record.id, runId: record.runId, stream, ...readContinuation(params, page.nextOffset) })})`], { ...page, stream, agent: agentSummary(record) });
     } });
   pi.registerTool({ name: 'agent_send', label: 'Send to agent',
     description: 'Answer a waiting child, steer an active child, queue during creation or resume a settled session as a new run. Answers match option IDs/titles or use freeform; batch answers are a JSON array of strings. Only the direct parent may send.',

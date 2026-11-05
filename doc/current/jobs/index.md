@@ -2,9 +2,11 @@
 
 jobs 模块在同一 Pi 进程内管理 pipe 与 PTY 两种后台执行。实现位于 src/jobs，来源与改动边界见 [上游登记](../../../third-party/UPSTREAM.md)。
 
+包通过 `pi.skills` 发布 [pi-suite-jobs 技能](../../../skills/pi-suite-jobs/SKILL.md)，说明 pipe/PTY 选择、CLI 监督、输入接管、日志与共享等待、停止及历史清理。Pi 的包资源发现独立于模块开关；技能要求先核对当前工具，缺少 jobs 工具时通过可用的 ask_user 询问启用意愿或说明限制，不自行修改配置。
+
 ## 结构
 
-- JobManager（manager.ts）持有进程、PTY、日志和记录，不持有 Pi context。它注册在进程全局槽位 `pi-suite.jobs.runtime`，执行协议版本 8；reload 重新导入模块时复用同一 manager。
+- JobManager（manager.ts）持有进程、PTY、日志和记录，不持有 Pi context。它注册在进程全局槽位 `pi-suite.jobs.runtime`，执行协议版本 9；reload 重新导入模块时复用同一 manager。
 - JobsModule（index.ts）是每个扩展实例的会话绑定：只在会话绑定期间订阅 manager，发布当前会话的活动数量和结算通知；reload、new、resume、fork、树切换只撤销并重建订阅，不转移所有权。
 - 执行协议不兼容且占用中的 manager 仍有活动或未保存的 job 时，保留其注册和退出清理。相同 agentDir 且控制桥版本兼容时，进入受限模式：查询、日志、停止、指定 ID 的 wait/goal_wait 与 quit 通过原实现的闭包调用，活动数量继续更新；新启动、写入与终端 attach 返回 RUNTIME_UNAVAILABLE，自动结果与监督通知暂停。job 全部结束并保存后，/reload 替换空闲 manager，同时释放其退出监听。
 - 控制桥版本 3 暴露查询、日志路径、订阅、活动数量、停止、通知已读标记、创建归属查询 createdBy、全 cwd 的直属 sessionJobs 与 quit。版本 2 支持 createdBy，版本 1 的创建归属查询明确返回 RUNTIME_UNAVAILABLE；版本 1/2 不提供完整 session 列表，明确返回 RUNTIME_UNAVAILABLE，workspace 查询、日志、停止与 quit 保留。绑定时提示一次状态仅包含当前分支直属活动 job，完整 child 聚合需要 v3。保存记录和控制返回数据的契约变化需要同步提升控制桥版本。没有兼容控制桥或 agentDir 不同的占用注册保留退出清理，绑定时提示原因，工具返回 RUNTIME_UNAVAILABLE。
@@ -57,9 +59,17 @@ job_list 的 session 范围、/jobs 默认列表与状态数量共用 JobsModule
 
 结果首行格式为 `job_3fa1c2d0 completed · exit 0 · 12.4s · pipe`，清理未确认时附 cleanup 状态，最后一行给出后续调用。
 
+## 输出读取
+
+src/jobs/output.ts 为模型工具、日志查看器和结算预览提供同一 reader，调用共享 runtime/read.ts；agent_read 的结果与 transcript 也复用共享读取。默认按头部、关键行和尾部组合，关键行带前后各一行，truncated 的 head/keys/tail 保留原始字节范围。搜索把正文、上下文及前缀一起计入 limitBytes，超长返回行按 UTF-8 裁剪并标注；job_read/agent_read 的续读提示保留 search/context/limitBytes。
+
+PTY 输出先以等字节空白隐藏密码提示至下一个 LF 的回显，再处理 CR、BS、横向 CSI 定位/移动/行清理与字素宽度，折叠连续重复行；原始日志与分页偏移保持原值，提示之后的 offset 页仍恢复该行隐藏上下文。fullScreen 来自已有 xterm alternate buffer；读取附全屏提示，当前可控 PTY 的屏幕由 /jobs attach 查看。垂直光标与全屏历史不提供完整线性屏幕还原；任意正则对极长单逻辑行仍需要该行缓冲，不能视为有界内存读取。
+
 ## 通知
 
 job 结算后，属于当前会话且启动时的分支叶子仍在当前分支上的，经共享 Notifications 投递一次（请求 ID `job:<id>`），消息发出后持久标记 notified。wait 或 job_stop 已返回的结算会撤销该通知。Esc 中止后，本会话尚未通知的 job 不再自动唤醒，结果随下一条用户消息送达。
+
+结算前用同一 reader 捕获至多 2 KiB 的 outputPreview，pipe 汇总 stdout/stderr，PTY 使用已隐藏密码回显的 output；预览在终态发布前完成，随既有结算通知投递。
 
 ## monitor
 

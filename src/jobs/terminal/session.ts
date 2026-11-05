@@ -20,6 +20,7 @@ export class PtyTerminalSession {
   private xterm: XtermTerminal;
   private disposed = false;
   private completing = false;
+  private alternateScreen = false;
   private scrollOffset = 0;
   private followBottom = true;
   // Ordered writes: xterm renders each chunk before device queries are answered and listeners run.
@@ -35,6 +36,7 @@ export class PtyTerminalSession {
     }
     const { cols = 80, rows = 24, scrollback = 5000 } = options;
     this.xterm = new xterm.Terminal({ cols, rows, scrollback, allowProposedApi: true, convertEol: true });
+    this.xterm.buffer.onBufferChange(buffer => { if (buffer.type === 'alternate') this.alternateScreen = true; });
     const env: Record<string, string> = {};
     for (const [key, value] of Object.entries({ TERM: 'xterm-256color', ...process.env })) if (value !== undefined) env[key] = value;
     this.ptyProcess = createPtyProcess(options.shellConfig.shell, [...options.shellConfig.args, options.command],
@@ -79,6 +81,7 @@ export class PtyTerminalSession {
   get cols(): number { return this.xterm.cols; }
   get rows(): number { return this.xterm.rows; }
   get processExited(): boolean { return this.ptyProcess.processExited; }
+  get fullScreen(): boolean { return this.alternateScreen; }
 
   write(data: string): void {
     if (this.disposed || this.completing) throw new Error('Terminal no longer accepts input');

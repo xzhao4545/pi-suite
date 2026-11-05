@@ -30,6 +30,8 @@ export type JobSummary = {
   stopReason?: StopReason; cleanup: CleanupEvidence;
   /** Launch, exit-observation or storage error; visible in list/read instead of being dropped. */
   error?: string; notified?: boolean;
+  /** Final bounded output, captured at the settlement boundary for a single completion notice. */
+  outputPreview?: string; fullScreen?: boolean;
 };
 export type StartRequest = {
   /** Omitted only for a file-watch monitor, which generates its own command. */

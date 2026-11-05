@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
-import { fileSource } from '../runtime/read.ts';
+import { fileSource, readContinuation } from '../runtime/read.ts';
 import { ToolError } from '../runtime/errors.ts';
 import { LIST_LIMITS, listFields, objectId, readFields, rejectContextWithoutSearch, rejectListWithId, textResult as text, type StopOutcome } from '../runtime/tools.ts';
 import { translateInput } from './terminal/keys.ts';
@@ -132,7 +132,7 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: Vie
       return text([
         `${summaryLine(job)} · ${stream} bytes ${page.offset}-${page.nextOffset} of ${page.totalBytes}${page.matches !== undefined ? ` · ${page.matches} matches` : ''}`,
         stderrNote, page.text,
-        page.endOfStream ? undefined : `more: job_read({"id":"${job.id}","stream":"${stream}","offset":${page.nextOffset}${params.search ? `,"search":${JSON.stringify(params.search)}` : ''}})`,
+        page.endOfStream ? undefined : `more: job_read(${JSON.stringify({ id: job.id, stream, ...readContinuation(params, page.nextOffset) })})`,
       ], page);
     },
   });

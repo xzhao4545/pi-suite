@@ -10,7 +10,7 @@ export type ReadSource = { size: number; read(offset: number, length: number): P
 export type ReadRequest = { offset?: number; limitBytes?: number; search?: string; context?: number };
 export type ReadPage = {
   text: string; offset: number; nextOffset: number; totalBytes: number; endOfStream: boolean;
-  truncated?: { head: [number, number]; tail: [number, number]; omittedBytes: number; keyLines: number };
+  truncated?: { head: [number, number]; keys: [number, number][]; tail: [number, number]; omittedBytes: number; keyLines: number };
   matches?: number;
 };
 export const READ_LIMITS = { defaultBytes: 16384, maxBytes: 65536, maxMatches: 50, defaultContext: 2, maxContext: 20, chunk: 65536 };
@@ -43,6 +43,17 @@ function utf8Start(buffer: Buffer): number {
   let start = 0;
   while (start < Math.min(3, buffer.length) && (buffer[start] & 0xc0) === 0x80) start++;
   return start;
+}
+/** A rendered line can exceed its allocation; clip on UTF-8 boundaries and make that visible. */
+export function boundedText(text: string, budget: number): string {
+  const bytes = Buffer.from(text);
+  if (bytes.length <= budget) return text;
+  const marker = '... [truncated]'.slice(0, budget);
+  return bytes.subarray(0, utf8End(bytes, budget - marker.length)).toString('utf8') + marker;
+}
+/** Keep the same read mode and caller's limits when the model follows a continuation hint. */
+export function readContinuation(request: ReadRequest, offset: number): ReadRequest {
+  return { offset, search: request.search, context: request.context, limitBytes: request.limitBytes };
 }
 function formatBytes(bytes: number): string {
   return bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KiB` : `${(bytes / 1048576).toFixed(1)} MiB`;
@@ -99,30 +110,42 @@ export async function readBounded(source: ReadSource, request: ReadRequest, rend
   const tailCut = tailRaw.indexOf(10) + 1 || utf8Start(tailRaw);
   const tailStart = size - tailBudget + tailCut;
   const keyBudget = limit - headEnd - (size - tailStart);
-  // Each key line carries its preceding line for context. Keep the earliest blocks within half
+  // Each key line carries its adjacent lines for context. Keep the earliest blocks within half
   // of the budget and a rolling window of the latest blocks in the rest.
-  const first: string[] = [], recent: { text: string; bytes: number }[] = [];
-  let keyLines = 0, firstBytes = 0, recentBytes = 0, previous: string | undefined;
+  type Line = { text: string; start: number; end: number };
+  type Block = { text: string; bytes: number; range: [number, number] };
+  const first: Block[] = [], recent: Block[] = [];
+  let keyLines = 0, firstBytes = 0, recentBytes = 0, previous: Line | undefined;
+  let pending: { before?: Line; match: Line } | undefined;
+  const collect = (before: Line | undefined, match: Line, after?: Line) => {
+    const allocation = Math.floor(keyBudget / 2) - 1, contextBudget = Math.floor(allocation / 4);
+    const preceding = before ? boundedText(`  ${before.text}`, contextBudget) : undefined;
+    const following = after ? boundedText(`  ${after.text}`, contextBudget) : undefined;
+    // The match retains half the block even when both context lines exceed the budget.
+    const used = [preceding, following].reduce((bytes, text) => bytes + (text === undefined ? 0 : Buffer.byteLength(text) + 1), 0);
+    const text = [preceding, boundedText(`> ${match.text}`, allocation - used), following].filter(text => text !== undefined).join('\n');
+    const block: Block = { text, bytes: Buffer.byteLength(text) + 1, range: [before?.start ?? match.start, after?.end ?? match.end] };
+    if (!recent.length && firstBytes + block.bytes <= keyBudget / 2) { first.push(block); firstBytes += block.bytes; }
+    else {
+      recent.push(block); recentBytes += block.bytes;
+      while (recent.length > 1 && recentBytes > keyBudget - firstBytes) recentBytes -= recent.shift()!.bytes;
+    }
+  };
   for await (const line of lines(source, headEnd, tailStart)) {
-    const text = render(line.bytes.toString('utf8'));
-    if (KEY_LINE.test(text)) {
-      keyLines++;
-      const block = `${previous === undefined ? '' : `  ${previous}\n`}> ${text}`, bytes = Buffer.byteLength(block) + 1;
-      if (!recent.length && (firstBytes + bytes <= keyBudget / 2 || !first.length)) { first.push(block); firstBytes += bytes; }
-      else {
-        recent.push({ text: block, bytes }); recentBytes += bytes;
-        while (recent.length > 1 && recentBytes > keyBudget - firstBytes) recentBytes -= recent.shift()!.bytes;
-      }
-      previous = undefined;
-    } else previous = text;
+    const current = { text: render(line.bytes.toString('utf8')), start: line.offset, end: Math.min(tailStart, line.offset + line.bytes.length + 1) };
+    if (pending) collect(pending.before, pending.match, current);
+    pending = KEY_LINE.test(current.text) ? { before: previous, match: current } : undefined;
+    if (pending) keyLines++;
+    previous = current;
   }
-  const picked = [...first, ...(keyLines > first.length + recent.length ? ['  …'] : []), ...recent.map(item => item.text)];
+  if (pending) collect(pending.before, pending.match);
+  const picked = [...first.map(item => item.text), ...(keyLines > first.length + recent.length ? ['  …'] : []), ...recent.map(item => item.text)];
   const omitted = tailStart - headEnd;
   const marker = `[… ${formatBytes(omitted)} omitted (bytes ${headEnd}–${tailStart}), ${keyLines} matching lines; read with offset or search …]`;
   const text = [render(headBuffer.subarray(0, headEnd).toString('utf8')).replace(/\n$/, ''), marker, ...picked,
     ...(picked.length ? ['[… end of matching lines …]'] : []), render(tailRaw.subarray(tailCut).toString('utf8'))].join('\n');
   return { text, offset: 0, nextOffset: size, totalBytes: size, endOfStream: true,
-    truncated: { head: [0, headEnd], tail: [tailStart, size], omittedBytes: omitted, keyLines } };
+    truncated: { head: [0, headEnd], keys: [...first, ...recent].map(item => item.range), tail: [tailStart, size], omittedBytes: omitted, keyLines } };
 }
 
 /** Line numbers count from the search start offset; matched lines also show their byte offset for resuming. */
@@ -132,19 +155,28 @@ async function search(source: ReadSource, request: ReadRequest, render: (raw: st
   const from = Math.min(request.offset ?? 0, source.size);
   const out: string[] = [], before: string[] = [];
   let matches = 0, lineNumber = 0, after = 0, bytes = 0, nextOffset = source.size, lastPrinted = -1;
+  const append = (text: string, allocation = limit - bytes) => {
+    const separator = Number(out.length > 0);
+    const line = boundedText(text, Math.max(0, Math.min(allocation, limit - bytes - separator)));
+    out.push(line); bytes += Buffer.byteLength(line) + separator;
+  };
   for await (const line of lines(source, from, source.size)) {
+    // Count serialized context and prefixes too; resume at the first unprocessed raw line.
+    if (out.length && limit - bytes < 32) { nextOffset = line.offset; break; }
     lineNumber++;
     const text = render(line.bytes.toString('utf8'));
+    pattern.lastIndex = 0;
     if (pattern.test(text)) {
       if (matches >= READ_LIMITS.maxMatches || bytes >= limit) { nextOffset = line.offset; break; }
       matches++;
-      if (lastPrinted >= 0 && lineNumber - before.length > lastPrinted + 1) out.push('--');
-      for (const [index, item] of before.entries()) out.push(`${lineNumber - before.length + index}  ${item}`);
-      out.push(`${lineNumber}@${line.offset}> ${text}`); bytes += Buffer.byteLength(text);
+      if (lastPrinted >= 0 && lineNumber - before.length > lastPrinted + 1) append('--');
+      for (const [index, item] of before.entries()) append(`${lineNumber - before.length + index}  ${item}`,
+        Math.floor((limit - bytes) / (before.length - index + 1)));
+      append(`${lineNumber}@${line.offset}> ${text}`);
       before.length = 0; after = context; lastPrinted = lineNumber;
-    } else if (after > 0) { out.push(`${lineNumber}  ${text}`); after--; lastPrinted = lineNumber; }
+    } else if (after > 0) { append(`${lineNumber}  ${text}`); after--; lastPrinted = lineNumber; }
     else { before.push(text); if (before.length > context) before.shift(); }
   }
-  return { text: out.join('\n') || `No lines match ${request.search}`, offset: from, nextOffset, totalBytes: source.size,
+  return { text: out.join('\n') || boundedText(`No lines match ${request.search}`, limit), offset: from, nextOffset, totalBytes: source.size,
     endOfStream: nextOffset >= source.size, matches };
 }

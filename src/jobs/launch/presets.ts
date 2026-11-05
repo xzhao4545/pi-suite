@@ -20,6 +20,9 @@ export function agentCommand(agent: AgentLaunch, presets: Record<string, Preset>
   // Own-property lookup prevents names such as constructor from resolving through Object.prototype.
   const preset = Object.hasOwn(presets, agent.preset) ? presets[agent.preset] : undefined;
   if (!preset) throw new ToolError('INVALID_ARGS', `Unknown CLI agent ${agent.preset}; configured presets: ${Object.keys(presets).join(', ')}`);
+  // Pi 1.5 still parses @file after --. Remove this boundary when Pi exposes a
+  // literal-prompt entry; adding a prefix here would silently change the user's task.
+  if (agent.preset === 'pi' && agent.prompt.startsWith('@')) throw new ToolError('INVALID_ARGS', 'Pi treats a positional prompt starting with @ as a file reference, even after --; use a prompt with an introductory text prefix. Verbatim leading @ is not supported');
   if (agent.fork && agent.preset !== 'pi') throw new ToolError('INVALID_ARGS', 'fork is supported only by the pi preset');
   if (agent.fork && !sessionFile) throw new ToolError('INVALID_ARGS', 'Cannot fork an unpersisted session; start a fresh CLI agent instead');
   const args = [...preset.args, ...agent.fork ? ['--fork', sessionFile!] : []];

@@ -18,6 +18,8 @@ runtime/tools.ts 提供 objectId、listFields、paginate、readFields、WAIT_ID_
 
 单对象操作首行显示对象摘要，列表与 wait 显示集合摘要，goal 显示目标动作；其后提供必要正文与可用后续入口。details 保存同一结果的结构化字段。完整输出与日志通过 read 按需读取，规则见 [jobs 读取与操作](../jobs/index.md)。
 
+runtime/read.ts 的 readContinuation 共用 offset/search/context/limitBytes 续读字段，job_read 与 agent_read 的 more 提示保留当前读取方式。默认截断的 keys 数组记录所选匹配行及上下文原始范围；搜索正文、上下文和标注共同计入字节预算，超长返回行显式截断，boundedText 也供结算预览复用。
+
 agent 工具使用稳定 ID，runId 按需选择历史执行；handle/alias 的发送与补全属于 TUI 提及入口，见 [agents 操作](../agents/operations.md)。jobs 与 agents 共用生命周期语义，领域终态分别包含 timed_out 与 limited；活动判断还核对真实清理边界。
 
 ask_user.timeoutMs 只控制询问期限；wait.timeoutMs 只控制等待调用；job_start.timeoutMs 控制 job 的运行期限并实际停止超时进程。相同单位不表示相同作用范围。

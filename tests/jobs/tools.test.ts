@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fauxAssistantMessage, fauxToolCall, type TranscriptContext } from "@earendil-works/pi-ai";
 import { host } from "../support/host.ts";
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { agentDir } from "../support/jobs.ts";
 
 const TOOLS = ["job_start", "job_list", "job_read", "job_write", "job_stop", "wait"];
@@ -20,11 +20,13 @@ const notices = (branch: SessionEntry[], id: string) => branch
   .filter(entry => entry.type === "custom_message" && entry.customType === "pi-suite:notification" && JSON.stringify(entry.content).includes(id));
 
 test("wait returns the settlement and consumes it; job_read shows the output", { timeout: 30000 }, async () => {
-  const h = await host({ root: agentDir(), tools: TOOLS });
+  let ctx!: ExtensionContext;
+  const h = await host({ root: agentDir(), tools: TOOLS, extend: pi => { pi.on('session_start', (_event, context) => { ctx = context; }); } });
   let id = "";
+  const log = ['from-job', ...Array.from({ length: 80 }, (_, i) => `WARN ${i} 构建完成 ${'x'.repeat(80)}`)];
   try {
     h.faux.setResponses([
-      () => fauxAssistantMessage(fauxToolCall("job_start", { command: "echo from-job", name: "echo" })),
+      () => fauxAssistantMessage(fauxToolCall("job_start", { command: `printf '%s\\n' ${log.map(line => `'${line}'`).join(' ')}`, name: "echo" })),
       context => { id = jobId(context); return fauxAssistantMessage(fauxToolCall("wait", { ids: [id], timeoutMs: 20000 })); },
       context => {
         assert.match(lastToolText(context), new RegExp(`wait 1/1 settled\\n${id} completed · exit 0`));
@@ -38,6 +40,18 @@ test("wait returns the settlement and consumes it; job_read shows the output", {
       },
     ]);
     await h.session.prompt("Run it"); await h.idle();
+    let request: Record<string, unknown> = { id, search: '/^WARN/', context: 0, limitBytes: 1024 }, matches = 0;
+    for (;;) {
+      const result = await h.session.getToolDefinition('job_read')!.execute('continuation', request, new AbortController().signal, undefined, ctx as never);
+      const page = result.details as { nextOffset: number; matches: number };
+      matches += page.matches;
+      const text = result.content.map(part => part.type === 'text' ? part.text : '').join('\n');
+      const hint = /more: job_read\((\{.*\})\)/.exec(text);
+      if (!hint) break;
+      request = JSON.parse(hint[1]);
+      assert.deepEqual(request, { id, stream: 'stdout', offset: page.nextOffset, search: '/^WARN/', context: 0, limitBytes: 1024 });
+    }
+    assert.equal(matches, 80, 'following actual search hints preserves the original query and limits');
     await sleep(300); await h.idle();
     assert.equal(h.faux.state.callCount, 4, "a result already returned by wait does not wake the model again");
     assert.equal(notices(h.session.sessionManager.getBranch(), id).length, 0);
@@ -54,6 +68,7 @@ test("a job settling after the turn wakes the owner session exactly once; status
       context => {
         const notice = context.messages.findLast(message => message.role === "user");
         assert.match(JSON.stringify(notice), new RegExp(`${id} completed · exit 0`));
+        assert.match(JSON.stringify(notice), /stdout:.*late/s, 'the completion wake includes its settled output preview');
         return fauxAssistantMessage("job finished");
       },
     ]);

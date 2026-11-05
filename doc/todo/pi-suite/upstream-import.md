@@ -17,7 +17,8 @@
 - [x] 把上游 widget、状态、通知、配置和会话事件接入共享 Dock、StatusPublisher、Notifications、SessionBinding 与配置（Linux 必要详情/询问组合通过，Windows 与真实手机由模块专项验收）
 - [x] 登记许可证、导入文件清单与改动边界，更新 sources.json
 - [x] 锁定并验证新增运行依赖：zigpty、@xterm/headless、@xterm/addon-serialize、croner（Linux；Windows 实际后端由平台专项验收）
-- [ ] 按新工具整理 interactive-shell 技能说明并在包中声明
+- [x] 按新工具整理 interactive-shell 技能说明并在包中声明（真实 Pi 包资源发现、加载与模块关闭行为通过，见 [技能阶段](../../finished/pi-suite/jobs/skill.md)）
+- [ ] 按模块专项完成 Windows、真实手机与完整资源/CLI 组合验收
 
 ## 验收方式
 
@@ -51,7 +52,7 @@ src/
     terminal/     session、protocol、keys、visible-text
     monitors/     compile、runtime、hands-free（stream、poll-diff、file-watch 编译与监督）
     launch/       config、presets、authorize（CLI 预设与启动授权）
-    manager、store、query、tools、viewer、log-viewer、runtime、control、state、workspace、index
+    manager、store、query、output、tools、viewer、log-viewer、runtime、control、state、workspace、index
   agents/
     manager、runtime、runner、records、history、child、questions、parent（执行、队列、会话与嵌套）
     catalog、defaults、models、model-editor、types（类型、配置与原生模型选择）
@@ -106,8 +107,8 @@ src/
 | tool-schema.ts | 486 | 不导入，作为参数参考；保留“kill 不确认退出”的描述口径 |
 | overlay-component.ts | 1133 | 只导入用户接管/交还、退出倒计时和 hands-free 更新预算的状态机，渲染由 ui/terminal 重写 |
 | output-selection-runtime.ts 的 normalizeSelectorVisibleText | 约 20 | 摘出到 terminal/visible-text，用于 PTY 回车覆写后的可见文本 |
-| terminal-observation.ts 的 sanitizeTerminalTextBuiltIn、containsSecretPromptText | 约 40 | 未按函数直接摘入；输出清理与 PTY 可见文本由共享读取/terminal/visible-text 处理。原生 attach 的用户按键统一记录为 sensitive，模型写入可显式设置 sensitive；没有密码提示识别函数 |
-| skills/interactive-shell | 280 | 待核对保留范围；仓库尚无对应技能与 package skills 声明，不能记为已重写。接入时需使用本包工具并删除 jev 与 output-selection 参考 |
+| terminal-observation.ts 的 sanitizeTerminalTextBuiltIn、containsSecretPromptText | 约 40 | 未按函数直接摘入；输出清理与 PTY 可见文本由共享读取/terminal/visible-text 处理。密码提示至 LF 的回显隐藏由本包 terminal/read 的原始字节视图实现，分页/搜索保持偏移；原生 attach 用户按键统一 sensitive，模型写入可显式设置 sensitive |
+| skills/interactive-shell | 280 | 按本包真实工具改写为 skills/pi-suite-jobs/SKILL.md，由 package.pi.skills 发布。保留 pipe/PTY、CLI dispatch/hands-free、授权、输入接管、日志/共享等待、停止及用户清理契约；先核对可用工具，模块关闭时询问启用意愿或说明限制。删除 Jev、worktree、output-selection 和不存在的工具/参数，不复制独立 references |
 | jev-client、semantic-*、selector-*、output-source-store、output-selector、scripts/、examples/ | 约 2800 | 丢弃：外发终端内容到付费接口及其评估资产 |
 | reattach-overlay.ts | 448 | 丢弃：与主 overlay 重复的第二套界面 |
 | background-widget.ts | 106 | 丢弃实现，由统一 dock 显示 |

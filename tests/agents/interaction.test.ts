@@ -37,18 +37,49 @@ test('same-agent unread runs have independent read cancellation and one coalesce
   const h = await setup();
   let entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
   const fourthEntered = Promise.withResolvers<void>(), fourthRelease = Promise.withResolvers<void>();
+  const longResult = 'HEAD_RUN_TWO\n' + Array.from({ length: 120 }, (_, i) => `WARN ${i} 构建完成 ✅ ${'x'.repeat(160)}\n`).join('')
+    + 'ERROR middle result\nTAIL_RUN_TWO\n';
   const respond: FauxResponseFactory = async context => {
     const prompt = userText(context);
     if (prompt.includes('HOLD_PARENT')) { entered.resolve(); await release.promise; return fauxAssistantMessage('parent finished'); }
     if (prompt === 'RUN_FOUR') { fourthEntered.resolve(); await fourthRelease.promise; }
-    return fauxAssistantMessage(`answer: ${prompt}`);
+    return fauxAssistantMessage(prompt === 'RUN_TWO' ? longResult : `answer: ${prompt}`);
   };
   h.faux.setResponses(Array(20).fill(respond));
   let parent = h.session.prompt('HOLD_PARENT_ONE'); await entered.promise;
   try {
     const first = await h.manager.start({ prompt: 'RUN_ONE' }, { ctx: h.ctx }, h.config); await first.done.promise;
     const second = (await h.manager.send(first.record.id, 'RUN_TWO', { ctx: h.ctx }, h.config)).run; await second.done.promise;
-    await h.invoke('agent_read', { id: second.record.id, runId: second.record.runId });
+    const calls = h.faux.state.callCount;
+    const read = async (params: object) => {
+      const result = await h.invoke('agent_read', { id: second.record.id, runId: second.record.runId, ...params });
+      const hint = /more: agent_read\((\{.*\})\)/.exec(output(result));
+      return { ...(result.details as { text: string; offset: number; nextOffset: number; totalBytes: number; matches?: number; truncated?: unknown }),
+        hint: hint ? JSON.parse(hint[1]) as Record<string, unknown> : undefined };
+    };
+    const summary = await read({});
+    assert.ok(summary.truncated); assert.match(summary.text, /HEAD_RUN_TWO/); assert.match(summary.text, /TAIL_RUN_TWO/);
+    let offset = 0, joined = '';
+    do {
+      const page = await read({ offset, limitBytes: 1024 });
+      assert.equal(page.offset, offset); assert.ok(page.nextOffset > offset); assert.ok(!page.text.includes('\uFFFD'));
+      assert.ok(Buffer.byteLength(page.text) <= 1024); joined += page.text; offset = page.nextOffset;
+    } while (offset < Buffer.byteLength(longResult));
+    assert.equal(joined, longResult);
+    let matches = 0; offset = 0;
+    let request: Record<string, unknown> = { search: '/^WARN/', context: 1, limitBytes: 1024, offset };
+    do {
+      const page = await read(request);
+      assert.ok(Buffer.byteLength(page.text) <= 1024); matches += page.matches!;
+      assert.ok(page.nextOffset > offset); offset = page.nextOffset;
+      if (page.hint) {
+        assert.deepEqual(page.hint, { id: second.record.id, runId: second.record.runId, stream: 'result', offset, search: '/^WARN/', context: 1, limitBytes: 1024 });
+        request = page.hint;
+      }
+    } while (offset < Buffer.byteLength(longResult));
+    assert.equal(matches, 120);
+    const wholeTranscript = await read({ stream: 'transcript' }); assert.match(wholeTranscript.text, /\[assistant\]/);
+    assert.equal(h.faux.state.callCount, calls, 'paging, search and transcript reads do not resume a model');
     assert.equal(first.consumed, false); assert.equal(second.consumed, true);
     release.resolve(); await parent; await h.idle();
     assert.equal(h.notices().length, 1);

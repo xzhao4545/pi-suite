@@ -16,6 +16,8 @@ jobs.agents 按内置、用户、项目顺序，逐键、逐字段合并。每�
 
 所有参数按 Pi 使用的 Bash 规则转义；prompt 前添加 `--` 结束选项解析，prompt 以 `--` 开头时仍作为数据。自定义 CLI 应支持这一位置参数约定。command 与 agent 互斥；file-watch 自行生成命令，不能提供 command 或 agent。mode 仍默认 pipe；需要交互终端的 CLI 用 mode=pty，监督参数见 [hands-free 与 dispatch](hands-free.md)。
 
+Pi 1.5.0 的位置 prompt 以 `@` 开头时会按附件文件处理，即使位于 `--` 之后；pi 预设在启动前返回 INVALID_ARGS 并说明该上游边界，保持正文原值。正常文本中的 `@` 与以 `--` 开头的文本沿用位置参数约定。
+
 ```json
 {"agent":{"preset":"pi","prompt":"阅读项目计划并继续实现","fork":true},"mode":"pty","handsFree":{"mode":"dispatch"}}
 ```

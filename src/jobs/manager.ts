@@ -15,6 +15,7 @@ import { ToolError } from '../runtime/errors.ts';
 import { compileMonitor, type CompiledMonitor } from './monitors/compile.ts';
 import { JobMonitor, type MonitorEvent } from './monitors/runtime.ts';
 import { compileHandsFree, HandsFreeSupervisor, type HandsFreeUpdate } from './monitors/hands-free.ts';
+import { outputPreview } from './output.ts';
 import { errnoCode, isWorkflowGate, LIMITS, type InputRecord, type JobSummary, type StartRequest, type StopReason, type StopResult, type Stream, type Workspace } from './types.ts';
 
 const JOB_ID = /^job_[a-f0-9]{8}$/;
@@ -70,6 +71,7 @@ export class JobManager {
 
   private view(item: Owned): JobSummary {
     const job = structuredClone(item.job);
+    if (item.run?.terminal?.fullScreen) job.fullScreen = true;
     // Live elapsed is monotonic; endedAt fixes the saved value.
     if (item.run && job.endedAt === undefined) job.elapsedMs = Math.round(performance.now() - item.run.startedMonotonic);
     if (item.persistenceError) job.error = [job.error, `history not saved: ${item.persistenceError}`].filter(Boolean).join('; ');
@@ -192,6 +194,9 @@ export class JobManager {
     // Exit is the only settlement evidence; a stop request alone never settles the job.
     item.settlement = run.exited.then(async exit => {
       clearTimeout(item.timeoutTimer);
+      job.exitCode = exit.code; job.signal = exit.signal;
+      job.endedAt = new Date().toISOString();
+      job.elapsedMs = Math.round(performance.now() - run.startedMonotonic);
       item.supervisor?.dispose();
       // A result replaces any queued progress snapshot; never wake twice for final output.
       item.pendingUpdate = undefined;
@@ -199,9 +204,11 @@ export class JobManager {
       // The logs are flushed by now; the monitor matches the last lines before the job settles,
       // so a settled job never reports fewer events than its output holds.
       try { await item.watcher?.stop(); } catch (error) { this.setError(item, `monitor: ${String(error)}`); }
-      job.exitCode = exit.code; job.signal = exit.signal;
-      job.endedAt = new Date().toISOString();
-      job.elapsedMs = Math.round(performance.now() - run.startedMonotonic);
+      job.fullScreen = run.terminal?.fullScreen || undefined;
+      // The logs are flushed, but the run remains active until its final preview
+      // exists. Publishing terminal state first would split output and result wakes.
+      try { job.outputPreview = await outputPreview(this, job); }
+      catch (error) { this.setError(item, `output preview unavailable: ${String(error)}`); }
       if (exit.error) this.setError(item, exit.error);
       if (job.stopReason) job.cleanup.rootExited = true;
       else { job.cleanup = { state: run.knownResidual ? 'unconfirmed' : 'not_required', scope: [], rootExited: true }; run.dispose(); }
@@ -253,6 +260,10 @@ export class JobManager {
         const cleanup = await stopTracked(run, item.stopDeadline!);
         cleanup.rootExited ||= job.cleanup.rootExited || !!run.exitObserved;
         job.cleanup = cleanup;
+        // Process cleanup is finished; join its output settlement before returning
+        // a confirmed stop, so the tool and completion notice see the same terminal result.
+        item.cleanupSettled = true;
+        if (cleanup.rootExited) await item.settlement;
       } else job.cleanup = { state: 'not_required', scope: [], rootExited: true };
     } catch (error) {
       job.cleanup.state = 'unconfirmed'; job.cleanup.error = String(error);

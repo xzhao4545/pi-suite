@@ -28,12 +28,14 @@ jobs 导入 pi-background-jobs 0.1.3 与 pi-interactive-shell 0.18.0 的部分�
 | src/jobs/store.ts、runtime.ts、state.ts、types.ts、workspace.ts | pi-background-jobs 同名文件 | 目录与 ID 改为本包格式；runtime 注册键与协议改为本包，增加独立版本的查询/停止控制桥；v3 提供 createdBy 和全 cwd 直属 sessionJobs；v2 保留 createdBy，v1/v2 完整 session 查询明确拒绝，当前分支直属计数与基础控制保留 |
 | src/jobs/backends/pty.ts、terminal/protocol.ts、terminal/keys.ts、terminal/shell.ts | pi-interactive-shell pty-process.ts、pty-protocol.ts、key-encoding.ts、shell-resolution.ts | 删除语义动作编码；Windows 停止接入 windows-tree |
 | src/jobs/terminal/session.ts、render.ts | pi-interactive-shell pty-session.ts | 输出写入 job 日志而非内存缓冲；渲染纯函数拆出 |
-| src/jobs/terminal/visible-text.ts | pi-interactive-shell output-selection-runtime.ts 的 normalizeSelectorVisibleText | 单独摘出 |
+| src/jobs/terminal/visible-text.ts | pi-interactive-shell output-selection-runtime.ts 的 normalizeSelectorVisibleText | 单独摘出并扩展横向 CSI/BS、终端列与字素宽度、连续重复行折叠 |
+| src/jobs/output.ts、terminal/read.ts | 本项目实现，复用共享 runtime/read 与已有终端 | 工具、日志查看和完成预览共用 reader；密码提示后至 LF 的回显以等字节空白隐藏，保持分页/搜索原始偏移；2 KiB 预览在终态发布前捕获并沿既有通知投递，不计作上游直接导入 |
 | src/jobs/monitors/compile.ts | pi-interactive-shell index.ts 的 trigger 编译、poll-diff 循环与 file-watch 命令生成 | 触发模式与 job_read search 共用语法；阈值增加 eq；删除 semantic 策略 |
 | src/jobs/monitors/runtime.ts | pi-interactive-shell headless-monitor.ts 的匹配、冷却、去重与 poll-diff 摘要，index.ts 的 detector 协议 | 改为读取 job 自身日志，pipe 与 PTY 共用；detector 失败时附错误投递候选事件；删除语义挂钩与 dispatch 状态机 |
 | src/jobs/monitors/hands-free.ts | pi-interactive-shell headless-monitor.ts 的静默/宽限期生命周期与 overlay-component.ts 的增量更新/预算状态机 | 由长期 JobManager 持有；实际退出才结算；接管暂停更新与静默终止；预算生成时扣除，更新走共享通知；删除语义监督 |
 | src/jobs/launch/config.ts | pi-interactive-shell config.ts 的默认预设与 launch-policy.ts 的精确匹配/优先级 | schema 与加载并入共享配置，逐键和字段合并；用户级规则，未设置也默认 ask |
 | src/jobs/launch/presets.ts | pi-interactive-shell spawn.ts 的 CLI 参数拼装与 Bash 转义 | 结构化 job_start.agent；删除 worktree 与 /spawn；prompt 前结束选项解析；Pi fork 复用宿主会话文件 |
+| skills/pi-suite-jobs/SKILL.md、package.json 的 pi.skills | pi-interactive-shell skills/interactive-shell/SKILL.md 及 foreground/agents/monitors references | 自含技能按本包 job 工具、共享 wait、pipe/PTY 与真实监督字段适配；保留授权/输入/接管/阅读/清理边界，缺工具时先询问或说明限制；删除 Jev、worktree、output-selection、独立 references 与不存在工具/参数 |
 
 tasks 导入改造 @tintinweb/pi-tasks 0.9.1 的存储、依赖、会话与提醒机制，保留 [完整 MIT 许可证](./licenses/pi-tasks.txt)：
 

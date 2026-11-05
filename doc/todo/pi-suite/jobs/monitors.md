@@ -20,6 +20,9 @@
 - [x] 实现 PTY 视图中的用户接管与交还，同步操作说明
 - [ ] 在 Windows 验证 monitor、hands-free、dispatch、CLI 预设、launchPolicy 与终端用户接管
 - [ ] 核对各实际 CLI 版本的默认参数、选项结束标记、Pi fork 和 PTY 启动/接管，使用离线 provider 或受控流程避免付费模型依赖
+- [x] Linux 实际 Pi 1.5.0 发布 CLI 使用离线 provider 验证 fork、复杂字面 prompt 与共享 PTY 接管/交还/离开，见 [实际 CLI 阶段](../../../finished/pi-suite/jobs/pi-cli.md)
+- [ ] Pi 位置 prompt 以 @ 开头受上游附件解析限制，原样 @ 支持尚未实现（当前启动前报告 INVALID_ARGS）
+- [ ] codex/claude 实际离线或受控 PTY 组合验收（目前只核对 help 参数）；cursor 对应的 agent 命令尚缺环境
 
 ## 验收方式
 
@@ -59,6 +62,8 @@ file-watch 自行生成监视命令，不能同时提供 command 或 agent。tri
 配置 jobs.agents 定义预设键对应的可执行文件与默认参数，内置 pi、codex、claude、cursor；pi 支持 fork 当前会话。jobs.launchPolicy 为精确命令匹配的 allow、deny、ask 列表，deny 优先，未匹配默认 ask，只能在用户级配置设置，项目级配置出现该字段时报错。不保留 worktree 启动。
 
 实现接口为 jobs.agents 的 `{command,args?}` 字段与 launchPolicy 的 `{command,decision}` 数组；即使省略策略也默认询问。匹配最终原始/CLI/monitor 命令，detector 命令单独授权；未确认不分配 ID、不启动进程。当前字段、默认参数、错误和操作见 [CLI 预设与启动授权](../../../current/jobs/launch.md)。
+
+Pi 1.5.0 的真实发布 CLI 已在 Linux 使用隔离资源和 faux provider 验证：fork 保持源会话原文，复杂中文、引号、美元符号、反引号、换行与以 `--` 开头的 prompt 保持字面数据；新的真实 PTY 复用 attachJob 操作。以 `@` 开头的位置 prompt 会被上游解析为附件，当前明确报错，原样支持继续保留待办。codex/claude 只完成 help 参数核对，cursor 的 agent 命令缺失，不能以 Pi 的验收代替这些预设或 Windows/手机组合。
 
 ## 用户接管
 
