@@ -12,6 +12,7 @@ import { ToolError } from '../runtime/errors.ts';
 import type { JobSummary } from './types.ts';
 import type { MonitorEvent } from './monitors/runtime.ts';
 import type { HandsFreeUpdate } from './monitors/hands-free.ts';
+import type { JobControl } from './control.ts';
 
 export function displayName(job: JobSummary): string {
   return stripVTControlCharacters(job.name).replace(/[\x00-\x1f\x7f-\x9f]/g, ' ').trim() || job.id;
@@ -70,11 +71,18 @@ export class JobsModule implements Waitable {
     if (handle.mode !== 'active') throw new ToolError('RUNTIME_UNAVAILABLE', handle.reason);
     return handle.manager;
   }
+  control(): JobControl {
+    const handle = this.runtime();
+    if (handle.mode === 'unavailable') throw new ToolError('RUNTIME_UNAVAILABLE', handle.reason);
+    return handle.mode === 'active' ? handle.manager : handle.control.jobs;
+  }
+  get executionAvailable(): boolean { return this.runtime().mode === 'active'; }
   bind(): void {
     this.detach();
     const handle = this.runtime();
-    if (handle.mode !== 'active') return;
-    this.unsubscribe = handle.manager.subscribe(() => this.refresh());
+    if (handle.mode !== 'active') this.binding.current?.ctx.ui.notify(handle.reason, 'warning');
+    if (handle.mode === 'unavailable') return;
+    this.unsubscribe = this.control().subscribe(() => this.refresh());
     this.refresh();
   }
   detach(): void {
@@ -91,8 +99,8 @@ export class JobsModule implements Waitable {
   /** reload/new/resume/fork only detach; quit applies the stop-all policy. */
   shutdown(reason: string): Promise<void> | undefined {
     this.detach();
-    if (reason !== 'quit' || this.handle?.mode !== 'active') return;
-    return quitRuntime(this.handle.manager);
+    if (reason !== 'quit' || !this.handle || this.handle.mode === 'unavailable') return;
+    return this.handle.mode === 'active' ? quitRuntime(this.handle.manager) : this.handle.control.quit();
   }
   /** Esc pauses automatic wake for this session's unnotified jobs; results then wait for the next user turn. */
   pauseWakes(): void {
@@ -115,7 +123,11 @@ export class JobsModule implements Waitable {
   }
   private refresh(): void {
     const current = this.binding.current;
-    if (this.handle?.mode !== 'active' || !current) return;
+    if (!this.handle || this.handle.mode === 'unavailable' || !current) return;
+    if (this.handle.mode === 'restricted') {
+      this.status.setActivities('jobs', this.handle.control.jobs.activeIds(current.sessionId));
+      return;
+    }
     const manager = this.handle.manager;
     this.status.setActivities('jobs', manager.activeIds(current.sessionId));
     const updates = manager.unseenUpdates().filter(({ job }) => this.visible(job));
@@ -163,7 +175,7 @@ export class JobsModule implements Waitable {
   }
 
   settlement(id: string): Settlement {
-    const job = this.manager().peek(id);
+    const job = this.control().peek(id);
     return { id, state: job.state, summary: summaryLine(job), settled: isTerminal(job.state) };
   }
   unread(): Settlement[] {
@@ -177,15 +189,17 @@ export class JobsModule implements Waitable {
       .map(({ job, update }) => ({ id: job.id, state: job.state, summary: updateDigest(job, update), settled: false, update: update.updateId }));
     return [...events, ...updates, ...results];
   }
-  subscribe(listener: () => void): () => void { return this.manager().subscribe(listener); }
+  subscribe(listener: () => void): () => void { return this.control().subscribe(listener); }
   /** What wait returned must not wake the model again: a result, monitor events or supervision updates. */
   consume(item: Settlement): void {
-    const current = this.binding.current, manager = this.manager();
+    const current = this.binding.current;
     if (item.update !== undefined) {
+      const manager = this.manager();
       if (current) this.notifications.cancel(current.sessionId, `job:${item.id}:update`);
       this.queuedUpdates.delete(item.id); manager.markUpdateNotified(item.id, item.update); return;
     }
     if (item.event !== undefined) {
+      const manager = this.manager();
       if (current) this.notifications.cancel(current.sessionId, `job:${item.id}:monitor`);
       this.queuedEvents.delete(item.id);
       manager.markEventsNotified(item.id, item.event);
@@ -193,7 +207,7 @@ export class JobsModule implements Waitable {
     }
     if (current) this.notifications.cancel(current.sessionId, `job:${item.id}`);
     this.queued.delete(item.id);
-    manager.markNotified(item.id);
+    this.control().markNotified(item.id);
   }
   /** Owner session and the leaf that issued the start, used for branch-scoped notification. */
   static owner(ctx: ExtensionContext): { ownerSessionId: string; anchorEntryId: string | null } {

@@ -80,7 +80,7 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: Vie
     description: 'List jobs as short summaries, or give id for one job\'s detail. state: active (default), finished or all; scope: session (default) or workspace. Unsettled records from another or crashed Pi process appear only under all.',
     parameters: Type.Object({ id: Type.Optional(id), ...listFields(['active', 'finished', 'all'] as const) }, { additionalProperties: false }),
     async execute(_callId, params, _signal, _update, ctx) {
-      const manager = jobs.manager();
+      const manager = jobs.control();
       const workspace = await resolveWorkspace(ctx.cwd);
       rejectListWithId(params);
       if (params.id !== undefined) {
@@ -112,7 +112,7 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: Vie
     }, { additionalProperties: false }),
     async execute(_callId, params, _signal, _update, ctx) {
       rejectContextWithoutSearch(params);
-      const manager = jobs.manager();
+      const manager = jobs.control();
       const { job } = await manager.get(params.id, await resolveWorkspace(ctx.cwd));
       const page = await readJobLog(manager, job, params.stream as Stream | undefined, { offset: params.offset, limitBytes: params.limitBytes, search: params.search, context: params.context });
       const stream = page.stream;
@@ -172,8 +172,8 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: Vie
       'Repeated calls join the stop in progress. History is kept; jobs from another Pi process cannot be stopped.',
     parameters: Type.Object({ id }, { additionalProperties: false }),
     async execute(_callId, params, _signal, _update, ctx) {
-      const manager = jobs.manager();
-      if (!manager.isLive(params.id)) await manager.get(params.id, await resolveWorkspace(ctx.cwd));
+      const manager = jobs.control();
+      await manager.get(params.id, await resolveWorkspace(ctx.cwd));
       const { job, requested } = await manager.stop(params.id, 'user');
       // The model already sees this settlement; a later wake for it would repeat the result.
       if (isTerminal(job.state)) jobs.consume({ id: job.id, state: job.state, summary: summaryLine(job), settled: true });

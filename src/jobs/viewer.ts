@@ -56,7 +56,7 @@ async function pickJob(ctx: ExtensionCommandContext, deps: ViewerDeps, state: Li
   const workspace = await resolveWorkspace(ctx.cwd);
   let cursor: string | undefined;
   for (;;) {
-    const { rows, nextCursor, errors } = await listJobs(deps.jobs.manager(), workspace, { state, scope, sessionId: ctx.sessionManager.getSessionId(), cursor, limit: 20 });
+    const { rows, nextCursor, errors } = await listJobs(deps.jobs.control(), workspace, { state, scope, sessionId: ctx.sessionManager.getSessionId(), cursor, limit: 20 });
     for (const error of errors) ctx.ui.notify(`history error: ${error}`, 'warning');
     const labels = new Map(rows.map(row => [`${summaryLine(row.job)} · ${displayName(row.job)}${row.unsettled ? ' · unsettled history' : ''}`, row.job.id]));
     const more = nextCursor ? 'More…' : undefined;
@@ -74,10 +74,10 @@ async function pickJob(ctx: ExtensionCommandContext, deps: ViewerDeps, state: Li
 }
 
 async function jobActions(pi: ExtensionAPI, ctx: ExtensionCommandContext, deps: ViewerDeps, id: string): Promise<void> {
-  const manager = deps.jobs.manager();
+  const manager = deps.jobs.control();
   for (;;) {
     const { job, live } = await manager.get(id, await resolveWorkspace(ctx.cwd));
-    const attach = live && job.mode === 'pty' && manager.terminal(id) ? (isActive(job) ? 'Attach terminal' : 'View last screen') : undefined;
+    const attach = deps.jobs.executionAvailable && live && job.mode === 'pty' && deps.jobs.manager().terminal(id) ? (isActive(job) ? 'Attach terminal' : 'View last screen') : undefined;
     const stop = live && !isTerminal(job.state) ? 'Stop job' : undefined;
     const actions = [attach, 'Details', ...streamsOf(job).map(stream => `Read ${stream}`), stop, 'Back'].filter(item => item !== undefined);
     const choice = await ctx.ui.select(`${summaryLine(job)} · ${displayName(job)}`, actions);

@@ -2,7 +2,7 @@ import { paginate } from '../runtime/tools.ts';
 import { ToolError } from '../runtime/errors.ts';
 import { fileSource, readBounded, type ReadPage, type ReadRequest } from '../runtime/read.ts';
 import { bucket } from './state.ts';
-import type { JobManager } from './manager.ts';
+import type { JobReader } from './control.ts';
 import type { InputRecord, JobSummary, Stream, Workspace } from './types.ts';
 import { displayName } from './index.ts';
 import { normalizeVisibleText, sanitizeText } from './terminal/visible-text.ts';
@@ -24,7 +24,7 @@ function renderEvents(raw: string): string {
 }
 
 /** One log read for job_read and the /jobs viewer: stream check, PTY visible text, bounded page. */
-export async function readJobLog(manager: JobManager, job: JobSummary, requested: Stream | undefined, request: ReadRequest): Promise<ReadPage & { stream: Stream }> {
+export async function readJobLog(manager: JobReader, job: JobSummary, requested: Stream | undefined, request: ReadRequest): Promise<ReadPage & { stream: Stream }> {
   const stream = requested ?? (job.mode === 'pty' ? 'output' : 'stdout');
   const streams = streamsOf(job);
   if (!streams.includes(stream)) throw new ToolError('UNSUPPORTED_STREAM', `${job.id} has streams ${streams.join(', ')}`, job.id);
@@ -41,7 +41,7 @@ export interface ListQuery { state: ListState; scope: ListScope; sessionId: stri
 export interface ListRow { job: JobSummary; live: boolean; unsettled: boolean }
 export interface ListResult { rows: ListRow[]; nextCursor?: string; errors: string[] }
 
-export async function listJobs(manager: JobManager, workspace: Workspace, query: ListQuery): Promise<ListResult> {
+export async function listJobs(manager: JobReader, workspace: Workspace, query: ListQuery): Promise<ListResult> {
   const { jobs, errors } = await manager.list(workspace);
   const rows = jobs.map(({ job, live }) => ({ job, live, unsettled: bucket(job, live) === 'unsettled' }))
     .filter(row => (query.scope === 'workspace' || row.job.ownerSessionId === query.sessionId) &&

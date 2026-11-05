@@ -2,7 +2,7 @@
 
 目标：让后台任务跨 reload、resume 等界面与会话操作继续执行。
 
-当前状态：实施中；长期 manager 与可撤销会话绑定、reload/new/resume/fork 后重新订阅、分支引用通知与去重已实现并通过两平台宿主检查，见 [执行任务](../../../current/jobs/index.md)。quit 策略已实现；协议不兼容升级的控制边界尚未做宿主验证。
+当前状态：实施中；长期 manager 与可撤销会话绑定、reload/new/resume/fork 后重新订阅、分支引用通知与去重已实现并通过两平台宿主检查，见 [执行任务](../../../current/jobs/index.md)。quit 策略与独立版本控制桥已实现；不兼容升级保留查询、停止与退出清理的宿主边界通过 Linux 检查，见 [升级控制基础阶段](../../../finished/pi-suite/jobs/runtime-control-core.md)。Windows 升级边界待复核。
 
 影响范围：运行进程、PTY、日志、会话绑定及通知归属。
 
@@ -15,7 +15,8 @@
 - [x] 拆分长期 manager 和可撤销的会话/UI 绑定
 - [x] 实现 reload/new/resume/fork 后重新订阅
 - [x] 处理分支引用、旧回调和通知去重
-- [ ] 实现 quit 策略与协议不兼容升级的控制边界
+- [x] 实现 quit 策略与协议不兼容升级的控制边界
+- [ ] 在 Windows 核对控制桥受限模式、空闲替换与升级期间 quit 清理
 
 ## 验收方式
 

@@ -2,7 +2,7 @@
 
 目标：统一查看运行中和已结束的 job，保留可分页的输入输出及时间信息，并允许用户明确停止指定 job。
 
-当前状态：实施中；记录、日志、输入记录、列表与详情、停止证据、按创建归属级联停止及活动数量已实现并通过两平台检查，见 [执行任务](../../../current/jobs/index.md)。/jobs 用户入口（筛选、翻页、详情、各通道读取、确认停止）与 PTY attach/detach 已实现；有界日志窗口、实时跟随、历史翻页和列表游标通过 Linux 检查，见 [日志查看基础阶段](../../../finished/pi-suite/jobs/log-viewer-core.md)。Windows 查看流程、停止与自然退出竞争尚待验证；级联停止待 agents 模块接入。
+当前状态：实施中；记录、日志、输入记录、列表与详情、停止证据、按创建归属级联停止及活动数量已实现并通过两平台检查，见 [执行任务](../../../current/jobs/index.md)。/jobs 用户入口（筛选、翻页、详情、各通道读取、确认停止）与 PTY attach/detach 已实现；有界日志窗口、实时跟随、历史翻页和列表游标通过 Linux 检查，见 [日志查看基础阶段](../../../finished/pi-suite/jobs/log-viewer-core.md)。Linux 已验证自然退出后 monitor 处理期间 stop 保留退出结果，见 [升级控制基础阶段](../../../finished/pi-suite/jobs/runtime-control-core.md)。Windows 查看流程与停止竞争尚待验证；级联停止待 agents 模块接入。
 
 影响范围：JobManager、持久元数据、日志、工具适配入口、jobs 详情与平台停止后端。
 

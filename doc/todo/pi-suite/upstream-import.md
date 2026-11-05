@@ -69,7 +69,7 @@ src/
 | src/store.ts | 206 | 导入改造。目录改为 `<agentDir>/pi-suite/jobs/<workspaceHash>/<jobId>/`，增加 input.jsonl 与 PTY 的 output.log；保留 UTF-8 边界分页、日志文件身份校验和删除前复核 |
 | src/jobs.ts | 319 | 导入改造为 JobManager。保留可重入 stop、shortenStop、wait 观察引用、monitor 的日志与运行时限、shutdown/exitSync；增加 PTY 模式、创建归属与按创建者级联停止。不保留默认 exclusive 工作区锁：PTY REPL 与构建常需并存，串行要求由模型用 wait 表达 |
 | src/process.ts | 86 | 导入改造为 pipe 后端。保留输出文件校验与退出观测；Linux 使用 detached 进程组 |
-| src/runtime.ts | 74 | 导入。globalThis 注册键改为 pi-suite，保留协议版本、空闲替换、quit 共享期限与 exit 同步回退 |
+| src/runtime.ts | 74 | 导入。globalThis 注册键改为 pi-suite，保留协议版本、空闲替换、quit 共享期限与 exit 同步回退；增加独立版本的查询/停止控制桥，执行协议不兼容时仍由原实现处理控制 |
 | src/state.ts、src/workspace.ts | 14、26 | 导入 |
 | src/types.ts | 47 | 导入并合并 PTY、归属、输入记录字段 |
 | src/tools.ts | 75 | 不导入实现，按统一规范重写注册；保留描述中对停止确认与日志不可信的说明 |

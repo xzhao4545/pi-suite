@@ -20,6 +20,7 @@ import { errnoCode, LIMITS, type InputRecord, type JobSummary, type StartRequest
 const JOB_ID = /^job_[a-f0-9]{8}$/;
 type Owned = {
   job: JobSummary; run?: Tracked; launched: boolean; ready: PromiseWithResolvers<void>;
+  settlement?: Promise<void>;
   stopPromise?: Promise<StopResult>; stopDone?: boolean; cleanupSettled?: boolean;
   stopDeadline?: number; stopController?: AbortController; stopTimer?: NodeJS.Timeout;
   timeoutTimer?: NodeJS.Timeout;
@@ -185,7 +186,7 @@ export class JobManager {
       update => { item.pendingUpdate = update; void this.persist(item); this.changed(); },
       () => { void this.stop(job.id, 'quiet'); });
     // Exit is the only settlement evidence; a stop request alone never settles the job.
-    void run.exited.then(async exit => {
+    item.settlement = run.exited.then(async exit => {
       clearTimeout(item.timeoutTimer);
       item.supervisor?.dispose();
       // A result replaces any queued progress snapshot; never wake twice for final output.
@@ -224,6 +225,9 @@ export class JobManager {
       return item.stopPromise.then(() => ({ job: this.view(item), requested: true }));
     }
     if (item.launched && isTerminal(job.state)) return Promise.resolve({ job: this.view(item), requested: false });
+    // Exit can precede settlement while logs/monitor detectors drain. The process is already
+    // gone: preserve its natural result and wait for that evidence, rather than signal again.
+    if (item.run?.exitObserved) return item.settlement!.then(() => ({ job: this.view(item), requested: false }));
     job.stopReason ??= reason;
     item.supervisor?.dispose(); item.pendingUpdate = undefined;
     if (!isTerminal(job.state)) job.state = 'stopping';

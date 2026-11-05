@@ -3,7 +3,7 @@ import { Text, type TUI, type TuiMouseEvent } from '@earendil-works/pi-tui';
 import { DetailsView } from '../ui/details.ts';
 import type { Dock } from '../ui/dock.ts';
 import { fileSource, READ_LIMITS, type ReadPage } from '../runtime/read.ts';
-import type { JobManager } from './manager.ts';
+import type { JobReader } from './control.ts';
 import type { JobSummary, Stream } from './types.ts';
 import { isTerminal } from './state.ts';
 import { readJobLog } from './query.ts';
@@ -22,7 +22,7 @@ export class JobLogView extends DetailsView {
   private unsubscribe: () => void;
   private queue = Promise.resolve();
 
-  constructor(private terminal: TUI, private manager: JobManager, private job: JobSummary,
+  constructor(private terminal: TUI, private manager: JobReader, private job: JobSummary,
     private stream: Stream, private live: boolean, done: () => void) {
     super(terminal, () => this.header(), new Text('Loading log…', 0, 0), done, [
       { label: 'Previous bytes', run: () => { void this.previous(); } },
@@ -122,7 +122,7 @@ export class JobLogView extends DetailsView {
   dispose(): void { this.closed = true; clearTimeout(this.timer); this.unsubscribe(); }
 }
 
-export async function showJobLog(ctx: ExtensionContext, dock: Dock, manager: JobManager, job: JobSummary, stream: Stream, live: boolean): Promise<void> {
+export async function showJobLog(ctx: ExtensionContext, dock: Dock, manager: JobReader, job: JobSummary, stream: Stream, live: boolean): Promise<void> {
   dock.setDetail(true);
   let view: JobLogView | undefined;
   try {

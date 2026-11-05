@@ -1,11 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { resolveWorkspace } from "../../src/jobs/workspace.ts";
 import { agentDir, manager, owner, settled, testShell } from "../support/jobs.ts";
+import { shellArgument } from "../../src/jobs/launch/presets.ts";
 
 const shell = testShell();
 const cwd = () => mkdtempSync(join(tmpdir(), "pi-suite-job-cwd-"));
@@ -66,6 +67,25 @@ test("timeoutMs settles as timed_out after confirmed cleanup", { timeout: 30000 
     const job = await settled(jobs, id, 20000);
     assert.equal(job.state, "timed_out"); assert.equal(job.stopReason, "timeout");
     assert.equal(job.cleanup.state, "managed_scope_confirmed", job.cleanup.error);
+  } finally { await jobs.shutdown(Date.now() + 5000); }
+});
+
+test("stop after observed natural exit waits for final monitor evidence without relabeling or signaling it", { timeout: 20000 }, async () => {
+  const jobs = manager(), work = cwd(), marker = join(work, 'detector-started');
+  try {
+    const job = await jobs.start({ ...owner, cwd: work, command: 'echo done', monitor: {
+      triggers: [{ id: 'done', literal: 'done' }],
+      detector: { command: `touch ${shellArgument(marker)}; read event; sleep 0.2; echo true` },
+    } }, shell);
+    const deadline = Date.now() + 10000;
+    while (!existsSync(marker)) { assert.ok(Date.now() < deadline, 'final detector did not start'); await sleep(10); }
+    // The final detector runs during settlement, after the backend observed the root exit.
+    assert.equal(jobs.peek(job.id).state, 'running');
+    const [first, second] = await Promise.all([jobs.stop(job.id), jobs.stop(job.id)]);
+    assert.equal(first.requested, false); assert.equal(second.requested, false);
+    assert.equal(first.job.state, 'completed'); assert.equal(first.job.exitCode, 0);
+    assert.equal(first.job.stopReason, undefined); assert.equal(first.job.monitor?.events, 1);
+    assert.equal(first.job.cleanup.state, 'not_required');
   } finally { await jobs.shutdown(Date.now() + 5000); }
 });
 

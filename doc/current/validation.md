@@ -27,6 +27,8 @@ CLI 启动的 6 项检查覆盖预设字段合并、用户级策略与精确命�
 
 日志查看的 3 项检查在 Linux 使用真实 pipe job，覆盖底部实时跟随、滚动与搜索保留位置、UTF-8 分次写入、关闭详情后进程继续及退出后补读最终输出；历史核对有界尾窗、前后字节翻页、字面量 Markdown 与 40/60/120 列渲染，列表核对同一筛选集合插入新记录后的游标稳定、会话/workspace 范围与已结束详情。Windows 与完整 /jobs 交互选择流程继续由历史控制专项验收。
 
+升级控制边界的 2 项检查在 Linux 使用真实宿主 reload 与受控进程，核对执行协议不兼容时查询/日志/停止/指定 ID 等待、活动计数和 quit 可用，新启动与写入明确拒绝，占用注册与退出监听保留，以及空闲替换和历史只读。不同 agentDir 与缺少兼容控制桥的占用注册保持不可接管。另以真实 monitor detector 延迟最终结算，核对已观测自然退出时重复 stop 等待完整事件、requested:false、退出码 0 和 completed 状态。Windows 升级边界与停止竞争由对应专项验收。
+
 以上 46 项离线检查及类型检查在 Windows（Node 24.22.2）和 Linux（已有 WSL/nvm 环境，Node 24.14.0）通过，日常检查在 5 分钟内。共享 wait 提前返回、goal_wait waitFor、终端视图与 monitor 的 11 项检查目前只在 Linux 通过，Windows 待复核。另在 Windows 执行 pi-starship 0.65.2 实际 extension_status 模块，验证 goal/runtime 槽位读取、数量上限与空状态。这些检查证明当前询问、目标、执行任务及共享组件的契约；终端缩放、/jobs 交互选择流程、真实手机 SSH 输入、完整第三方 footer 布局和后续业务模块综合生命周期由 [完整实施计划](../todo/pi-suite/implementation.md) 管理。
 
 [返回当前文档](./index.md)
