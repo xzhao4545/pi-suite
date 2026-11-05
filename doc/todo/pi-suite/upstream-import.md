@@ -2,7 +2,7 @@
 
 目标：tasks、jobs、agents 以上游发布包源码为基础导入改造，保留已解决的平台与并发边界，按文件记录导入、改造和丢弃范围。
 
-当前状态：实施中；四个上游发布包已下载核对，jobs 的后端、长期管理、PTY、monitor、hands-free 与 CLI 预设，tasks 的两级存储、依赖、会话与提醒，以及 agents 的基础执行、队列、记录、交互与资源基础能力已按职责导入改造并登记来源；类型与单 agent 模型配置已实现，@handle 输入、补全与克隆启动已导入，agents 的调度/workflow/RPC 高级入口继续导入，完整资源组合待验收。task 的 agent 执行恢复关联已接入，综合场景待验收。本文件记录完整按文件处置结论。ask 与 goal 已按上游契约重写并通过两平台检查，不再改为导入。
+当前状态：实施中；四个上游发布包已下载核对，jobs 的后端、长期管理、PTY、monitor、hands-free 与 CLI 预设，tasks 的两级存储、依赖、会话与提醒，以及 agents 的基础执行、队列、记录、交互与资源基础能力已按职责导入改造并登记来源；类型与单 agent 模型配置已实现，@handle 输入、补全与克隆启动已导入，定时调度已接入，agents 的 workflow/RPC 高级入口继续导入，完整资源组合待验收。task 的 agent 执行恢复关联已接入，综合场景待验收。本文件记录完整按文件处置结论。ask 与 goal 已按上游契约重写并通过两平台检查，不再改为导入。
 
 影响范围：src/tasks、src/jobs、src/agents 与共享 runtime/ui，third-party 来源登记与许可证，package.json 运行依赖。
 
@@ -109,7 +109,7 @@ src/
 
 ## @tintinweb/pi-subagents 0.23.0
 
-基础执行、队列、run 记录、类型、父级交互与任务/job 关联已导入改造，见 [基础阶段](../../finished/pi-suite/agents/core.md) 与 [来源登记](../../../third-party/UPSTREAM.md)。类型与单 agent 模型配置见 [模型基础阶段](../../finished/pi-suite/agents/models-core.md)，资源选择、技能、memory 与上下文见 [资源基础阶段](../../finished/pi-suite/agents/resources-core.md)。@handle 输入与克隆启动见 [提及基础阶段](../../finished/pi-suite/agents/mentions-core.md)。下表保留完整处置范围；调度/workflow/RPC 和回收仍需继续执行。
+基础执行、队列、run 记录、类型、父级交互与任务/job 关联已导入改造，见 [基础阶段](../../finished/pi-suite/agents/core.md) 与 [来源登记](../../../third-party/UPSTREAM.md)。类型与单 agent 模型配置见 [模型基础阶段](../../finished/pi-suite/agents/models-core.md)，资源选择、技能、memory 与上下文见 [资源基础阶段](../../finished/pi-suite/agents/resources-core.md)。@handle 输入与克隆启动见 [提及基础阶段](../../finished/pi-suite/agents/mentions-core.md)。定时调度见 [调度基础阶段](../../finished/pi-suite/agents/schedules-core.md)。下表保留完整处置范围；workflow/RPC 和回收仍需继续执行。
 
 | 文件 | 行数 | 处置 |
 | --- | --- | --- |
@@ -120,7 +120,7 @@ src/
 | src/agent-record-entry.ts | 138 | 导入，条目类型改为 pi-suite:agent-record，保留 reopenTarget 拒绝规则 |
 | src/completion-outbox.ts、group-join.ts | 116、141 | 规则并入共享 Notifications：一个边界一条消息、已读取结果撤销通知；不保留 group 参数 |
 | src/mention.ts、mention-clone.ts、ui/agent-mention.ts | 141、195、216 | 已按职责导入 @handle 输入、原生补全与克隆启动；handle/alias 并入 run 记录、工具和通知复用公共模块，取消随主绑定生命周期 |
-| src/schedule.ts、schedule-store.ts、ui/schedule-menu.ts | 386、153、105 | 导入，存储路径改为本包目录 |
+| src/schedule.ts、schedule-store.ts、ui/schedule-menu.ts | 386、153、105 | 已按职责导入；存储改为本包按主会话目录，文件协议与 tasks 共用异步锁和原子提交；保留 cron/单次/周期、普通 run 与通知，长延时分段与原生值选择取消 |
 | src/workflow/* | 4307 | 导入；runtime.ts 1219 行拆分；gate 在 cwd 执行，不再依赖 worktree；工具名 agent_workflow |
 | src/ui/workflow-card.ts、workflow-dialog.ts、workflow-menu.ts | 470、1115、193 | 导入，workflow-dialog 拆分；显示行接入 dock |
 | src/cross-extension-rpc.ts | 221 | 导入，保留 subagents:rpc:* 通道名与协议版本 2，供外部扩展调用 |

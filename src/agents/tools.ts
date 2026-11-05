@@ -11,21 +11,37 @@ import { thinkingSchema } from './catalog.ts';
 import { AgentsModule, agentSummary, summaryLine } from './index.ts';
 import { active, executing } from './types.ts';
 import { transcript, transcriptText } from './records.ts';
+import type { AgentScheduler } from './schedules/index.ts';
 
 const id = objectId('agent', 'agent_3fa1c2d0'), runId = objectId('run', 'run_3fa1c2d0');
-export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits: WaitRegistry, config: () => SuiteConfig) {
-  const startSchema = Type.Object({ prompt: Type.String({ minLength: 1 }), type: Type.Optional(Type.String({ minLength: 1 })),
+export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits: WaitRegistry, config: () => SuiteConfig, scheduler?: AgentScheduler) {
+  let scheduling = Boolean(scheduler && config().agents.scheduling);
+  const startFields = { prompt: Type.String({ minLength: 1 }), type: Type.Optional(Type.String({ minLength: 1 })),
     name: Type.Optional(Type.String({ maxLength: 80 })), background: Type.Optional(Type.Boolean()),
     model: Type.Optional(Type.String({ minLength: 1 })), thinking: Type.Optional(thinkingSchema),
     maxTurns: Type.Optional(Type.Integer({ minimum: 0 })), taskId: Type.Optional(taskId),
-    inheritContext: Type.Optional(Type.Boolean()), isolated: Type.Optional(Type.Boolean()) }, { additionalProperties: false });
+    inheritContext: Type.Optional(Type.Boolean()), isolated: Type.Optional(Type.Boolean()), schedule: Type.Optional(Type.String({ minLength: 1 })) };
+  const buildStartSchema = () => {
+    const fields = { ...startFields };
+    if (!scheduling) Reflect.deleteProperty(fields, 'schedule');
+    return Type.Object(fields, { additionalProperties: false });
+  };
+  const startSchema = buildStartSchema();
+  const description = 'Start a same-process Pi child session. background=true (default) returns an ID immediately; false waits and returns early on any direct child question. ' +
+    'Types: general-purpose, Explore, Plan or a configured agent markdown file. Read with agent_read, answer/steer/resume with agent_send, stop its subtree with agent_stop, wait with wait.';
+  const scheduleDescription = ' schedule registers a future job instead of starting now: six-field cron, interval 5m/1h, or one-shot +10m/ISO. Do not combine with background:false or inheritContext. Manage via /agents schedules.';
   const startTool: ToolDefinition<typeof startSchema> = { name: 'agent_start', label: 'Start agent',
-    description: 'Start a same-process Pi child session. background=true (default) returns an ID immediately; false waits and returns early on any direct child question. ' +
-      'Types: general-purpose, Explore, Plan or a configured agent markdown file. Read with agent_read, answer/steer/resume with agent_send, stop its subtree with agent_stop, wait with wait.',
+    description: description + (scheduling ? scheduleDescription : ''),
     parameters: startSchema,
     async execute(_id, params, signal, _update, ctx) {
       if (signal?.aborted) throw signal.reason;
-      const run = await agents.manager.start(params, agents.scope(ctx), config());
+      const { schedule, ...request } = params;
+      if (schedule !== undefined) {
+        if (!scheduler || !config().agents.scheduling) throw new ToolError('INVALID_ARGS', 'Scheduling is disabled');
+        const job = await scheduler.add(request, schedule, ctx, signal);
+        return text([`${job.id} ${job.scheduleType} · ${job.name}`, `next: ${job.nextRun}`, 'manage: /agents schedules'], { schedule: job });
+      }
+      const run = await agents.manager.start(request, agents.scope(ctx), config());
       // A mention clone has no real parent tool-call ID. Its transient result cannot
       // consume the child's answer, even when frontmatter selects a foreground run.
       if (!_id) { run.notifyResult = true; agents.manager.changed(); }
@@ -96,5 +112,12 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
       const outcome = await agents.manager.stop(params.id, params.runId);
       return text([`${params.id} ${outcome.state} · cleanup ${outcome.cleanup}`, ...outcome.affected.map(item => `${item.id} ${item.state}${item.cleanup ? ` · ${item.cleanup}` : ''}`)], outcome);
     } });
-  return startTool;
+  return Object.assign(startTool, { refreshSchema() {
+    const next = Boolean(scheduler && config().agents.scheduling);
+    if (next === scheduling) return;
+    scheduling = next; startTool.parameters = buildStartSchema();
+    startTool.description = description + (scheduling ? scheduleDescription : '');
+    // Late registration updates Pi's single tool registry after a new project's config loads.
+    pi.registerTool(startTool);
+  } });
 }

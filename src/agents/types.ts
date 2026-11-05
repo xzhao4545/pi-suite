@@ -29,7 +29,7 @@ export interface AgentRecord {
   model: string; modelSource: ModelSource; thinking: Thinking; thinkingSource: ModelSource;
   sessionFile?: string; endLeafId?: string | null; persisted: boolean;
   result?: string; error?: string; usage?: Pick<SessionStats, 'tokens' | 'cost'>;
-  taskId?: string; handle?: string; alias?: string;
+  taskId?: string; handle?: string; alias?: string; scheduleId?: string;
   turns?: number; toolUses?: number; activity?: string; lastUpdateAt?: string;
   individual?: ModelOverrides;
 }
@@ -51,5 +51,5 @@ export interface Execution {
   settled?: boolean; terminated?: boolean; streamingEntry?: SessionEntry;
   liveResults?: Map<string, SessionEntry>; renderers?: Map<string, ToolRenderers>;
   pendingMessages: string[]; consumed: boolean; notifyResult?: boolean; maxTurns?: number;
-  request: StartAgent; config: SuiteConfig; isolated?: boolean; inheritedContext?: string;
+  request: StartAgent; config: SuiteConfig; isolated?: boolean; inheritedContext?: string; bypassQueue?: boolean;
 }

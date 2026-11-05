@@ -20,6 +20,7 @@ import { AgentsModule } from "./agents/index.ts";
 import { registerAgentTools } from "./agents/tools.ts";
 import { registerAgentsCommand } from "./agents/viewer.ts";
 import { registerAgentMentions } from "./agents/mentions/index.ts";
+import { AgentScheduler } from "./agents/schedules/index.ts";
 
 export default function piSuite(pi: ExtensionAPI): void {
   let config = loadConfig(process.cwd());
@@ -39,9 +40,11 @@ export default function piSuite(pi: ExtensionAPI): void {
     registerJobTools(pi, jobs, viewer, { ask, config: () => config, tasks }); registerJobsCommand(pi, viewer); waits.register(jobs);
   }
   const agents = config.modules.agents ? new AgentsModule(pi, binding, notifications, status, tasks) : undefined;
+  const schedules = agents ? new AgentScheduler(pi, binding, agents, notifications, () => config) : undefined;
+  let startTool: ReturnType<typeof registerAgentTools> | undefined;
   if (agents) {
-    const startTool = registerAgentTools(pi, agents, waits, () => config);
-    registerAgentsCommand(pi, agents, dock, notifications, () => config, cwd => { config = loadConfig(cwd); }); waits.register(agents);
+    startTool = registerAgentTools(pi, agents, waits, () => config, schedules);
+    registerAgentsCommand(pi, agents, dock, notifications, () => config, cwd => { config = loadConfig(cwd); }, schedules); waits.register(agents);
     registerAgentMentions(pi, agents, binding, () => config, startTool);
   }
   if (jobs || agents) {
@@ -57,7 +60,7 @@ export default function piSuite(pi: ExtensionAPI): void {
   const bindSession = async (ctx: Parameters<SessionBinding["bind"]>[0], reason: "startup" | "reload" | "new" | "resume" | "fork", previousSessionFile?: string) => {
     // Tree navigation has no shutdown event. Revoke the old readers and timers before
     // rebinding, without appending their state into the branch the host just selected.
-    ask.cancel(); goal?.detach(); jobs?.detach(); agents?.detach(); notifications.detach();
+    schedules?.stop(); ask.cancel(); goal?.detach(); jobs?.detach(); agents?.detach(); notifications.detach();
     config = loadConfig(ctx.cwd);
     binding.bind(ctx);
     dock.bind(ctx, config.ui.maxRows);
@@ -66,19 +69,22 @@ export default function piSuite(pi: ExtensionAPI): void {
     jobs?.bind();
     await tasks?.bind(ctx, { reason, previousSessionFile });
     agents?.manager.configure(config); agents?.bind();
+    await schedules?.bind(); startTool?.refreshSchema();
     notifications.flush();
   };
   pi.on("session_start", (event, ctx) => bindSession(ctx, event.reason, event.previousSessionFile));
   pi.on("session_tree", async (_event, ctx) => { await bindSession(ctx, "resume"); notifications.afterHostOperation(); });
   pi.on("session_shutdown", event => {
+    schedules?.stop();
     ask.cancel(); goal?.shutdown();
     tasks?.detach();
     // Detach before revoking so pending job notices are cancelled under the old session ID.
     const quit = jobs?.shutdown(event.reason);
     const agentQuit = event.reason === 'quit' ? agents?.manager.shutdown() : undefined;
+    const scheduleQuit = agentQuit?.then(() => schedules?.drain());
     agents?.detach();
     notifications.detach(); status.detach(); dock.detach(binding.current?.ctx); binding.revoke();
-    return Promise.all([quit, agentQuit]).then(() => {});
+    return Promise.all([quit, agentQuit, scheduleQuit]).then(() => {});
   });
   pi.on("agent_before_settle", event => { goal?.beforeSettle(event); return notifications.beforeSettle(event); });
   pi.on("agent_settled", event => {

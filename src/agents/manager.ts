@@ -56,7 +56,9 @@ export class AgentManager {
     return !record.parentAgentId && record.ownerSessionId === scope.ctx.sessionManager.getSessionId()
       && (record.anchorEntryId === null || scope.ctx.sessionManager.getBranch().some(entry => entry.id === record.anchorEntryId));
   }
-  async start(request: StartAgent, scope: ParentScope, config: SuiteConfig, previous?: AgentRecord): Promise<Execution> {
+  async start(request: StartAgent, scope: ParentScope, config: SuiteConfig, previous?: AgentRecord,
+    options: { scheduleId?: string; bypassQueue?: boolean; signal?: AbortSignal } = {}): Promise<Execution> {
+    options.signal?.throwIfAborted();
     if (this.closing || scope.run && (!active(scope.run.record.state) || this.closedRuns.has(scope.run.record.runId))) {
       throw new ToolError('NOT_RUNNING', 'Parent run no longer admits children');
     }
@@ -74,6 +76,7 @@ export class AgentManager {
       if (!task?.parentId) throw new ToolError('NOT_FOUND', `No execution task #${request.taskId}`);
     }
     // Recheck after task I/O: stop closes subtree admission before awaiting any abort/job cleanup.
+    options.signal?.throwIfAborted();
     if (this.closing || scope.run && this.closedRuns.has(scope.run.record.runId)) throw new ToolError('NOT_RUNNING', 'Parent run is stopping');
     const id = previous?.id ?? allocate('agent');
     if ([...this.runs.values()].some(run => run.record.id === id && !run.settled)) throw new ToolError('ALREADY_RUNNING', `${id} already has an unsettled execution`, id);
@@ -84,19 +87,22 @@ export class AgentManager {
     const handle = scope.run ? undefined : previous?.handle ?? assignHandle(handleBase(type.name), taken);
     if (handle) taken.add(handle);
     const alias = scope.run ? undefined : previous?.alias ?? (request.name ? assignHandle(handleBase(request.name), taken) : undefined);
+    // A timer has no foreground caller or launch-time conversation; provenance selects
+    // background delivery and suppresses inherited text without changing the type definition.
     const record: AgentRecord = { version: 1, id, runId: allocate('run'), type: type.name, name: request.name ?? previous?.name ?? type.displayName ?? type.name, handle, alias,
       prompt: request.prompt, cwd: scope.ctx.cwd, ownerSessionId: scope.run?.record.ownerSessionId ?? scope.ctx.sessionManager.getSessionId(),
       anchorEntryId: scope.run?.record.anchorEntryId ?? scope.ctx.sessionManager.getLeafId(),
       parentAgentId: scope.run?.record.id, parentRunId: scope.run?.record.runId,
       ancestors: scope.run ? [...scope.run.record.ancestors, scope.run.record.runId] : [],
-      background: type.runInBackground ?? request.background ?? true, state: 'queued', createdAt: new Date(Math.max(Date.now(), previous ? Date.parse(previous.createdAt) + 1 : 0)).toISOString(),
+      background: options.scheduleId ? true : type.runInBackground ?? request.background ?? true, scheduleId: options.scheduleId, state: 'queued', createdAt: new Date(Math.max(Date.now(), previous ? Date.parse(previous.createdAt) + 1 : 0)).toISOString(),
       model: `${settings.model.provider}/${settings.model.id}`, modelSource: settings.modelSource,
       thinking: settings.thinking, thinkingSource: settings.thinkingSource,
       persisted: previous?.persisted ?? type.persistSession ?? (!scope.run && config.agents.persistSessions), sessionFile: previous?.sessionFile,
       taskId: request.taskId ?? previous?.taskId, individual: previous?.individual };
     const run: Execution = { record, type, model: settings.model, parent: scope, controller: new AbortController(),
       done: Promise.withResolvers(), pendingMessages: [], consumed: false, maxTurns: type.maxTurns ?? request.maxTurns, request, config,
-      isolated: type.isolated ?? request.isolated, inheritedContext: (type.inheritContext ?? request.inheritContext) ? buildParentContext(scope.ctx) : undefined };
+      isolated: type.isolated ?? request.isolated, bypassQueue: options.bypassQueue,
+      inheritedContext: !options.scheduleId && (type.inheritContext ?? request.inheritContext) ? buildParentContext(scope.ctx) : undefined };
     // Preserve a non-persisted transcript for same-process resume using the SDK's session tree.
     if (previous && !previous.sessionFile) {
       run.entries = transcript(previous, this.runs.get(previous.runId));
@@ -116,7 +122,8 @@ export class AgentManager {
     for (;;) {
       // Choose the earliest runnable item for its own pool; a saturated foreground head must
       // not block background work. Nested children are uncharged to avoid parent/child deadlock.
-      const index = this.queue.findIndex(run => !!run.parent.run || this.room(run.record.background ? 'background' : 'foreground'));
+      // Timed dispatches bypass saturation but still charge their ordinary pool below.
+      const index = this.queue.findIndex(run => !!run.parent.run || run.bypassQueue || this.room(run.record.background ? 'background' : 'foreground'));
       if (index < 0) return;
       const [run] = this.queue.splice(index, 1);
       run.record.state = 'starting'; run.record.startedAt = new Date().toISOString(); run.startedMonotonic = performance.now();

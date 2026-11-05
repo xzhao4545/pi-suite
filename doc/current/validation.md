@@ -1,6 +1,6 @@
 # 基线与验证
 
-开发依赖锁定 @earendil-works/pi-coding-agent、pi-ai、pi-tui 1.5.0 和 typebox 1.3.27，使用新作用域 API。Windows 实际 CLI 为 Pi 1.5.0；Linux 使用同版本 SDK。项目要求 Node.js 24+ 和 pnpm 12.6.0。Linux 按操作系统能力验证，使用已有环境，不安排发行版专项或安装新发行版。
+开发依赖锁定 @earendil-works/pi-coding-agent、pi-ai、pi-tui 1.5.0 和 typebox 1.3.27，使用新作用域 API；调度运行依赖锁定 croner 10.0.1。Windows 实际 CLI 为 Pi 1.5.0；Linux 使用同版本 SDK。项目要求 Node.js 24+ 和 pnpm 12.6.0。Linux 按操作系统能力验证，使用已有环境，不安排发行版专项或安装新发行版。
 
 Linux 检查复用已有 Node.js/nvm 环境；非交互 shell 应先加载 nvm 初始化脚本，再解析 node 命令。pnpm-workspace.yaml 的 supportedArchitectures 为 Windows/Linux 保留平台可选依赖，使共享依赖目录包含 TypeScript 7 的两平台编译器。
 
@@ -35,7 +35,9 @@ agents 的 8 项 Linux 离线检查使用真实 Pi SDK child 与 faux provider�
 
 资源基础的 4 项 Linux 真实 SDK/faux 检查覆盖已配置包声明、字段优先级、门控、精确排除与目录/单文件、同名类型覆盖、项目信任与路径/符号链接边界；真实扩展核对排除工厂不执行、本包不重复、晚注册工具、第一请求扩大工具集合后的直接/嵌套调用限制，以及 MCP 服务器通配与桥接。技能完整预加载一次、memory 前 200 行及只读/读写目录行为、父级文本不含工具结果、frontmatter 运行选项与会话目录、隔离提示和嵌套准入均通过。Windows、实际 MCP 服务、更多竞争与综合资源组合按 agents 专项继续验收。
 
-@handle 的 3 项 Linux 检查使用真实 SDK 输入事件、faux provider 与 Pi 原生补全，覆盖 handle/alias 唯一及恢复、会话过滤、排队消息、文件与命令补全并存、CJK 前缀及重复绑定；克隆核对当前父级上下文、只持有一个注册启动工具、重复调用只有一次启动、普通 owner/run 与前台结果通知、活动引导和结束恢复。切换事件取消实际流式克隆并拒绝后续启动，克隆未调用工具时明确报错；配置关闭、裸名称/文件/普通文本/图片、非用户与 print 输入边界通过。类型检查与全量 101 项检查通过，约 10 秒完成。Windows 与真实手机 SSH 的提及组合按扩展专项继续验收。
+@handle 的 3 项 Linux 检查使用真实 SDK 输入事件、faux provider 与 Pi 原生补全，覆盖 handle/alias 唯一及恢复、会话过滤、排队消息、文件与命令补全并存、CJK 前缀及重复绑定；克隆核对当前父级上下文、只持有一个注册启动工具、重复调用只有一次启动、普通 owner/run 与前台结果通知、活动引导和结束恢复。切换事件取消实际流式克隆并拒绝后续启动，克隆未调用工具时明确报错；配置关闭、裸名称/文件/普通文本/图片、非用户与 print 输入边界通过。Windows 与真实手机 SSH 的提及组合按扩展专项继续验收。
+
+定时调度的 4 项 Linux 检查使用真实 SDK/faux、计时器与原生选择器，覆盖六字段 cron、周期与相对/ISO 单次、无效时间、远期延时、文件竞争只准入一次与损坏文件保留；原生 agent_start 核对参数互斥、长名称取消和 40/120 列、关闭后的 schema。实际 once/interval/cron 在普通池满时立即启动并保持计数，触发时使用更新的类型选项，普通 run 的结果通过统一通知；实际 new/resume/reload 按 owner 恢复期限，模型不可用时保存和通知错误且不替换。公共 JSON 存储沿用 tasks 的真实多进程锁、取消/无效文件与宿主会话验收。类型检查与全量 105 项检查通过，约 10 秒完成。Windows、实际 CLI/手机 SSH 和本地时区的综合调度场景按扩展专项继续验收。
 
 以上 46 项离线检查及类型检查在 Windows（Node 24.22.2）和 Linux（已有 WSL/nvm 环境，Node 24.14.0）通过，日常检查在 5 分钟内。共享 wait 提前返回、goal_wait waitFor、终端视图与 monitor 的 11 项检查目前只在 Linux 通过，Windows 待复核。另在 Windows 执行 pi-starship 0.65.2 实际 extension_status 模块，验证 goal/runtime 槽位读取、数量上限与空状态。这些检查证明当前询问、目标、执行任务及共享组件的契约；终端缩放、/jobs 交互选择流程、真实手机 SSH 输入、完整第三方 footer 布局和后续业务模块综合生命周期由 [完整实施计划](../todo/pi-suite/implementation.md) 管理。
 

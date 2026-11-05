@@ -2,7 +2,7 @@
 
 | 入口 | 当前行为 |
 | --- | --- |
-| agent_start | prompt、type?、name?、background?、model?、thinking?、maxTurns?、taskId?、inheritContext?、isolated?；background 默认 true，类型 run_in_background 优先 |
+| agent_start | prompt、type?、name?、background?、model?、thinking?、maxTurns?、taskId?、inheritContext?、isolated?、schedule?；普通执行 background 默认 true，类型 run_in_background 优先；schedule 登记未来后台任务 |
 | agent_list | id 查进度详情和历史 run；列表 state 为 active/queued/finished/all，默认 active；scope 为 session/workspace，默认 session；cursor/limit 分页，默认 20、最多 100 |
 | agent_read | id、runId?；活动默认 transcript，结束默认 result；offset/limitBytes/search/context 使用 [共享读取规则](../jobs/index.md) |
 | agent_send | id、message；返回 answered、steered、queued 或 resumed，只有直接父级可以发送 |
@@ -14,6 +14,8 @@
 ## /agents
 
 `/agents` 选择 active、queued、finished 或 all；也可使用 `/agents all` 等直接指定筛选。选择一条 run 后可查看 Transcript、修改该 agent 的 Model / thinking，或选择“Stop child, nested agents and jobs”停止该运行范围。菜单的 Types · model / thinking 和 `/agents types` 配置类型，写回位置和作用范围见 [模型配置](models.md)。
+
+Scheduled agents 与 `/agents schedules` 查看当前会话的调度，选择一项后可确认取消；创建使用 agent_start 的 schedule，规则、开关、时间与已触发运行的控制见 [定时调度](schedules.md)。
 
 查看器复用共享 Transcript 与 DetailsView；Markdown、thinking、工具调用/结果由 Pi 原生组件渲染。工具优先使用对应 child 的渲染定义，持久历史缺少定义时使用 Pi 标准渲染。稳定消息缓存组件及宽度渲染，活动尾部与工具部分输出随事件更新；在底部时跟随，向上阅读保留位置。
 

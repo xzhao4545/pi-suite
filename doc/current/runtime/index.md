@@ -24,11 +24,15 @@ jobs.agents 配置 CLI 键对应的 command 与 args，按键和字段合并用�
 
 runtime/text.ts 提供安全字面量文本转换，供任务说明、pipe 日志与 monitor 事件共用；终端回车覆写等 PTY 语义由 jobs 的终端模块处理。
 
+runtime/json-store.ts 为 TaskStore 与 ScheduleStore 提供按目标串行入口、异步 pid:uuid 文件锁、锁内重读、复制后修改、原子保存和快照；领域 schema 与修改规则由具体 Store 定义。损坏数据保留已有有效缓存并禁止覆盖，锁超时与数据错误使用领域前缀报告。
+
 agents.maxConcurrent 限制后台池，maxConcurrentForeground=0 表示前台不限；maxDepth 为包含顶级的会话层数。persistSessions 控制顶级默认持久化；defaultModel 和 types.<类型>.model/thinking 提供逐字段覆盖。`/agents types` 按字段定位写入用户或项目配置，保存后立即更新内存，只影响新执行；写入复用共享 schema 与最新文件内容，无效文件拒绝覆盖。模型来源、认证要求和单 agent 操作见 [模型配置](../agents/models.md)。
 
 agents.packageAgents 接受 boolean 或包名/source 数组，默认加载 Pi 已安装包显式声明的类型；false 和空数组关闭。包根由 Pi 的公共包管理器解析，项目包受父级信任约束，声明与资源范围见 [类型与资源](../agents/resources.md)。
 
 agents.mentions 默认 true，控制 TUI 的 @handle 输入投递与补全。类型首次提及由仅持有 agent_start 的内存会话克隆生成任务，结果接入共享通知；已有实例复用 Manager.send。关闭开关时保留 Pi 原生文件补全，操作见 [agents 操作](../agents/operations.md)。
+
+agents.scheduling 默认 true，控制顶级 agent_start 的 schedule 参数、主会话计时器与 Scheduled agents 菜单。绑定时按开关更新工具 schema；关闭后使用 /reload，原调度文件保留。时间和生命周期见 [定时调度](../agents/schedules.md)。
 
 ## 会话和通知
 

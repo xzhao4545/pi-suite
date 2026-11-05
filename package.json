@@ -37,6 +37,7 @@
   "dependencies": {
     "@xterm/addon-serialize": "0.13.0",
     "@xterm/headless": "5.5.0",
+    "croner": "10.0.1",
     "zigpty": "0.1.6"
   }
 }
