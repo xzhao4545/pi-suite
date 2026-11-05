@@ -24,9 +24,9 @@ export class GoalManager {
     // While waitFor objects are pending, other settlement notices merge silently instead of
     // waking the model. A direct child's question still wakes it: the child is waiting for an
     // answer, and the run that answers it ends this wait (startRun clears it). So does a monitor
-    // event of a waited job: the model attached that monitor to be woken by it.
+    // event or hands-free update of a waited job: the model requested these wakeups.
     notifications.setAdmission(ids => !this.goal || this.goal.status === "active" && this.goal.automatic && this.goal.waiting !== "user" &&
-      (!this.goal.waitFor || ids.some(id => isQuestion(id) || this.goal!.waitFor!.some(waited => id === `job:${waited}:monitor`))));
+      (!this.goal.waitFor || ids.some(id => isQuestion(id) || this.goal!.waitFor!.some(waited => id === `job:${waited}:monitor` || id === `job:${waited}:update`))));
   }
   private get requestId(): string { return `goal:${this.goal!.id}`; }
   private get owned(): boolean {

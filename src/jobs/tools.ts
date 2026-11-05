@@ -12,6 +12,7 @@ import { JobsModule, displayName, summaryLine } from './index.ts';
 import { jobDetail, listJobs, readJobLog } from './query.ts';
 import { attachJob, screenMessage, type ViewerDeps } from './viewer.ts';
 import { monitorSchema } from './monitors/compile.ts';
+import { handsFreeSchema } from './monitors/hands-free.ts';
 import type { InputRecord, Stream } from './types.ts';
 
 const id = objectId('job', 'job_3fa1c2d0');
@@ -21,7 +22,8 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: Vie
     name: 'job_start', label: 'Start Job',
     description: 'Start a command as a background job and return at once. mode=pipe (default) records stdout/stderr for builds, tests and batch work; mode=pty runs it in a terminal for REPLs and interactive programs. ' +
       'The job keeps running across turns, compaction and reload; when it settles one notice is sent to this session. Read output with job_read, send input with job_write, wait with wait. Do not background commands yourself with & or nohup. ' +
-      'monitor wakes you when output matches a trigger (stream: each line; poll-diff: rerun command and compare; file-watch: watch a path, no command); events are read with job_read stream events.',
+      'monitor wakes you when output matches a trigger (stream: each line; poll-diff: rerun command and compare; file-watch: watch a path, no command); events are read with job_read stream events. ' +
+      'handsFree (pty only) sends bounded progress updates; handsFree.mode=dispatch sends only a result and requests termination after startup grace and output silence. Quiet termination is stopped, never proof of success. User control pauses updates and quiet termination.',
     parameters: Type.Object({
       command: Type.Optional(Type.String({ minLength: 1, maxLength: 32768, description: 'Required unless monitor.strategy is file-watch' })),
       mode: Type.Optional(Type.Union([Type.Literal('pipe'), Type.Literal('pty')])),
@@ -31,6 +33,7 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: Vie
       taskId: Type.Optional(Type.String({ maxLength: 64 })),
       attach: Type.Optional(Type.Boolean({ description: 'pty only: open the terminal view now because the user must operate the program (login, prompts). The call returns when the user leaves the view; the job keeps running' })),
       monitor: Type.Optional(monitorSchema),
+      handsFree: Type.Optional(handsFreeSchema),
     }, { additionalProperties: false }),
     async execute(_callId, params, signal, _update, ctx) {
       const manager = jobs.manager();

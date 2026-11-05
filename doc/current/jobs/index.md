@@ -4,7 +4,7 @@ jobs 模块在同一 Pi 进程内管理 pipe 与 PTY 两种后台执行。实现
 
 ## 结构
 
-- JobManager（manager.ts）持有进程、PTY、日志和记录，不持有 Pi context。它注册在进程全局槽位 `pi-suite.jobs.runtime`，协议版本 1；reload 重新导入模块时复用同一 manager。
+- JobManager（manager.ts）持有进程、PTY、日志和记录，不持有 Pi context。它注册在进程全局槽位 `pi-suite.jobs.runtime`，协议版本 2；reload 重新导入模块时复用同一 manager。
 - JobsModule（index.ts）是每个扩展实例的会话绑定：只在会话绑定期间订阅 manager，发布当前会话的活动数量和结算通知；reload、new、resume、fork、树切换只撤销并重建订阅，不转移所有权。
 - 版本不兼容且旧 manager 仍有活动或未保存的 job 时，旧 manager 继续运行，本实例的 jobs 工具返回 RUNTIME_UNAVAILABLE，需结束这些 job 后重启 Pi。
 
@@ -35,12 +35,12 @@ session_shutdown 只有 quit 停止全部 job，共享 10 秒期限并关闭新 
 
 | 工具 | 参数与行为 |
 | --- | --- |
-| job_start | command、mode?（pipe 默认、pty）、name?、cwd?、timeoutMs?（省略不限时）、taskId?、attach?、monitor?；立即返回 ID。attach 只用于需要用户直接操作程序的 PTY job（登录、交互提示），立即打开终端视图，用户离开视图后返回；非 PTY 或非交互界面在启动前返回 INVALID_ARGS。monitor 见下节；file-watch 不传 command |
+| job_start | command、mode?（pipe 默认、pty）、name?、cwd?、timeoutMs?（省略不限时）、taskId?、attach?、monitor?、handsFree?；立即返回 ID。attach 只用于需要用户直接操作程序的 PTY job（登录、交互提示），立即打开终端视图，用户离开视图后返回；非 PTY 或非交互界面在启动前返回 INVALID_ARGS。monitor 见下节；file-watch 不传 command；handsFree 仅用于 PTY，见 [监督与委派](hands-free.md) |
 | job_list | id 查看详情，或 state?（active 默认、finished、all）、scope?（session 默认、workspace）、cursor?、limit?（默认 20，最大 100）；id 与列表参数混用返回 INVALID_ARGS；其他或已崩溃 Pi 进程未结算的记录只在 all 中显示为 unsettled history |
 | job_read | id、stream?、offset?、limitBytes?、search?、context?；pipe 为 stdout（默认）、stderr、input，PTY 为 output（默认）、input，带 monitor 的 job 另有 events，其他组合返回 UNSUPPORTED_STREAM；PTY 输出转为可见文本，偏移仍指原始字节 |
 | job_write | id 与 input、keys、paste 之一，submit 追加回车，sensitive 不保存正文；endInput 关闭 pipe stdin；keys 仅 PTY；非运行状态返回 NOT_RUNNING |
 | job_stop | id；返回真实状态、requested、cleanup 与 affected |
-| wait | ids（job_/agent_ 前缀，1–50）、mode?（all 默认、any）、timeoutMs?（默认 300000，最大 3600000）；超时或取消只结束等待，不停止对象。除 ids 按 mode 满足外，当前会话可见的其他对象结算（列在 also 下并撤销其通知）、monitor 事件（包括被等待 job 自身的）、直接 child 提问、用户插话（steer）也提前返回；details.reason 为 condition、question、event、other、user 或 timeout |
+| wait | ids（job_/agent_ 前缀，1–50）、mode?（all 默认、any）、timeoutMs?（默认 300000，最大 3600000）；超时或取消只结束等待，不停止对象。除 ids 按 mode 满足外，当前会话可见的其他对象结算（列在 also 下并撤销其通知）、monitor 事件与 hands-free 更新（包括被等待 job 自身的）、直接 child 提问、用户插话（steer）也提前返回；details.reason 为 condition、question、event、other、user 或 timeout |
 
 结果首行格式为 `job_3fa1c2d0 completed · exit 0 · 12.4s · pipe`，清理未确认时附 cleanup 状态，最后一行给出后续调用。
 
@@ -72,8 +72,8 @@ PTY 行先按回车覆写转为可见文本，pipe 行去除控制字符。事�
 
 | 按键（可配置） | 行为 |
 | --- | --- |
-| 任意其他按键 | 发送给程序；用户接管输入，模型的 job_write 返回 USER_CONTROL |
-| Ctrl+G（returnKey） | 把输入交还模型，视图保持打开 |
+| 任意其他按键 | 发送给程序；用户接管输入，模型的 job_write 返回 USER_CONTROL；hands-free 更新与静默终止暂停 |
+| Ctrl+G（returnKey） | 把输入交还模型，视图保持打开；恢复 hands-free 更新，重新开始静默计时 |
 | Ctrl+T（transferKey） | 离开视图并把当前屏幕文本发给模型；/jobs 中作为新消息，job_start attach 中写入工具结果 |
 | Ctrl+B（detachKey） | 离开视图，job 继续运行；程序已退出时 Esc 也可离开 |
 | Shift+↑/↓ | 滚动终端回滚区，不发送输入 |
@@ -86,6 +86,6 @@ pipe 与 PTY 都使用 Pi 自身的 Bash 选择（settings 的 shellPath，否�
 
 ## 未实现
 
-hands-free/dispatch、CLI agent 预设、终端缩放的平台验证，以及跨 Pi 进程重新 attach，均由 [执行任务待办](../../todo/pi-suite/jobs/index.md) 管理。
+CLI agent 预设、监督功能与终端缩放的平台验证，以及跨 Pi 进程重新 attach，均由 [执行任务待办](../../todo/pi-suite/jobs/index.md) 管理。
 
 [返回当前文档](../index.md)

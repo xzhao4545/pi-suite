@@ -14,6 +14,7 @@ import type { PtyTerminalSession } from './terminal/session.ts';
 import { ToolError } from '../runtime/errors.ts';
 import { compileMonitor, type CompiledMonitor } from './monitors/compile.ts';
 import { JobMonitor, type MonitorEvent } from './monitors/runtime.ts';
+import { compileHandsFree, HandsFreeSupervisor, type HandsFreeUpdate } from './monitors/hands-free.ts';
 import { errnoCode, LIMITS, type InputRecord, type JobSummary, type StartRequest, type StopReason, type StopResult, type Stream, type Workspace } from './types.ts';
 
 const JOB_ID = /^job_[a-f0-9]{8}$/;
@@ -27,6 +28,8 @@ type Owned = {
   /** Set while the user types in the terminal view; model input is refused until control returns. */
   userControl?: boolean;
   watcher?: JobMonitor;
+  supervisor?: HandsFreeSupervisor;
+  pendingUpdate?: HandsFreeUpdate;
   /** Monitor events not yet delivered to the model, newest last, capped for the notice digest. */
   pendingEvents: MonitorEvent[];
 };
@@ -93,6 +96,7 @@ export class JobManager {
 
   async start(request: StartRequest, shell: ResolvedShellConfig, signal?: AbortSignal): Promise<JobSummary> {
     const mode = request.mode ?? 'pipe';
+    const handsFree = request.handsFree ? compileHandsFree(request.handsFree, mode) : undefined;
     // A monitor decides the command the job runs: its poll loop, or a generated file watcher.
     const monitor: CompiledMonitor | undefined = request.monitor ? compileMonitor(request.monitor, request.command, shell) : undefined;
     const command = monitor?.command ?? request.command;
@@ -114,6 +118,7 @@ export class JobManager {
       command, cwd: request.cwd, mode, ...(request.taskId ? { taskId: request.taskId } : {}),
       ...(request.creator ? { creator: request.creator } : {}),
       ...(request.monitor ? { monitor: { config: request.monitor, events: 0, notifiedEvents: 0 } } : {}),
+      ...(handsFree ? { handsFree: { config: handsFree, updates: 0, notifiedUpdates: 0, totalCharsSent: 0 } } : {}),
       state: 'starting', createdAt: new Date().toISOString(),
       ...(request.timeoutMs ? { timeoutMs: request.timeoutMs } : {}), exitCode: null,
       cleanup: { state: 'not_required', scope: [], rootExited: false },
@@ -171,9 +176,16 @@ export class JobManager {
       item.watcher = new JobMonitor(watch.monitor, JobMonitor.sources(streams.map(stream => ({ path: this.store.logPath(job, stream), stream: stream as MonitorEvent['stream'] })), job.mode === 'pty'),
         watch.shell, job.cwd, candidate => this.recordEvent(item, candidate));
     }
+    if (job.handsFree) item.supervisor = new HandsFreeSupervisor(run.terminal!, job.handsFree,
+      update => { item.pendingUpdate = update; void this.persist(item); this.changed(); },
+      () => { void this.stop(job.id, 'quiet'); });
     // Exit is the only settlement evidence; a stop request alone never settles the job.
     void run.exited.then(async exit => {
       clearTimeout(item.timeoutTimer);
+      item.supervisor?.dispose();
+      // A result replaces any queued progress snapshot; never wake twice for final output.
+      item.pendingUpdate = undefined;
+      this.changed();
       // The logs are flushed by now; the monitor matches the last lines before the job settles,
       // so a settled job never reports fewer events than its output holds.
       try { await item.watcher?.stop(); } catch (error) { this.setError(item, `monitor: ${String(error)}`); }
@@ -184,6 +196,7 @@ export class JobManager {
       if (job.stopReason) job.cleanup.rootExited = true;
       else { job.cleanup = { state: run.knownResidual ? 'unconfirmed' : 'not_required', scope: [], rootExited: true }; run.dispose(); }
       job.state = settleExit(exit, job.stopReason);
+      if (job.handsFree) job.completionReason = job.stopReason === 'quiet' ? 'quiet' : job.stopReason === 'timeout' ? 'timeout' : job.stopReason ? 'stopped' : 'exited';
       void this.persist(item);
       this.changed();
     });
@@ -207,6 +220,7 @@ export class JobManager {
     }
     if (item.launched && isTerminal(job.state)) return Promise.resolve({ job: this.view(item), requested: false });
     job.stopReason ??= reason;
+    item.supervisor?.dispose(); item.pendingUpdate = undefined;
     if (!isTerminal(job.state)) job.state = 'stopping';
     job.cleanup.state = 'pending';
     item.stopController = new AbortController();
@@ -276,7 +290,9 @@ export class JobManager {
     if (!run || run.exitObserved || job.state !== 'running') throw new ToolError('NOT_RUNNING', `${id} is ${job.state} and does not accept input`, id);
     if (item.userControl && record.source !== 'user') throw new ToolError('USER_CONTROL', `The user controls ${id} in the terminal view; wait until control returns`, id);
     try { run.write(data); } catch (error) { throw new ToolError('NOT_RUNNING', String(error instanceof Error ? error.message : error), id); }
-    if (record.source === 'user' && !item.userControl) { item.userControl = true; this.changed(); }
+    if (record.source === 'user' && !item.userControl) {
+      item.userControl = true; item.supervisor?.pause(); item.pendingUpdate = undefined; this.changed();
+    } else if (record.source !== 'user') item.supervisor?.input();
     const entry: InputRecord = { at: new Date().toISOString(), ...record, bytes: Buffer.byteLength(data) };
     if (entry.sensitive) delete entry.text;
     item.inputQueue = item.inputQueue.then(() => this.store.appendInput(job, entry)).catch(error => { this.setError(item, `input record not saved: ${String(error)}`); this.changed(); });
@@ -295,7 +311,7 @@ export class JobManager {
   /** Hand input back to the model (Ctrl+G or leaving the terminal view). */
   returnControl(id: string): void {
     const item = this.jobs.get(id);
-    if (item?.userControl) { item.userControl = false; this.changed(); }
+    if (item?.userControl) { item.userControl = false; item.supervisor?.resume(); this.changed(); }
   }
 
   private owned(id: string): Owned {
@@ -347,6 +363,18 @@ export class JobManager {
     if (!monitor || upTo <= monitor.notifiedEvents) return;
     monitor.notifiedEvents = Math.min(upTo, monitor.events);
     item.pendingEvents = item.pendingEvents.filter(event => event.eventId > monitor.notifiedEvents);
+    void this.persist(item);
+  }
+  /** One latest update per job; bounded output is charged when produced, including replacements. */
+  unseenUpdates(): { job: JobSummary; update: HandsFreeUpdate }[] {
+    return [...this.jobs.values()].filter(item => item.pendingUpdate && item.pendingUpdate.updateId > item.job.handsFree!.notifiedUpdates)
+      .map(item => ({ job: this.view(item), update: item.pendingUpdate! }));
+  }
+  markUpdateNotified(id: string, upTo: number): void {
+    const item = this.owned(id), state = item.job.handsFree!;
+    if (upTo <= state.notifiedUpdates) return;
+    state.notifiedUpdates = Math.min(upTo, state.updates);
+    if (item.pendingUpdate && item.pendingUpdate.updateId <= state.notifiedUpdates) item.pendingUpdate = undefined;
     void this.persist(item);
   }
 

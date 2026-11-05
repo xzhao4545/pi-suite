@@ -1,6 +1,6 @@
 # 公共运行时与配置
 
-唯一扩展入口为 src/index.ts；工具、命令和宿主事件由入口与对应模块注册。当前工具为 ask_user、goal_complete、goal_blocked、goal_wait，命令为 /goal、/suite。
+唯一扩展入口为 src/index.ts；工具、命令和宿主事件由入口与对应模块注册。当前工具为 ask_user、goal_complete、goal_blocked、goal_wait、job_start、job_list、job_read、job_write、job_stop 和共享 wait，命令为 /goal、/jobs、/suite。
 
 ## 配置
 

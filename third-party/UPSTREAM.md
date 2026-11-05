@@ -30,6 +30,7 @@ jobs 导入 pi-background-jobs 0.1.3 与 pi-interactive-shell 0.18.0 的部分�
 | src/jobs/terminal/visible-text.ts | pi-interactive-shell output-selection-runtime.ts 的 normalizeSelectorVisibleText | 单独摘出 |
 | src/jobs/monitors/compile.ts | pi-interactive-shell index.ts 的 trigger 编译、poll-diff 循环与 file-watch 命令生成 | 触发模式与 job_read search 共用语法；阈值增加 eq；删除 semantic 策略 |
 | src/jobs/monitors/runtime.ts | pi-interactive-shell headless-monitor.ts 的匹配、冷却、去重与 poll-diff 摘要，index.ts 的 detector 协议 | 改为读取 job 自身日志，pipe 与 PTY 共用；detector 失败时附错误投递候选事件；删除语义挂钩与 dispatch 状态机 |
+| src/jobs/monitors/hands-free.ts | pi-interactive-shell headless-monitor.ts 的静默/宽限期生命周期与 overlay-component.ts 的增量更新/预算状态机 | 由长期 JobManager 持有；实际退出才结算；接管暂停更新与静默终止；预算生成时扣除，更新走共享通知；删除语义监督 |
 
 工具与通知不导入上游实现，按本包规范重写。其余文件尚未导入；tasks 与 agents 仍作为设计参考。按文件导入、改造与丢弃的计划见 [上游导入](../doc/todo/pi-suite/upstream-import.md)。pi-starship 0.65.2 用于外部 footer 契约参考及实际 extension_status 模块验证，不是本包依赖。导入其他模块时同步记录路径、许可证及具体重构边界。
 

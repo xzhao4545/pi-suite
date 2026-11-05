@@ -145,14 +145,14 @@ wait 是一次阻塞的工具调用，结束条件如下（参照 omp：任一�
 | ids 按 mode 满足（any 任一结算，all 全部结算） | 返回 | condition |
 | 当前会话可见的其他 job/agent 结算（不在 ids 中） | 提前返回，结果列在 also 下，pending 列出仍未结算的 ids | other |
 | 当前会话任一直接 child 提问，无论是否在 ids 中 | 立即返回该问题，mode 为 all 时同样返回，避免主 agent 等待一个正在等它回答的 child | question |
-| 当前会话可见 job 的 monitor 事件，包括 ids 中 job 自己的 | 提前返回，事件摘要列在 also 下并撤销其通知；job 的结算仍按 ids 判断 | event |
+| 当前会话可见 job 的 monitor 事件或 hands-free 更新，包括 ids 中 job 自己的 | 提前返回，事件摘要列在 also 下并撤销其通知；event/update 分别记录对应编号，job 的结算仍按 ids 判断 | event |
 | 用户在等待期间发送插话（steer） | 提前返回，Pi 随后处理该消息；等待开始前已排队未处理的插话使 wait 立即返回 | user |
 | 期限到达 | 返回 | timeout |
 
 - mode 为 all 时，ids 中部分对象结算不算返回条件，按 all 继续等待。
 - 可见范围与结算通知相同：属于当前会话、启动位置在当前分支上；Esc 后转为下一轮送达的结果不再参与。
 - follow-up 消息与本包自己的通知不打断 wait；follow-up 本来就在本轮结束后才处理。
-- wait 已返回的结算结果与 monitor 事件（包括 also 下的）从统一通知队列撤销，避免同一结果再唤醒一次；已返回的问题不再重复返回。
+- wait 已返回的结算结果、monitor 事件与 hands-free 更新（包括 also 下的）从统一通知队列撤销，避免同一结果再唤醒一次；已返回的问题不再重复返回。
 - 没有 goal 时，后台对象结算后由统一通知在宿主 idle 时请求一次继续；有 goal 时按目标的自动工作许可调度。
 
 ## 上游工具映射

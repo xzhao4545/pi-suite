@@ -17,7 +17,7 @@
 - [统一界面](./ui/index.md) — dock 高度预算、状态发布与原生历史组件。
 - [ask 接口与操作](./ask/index.md) — 默认值、批量、多选、超时、搜索及焦点。
 - [目标管理](./goal/index.md) — 持久目标、运行调度、宿主恢复、预算和操作。
-- [执行任务](./jobs/index.md) — pipe/PTY job、记录与日志、停止证据、工具、通知和同进程保活。
+- [执行任务](./jobs/index.md) — pipe/PTY job、记录与日志、停止证据、工具、通知、同进程保活及 [PTY 监督与委派](./jobs/hands-free.md)。
 - [基线与验证](./validation.md) — 依赖来源、目标平台和必要检查范围。
 
 ## 版本控制
