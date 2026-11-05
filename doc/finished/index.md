@@ -20,4 +20,6 @@
 - [子代理类型开关与执行引用回收阶段](./pi-suite/agents/types-retention.md) — 统一 enabled 准入、原生类型菜单、完整历史与通知/reader/workflow 引用保留。
 - [子代理原生会话查看与快捷控制](./pi-suite/agents/viewer-controls.md) — toolCallId 流式配对与组件缓存、消息输入、两次停止、真实前台转后台和阅读状态；Linux 离线验收。
 - [工作区持久历史发现与只读查询阶段](./pi-suite/agents/history-discovery.md) — Pi 默认/配置目录与持久引用、完整分支、文件缓存、记录合并和原生只读边界；Linux 离线验收。
+- [子代理停止竞争与主从交互生命周期阶段](./pi-suite/agents/lifecycle.md) — 同范围重入、排队取消、清理期间恢复准入、直接 child 最终结算和 run 级通知；Linux SDK/进程验收。
 - [两级任务基础阶段](./pi-suite/tasks/core.md) — 原子批量编辑、派生进度、统一存储、会话与提醒、共享详情和 job 引用；Linux 离线验收。
+- [子代理共享任务清单与执行恢复集成](./pi-suite/tasks/agents-integration.md) — 多 child 并发、reload/fork 清单边界、回收后稳定执行引用与实际任务状态；Linux SDK 验收。

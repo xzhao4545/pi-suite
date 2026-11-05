@@ -156,9 +156,10 @@ test('queued RPC spawns return immediately, steer and abort share the manager, a
     assert.equal(manager.get(first).record.state, 'stopped');
     gates.forEach(gate => gate.resolve());
     await Promise.all([...manager.runs.values()].map(run => run.done.promise));
-    assert.equal(notifications.has(binding.current!.sessionId, `agent:${first}:result`), true);
+    const noticeId = `agent:${first}:${manager.get(first).record.runId}:result`;
+    assert.equal(notifications.has(binding.current!.sessionId, noticeId), true);
     assert.deepEqual(await request(bus, 'consume', { agentId: first }), { success: true });
-    assert.equal(notifications.has(binding.current!.sessionId, `agent:${first}:result`), false, 'late consumption cancels the pending shared notification');
+    assert.equal(notifications.has(binding.current!.sessionId, noticeId), false, 'late consumption cancels the pending shared notification');
   } finally { rpc.detach(); agents.detach(); release(); await manager.shutdown(); await h.cleanup(); }
 });
 

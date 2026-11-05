@@ -144,7 +144,7 @@ wait 是一次阻塞的工具调用，结束条件如下（参照 omp：任一�
 | 事件 | 处理 | reason |
 | --- | --- | --- |
 | ids 按 mode 满足（any 任一结算，all 全部结算） | 返回 | condition |
-| 当前会话可见的其他 job/agent/workflow 结算（不在 ids 中） | 提前返回，结果列在 also 下，pending 列出仍未结算的 ids | other |
+| 当前会话可见的其他 job/agent/workflow 执行结算（不在当前等待执行快照中，含同 agent 的旧 run） | 提前返回，结果列在 also 下，pending 列出仍未结算的 ids | other |
 | 当前会话任一直接 child 提问，无论是否在 ids 中 | 立即返回该问题，mode 为 all 时同样返回，避免主 agent 等待一个正在等它回答的 child | question |
 | 当前会话可见 job 的 monitor 事件或 hands-free 更新，包括 ids 中 job 自己的 | 提前返回，事件摘要列在 also 下并撤销其通知；event/update 分别记录对应编号，job 的结算仍按 ids 判断 | event |
 | 用户在等待期间发送插话（steer） | 提前返回，Pi 随后处理该消息；等待开始前已排队未处理的插话使 wait 立即返回 | user |

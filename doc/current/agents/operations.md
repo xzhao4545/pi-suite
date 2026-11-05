@@ -5,10 +5,10 @@
 | agent_start | prompt、type?、name?、background?、model?、thinking?、maxTurns?、taskId?、inheritContext?、isolated?、schedule?；普通执行 background 默认 true，类型 run_in_background 优先；schedule 登记未来后台任务 |
 | agent_list | id 查进度详情和历史 run；列表 state 为 active/queued/finished/all，默认 active；scope 为 session/workspace，默认 session；cursor/limit 分页，默认 20、最多 100 |
 | agent_read | id、runId?；活动默认 transcript，结束默认 result；offset/limitBytes/search/context 使用 [共享读取规则](../jobs/index.md) |
-| agent_send | id、message；返回 answered、steered、queued 或 resumed，只有直接父级可以发送 |
+| agent_send | id、message；返回 answered、steered、queued 或 resumed，只有直接父级可以发送；停止/清理尚未结束时不能恢复为新 run |
 | agent_stop | id、runId?；取消运行子树及其创建的活动 job，返回真实状态和 cleanup |
 | agent_workflow | script、scriptPath 或 name 三选一，args?、resumeFromRunId?；始终后台启动，返回 wf_ ID 与保存路径，见 [Workflow 操作](workflow/operations.md) |
-| wait | 接受 job、agent 与 workflow ID 的 any/all 等待；结果、问题与其他事件使用统一返回结构，超时只结束调用 |
+| wait | 接受 job、agent 与 workflow ID 的 any/all 等待；结果、问题与其他事件使用统一返回结构，超时或取消只结束调用；同 agent 的旧未读 run 作为其他执行返回 |
 
 模型工具默认返回摘要，完整输入、thinking、工具调用和输出通过 agent_read 或原生 transcript 按需读取。workspace 列表发现当前配置工作区的持久历史并合并本进程记录；session 列表与状态数量使用同一直接子级和分支归属过滤。未知 ID 的 agent_list/read/send/stop 先发现并核对当前配置工作区，发送仍需直接父级与分支准入；分页 more 保留 scope。实际目录与引用范围、读取和合并规则见 [持久历史](history.md)。
 
@@ -49,7 +49,7 @@ TUI 输入 `@explore 消息` 或 `@agent-explore 消息` 可以发送给 Explore
 
 ## 父级回答
 
-child ask_user 使用共享 schema 与 response/details，工具挂起期间为 waiting(parent)。问题只交给直接父级，包含选项 ID、标题和 agent_send 提示；顶级通过统一 Notifications，嵌套通过父 child 的通知边界/共享等待返回。顶层 workflow child 的问题也交给所属主会话，可用 agent_send 回答；普通引导与恢复由 workflow 控制。
+child ask_user 使用共享 schema 与 response/details，工具挂起期间为 waiting(parent)。问题只交给直接父级，包含选项 ID、标题和 agent_send 提示；顶级通过统一 Notifications，嵌套通过父 child 的通知边界/共享等待返回。提问与结果请求分别使用 `agent:<agentId>:<runId>:ask`、`agent:<agentId>:<runId>:result`，消费或撤销限定该次 run，恢复后的新执行保留自己的通知。顶层 workflow child 的问题也交给所属主会话，可用 agent_send 回答；普通引导与恢复由 workflow 控制。
 
 message 与选项 ID/标题精确匹配时返回 selection，否则在 allowFreeform=true 时返回 freeform。多选可发送 JSON 字符串数组；批量问题发送对应题数的 JSON 数组，每题元素为文本或选择数组。返回标记 source=parent，不能把父级回答声称为用户直接授权。期限默认使用 ask.timeout，timeoutMs=0 无期限；超时和取消保留非回答状态，并使 child 以 stopped 结算。
 

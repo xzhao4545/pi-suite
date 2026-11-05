@@ -2,7 +2,7 @@
 
 目标：主 agent 可以启动、等待、查看进度、发送消息、回答提问并强制停止 subagent；child 需要信息时可以向父 agent 提问。
 
-当前状态：共享 ask schema 的父级提问、agent_send、wait/前台提前返回及统一通知已接入；Linux 离线链路通过，嵌套提问、流式进度与多 child 综合场景继续验收，见 [基础阶段](../../../finished/pi-suite/agents/core.md)。
+当前状态：共享 ask schema 的父级提问、agent_send、wait/前台提前返回及统一通知已接入，见 [基础阶段](../../../finished/pi-suite/agents/core.md)。多 run 通知/读取隔离、真实多 child any/all 与问题提前返回、嵌套 FG/BG 直接父级提问和 Esc/timeout 等待边界通过 3 项 Linux SDK 聚合检查，见 [生命周期阶段](../../../finished/pi-suite/agents/lifecycle.md)；所属 jobs 与当前工具参数摘要的进度详情、结果通知的用量/错误正文仍待实现，平台验收由 [扩展专项](extensions.md) 管理。
 
 影响范围：AgentManager、child 会话工具注入、共享 Notifications 与 wait、agent_* 工具、状态栏计数和 goal 调度。
 
@@ -14,10 +14,12 @@
 
 - [x] child 会话注册转交父 agent 的 ask_user，提问期间状态为 waiting(parent)
 - [x] agent_send 按 child 状态回答提问、引导运行或恢复会话，并返回实际 action
-- [ ] agent_list(id) 返回进度详情，agent_read 读取运行中与已结束的 transcript 和结果
-- [ ] 完成、失败、停止与提问经统一 Notifications 投递，已读取结果撤销通知
+- [x] agent_list(id) 返回基本状态、活动和提问详情，agent_read 读取运行中与已结束的 transcript 和结果
+- [ ] 在 agent_list(id) 进度详情中补充当前工具参数摘要及所属活动 jobs 的 ID/状态
+- [ ] 在结果通知摘要补充用量及错误正文，保留既有 ID、名称、状态、耗时、结果首段和读取提示
+- [x] 完成、失败、停止与提问经统一 Notifications 投递，已读取结果按 run 撤销通知
 - [x] wait 与前台 agent_start 在当前会话任一直接 child 提问时提前返回问题（agents 已接入 unread，原生前台链路通过）
-- [ ] 嵌套 child 的提问只交给其直接父 agent
+- [x] 嵌套 child 的提问只交给其直接父 agent
 
 ## 验收方式
 
@@ -38,23 +40,25 @@
 | 主 → 子 启动 | agent_start | background 默认 true，立即返回 agent ID；false 时等待结算，child 提问时提前返回问题 |
 | 主 → 子 发消息 | agent_send | 运行中插入为引导消息；提问等待中作为回答；已结束则恢复会话开始新一次执行；会话尚未创建时排队，创建后投递 |
 | 主 ← 子 进度 | agent_list(id)、agent_read | 拉取状态、当前活动、transcript 与结果，不打断 child |
-| 主 ← 子 等待 | wait | 多个 ID，any/all，超时只结束等待 |
+| 主 ← 子 等待 | wait | 多个 ID，any/all；其他未读执行也会提前返回，包括同 agent 的旧 run；超时或取消只结束等待 |
 | 主 ← 子 提问 | child 的 ask_user | 转为父会话通知，父 agent 用 agent_send 回答 |
 | 主 ← 子 结果 | 结算通知、agent_read | 后台执行结算后通知一次；读取后撤销未投递通知 |
 | 主 → 子 停止 | agent_stop | 级联停止嵌套 child 与所属 job，返回真实结算 |
 
-agent_send 返回 action 为 answered、steered、resumed 或 queued 之一。child 处于 stopping、queued 或已删除时明确报错，不静默丢弃消息。
+agent_send 返回 action 为 answered、steered、resumed 或 queued 之一。排队、创建中或当前没有流式请求的 child 暂存消息；处于 stopping、结算中或无法找到目标时明确报错。执行已结束但停止/清理操作仍未返回时拒绝新 run，不能通过恢复绕过清理。
+
+共享 wait 按 `(id, runId)` 判断已经在 results 中的执行。等待当前 run 时，同 agent 的旧未读结果进入 others、reason 为 other；消费只改变旧 run，新 run 保持 pending。提前返回的原因是另一个执行的结果，不要求 agent ID 不同。入口 signal 已取消时立即拒绝；wait 的取消和超时不停止 child。
 
 ## child 提问
 
 child 会话中注册同名 ask_user，参数沿用统一 schema，使父 agent 收到的问题结构与它自己向用户提问时相同，可以直接转问用户。
 
 1. child 调用 ask_user 后，该执行进入 waiting，waitingFor 为 parent；child 的工具调用保持挂起，不结束其宿主循环。
-2. 问题以请求 ID `agent:<agentId>:ask` 投递到父会话的统一通知。父会话 idle 时请求一次继续；忙碌时在下一个结算边界合并投递。
+2. 问题以请求 ID `agent:<agentId>:<runId>:ask` 投递到父会话的统一通知。父会话 idle 时请求一次继续；忙碌时在下一个结算边界合并投递。请求和消费均限定该次 run，不取消恢复后新执行的通知。
 3. 通知包含 agent ID、名称、问题的紧凑文本、选项 ID 与标题，以及回答方式 `agent_send({"id":"agent_…","message":"…"})`。
 4. 父 agent 可以直接回答，也可以调用自己的 ask_user 问用户后再回答。回答文本与某个选项 ID 或标题完全一致时，child 收到的结果带对应 optionIds；否则作为 freeform 文本返回，来源标为 parent。
 5. timeoutMs 规则与 ask_user 相同：省略用配置默认值，0 不设期限。期限到达时 child 收到 timed_out，不能当作同意或默认答案。
-6. 父 agent 调用 agent_stop 时，挂起的提问以 cancelled 结束并进入正常停止流程；对已超时或已结束的问题调用 agent_send 返回 NOT_RUNNING。
+6. 父 agent 调用 agent_stop 时，挂起的提问以 cancelled 结束并进入正常停止流程；问题超时后不再接受该次回答。运行结算/停止清理中不能通过 agent_send 恢复，清理结束后的显式发送按普通新 run 恢复契约处理。
 
 父 agent 正在 wait 或前台 agent_start 中等待时，它的任一直接 child 提问都使等待直接返回问题，不限于正在等待的那个 child，避免父等子、子等父或提问的 child 卡到等待超时。嵌套 child 的提问交给其直接父 agent：直接父正在等待时由等待返回；直接父以后台方式启动该 child 时，问题作为引导消息插入直接父的当前执行。上游在父执行结算时停止其嵌套 child，因此不存在直接父已结束而孙级仍在提问的情况。goal_wait 的 waitFor 也不阻挡提问通知，见 [目标状态与续跑](../goal.md)。
 
@@ -62,29 +66,29 @@ child 提问期间计入 agents 活动数量；goal 调度不因 child 提问进
 
 ## 进度查看
 
-agent_list(id) 返回：
+agent_list(id) 的进度字段与待完成范围：
 
 | 字段 | 说明 |
 | --- | --- |
-| status、waitingFor | 统一状态及等待对象 |
-| activity | 当前工具名与参数摘要，或“生成回复中” |
+| state、waitingFor | 统一状态及等待对象 |
+| activity | 当前工具名或“生成回复中”；工具参数摘要待完成 |
 | turns、toolUses、usage、elapsedMs | 本次执行轮数、工具调用次数、用量与耗时 |
 | lastUpdateAt | 最近一次消息或工具事件时间 |
 | question | 待答问题摘要 |
-| jobs | 所属活动 job 的 ID 与状态 |
+| jobs | 所属活动 job 的 ID 与状态，待完成 |
 | runs | 最近执行列表及各自结果状态 |
 
 agent_read 的 stream 有两种：
 
-- transcript：按消息顺序序列化为带角色标签的纯文本，工具调用写名称与参数摘要，工具结果写前若干行并标注省略字节数。运行中默认读取 transcript。
+- transcript：按消息顺序完整序列化为带角色标签的纯文本，工具调用包含名称与参数，工具结果保留文本后由共享字节读取规则分页/截断。运行中默认读取 transcript。
 - result：最终 assistant 文本或结构化输出；失败与停止时为错误和保留的部分输出。结算后默认读取 result。
 
 两种 stream 都使用与 job_read 相同的 offset、limitBytes、search、context 和默认智能截断，规则见 [jobs 输出读取](../jobs/output.md)。已写完的消息偏移稳定；正在生成的最后一条消息可能在下次读取时变长。
 
 ## 通知与唤醒
 
-后台 child 结算（completed、failed、stopped、timed_out）时，向所属会话投递一次通知：ID、名称、状态、耗时、用量、结果首段（最多 500 字符）和 agent_read 提示。通知与 job、goal 共用统一 Notifications，在同一结算边界合并为一条消息。wait 或 agent_read 已经读取该次结算时，撤销尚未投递的通知。
+后台 child 结算（completed、failed、stopped、limited）时，向所属会话投递一次通知：ID、名称、状态、耗时、结果首段（最多 500 字符）和 agent_read 提示；用量及错误正文为保留的通知摘要需求，当前待补。未回答问题的 timed_out/cancelled 由 child 的 stopped 终态保留。结果请求 ID 为 `agent:<agentId>:<runId>:result`。通知与 job、goal 共用统一 Notifications，在同一结算边界合并为一条消息。wait 或 agent_read 已经读取该次结算时，只撤销该 run 尚未投递的通知。
 
-上游 group-join 的批量等待由统一通知的边界合并替代，不保留 group 参数。前台执行的结果直接作为工具结果返回，不再另发通知。
+上游 group-join 的批量等待由统一通知的边界合并替代，不保留 group 参数。未提前返回的前台执行结果直接作为工具结果返回，不再另发通知；因提问或转后台提前返回的执行，最终结果进入统一通知。
 
 [返回 agents 待办](index.md)

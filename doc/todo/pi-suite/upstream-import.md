@@ -2,7 +2,7 @@
 
 目标：tasks、jobs、agents 以上游发布包源码为基础导入改造，保留已解决的平台与并发边界，按文件记录导入、改造和丢弃范围。
 
-当前状态：实施中；四个上游发布包已下载核对，jobs 的后端、长期管理、PTY、monitor、hands-free 与 CLI 预设，tasks 的两级存储、依赖、会话与提醒，以及 agents 的基础执行、队列、记录、交互与资源基础能力已按职责导入改造并登记来源；类型与单 agent 模型配置已实现，@handle 输入、补全与克隆启动已导入，定时调度与 RPC 五通道、生命周期、cwd 和结构化结果已接入，workflow Worker、宿主、保存资源、工具与原生控制已接入。类型开关与 Execution 回收已按统一 catalog/config/history 适配，workspace 持久历史发现与只读查询通过 Linux 离线验收，平台与完整资源组合待验收。task 的 agent 执行恢复关联已接入，综合场景待验收。本文件记录完整按文件处置结论。ask 与 goal 已按上游契约重写并通过两平台检查，不再改为导入。
+当前状态：实施中；四个上游发布包已下载核对，jobs 的后端、长期管理、PTY、monitor、hands-free 与 CLI 预设，tasks 的两级存储、依赖、会话与提醒，以及 agents 的基础执行、队列、记录、交互与资源基础能力已按职责导入改造并登记来源；类型与单 agent 模型配置已实现，@handle 输入、补全与克隆启动已导入，定时调度与 RPC 五通道、生命周期、cwd 和结构化结果已接入，workflow Worker、宿主、保存资源、工具与原生控制已接入。类型开关与 Execution 回收已按统一 catalog/config/history 适配，workspace 持久历史发现与只读查询通过 Linux 离线验收，平台与完整资源组合待验收。tasks 的多 child 共享清单及执行恢复、agents 停止竞争与主从问答生命周期通过 Linux 验收，进度/通知摘要补全和平台组合继续实施。本文件记录完整按文件处置结论。ask 与 goal 已按上游契约重写并通过两平台检查，不再改为导入。
 
 影响范围：src/tasks、src/jobs、src/agents 与共享 runtime/ui，third-party 来源登记与许可证，package.json 运行依赖。
 

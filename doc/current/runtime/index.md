@@ -44,4 +44,6 @@ SessionBinding 为当前主会话保存上下文、会话 ID 和绑定代次。s
 
 Notifications 按主会话 ID 保存消息，以请求 ID 合并尚未投递的通知。询问与目标详情占用阻塞令牌；释放后仅在当前宿主 idle 且没有待处理消息、目标允许自动工作时投递合并 follow-up。非当前会话的通知保留到对应会话绑定。agent_before_settle 的 completed 边界把合并消息作为一份 custom_message 请求一次继续；已存在宿主继续或待处理消息时保留批次。agent_settled 检查 idle 投递。Pi 1.5.0 的手动压缩与树切换成功事件先于 busy 标记清除，仅在这些事件存在待投递消息时使用受绑定代次限制的短期 idle 检查。界面查看器没有模型调度或进程控制权。
 
+WaitRegistry 按 `(id, runId)` 区分 results 中的执行与其他未读结果；等待同一 agent 的新 run 时，旧 run 的未读结算进入 others，以 reason=other 提前返回，仅消费旧结果，新 run 继续保留在 pending。job/workflow 没有 runId 时沿用 ID 语义，monitor/hands-free 进度仍按独立计数消费。已取消的 signal 在 wait 入口立即拒绝；运行中取消也只结束等待，不取消 child 或进程。
+
 [返回当前文档](../index.md)

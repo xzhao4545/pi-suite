@@ -24,7 +24,7 @@ add 不传 parentId 创建父级，可用 children 提供最多 100 个直接子
 
 job_start(taskId) 在 tasks 启用时要求 ID 对应当前会话的子任务，记录 job 的 taskId 并把 job ID 写回该任务。执行归属仍由 JobManager 的会话与创建者字段确定；job 停止或完成不自动修改任务状态。任务删除不停止 job，job 历史仍保存启动时的 taskId。
 
-TaskStore.link 为统一执行引用入口，保存 agent owner 与 jobIds；它不设置任务状态。agents 的运行接入和恢复后的引用关联由 [子代理计划](../../todo/pi-suite/agents/index.md) 管理。
+TaskStore.link 为统一执行引用入口，保存 agent owner 与 jobIds；它不设置任务状态。多个 child 与嵌套 child 捕获父级同一个 TaskStore，经既有串行入口提交 task_edit；agent 恢复沿用稳定 agent ID 和 taskId，完成或停止执行不自动把任务改为 done。会话切换和 fork 的清单边界见 [存储与会话](storage.md)。
 
 ## 模块文件
 

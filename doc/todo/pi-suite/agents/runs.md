@@ -2,7 +2,7 @@
 
 目标：查看活动和已结束的 subagent，保留结果及原生会话历史，并允许用户停止指定 subagent 的当前执行。
 
-当前状态：基础执行、结果/会话引用、独立 runId、恢复、历史结束叶子、列表、真实取消、嵌套与遗留 job 清理已接入，见 [基础阶段](../../../finished/pi-suite/agents/core.md)。Execution 定期回收、通知与 reader/workflow 保留引用、持久/非持久历史边界见 [类型与回收阶段](../../../finished/pi-suite/agents/types-retention.md)；workspace 持久历史发现、完整分支汇总、增量解析与原生只读查询通过 Linux 离线验收，范围见 [历史发现阶段](../../../finished/pi-suite/agents/history-discovery.md)，平台与更广的启动/停止竞争继续验收。
+当前状态：基础执行、结果/会话引用、独立 runId、恢复、历史结束叶子、列表、真实取消、嵌套与遗留 job 清理已接入，见 [基础阶段](../../../finished/pi-suite/agents/core.md)。Execution 定期回收、通知与 reader/workflow 保留引用、持久/非持久历史边界见 [类型与回收阶段](../../../finished/pi-suite/agents/types-retention.md)；workspace 持久历史发现、完整分支汇总、增量解析与原生只读查询通过 Linux 离线验收，范围见 [历史发现阶段](../../../finished/pi-suite/agents/history-discovery.md)，停止竞争通过 Linux 聚合验收，见 [生命周期阶段](../../../finished/pi-suite/agents/lifecycle.md)；所属 job 详情及平台组合继续推进。
 
 影响范围：AgentManager、Pi child session、持久结果引用、agents 列表/查看器、停止信号及状态栏数量。
 
@@ -16,10 +16,11 @@
 - [x] 保留运行结果、起止时间、耗时、错误与 child session 引用
 - [x] 对已结束记录复用原生会话查看器，按需读取历史
 - [x] 将手动停止接入 child 的 abort 与工具取消、等待最终结算
-- [ ] 级联停止嵌套 child 及其启动的后台 job，处理启动竞争和多次执行边界
+- [x] 级联停止嵌套 child 及其启动的后台 job，处理启动竞争和多次执行边界（Linux 聚合验收通过，平台组合由扩展专项管理）
 - [x] 将活动数量提供给共享状态栏发布器
 - [x] 回收结束超过 10 分钟的 Execution，保留完整历史记录、结果、通知/reader/workflow 引用和遗留 job 归属
 - [x] 从默认/配置目录与可达持久引用发现 workspace 完整分支历史，按 runId 查询并保留原生只读边界，读取不修复会话文件
+- [ ] 在 agents 详情展示所属活动 job，并提供日志跳转与单独停止入口
 
 ## 验收方式
 
@@ -71,7 +72,7 @@ agent ID 用于稳定引用可恢复的会话；同一 agent 同时只保留一�
 
 停止请求交给 child 的 AbortController/AgentSession abort 及工具取消信号，同时通过 JobManager 请求停止所属后台 job。进入停止中并等待 child 执行、嵌套 child 和 job 退出/清理结算；仅设置 stopped 标志或发送一条“请停止”消息不作为完成停止的依据。尚未返回的工具或尚未确认退出的 job 明确显示停止中或清理待确认，不虚构成功。
 
-取消尚未开始的排队项会移出队列并记录停止原因，不创建 child 执行。重复停止合并已有停止请求；已经结算的 agent 仍检查其所属活动 job 并清理，原执行结果保持原终态。主模型停止请求、UI 停止和 child 自身结束竞争时按运行标识结算一次，旧执行的回调不能结束恢复后的新执行。
+取消尚未开始的排队项会移出队列并记录停止原因，不创建 child 执行。停止先登记同范围共享操作、整批转换目标状态，再触发取消和订阅回调，重复停止合并已有停止请求；已经结算的 agent 仍检查其所属活动 job 并清理，原执行结果保持原终态。主模型停止请求、UI 停止和 child 自身结束竞争时按运行标识结算一次，旧执行的回调不能结束恢复后的新执行。父级最终结算等待所有未 settled 直接 child，自然终态不重复改为 stopped，清理期间不准入同 agent 的新 run；验收范围见 [生命周期阶段](../../../finished/pi-suite/agents/lifecycle.md)。
 
 停止某个 subagent 时，同时取消其未结算的直属及后续嵌套 subagent 执行，并停止目标 agent 与这些后代创建的所有所属活动 job，包括已经结束的后代仍留在运行的 job；保留各自历史。按实际创建归属选择目标，不因某个 task 或 agent 仅引用了别人的 job 就转移所有权。一次请求汇总 child 和 job 的停止进度，不以父项单独改状态代替实际清理。
 

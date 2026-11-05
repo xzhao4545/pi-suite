@@ -65,18 +65,21 @@ export class WaitRegistry {
    * message, at the timeout, or when the signal aborts.
    */
   async wait(ids: string[], mode: 'any' | 'all', timeoutMs: number, signal?: AbortSignal): Promise<WaitResult> {
+    signal?.throwIfAborted();
     const unique = [...new Set(ids)];
     const sources = unique.map(id => this.source(id));
     const all = Object.values(this.sources);
     const snapshot = () => unique.map((id, index) => sources[index].settlement(id));
-    // A waited ID's own result is already in results; its progress is reported beside it.
-    const others = () => all.flatMap(source => source.unread()).filter(item => item.event !== undefined || item.update !== undefined || !unique.includes(item.id));
+    // A resumed agent shares its ID with older unread runs. Only the exact waited
+    // execution is already in results; earlier results and progress remain visible.
+    const others = (results: Settlement[]) => all.flatMap(source => source.unread()).filter(item => item.event !== undefined
+      || item.update !== undefined || !results.some(result => result.id === item.id && result.runId === item.runId));
     const done = Promise.withResolvers<WaitResult>();
     let finished = false;
     const finish = (reason: WaitReason) => {
       if (finished) return;
       finished = true;
-      const results = snapshot(), extra = others();
+      const results = snapshot(), extra = others(results);
       for (const item of [...results, ...extra]) if (item.settled || item.question || item.event !== undefined || item.update !== undefined) this.source(item.id).consume(item);
       done.resolve({ results, others: extra, pending: results.filter(result => !result.settled).map(result => result.id),
         timedOut: reason === 'timeout', reason });
@@ -85,7 +88,7 @@ export class WaitRegistry {
       const results = snapshot();
       if (results.some(result => result.question)) return finish('question');
       if (mode === 'any' ? results.some(result => result.settled) : results.every(result => result.settled)) return finish('condition');
-      const extra = others();
+      const extra = others(results);
       if (extra.some(item => item.question)) finish('question');
       else if (extra.some(item => item.event !== undefined || item.update !== undefined)) finish('event');
       else if (extra.length) finish('other');
@@ -107,7 +110,7 @@ export class WaitRegistry {
 }
 
 const HEADLINE: Record<WaitReason, string> = {
-  condition: '', timeout: ' · timed out', other: ' · returned early: another job, agent or workflow settled',
+  condition: '', timeout: ' · timed out', other: ' · returned early: another job, agent run or workflow settled',
   question: ' · returned early: an agent asked a question', event: ' · returned early: a monitor event fired',
   user: ' · returned early: the user sent a message',
 };
@@ -116,7 +119,7 @@ export function registerWait(pi: ExtensionAPI, registry: WaitRegistry): void {
   pi.registerTool({
     name: 'wait', label: 'Wait',
     description: 'Wait for jobs, agents or workflows (job_… / agent_… / wf_…) to settle. mode=all (default) or any. ' +
-      'Also returns early when any other job, agent or workflow of this session settles, a monitor event or hands-free update arrives (including on a waited job), a child agent asks a question, or the user sends a message; ' +
+      'Also returns early when any other job, agent run or workflow of this session settles (including earlier runs of a waited agent), a monitor event or hands-free update arrives (including on a waited job), a child agent asks a question, or the user sends a message; ' +
       'check pending and call wait again if still needed. Timeout or cancel only ends the wait; nothing is stopped.',
     parameters: Type.Object({
       ids: Type.Array(Type.String({ pattern: WAIT_ID_PATTERN }), { minItems: 1, maxItems: WAIT_LIMITS.maxIds }),

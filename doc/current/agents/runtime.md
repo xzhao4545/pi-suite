@@ -1,6 +1,6 @@
 # 执行与记录
 
-每个可恢复会话使用稳定 `agent_` ID，每次执行使用独立 `run_` ID。运行句柄、取消信号、父级引用、用量与槽位归属于 run；同一 agent 只能有一个未结算执行。恢复通过 agent_send 发起新执行，读取或打开历史不启动模型。
+每个可恢复会话使用稳定 `agent_` ID，每次执行使用独立 `run_` ID。运行句柄、取消信号、父级引用、用量与槽位归属于 run；同一 agent 只能有一个未结算执行，已有停止/清理操作未返回时也不准入新的 run。恢复通过 agent_send 发起新执行，读取或打开历史不启动模型。
 
 ## 并发与生命周期
 
@@ -24,7 +24,9 @@
 
 停止先关闭对应运行子树的准入，再取消真实 child 会话与工具信号、等待结算，并调用 JobManager.stopCreatedBy 清理所属活动 job。child 的 job_start 自动携带 agentId、runId 和 ancestors；模型不维护归属名单。JobManager 在异步授权与启动期间仍识别已关闭的 creator，防止停止期间启动遗漏的进程。
 
-agent_stop 不指定 runId 时覆盖该 agent 各次运行及其后代创建的活动 job；指定时限定该次运行子树。已结束 child 留下的 job 也参与清理。同一范围的重复停止加入正在进行的原操作，不影响同级或主会话创建的 job。job 清理失败时仍等待 child 完成结算后再报告错误，后续 stop 可以重新清理。JobManager 的本次清理结果只匹配传入 run ID 及 ancestors，累计关闭的 creator 仅用于后续准入。父 child 结算会取消尚未结束的直接嵌套 child。
+agent_stop 不指定 runId 时覆盖该 agent 各次运行及其后代创建的活动 job；指定时限定该次运行子树。已结束 child 留下的 job 也参与清理。同一范围的停止操作先登记共享 promise，再统一转换全部目标状态：排队目标移出队列并完成 stopped 结算，活动目标进入 stopping，之后才触发 abort、事件和订阅回调。同范围同步重入加入原操作；回调中的 configure/drain 不能启动排队后代，不影响同级或主会话创建的 job。job 清理失败时仍等待 child 完成结算后再报告错误，后续 stop 可以重新清理。JobManager 的本次清理结果只匹配传入 run ID 及 ancestors，累计关闭的 creator 仅用于后续准入。
+
+父执行结算前等待全部尚未 settled 的直接嵌套 child。仍在活动的 child 通过真实 stop 取消；已经产生终态但仍在会话关闭、记录落盘等最终结算的 child 等待其原 done，保留自然终态，不重复改为 stopped。任一 child 或父级所属 job 清理失败时，仍等待其他最终结算后报告错误，父级记录为 failed。父级 done、通知和活动数量以这条最终结算边界为准。
 
 ## 会话与历史
 

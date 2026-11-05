@@ -2,7 +2,7 @@
 
 目标：支持父任务和子任务两级管理、动态调整及自动折叠，通过精简工具参数和返回内容降低模型的 token 消耗与操作负担。
 
-当前状态：实施中；两级结构、批量编辑、进度派生、版本化存储与锁、共享 Dock/详情、会话 fork/reload、提醒及 job 引用已实现，Linux 的 8 项检查通过，见 [两级任务基础阶段](../../finished/pi-suite/tasks/core.md) 与 [当前任务文档](../../current/tasks/index.md)。Windows、手机综合布局、agents 已捕获同一 TaskStore，单 child 更新与恢复使用稳定 agent 引用；多 child/平台综合验收仍待完成。存储与会话处理以上游 @tintinweb/pi-tasks 0.9.1 导入改造，按文件处置见 [上游导入](upstream-import.md)。
+当前状态：实施中；两级结构、批量编辑、进度派生、版本化存储与锁、共享 Dock/详情、会话 fork/reload、提醒及 job 引用已实现，Linux 的 8 项检查通过，见 [两级任务基础阶段](../../finished/pi-suite/tasks/core.md) 与 [当前任务文档](../../current/tasks/index.md)。多 child 共享 TaskStore、并发编辑与原 owner 的 reload/fork/回收后恢复通过两项真实 SDK 检查，见 [子代理任务集成](../../finished/pi-suite/tasks/agents-integration.md)；Windows 与真实手机的界面、并发组合继续验收。存储与会话处理以上游 @tintinweb/pi-tasks 0.9.1 导入改造，按文件处置见 [上游导入](upstream-import.md)。
 
 影响范围：两级任务模型、存储、查询与批量修改工具、常驻面板及 agent/job 引用。
 
@@ -16,13 +16,15 @@
 - [x] 提供 task_list 查询和 task_edit 批量增删改接口
 - [x] 实现增删、移动、重新打开后的父级完成比例重算
 - [x] 实现未完成组和已完成项的自动折叠、显示筛选及详情查看
-- [x] 实现版本化存储及多个 child 的统一写入入口（真实跨进程并发通过，agents 接入待验收）
-- [ ] 保留上游存储锁、会话切换、未更新提醒与执行任务关联（存储/会话/提醒/job 关联及 agents 同清单执行已实现；多 child 与恢复综合验收待完成）
+- [x] 实现版本化存储及多个 child 的统一写入入口（真实跨进程并发及 SDK 多 child 同清单写入通过）
+- [x] 保留上游存储锁、会话切换、未更新提醒与执行任务关联（存储/会话/提醒/job 关联、agents 同清单执行及多 child/reload/fork/回收后恢复通过 Linux 验收）
 - [ ] Windows 与手机终端综合验收任务界面和 agents 并发更新
 
 ## 验收方式
 
 核对父子创建、批量增删改查、跨父级移动、完成后重新打开、并发更新和窄屏显示；父级计数始终反映当前子任务，界面折叠不丢失数据，不接受第三层任务。
+
+多 child 的共享 TaskStore、并发编辑和持久 owner/fork/恢复引用通过两项真实 SDK 聚合检查，范围见 [子代理任务集成](../../finished/pi-suite/tasks/agents-integration.md)；Windows 与真实手机的界面、并发组合继续验收。
 
 ## 关联计划
 
@@ -136,7 +138,7 @@ id 与 parentId 不同时使用。按 id 查询时只返回该对象，即使已
 
 - 存储：默认按会话保存在 `<cwd>/.pi/tasks/tasks-<sessionId>.json`；`<file>.lock` 记录 pid:uuid，最多重试约 5 秒并识别陈旧锁，释放时校验令牌；每次修改在锁内重读后原子写入；文件缺少有效字段时保持当前状态不覆盖。`--no-session` 时只在内存保存。
 - 依赖：blockedBy 与反向 blocks 双向维护；自引用、不存在目标和二元环在结果中警告，删除任务时清理指向它的边；列表只显示未完成的阻塞项。
-- 会话：new/resume/fork 重置会话级状态；fork 以父会话清单为种子；工作区变化时重新定位存储；reload 后按持久的 agentId 重新关联执行中的任务。
+- 会话：new/resume/fork 重置会话级状态；fork 以父会话清单为种子；工作区变化时重新定位存储；reload 按目标键复用清单，存活 child 保留原 TaskStore，恢复沿用稳定 agentId/taskId。
 - 提醒：连续若干轮未使用任务工具时，在下一次请求注入一条任务提醒，存在 doing 子任务时缩短间隔；提醒只进入该次请求上下文，不修改工具结果，可在配置 tasks 节关闭。
 - 执行关联：agent_start 的 taskId 记录执行该任务的 agent；child 结算不自动把任务标为 done，由模型或 child 通过 task_edit 更新。
 

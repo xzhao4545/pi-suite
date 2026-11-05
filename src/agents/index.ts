@@ -70,7 +70,8 @@ export class AgentsModule implements Waitable {
       this.notifications.enqueue(current.sessionId, request, item.summary, () => { this.queued.delete(request); this.consume(item); });
     }
   }
-  private request(item: Settlement): string { return `agent:${item.id}${item.question ? ':ask' : ':result'}`; }
+  // Resume keeps the agent ID, but each unread run owns its notification and cancellation.
+  private request(item: Settlement): string { return `agent:${item.id}:${item.runId}${item.question ? ':ask' : ':result'}`; }
   settlement(id: string): Settlement {
     const { record, run } = this.manager.get(id);
     const question = run?.question && !run.question.seen;

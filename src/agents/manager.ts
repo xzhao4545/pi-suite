@@ -151,6 +151,8 @@ export class AgentManager {
     options.signal?.throwIfAborted();
     if (this.closing || scope.run && (!active(scope.run.record.state) || this.closedRuns.has(scope.run.record.runId))) throw new ToolError('NOT_RUNNING', 'Parent run is stopping');
     const id = previous?.id ?? allocate('agent');
+    // A settled child can still have leftover jobs being cleaned up by its stop operation.
+    if ([...this.stops.keys()].some(key => key.startsWith(`${id}:`))) throw new ToolError('ALREADY_RUNNING', `${id} is still stopping or cleaning up`, id);
     if ([...this.runs.values()].some(run => run.record.id === id && !run.settled)) throw new ToolError('ALREADY_RUNNING', `${id} already has an unsettled execution`, id);
     // Handles and user aliases share a namespace across this owner's runs. Persisting them
     // keeps a completed/resumed agent addressable without renumbering after reload or /tree.
@@ -258,8 +260,14 @@ export class AgentManager {
       // A settled direct parent cannot leave hidden nested sessions burning tokens.
       this.closedRuns.add(run.record.runId);
       try {
-        await Promise.all([...this.runs.values()].filter(child => child.record.parentRunId === run.record.runId && active(child.record.state)).map(child => this.stop(child.record.id, child.record.runId)));
-        if (run.controller.signal.aborted || run.terminated) await this.stopJobs([run.record.runId]);
+        // A naturally completed child may still be finalizing its own descendants/session.
+        // Join that work without turning its completed result or leftover jobs into a stop.
+        const cleanup: Promise<unknown>[] = [...this.runs.values()].filter(child => child.record.parentRunId === run.record.runId && !child.settled)
+          .map(child => active(child.record.state) ? this.stop(child.record.id, child.record.runId) : child.done.promise);
+        if (run.controller.signal.aborted || run.terminated) cleanup.push(this.stopJobs([run.record.runId]));
+        // A failed child cleanup must not bypass other children or the parent's own jobs.
+        const outcomes = await Promise.allSettled(cleanup), failed = outcomes.find(outcome => outcome.status === 'rejected');
+        if (failed?.status === 'rejected') throw failed.reason;
       } catch (error) { run.record.error = [run.record.error, `Execution cleanup failed: ${String(error)}`].filter(Boolean).join('; '); run.record.state = 'failed'; }
       run.record.endedAt = new Date().toISOString(); run.record.elapsedMs = Math.round(performance.now() - run.startedMonotonic!);
       try { await closeAgent(run); }
@@ -289,23 +297,15 @@ export class AgentManager {
   stop(id: string, runId?: string): Promise<StopOutcome> {
     const { record, run } = this.get(id, runId);
     const roots = this.records().filter(item => item.id === id && (!runId || item.runId === runId)).map(item => item.runId);
-    const stopKey = `${id}:${roots.join(',')}`;
+    const stopKey = `${id}:${[...roots].sort().join(',')}`;
     const existing = this.stops.get(stopKey);
     if (existing) return existing;
     for (const root of roots) this.closedRuns.add(root);
     const targets = [...this.runs.values()].filter(item => roots.includes(item.record.runId) || item.record.ancestors.some(ancestor => roots.includes(ancestor)));
     let requested = false;
-    for (const target of targets) if (active(target.record.state)) {
-      requested = true; this.closedRuns.add(target.record.runId); target.controller.abort();
-      if (target.record.state === 'queued') {
-        this.queue = this.queue.filter(item => item !== target);
-        target.record.state = 'stopped'; target.record.endedAt = new Date().toISOString(); target.record.elapsedMs = 0;
-        target.settled = true; target.detachAbort?.(); target.done.resolve(this.view(target));
-        this.event('failed', target);
-      } else target.record.state = 'stopping';
-    }
-    this.changed();
-    const operation = (async () => {
+    // Abort handlers and change subscribers can stop synchronously. Publish their shared
+    // operation before invoking them; cleanup starts once all targets have transitioned.
+    const operation = Promise.resolve().then(async () => {
       // Job cleanup can fail independently of model abort. Still join every child before
       // reporting that failure, so callers cannot publish a settled parent prematurely.
       const [jobsResult] = await Promise.allSettled([this.stopJobs(roots), Promise.all(targets.map(target => target.done.promise))]);
@@ -315,8 +315,24 @@ export class AgentManager {
       this.drain();
       return { requested: requested || jobs.length > 0, state: this.get(id, record.runId).record.state,
         cleanup: jobs.some(job => job.cleanup === 'unconfirmed' || job.cleanup === 'pending') ? 'unconfirmed' : 'confirmed', affected };
-    })().finally(() => this.stops.delete(stopKey));
+    }).finally(() => this.stops.delete(stopKey));
     this.stops.set(stopKey, operation);
+    const cancelled: {target: Execution; queued: boolean}[] = [];
+    for (const target of targets) if (active(target.record.state)) {
+      requested = true; this.closedRuns.add(target.record.runId);
+      const queued = target.record.state === 'queued';
+      cancelled.push({target, queued});
+      if (queued) {
+        this.queue = this.queue.filter(item => item !== target);
+        target.record.state = 'stopped'; target.record.endedAt = new Date().toISOString(); target.record.elapsedMs = 0;
+        target.settled = true; target.detachAbort?.(); target.done.resolve(this.view(target));
+      } else target.record.state = 'stopping';
+    }
+    // Parent abort callbacks can drain the queue: close every target before invoking any.
+    for (const {target, queued} of cancelled) {
+      target.controller.abort(); if (queued) this.event('failed', target);
+    }
+    this.changed();
     return operation;
   }
   async shutdown(): Promise<void> {

@@ -3,7 +3,7 @@ import type { SessionBinding } from "./binding.ts";
 
 /** One delivery path for job, agent and goal wakeups; UI readers never send follow-ups. */
 type Pending = { text: string; delivered?: () => void };
-/** A child's question to its parent uses request ID `agent:<agentId>:ask` (agents/interaction.md). */
+/** Per-run questions keep the :ask suffix so goal admission uses the same shared queue. */
 export const isQuestion = (requestId: string): boolean => requestId.startsWith("agent:") && requestId.endsWith(":ask");
 export class Notifications {
   private pending = new Map<string, Map<string, Pending>>();

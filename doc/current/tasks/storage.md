@@ -22,7 +22,7 @@
 - cwd 改变时重新定位存储，不把另一工作区的清单写入当前文件。
 - 会话撤销时解除订阅并清除显示计时器；已经捕获的执行关联仍指向原清单，不能随会话切换转移到另一任务。
 
-agents 的 child 与嵌套 child 捕获父级 TaskStore，任务工具直接更新同一清单；恢复沿用稳定 agent ID，任务 owner 引用保持不变。不会按 child sessionId 另建清单。
+agents 的 child 与嵌套 child 捕获父级 TaskStore，多个执行通过同一串行入口更新清单；主会话 reload 或 fork 时，存活 child 继续使用原 owner 清单，fork 清单独立。回到原 owner 后，稳定 agent ID 的恢复继续沿用 taskId 与原清单；任务 owner 引用保持不变。TaskStore 注册表按目标键复用存储，不按 child sessionId 另建清单，也不额外建立执行重新关联系统。
 
 任务完成、折叠和查询不会删除文件或清单。任务清理由明确 task_edit 删除操作执行，nextId 保持递增。
 
