@@ -47,4 +47,6 @@ message 与选项 ID/标题精确匹配时返回 selection，否则在 allowFree
 
 模型与 thinking 分别按调用参数、该 agent 的 individual、agents.types 的对应字段、frontmatter、agents.defaultModel（仅模型）、父级当前值解析。配置逐类型逐字段合并；显式 provider/modelId 在认证目录中不可用时报错指出来源，不跨 Provider 替换；调用参数和 frontmatter 的模糊名仅在匹配唯一时接受。实际 thinking 由 Pi 按模型能力收紧。单独修改从下一次请求生效，结束后的修改用于恢复，详细规则见 [模型配置](models.md)。
 
+外部扩展使用 [跨扩展 RPC](rpc.md) 启动、停止、引导和消费当前会话的顶级结果。指定目标工作目录的 agent 仍按父级工作区显示在 agent_list 和 /agents 中，文件工具使用记录中的实际 cwd。
+
 [返回 agents](index.md)

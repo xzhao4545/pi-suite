@@ -14,4 +14,5 @@
 - [子代理类型与资源基础阶段](./pi-suite/agents/resources-core.md) — 扩展动态工具范围、技能、包声明与信任、memory、父级上下文与会话目录；Linux 离线验收。
 - [子代理 @handle 基础阶段](./pi-suite/agents/mentions-core.md) — 持久 handle/alias、原生补全、会话克隆启动与普通发送/恢复、取消和前台通知；Linux 离线验收。
 - [子代理定时调度基础阶段](./pi-suite/agents/schedules-core.md) — cron/周期/单次、会话存储、普通运行与通知、工具开关和查看取消；Linux 离线验收。
+- [子代理 RPC 基础阶段](./pi-suite/agents/rpc-core.md) — 五通道与版本 2、启动与归属、同步消费和公共通知、cwd 与结构化结果；Linux 离线验收。
 - [两级任务基础阶段](./pi-suite/tasks/core.md) — 原子批量编辑、派生进度、统一存储、会话与提醒、共享详情和 job 引用；Linux 离线验收。

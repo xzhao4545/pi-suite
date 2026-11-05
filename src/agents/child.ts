@@ -19,7 +19,7 @@ import type { Execution } from './types.ts';
 
 /** Child tools use the owner's task list and real run ancestry; the model cannot forge creators. */
 export function childSuite(pi: ExtensionAPI, run: Execution, manager: AgentManager): void {
-  const config = loadConfig(run.record.cwd), binding = new SessionBinding(), dock = new Dock();
+  const config = loadConfig(run.configCwd), binding = new SessionBinding(), dock = new Dock();
   const status = new StatusPublisher(dock), notices = new Notifications(pi, binding), waits = new WaitRegistry();
   const tasks = config.modules.tasks ? new TasksModule(binding, dock, run.parent.taskStore) : undefined;
   const agents = new AgentsModule(pi, binding, notices, status, tasks, run, manager);

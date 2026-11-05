@@ -13,7 +13,8 @@ export function agentRuntime(): AgentManager {
   const agentDir = getAgentDir();
   if (!managers.has(agentDir) || managers.get(agentDir)!.closed) {
     const runtime = acquireRuntime(agentDir);
-    const manager = new AgentManager(run => executeAgent(run, loadConfig(run.record.cwd), pi => childSuite(pi, run, manager), manager.changed), async ids => {
+    const manager = new AgentManager(run => executeAgent(run, loadConfig(run.configCwd), pi => childSuite(pi, run, manager), manager.changed,
+      (kind, details) => manager.event(kind, run, details)), async ids => {
       if (runtime.mode !== 'active') throw new Error('Cannot cascade agent stop: jobs execution runtime is unavailable');
       return (await runtime.manager.stopCreatedBy(ids)).map(({ job }) => ({ id: job.id, state: job.state, cleanup: job.cleanup.state }));
     });

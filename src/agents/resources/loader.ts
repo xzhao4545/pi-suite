@@ -22,13 +22,15 @@ export function resourcePath(path: string, cwd: string): string {
 }
 
 export async function childResources(run: Execution, factory: ExtensionFactory) {
-  const { type, record, parent } = run, cwd = record.cwd, agentDir = getAgentDir();
-  const settingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted: parent.ctx.isProjectTrusted() });
+  const { type, record, parent } = run, cwd = run.configCwd, agentDir = getAgentDir();
+  const projectTrusted = run.configTrusted;
+  const settingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted });
   const extensions = run.isolated ? false : type.extensions ?? true, skills = run.isolated ? false : type.skills ?? true;
   const selectors = parseExtSelectors(run.isolated ? [] : type.tools?.filter(name => name.startsWith('ext:')) ?? []);
   const mcpToolPatterns = type.tools?.filter(name => name.startsWith('mcp__')).map(name => name.slice(5).includes('__') ? name : `${name}__*`);
   const toolNames = type.tools?.filter(name => !name.startsWith('ext:') && !name.startsWith('mcp__')) ?? [...builtins, ...suiteTools];
   const readmitToolNames = new Set(type.tools?.length === 0 ? [] : ['ask_user']);
+  if (run.options.structuredOutput) readmitToolNames.add('StructuredOutput');
   if (type.allowedSubagents && !run.isolated && record.ancestors.length + 1 < run.config.agents.maxDepth) for (const name of nestedTools) readmitToolNames.add(name);
   const disallowedSet = new Set(type.excludeTools);
   const effectivelyHas = (name: string) => matchesToolPattern(name, toolNames) && !matchesToolPattern(name, [...disallowedSet]);
@@ -81,6 +83,9 @@ export async function childResources(run: Execution, factory: ExtensionFactory) 
   const errors = [...loader.getExtensions().errors.map(error => `${error.path}: ${error.error}`),
     ...loader.getSkills().diagnostics.filter(item => item.type === 'error').map(item => `${item.path}: ${item.message}`)];
   if (errors.length) throw new ToolError('AGENT_CONFIG', errors.join('; '));
-  return { loader, settingsManager, scope: { loader, toolNames, disallowedSet, ...selectors,
+  // Config trust covers the opened project, not an arbitrary RPC target's MCP configuration.
+  const sessionSettings = resolve(record.cwd) === resolve(cwd) ? settingsManager
+    : Object.assign(SettingsManager.create(cwd, agentDir, { projectTrusted }), { isProjectTrusted: () => false });
+  return { loader, settingsManager: sessionSettings, scope: { loader, toolNames, disallowedSet, ...selectors,
     mcpToolPatterns: mcpToolPatterns?.length ? mcpToolPatterns : undefined, readmitToolNames, nestedCallGate: gate } };
 }

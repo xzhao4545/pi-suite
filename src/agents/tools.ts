@@ -9,7 +9,7 @@ import type { WaitRegistry } from '../runtime/wait.ts';
 import { taskId } from '../tasks/types.ts';
 import { thinkingSchema } from './catalog.ts';
 import { AgentsModule, agentSummary, summaryLine } from './index.ts';
-import { active, executing } from './types.ts';
+import { active, executing, recordWorkspace } from './types.ts';
 import { transcript, transcriptText } from './records.ts';
 import type { AgentScheduler } from './schedules/index.ts';
 
@@ -76,7 +76,8 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
           `read: agent_read({"id":"${record.id}"})`], { agent: agentSummary(record), runs, question: run?.question?.params, waitingFor: run?.question ? 'parent' : undefined });
       }
       const scope = agents.scope(ctx), state: string = params.state ?? 'active';
-      const rows = agents.manager.records().filter(record => record.cwd === ctx.cwd && (params.scope === 'workspace' || agents.manager.visible(record, scope)))
+      const rows = agents.manager.records().filter(record => recordWorkspace(record) === (scope.run?.configCwd ?? ctx.cwd)
+        && (scope.run || record.workflowId === undefined) && (params.scope === 'workspace' || agents.manager.visible(record, scope)))
         .filter(record => state === 'all' || state === 'active' && executing(record.state) || state === 'queued' && record.state === 'queued' || state === 'finished' && !active(record.state));
       const { page, nextCursor } = paginate(rows, record => ({ createdAt: record.createdAt, id: record.runId }), params.cursor, params.limit ?? LIST_LIMITS.defaultLimit);
       return text([`${page.length} ${state} agents (${params.scope ?? 'session'})`, ...page.map(summaryLine),
@@ -106,8 +107,8 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
     parameters: Type.Object({ id, runId: Type.Optional(runId) }, { additionalProperties: false }),
     async execute(_id, params, _signal, _update, ctx) {
       const { record } = agents.manager.get(params.id, params.runId);
-      if (record.cwd !== ctx.cwd) throw new ToolError('NOT_FOUND', `No workspace agent ${params.id}`);
       const scope = agents.scope(ctx);
+      if (recordWorkspace(record) !== (scope.run?.configCwd ?? ctx.cwd)) throw new ToolError('NOT_FOUND', `No workspace agent ${params.id}`);
       if (scope.run && !agents.manager.visible(record, scope)) throw new ToolError('NOT_OWNER', `${params.id} is not a direct child of this run`);
       const outcome = await agents.manager.stop(params.id, params.runId);
       return text([`${params.id} ${outcome.state} · cleanup ${outcome.cleanup}`, ...outcome.affected.map(item => `${item.id} ${item.state}${item.cleanup ? ` · ${item.cleanup}` : ''}`)], outcome);

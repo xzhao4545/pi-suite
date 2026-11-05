@@ -1,12 +1,14 @@
 // Same-process SDK lifecycle adapted from @tintinweb/pi-subagents 0.23.0 src/agent-runner.ts (MIT).
 import { createAgentSession, getAgentDir, SessionManager, type ExtensionFactory, type ModelRuntime } from '@earendil-works/pi-coding-agent';
 import type { SuiteConfig } from '../runtime/config.ts';
-import type { Execution } from './types.ts';
+import type { AgentEventKind, Execution } from './types.ts';
 import { AGENT_ENTRY, resultText } from './records.ts';
 import { childResources, resourcePath } from './resources/loader.ts';
 import { installExtensionToolScope } from './resources/scope.ts';
+import { createStructuredCapture, createStructuredOutputTool, structuredRetryPrompt } from './output/tool.ts';
 
-export async function executeAgent(run: Execution, config: SuiteConfig, factory: ExtensionFactory, changed: () => void): Promise<void> {
+export async function executeAgent(run: Execution, config: SuiteConfig, factory: ExtensionFactory, changed: () => void,
+  emitEvent: (kind: AgentEventKind, details?: Record<string, unknown>) => void): Promise<void> {
   const { record, parent } = run, agentDir = getAgentDir();
   const { settingsManager, loader, scope } = await childResources(run, factory);
   if (run.controller.signal.aborted) return;
@@ -18,9 +20,11 @@ export async function executeAgent(run: Execution, config: SuiteConfig, factory:
   // Like upstream, bridge this single SDK boundary to retain the parent's providers, auth and
   // virtual routers. Remove the field access when Pi exposes a public context.modelRuntime.
   const modelRuntime = (parent.ctx.modelRegistry as unknown as { runtime: ModelRuntime }).runtime;
+  const capture = createStructuredCapture();
   const { session, extensionsResult } = await createAgentSession({ cwd: record.cwd, agentDir, sessionManager: manager,
     settingsManager, resourceLoader: loader, modelRuntime, model: run.model, thinkingLevel: record.thinking,
-    excludeTools: run.type.excludeTools });
+    excludeTools: run.type.excludeTools,
+    customTools: run.options.structuredOutput ? [createStructuredOutputTool(run.options.structuredOutput, capture)] : undefined });
   run.session = session; run.sessionManager = manager; record.sessionFile = manager.getSessionFile();
   // Creation awaits SDK/resource startup. An individual edit accepted during that await must
   // reach the first request even when the SDK was initially constructed with the earlier value.
@@ -55,6 +59,12 @@ export async function executeAgent(run: Execution, config: SuiteConfig, factory:
     if (event.type === 'tool_execution_start') { record.toolUses = (record.toolUses ?? 0) + 1; record.activity = `tool ${event.toolName}`; }
     if (event.type === 'tool_execution_end') record.activity = 'Generating response';
     if (event.type === 'agent_settled' && event.aborted) run.controller.abort();
+    if (event.type === 'message_end' && event.message.role === 'assistant') emitEvent('usage', { usage: event.message.usage });
+    if (event.type === 'compaction_end' && event.result && !event.aborted) {
+      record.compactionCount = (record.compactionCount ?? 0) + 1;
+      const info = { reason: event.reason, tokensBefore: event.result.tokensBefore, compactionCount: record.compactionCount };
+      run.options.onCompaction?.(info); emitEvent('compacted', info);
+    }
     record.lastUpdateAt = new Date().toISOString();
     record.sessionFile = manager.getSessionFile();
     changed();
@@ -63,14 +73,24 @@ export async function executeAgent(run: Execution, config: SuiteConfig, factory:
   run.controller.signal.addEventListener('abort', abort, { once: true });
   try {
     if (!run.controller.signal.aborted) {
-      record.state = 'running'; changed();
+      record.state = 'running'; emitEvent('started'); changed();
       await session.prompt(`${run.inheritedContext ?? ''}${record.prompt}`, { source: 'extension' });
       for (const message of run.pendingMessages.splice(0)) {
         if (!run.controller.signal.aborted) await session.prompt(message, { source: 'extension' });
       }
+      // The SDK cannot force tool choice. Preserve upstream's single explicit correction;
+      // absence after it is an error rather than returning prose as structured data.
+      if (run.options.structuredOutput && !capture.json && !run.controller.signal.aborted) {
+        record.structuredRetried = true;
+        await session.prompt(structuredRetryPrompt(capture), { source: 'extension' });
+      }
     }
     const entries = manager.getBranch(), last = entries.findLast(entry => entry.type === 'message' && entry.message.role === 'assistant');
     record.result = resultText(entries); record.endLeafId = manager.getLeafId();
+    if (run.options.structuredOutput && !run.controller.signal.aborted) {
+      if (capture.json === undefined) errors.push(capture.lastError ?? 'Agent did not report StructuredOutput');
+      else { record.structuredJson = capture.json; record.result = capture.json; }
+    }
     const usage = session.getSessionStats(); record.usage = { tokens: Object.fromEntries(Object.entries(usage.tokens)
       .map(([key, value]) => [key, value - before.tokens[key as keyof typeof before.tokens]])) as typeof usage.tokens, cost: usage.cost - before.cost };
     if (last?.type === 'message' && last.message.role === 'assistant' && last.message.stopReason === 'error') errors.push(last.message.errorMessage ?? 'Model request failed');

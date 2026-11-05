@@ -12,7 +12,7 @@ import { answerParent } from './questions.ts';
 import { closeAgent } from './runner.ts';
 import { buildParentContext } from './resources/context.ts';
 import { assignHandle, handleBase } from './mentions/grammar.ts';
-import { active, type AgentRecord, type Execution, type ParentScope, type Pool, type StartAgent } from './types.ts';
+import { active, isTopLevelAgent, type AgentEventKind, type AgentRecord, type Execution, type ParentScope, type Pool, type StartAgent, type StartOptions } from './types.ts';
 
 const allocate = (prefix: string) => `${prefix}_${randomBytes(4).toString('hex')}`;
 export class AgentManager {
@@ -23,6 +23,7 @@ export class AgentManager {
   private limits = { background: 10, foreground: 0 };
   private closing = false;
   private listeners = new Set<() => void>();
+  private eventListeners = new Set<(kind: AgentEventKind, run: Execution, details: Record<string, unknown>) => void>();
   private closedRuns = new Set<string>();
   private stops = new Map<string, Promise<StopOutcome>>();
   constructor(private execute: (run: Execution) => Promise<void>, private stopJobs: (ids: string[]) => Promise<StopOutcome['affected']>) {}
@@ -33,6 +34,18 @@ export class AgentManager {
   }
   subscribe(listener: () => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
   changed = (): void => { for (const listener of [...this.listeners]) listener(); };
+  subscribeEvents(listener: (kind: AgentEventKind, run: Execution, details: Record<string, unknown>) => void): () => void {
+    this.eventListeners.add(listener); return () => this.eventListeners.delete(listener);
+  }
+  event(kind: AgentEventKind, run: Execution, details: Record<string, unknown> = {}): void {
+    if (kind === 'started') run.startup?.resolve(undefined);
+    for (const listener of [...this.eventListeners]) listener(kind, run, details);
+  }
+  async awaitStartup(run: Execution): Promise<void> {
+    // A queued spawn returns its ID without waiting for a pool slot, as upstream does.
+    const error = await run.startup?.promise;
+    if (error !== undefined) throw new Error(error);
+  }
   restore(records: AgentRecord[]): void {
     for (const record of records) if (!this.runs.has(record.runId)) this.histories.set(record.runId, hydrate(record));
   }
@@ -53,16 +66,20 @@ export class AgentManager {
   }
   visible(record: AgentRecord, scope: ParentScope): boolean {
     if (scope.run) return record.parentRunId === scope.run.record.runId;
-    return !record.parentAgentId && record.ownerSessionId === scope.ctx.sessionManager.getSessionId()
+    return isTopLevelAgent(record) && record.ownerSessionId === scope.ctx.sessionManager.getSessionId()
       && (record.anchorEntryId === null || scope.ctx.sessionManager.getBranch().some(entry => entry.id === record.anchorEntryId));
   }
   async start(request: StartAgent, scope: ParentScope, config: SuiteConfig, previous?: AgentRecord,
-    options: { scheduleId?: string; bypassQueue?: boolean; signal?: AbortSignal } = {}): Promise<Execution> {
+    options: StartOptions = {}): Promise<Execution> {
     options.signal?.throwIfAborted();
     if (this.closing || scope.run && (!active(scope.run.record.state) || this.closedRuns.has(scope.run.record.runId))) {
       throw new ToolError('NOT_RUNNING', 'Parent run no longer admits children');
     }
-    const type = resolveType(scope.ctx.cwd, previous?.type ?? request.type ?? 'general-purpose', { trusted: scope.ctx.isProjectTrusted(), packageGate: config.agents.packageAgents });
+    const configCwd = scope.run?.configCwd ?? scope.ctx.cwd;
+    // A target-directory child reports its tools' cwd as untrusted. Carry the opened
+    // project's distinct trust with its config root through every nested generation.
+    const configTrusted = scope.run?.configTrusted ?? scope.ctx.isProjectTrusted();
+    const type = resolveType(configCwd, previous?.type ?? request.type ?? 'general-purpose', { trusted: configTrusted, packageGate: config.agents.packageAgents });
     if (scope.run) {
       if (scope.run.isolated) throw new ToolError('AGENT_TYPE', 'An isolated child cannot start nested agents');
       const allowed = scope.run.type.allowedSubagents;
@@ -84,24 +101,25 @@ export class AgentManager {
     // keeps a completed/resumed agent addressable without renumbering after reload or /tree.
     const taken = new Set(this.records().filter(record => record.ownerSessionId === scope.ctx.sessionManager.getSessionId() && record.id !== id)
       .flatMap(record => [record.handle, record.alias].filter((name): name is string => name !== undefined)));
-    const handle = scope.run ? undefined : previous?.handle ?? assignHandle(handleBase(type.name), taken);
+    const workflowId = scope.run?.record.workflowId ?? options.workflowId;
+    const handle = scope.run || workflowId ? undefined : previous?.handle ?? assignHandle(handleBase(type.name), taken);
     if (handle) taken.add(handle);
-    const alias = scope.run ? undefined : previous?.alias ?? (request.name ? assignHandle(handleBase(request.name), taken) : undefined);
+    const alias = scope.run || workflowId ? undefined : previous?.alias ?? (request.name ? assignHandle(handleBase(request.name), taken) : undefined);
     // A timer has no foreground caller or launch-time conversation; provenance selects
     // background delivery and suppresses inherited text without changing the type definition.
     const record: AgentRecord = { version: 1, id, runId: allocate('run'), type: type.name, name: request.name ?? previous?.name ?? type.displayName ?? type.name, handle, alias,
-      prompt: request.prompt, cwd: scope.ctx.cwd, ownerSessionId: scope.run?.record.ownerSessionId ?? scope.ctx.sessionManager.getSessionId(),
+      prompt: request.prompt, cwd: options.cwd ?? previous?.cwd ?? scope.ctx.cwd, configCwd, ownerSessionId: scope.run?.record.ownerSessionId ?? scope.ctx.sessionManager.getSessionId(),
       anchorEntryId: scope.run?.record.anchorEntryId ?? scope.ctx.sessionManager.getLeafId(),
       parentAgentId: scope.run?.record.id, parentRunId: scope.run?.record.runId,
       ancestors: scope.run ? [...scope.run.record.ancestors, scope.run.record.runId] : [],
-      background: options.scheduleId ? true : type.runInBackground ?? request.background ?? true, scheduleId: options.scheduleId, state: 'queued', createdAt: new Date(Math.max(Date.now(), previous ? Date.parse(previous.createdAt) + 1 : 0)).toISOString(),
+      background: options.scheduleId ? true : type.runInBackground ?? request.background ?? true, scheduleId: options.scheduleId, workflowId, description: options.description, state: 'queued', createdAt: new Date(Math.max(Date.now(), previous ? Date.parse(previous.createdAt) + 1 : 0)).toISOString(),
       model: `${settings.model.provider}/${settings.model.id}`, modelSource: settings.modelSource,
       thinking: settings.thinking, thinkingSource: settings.thinkingSource,
       persisted: previous?.persisted ?? type.persistSession ?? (!scope.run && config.agents.persistSessions), sessionFile: previous?.sessionFile,
       taskId: request.taskId ?? previous?.taskId, individual: previous?.individual };
     const run: Execution = { record, type, model: settings.model, parent: scope, controller: new AbortController(),
-      done: Promise.withResolvers(), pendingMessages: [], consumed: false, maxTurns: type.maxTurns ?? request.maxTurns, request, config,
-      isolated: type.isolated ?? request.isolated, bypassQueue: options.bypassQueue,
+      done: Promise.withResolvers(), pendingMessages: [], consumed: false, notifyResult: options.detached, maxTurns: type.maxTurns ?? request.maxTurns, request, config,
+      isolated: type.isolated ?? request.isolated, bypassQueue: options.bypassQueue, configCwd, configTrusted, options,
       inheritedContext: !options.scheduleId && (type.inheritContext ?? request.inheritContext) ? buildParentContext(scope.ctx) : undefined };
     // Preserve a non-persisted transcript for same-process resume using the SDK's session tree.
     if (previous && !previous.sessionFile) {
@@ -109,7 +127,20 @@ export class AgentManager {
       run.sessionManager = this.runs.get(previous.runId)?.sessionManager;
     }
     this.runs.set(record.runId, run); this.queue.push(run);
+    this.event('created', run);
+    try { options.onSpawned?.(id); }
+    catch (error) { await this.stop(id, record.runId); throw error; }
+    if (options.signal) {
+      const abort = () => { void this.stop(id, record.runId); };
+      options.signal.addEventListener('abort', abort, { once: true });
+      run.detachAbort = () => options.signal!.removeEventListener('abort', abort);
+      if (options.signal.aborted) abort();
+    }
     this.configure(config); this.changed();
+    if (record.state === 'queued') {
+      try { options.onQueued?.(id, this.queue.filter(item => item.record.background === record.background).indexOf(run)); }
+      catch (error) { await this.stop(id, record.runId); throw error; }
+    }
     if (request.taskId && taskStore) {
       try { await taskStore.link(request.taskId, { agentId: id }); }
       catch (error) { throw new ToolError('TASK_LINK_FAILED', `${id} started but task #${request.taskId} could not be linked: ${String(error)}`, id); }
@@ -117,19 +148,23 @@ export class AgentManager {
     return run;
   }
   private room(pool: Pool): boolean { return !this.limits[pool] || this.counts[pool] < this.limits[pool]; }
+  private pool(run: Execution): Pool | undefined {
+    if (!isTopLevelAgent(run.record) || run.options.detached && !run.record.background) return;
+    return run.record.background ? 'background' : 'foreground';
+  }
   private drain(): void {
     if (this.closing) return;
     for (;;) {
       // Choose the earliest runnable item for its own pool; a saturated foreground head must
       // not block background work. Nested children are uncharged to avoid parent/child deadlock.
       // Timed dispatches bypass saturation but still charge their ordinary pool below.
-      const index = this.queue.findIndex(run => !!run.parent.run || run.bypassQueue || this.room(run.record.background ? 'background' : 'foreground'));
+      const index = this.queue.findIndex(run => { const pool = this.pool(run); return pool === undefined || run.bypassQueue || this.room(pool); });
       if (index < 0) return;
       const [run] = this.queue.splice(index, 1);
       run.record.state = 'starting'; run.record.startedAt = new Date().toISOString(); run.startedMonotonic = performance.now();
-      if (!run.parent.run) {
-        run.chargedPool = run.record.background ? 'background' : 'foreground'; this.counts[run.chargedPool]++;
-      }
+      run.startup = Promise.withResolvers();
+      run.chargedPool = this.pool(run);
+      if (run.chargedPool) this.counts[run.chargedPool]++;
       void this.launch(run);
     }
   }
@@ -151,7 +186,12 @@ export class AgentManager {
       try { await closeAgent(run); }
       catch (error) { run.record.error = [run.record.error, `Session finalization failed: ${String(error)}`].filter(Boolean).join('; '); run.record.state = 'failed'; }
       if (run.chargedPool) this.counts[run.chargedPool]--;
-      run.settled = true; run.done.resolve(this.view(run)); this.changed(); this.drain();
+      run.settled = true; run.detachAbort?.();
+      run.startup?.resolve(run.record.error ?? 'Agent stopped before startup');
+      run.done.resolve(this.view(run));
+      // Synchronous completion consumers must run before changed() schedules a parent wake.
+      this.event(['failed', 'stopped', 'limited'].includes(run.record.state) ? 'failed' : 'completed', run);
+      this.changed(); this.drain();
     }
   }
   async send(id: string, message: string, scope: ParentScope, config: SuiteConfig) {
@@ -161,8 +201,8 @@ export class AgentManager {
     if (run && !run.settled && !active(run.record.state)) throw new ToolError('NOT_RUNNING', `${id} is settling`, id);
     if (record.state === 'stopping') throw new ToolError('NOT_RUNNING', `${id} is ${record.state}`, id);
     if (run && active(record.state)) {
-      if (!run.session || !run.session.isStreaming) { run.pendingMessages.push(message); return { action: 'queued' as const, run }; }
-      await run.session.steer(message); return { action: 'steered' as const, run };
+      if (!run.session || !run.session.isStreaming) { run.pendingMessages.push(message); this.event('steered', run, { message }); return { action: 'queued' as const, run }; }
+      await run.session.steer(message); this.event('steered', run, { message }); return { action: 'steered' as const, run };
     }
     const next = await this.start({ prompt: message, background: record.background }, scope, config, record);
     return { action: 'resumed' as const, run: next };
@@ -181,7 +221,8 @@ export class AgentManager {
       if (target.record.state === 'queued') {
         this.queue = this.queue.filter(item => item !== target);
         target.record.state = 'stopped'; target.record.endedAt = new Date().toISOString(); target.record.elapsedMs = 0;
-        target.settled = true; target.done.resolve(this.view(target));
+        target.settled = true; target.detachAbort?.(); target.done.resolve(this.view(target));
+        this.event('failed', target);
       } else target.record.state = 'stopping';
     }
     this.changed();

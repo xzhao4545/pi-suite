@@ -21,6 +21,7 @@ import { registerAgentTools } from "./agents/tools.ts";
 import { registerAgentsCommand } from "./agents/viewer.ts";
 import { registerAgentMentions } from "./agents/mentions/index.ts";
 import { AgentScheduler } from "./agents/schedules/index.ts";
+import { AgentRpc } from "./agents/rpc/index.ts";
 
 export default function piSuite(pi: ExtensionAPI): void {
   let config = loadConfig(process.cwd());
@@ -41,6 +42,7 @@ export default function piSuite(pi: ExtensionAPI): void {
   }
   const agents = config.modules.agents ? new AgentsModule(pi, binding, notifications, status, tasks) : undefined;
   const schedules = agents ? new AgentScheduler(pi, binding, agents, notifications, () => config) : undefined;
+  const agentRpc = agents ? new AgentRpc(pi, binding, agents, () => config) : undefined;
   let startTool: ReturnType<typeof registerAgentTools> | undefined;
   if (agents) {
     startTool = registerAgentTools(pi, agents, waits, () => config, schedules);
@@ -70,11 +72,13 @@ export default function piSuite(pi: ExtensionAPI): void {
     await tasks?.bind(ctx, { reason, previousSessionFile });
     agents?.manager.configure(config); agents?.bind();
     await schedules?.bind(); startTool?.refreshSchema();
+    agentRpc?.bind();
     notifications.flush();
   };
   pi.on("session_start", (event, ctx) => bindSession(ctx, event.reason, event.previousSessionFile));
   pi.on("session_tree", async (_event, ctx) => { await bindSession(ctx, "resume"); notifications.afterHostOperation(); });
   pi.on("session_shutdown", event => {
+    agentRpc?.detach();
     schedules?.stop();
     ask.cancel(); goal?.shutdown();
     tasks?.detach();
@@ -84,7 +88,7 @@ export default function piSuite(pi: ExtensionAPI): void {
     const scheduleQuit = agentQuit?.then(() => schedules?.drain());
     agents?.detach();
     notifications.detach(); status.detach(); dock.detach(binding.current?.ctx); binding.revoke();
-    return Promise.all([quit, agentQuit, scheduleQuit]).then(() => {});
+    return Promise.all([quit, agentQuit, scheduleQuit]).then(() => { if (agents) pi.events.emit('subagents:disposed', {}); });
   });
   pi.on("agent_before_settle", event => { goal?.beforeSettle(event); return notifications.beforeSettle(event); });
   pi.on("agent_settled", event => {
