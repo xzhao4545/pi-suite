@@ -63,7 +63,11 @@ job_list 的 session 范围、/jobs 默认列表与状态数量共用 JobsModule
 
 src/jobs/output.ts 为模型工具、日志查看器和结算预览提供同一 reader，调用共享 runtime/read.ts；agent_read 的结果与 transcript 也复用共享读取。默认按头部、关键行和尾部组合，关键行带前后各一行，truncated 的 head/keys/tail 保留原始字节范围。搜索把正文、上下文及前缀一起计入 limitBytes，超长返回行按 UTF-8 裁剪并标注；job_read/agent_read 的续读提示保留 search/context/limitBytes。
 
-PTY 输出先以等字节空白隐藏密码提示至下一个 LF 的回显，再处理 CR、BS、横向 CSI 定位/移动/行清理与字素宽度，折叠连续重复行；原始日志与分页偏移保持原值，提示之后的 offset 页仍恢复该行隐藏上下文。fullScreen 来自已有 xterm alternate buffer；读取附全屏提示，当前可控 PTY 的屏幕由 /jobs attach 查看。垂直光标与全屏历史不提供完整线性屏幕还原；任意正则对极长单逻辑行仍需要该行缓冲，不能视为有界内存读取。
+PTY 输出先以等字节空白隐藏密码提示至下一个 LF 的回显，再处理 CR、BS、横向 CSI 定位/移动/行清理与字素宽度，折叠连续重复行；原始日志与分页偏移保持原值，提示之后的 offset 页仍恢复该行隐藏上下文。可见文本转换的范围是当前读取片段内的单条物理行；垂直移动、跨行定位、清屏与备用屏幕切换保留为按日志顺序出现的文本片段，不保证得到最终二维画面。搜索与结算预览沿用这一范围。
+
+fullScreen 表示已有 xterm 曾进入 alternate buffer，即使程序返回主屏，该标志仍保留；读取附全屏提示。同一 owner 运行时可通过 /jobs attach 查看现有 xterm 当前屏幕，结束或停止后查看释放时保留的最后一屏及退出提示。最后一屏取当时的当前 viewport；程序结束前返回主屏时显示主屏，不保存被覆盖的备用屏幕历史帧。Pi 重启后仅能读取磁盘历史日志，无法查看该内存屏幕或恢复 attach；完整二维历史还原不在 reader 支持范围内。
+
+共享 reader 逐块扫描，单条逻辑行只在 LF/EOF 合并一次，完整正则匹配后才裁剪待返回上下文。单行组装为线性成本，单行缓冲和解码仍占用随最长行增长的内存。V8 正则求值的 RangeError 以 REGEX_RESOURCE_LIMIT 明确结束整次搜索并报告原始行范围；可以改用 offset 分页。完整 JavaScript 正则不承诺任意行长度下的常量内存或执行时限。
 
 ## 通知
 

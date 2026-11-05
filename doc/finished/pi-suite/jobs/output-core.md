@@ -8,4 +8,6 @@
 
 当前 reader、参数与操作见 [执行任务](../../../current/jobs/index.md#输出读取) 和 [公共工具契约](../../../current/runtime/tools.md)。
 
+后续 [超长逻辑行阶段](long-line.md) 核对一次合并、完整匹配与 V8 资源失败，[屏幕范围阶段](screen-range.md) 明确垂直/全屏线性片段和同 owner 最后一屏；平台组合继续由输出待办管理。
+
 [返回完成索引](../../index.md)

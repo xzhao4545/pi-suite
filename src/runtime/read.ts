@@ -46,8 +46,10 @@ function utf8Start(buffer: Buffer): number {
 }
 /** A rendered line can exceed its allocation; clip on UTF-8 boundaries and make that visible. */
 export function boundedText(text: string, budget: number): string {
-  const bytes = Buffer.from(text);
-  if (bytes.length <= budget) return text;
+  if (Buffer.byteLength(text) <= budget) return text;
+  // UTF-8 needs at least one byte per UTF-16 code unit. Encoding only this prefix
+  // avoids allocating a second full transcript just to return a small preview.
+  const bytes = Buffer.from(text.slice(0, budget));
   const marker = '... [truncated]'.slice(0, budget);
   return bytes.subarray(0, utf8End(bytes, budget - marker.length)).toString('utf8') + marker;
 }
@@ -70,19 +72,25 @@ export function compileSearch(search: string): RegExp {
 
 /** Streams complete lines with their starting byte offsets from [from, to). */
 async function* lines(source: ReadSource, from: number, to: number): AsyncGenerator<{ offset: number; bytes: Buffer }> {
-  let pending = Buffer.alloc(0), pendingAt = from;
+  let pending: Buffer[] = [], pendingBytes = 0, pendingAt = from;
   for (let position = from; position < to;) {
     const chunk = await source.read(position, Math.min(READ_LIMITS.chunk, to - position));
     if (!chunk.length) break;
     position += chunk.length;
-    let data = Buffer.concat([pending, chunk]), start = 0;
-    for (let index = data.indexOf(10); index >= 0; index = data.indexOf(10, start)) {
-      yield { offset: pendingAt + start, bytes: data.subarray(start, index) };
+    let start = 0;
+    for (let index = chunk.indexOf(10); index >= 0; index = chunk.indexOf(10, start)) {
+      const fragment = chunk.subarray(start, index);
+      // Complete JS regexes need the whole logical line. Join once at its end;
+      // copying and scanning the accumulated prefix on every chunk is quadratic.
+      const bytes = pendingBytes ? Buffer.concat([...pending, fragment], pendingBytes + fragment.length) : fragment;
+      pending = []; pendingBytes = 0;
+      yield { offset: pendingAt, bytes };
       start = index + 1;
+      pendingAt = position - chunk.length + start;
     }
-    pendingAt += start; pending = Buffer.from(data.subarray(start));
+    if (start < chunk.length) { pending.push(chunk.subarray(start)); pendingBytes += chunk.length - start; }
   }
-  if (pending.length) yield { offset: pendingAt, bytes: pending };
+  if (pendingBytes) yield { offset: pendingAt, bytes: pending.length === 1 ? pending[0] : Buffer.concat(pending, pendingBytes) };
 }
 
 export async function readBounded(source: ReadSource, request: ReadRequest, render: (raw: string) => string): Promise<ReadPage> {
@@ -132,9 +140,11 @@ export async function readBounded(source: ReadSource, request: ReadRequest, rend
     }
   };
   for await (const line of lines(source, headEnd, tailStart)) {
-    const current = { text: render(line.bytes.toString('utf8')), start: line.offset, end: Math.min(tailStart, line.offset + line.bytes.length + 1) };
+    const text = render(line.bytes.toString('utf8')), matched = KEY_LINE.test(text);
+    // Match against the complete line, then retain only what can reach the page.
+    const current = { text: boundedText(text, keyBudget), start: line.offset, end: Math.min(tailStart, line.offset + line.bytes.length + 1) };
     if (pending) collect(pending.before, pending.match, current);
-    pending = KEY_LINE.test(current.text) ? { before: previous, match: current } : undefined;
+    pending = matched ? { before: previous, match: current } : undefined;
     if (pending) keyLines++;
     previous = current;
   }
@@ -166,7 +176,15 @@ async function search(source: ReadSource, request: ReadRequest, render: (raw: st
     lineNumber++;
     const text = render(line.bytes.toString('utf8'));
     pattern.lastIndex = 0;
-    if (pattern.test(text)) {
+    let matched: boolean;
+    try { matched = pattern.test(text); }
+    catch (error) {
+      if (!(error instanceof RangeError)) throw error;
+      // V8 can exhaust its regex stack on large Unicode lines. A partial match
+      // would be misleading; fail the search and leave raw pagination available.
+      throw new ToolError('REGEX_RESOURCE_LIMIT', `JavaScript regex could not evaluate the ${line.bytes.length}-byte line at offset ${line.offset}: ${error.message}; read with offset or use a simpler search pattern`);
+    }
+    if (matched) {
       if (matches >= READ_LIMITS.maxMatches || bytes >= limit) { nextOffset = line.offset; break; }
       matches++;
       if (lastPrinted >= 0 && lineNumber - before.length > lastPrinted + 1) append('--');
@@ -175,7 +193,7 @@ async function search(source: ReadSource, request: ReadRequest, render: (raw: st
       append(`${lineNumber}@${line.offset}> ${text}`);
       before.length = 0; after = context; lastPrinted = lineNumber;
     } else if (after > 0) { append(`${lineNumber}  ${text}`); after--; lastPrinted = lineNumber; }
-    else { before.push(text); if (before.length > context) before.shift(); }
+    else { before.push(boundedText(text, limit)); if (before.length > context) before.shift(); }
   }
   return { text: out.join('\n') || boundedText(`No lines match ${request.search}`, limit), offset: from, nextOffset, totalBytes: source.size,
     endOfStream: nextOffset >= source.size, matches };

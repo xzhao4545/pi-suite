@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createWriteStream, mkdtempSync } from "node:fs";
+import { closeSync, createWriteStream, mkdtempSync, openSync, rmSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
@@ -52,6 +52,35 @@ for (const [label, bytes] of [["1 MiB", 1 << 20], ["100 MiB", 100 << 20]] as con
     } finally { await source.close(); }
   });
 }
+
+test("100 MiB logical line keeps complete regex semantics, bounded context and raw resume offsets", { timeout: 20000 }, async () => {
+  const root = mkdtempSync(join(tmpdir(), "pi-suite-long-line-")), path = join(root, "out.log");
+  const file = openSync(path, "w"), chunk = Buffer.alloc(65536, 120), size = 100 << 20;
+  try {
+    // Markers live well beyond a returned page, and a Chinese code point crosses
+    // the read-chunk boundary. Matching a cropped line would miss the final anchor.
+    writeSync(file, "START");
+    for (let written = 5; written < size - 3;) {
+      const length = Math.min(chunk.length, size - 3 - written);
+      writeSync(file, chunk, 0, length); written += length;
+    }
+    writeSync(file, "END\n\nNEXT\n");
+    writeSync(file, "字 ERROR ", 65535, "utf8");
+  } finally { closeSync(file); }
+  const source = await fileSource(path);
+  try {
+    const first = await readBounded(source, { search: "/^START.*END$|^NEXT$/", context: 0, limitBytes: 1024 }, plain);
+    assert.equal(first.matches, 1); assert.equal(first.nextOffset, size + 1); assert.equal(first.endOfStream, false);
+    assert.match(first.text, /^1@0> START/); assert.match(first.text, /truncated/); assert.ok(Buffer.byteLength(first.text) <= 1024);
+    const next = await readBounded(source, { search: "/^START.*END$|^NEXT$/", offset: first.nextOffset, context: 1 }, plain);
+    assert.equal(next.matches, 1); assert.equal(next.endOfStream, true); assert.match(next.text, new RegExp(`2@${size + 2}> NEXT`));
+    const noMatch = await readBounded(source, { search: "^START.*MISSING$", context: 1 }, plain);
+    assert.equal(noMatch.matches, 0);
+    const smart = await readBounded(source, { limitBytes: 1024 }, plain);
+    assert.equal(smart.truncated!.keyLines, 1); assert.equal(smart.truncated!.keys.length, 1);
+    assert.ok(Buffer.byteLength(smart.text) <= 1024 + 512); assert.ok(!smart.text.includes("\uFFFD"));
+  } finally { await source.close(); rmSync(root, {recursive: true}); }
+});
 
 test("offset pages never split Chinese or emoji characters and rejoin to the original text", async () => {
   const text = "构建步骤：编译完成 ✅ 测试通过 🎉 日志 ".repeat(200);
