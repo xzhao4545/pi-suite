@@ -19,7 +19,8 @@
 - [x] 实现 agent_workflow 及其查看界面，gate 在 cwd 执行，见 [宿主接入阶段](../../../finished/pi-suite/agents/workflow-host.md)
 - [x] 注册 subagents:rpc:* 通道并保持协议版本 2
 - [x] /agents 菜单汇总记录、类型开关、按类型的模型与 thinking 配置（见 [模型与 thinking 配置](models.md)）、调度与 workflow，同步操作说明，见 [类型与回收阶段](../../../finished/pi-suite/agents/types-retention.md)
-- [ ] Windows 与实际外部扩展组合复核 RPC 注册、启动/停止/引导/消费、生命周期与目录/结构化结果
+- [x] Linux 实际 Pi CLI 加载独立 consumer，验证五通道、两种加载次序和 reload、目标 cwd/trust、结构化结果及 stop/quit 真实清理，见 [独立扩展阶段](../../../finished/pi-suite/agents/rpc-cli.md)
+- [ ] Windows 与实际外部业务扩展组合复核 RPC 注册、启动/停止/引导/消费、生命周期与目录/结构化结果
 - [ ] Windows 与实际 MCP 服务复核资源组合、晚注册与 MCP 桥接、包根/符号链接及类型/技能目录的信任边界
 - [x] Linux 原生 stdio MCP 受控服务验证 discovery、直接/桥接/晚注册、显式资源与禁用名单、隔离/项目/RPC 信任及 child 服务进程清理，见 [真实传输阶段](../../../finished/pi-suite/agents/mcp-transport.md)
 - [ ] Windows 与真实手机 SSH 复核 @handle/文件补全、活动引导、结束恢复、克隆启动与会话切换

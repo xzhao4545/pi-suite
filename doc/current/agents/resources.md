@@ -14,6 +14,8 @@ allowed_subagents 默认为关闭；true、all 或 `*` 开放所有类型，CSV/
 
 extensions 默认 true，加载 Pi 配置和自动发现的扩展；false 或空名单关闭外部扩展。名单支持不区分大小写的规范名称、包的短名称、相对/绝对路径及 `~`；`*` 包含默认发现的扩展。exclude_extensions 接受规范名称，排除优先于包含，未匹配名称或无效路径报告错误。
 
+父 CLI 通过 `-e` 临时加载的 source 不自动加入 child 默认资源；child 使用该扩展时，需在类型 extensions 声明路径或将其纳入 Pi 配置。跨 cwd 的 child 仍从父级配置目录解析这些声明，目标项目资源遵循自身信任边界。
+
 Pi 的公共 DefaultPackageManager 解析路径与启用状态，筛选后交给 DefaultResourceLoader 加载；本包只注入一次带父级/run 归属的 child 工具。筛选发生在扩展工厂执行前，排除项不执行。Pi 的 `--no-extensions`/`-ne` 与 `--no-mcp` 对应的内置扩展开关得到保留，codemode、tool-search、MCP 使用 Pi 的新工厂。
 
 tools 支持 Pi 工具名、内置名称的大小写别名、Glob→find、MultiEdit→edit 和通配模式。`*`/all 展开全部内置工具；缺省包含内置及本包 task/job/wait，具体模块仍受 modules 开关约束。

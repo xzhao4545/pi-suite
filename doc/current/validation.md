@@ -25,6 +25,8 @@ Linux 独立工具进程组的 1 项真实进程聚合覆盖 pipe/PTY 异步 sto
 
 jobs 检查使用真实进程：pipe 的 stdout/stderr、退出码与耗时，stdin 输入与 sensitive 记录，进程树停止确认、重复停止与已结算不再停止，timeoutMs，另一 manager 只读历史，按创建归属级联停止及停止期间的启动，quit 停止与准入关闭，PTY 输入与合并输出；并通过真实宿主核对 wait 撤销通知、轮后结算恰好唤醒一次、状态计数清除、列表筛选与参数冲突、job_stop 结果和不支持的通道。同进程保活用 SDK 的 AgentSessionRuntime 与 reload 核对：job 运行中执行 new、resume、fork 与 reload，仍是原进程且日志连续，只有所属会话收到一次结果。输出读取核对小日志全量、1 MiB 与 100 MiB 日志的头尾与中段关键行截断及续读范围、中文与 emoji 分页边界、搜索上下文与匹配上限续读、无效正则，以及 PTY 回车覆写与重复行折叠。Windows 用 Git Bash 运行（测试在临时 agentDir 的 settings.json 设置 shellPath），Linux 用系统 bash。
 
+Linux Pi 1.5.0 实际发布 CLI 另通过临时终端缩放验收：真实 job_start 和 /jobs Attach terminal 路径下，外层 40×24→120×40→60×30→40×24 的实际 PTY 缩放传到内层 40×17→120×30→60×22→40×17；内层 TTY ioctl、同 stdin 的 stty size 与四次 SIGWINCH 一致。实际用户接管/交还、关闭后继续、重新 attach 输入、菜单停止及内外层清理通过；未新增永久测试条目，范围见 [终端缩放阶段](../finished/pi-suite/jobs/terminal-resize.md)。
+
 共享 wait 用内存来源核对其他对象结算、未在 ids 中的 child 提问、等待中与等待前的用户插话、超时，以及 mode all 的部分结算不返回；真实宿主核对等待一个 job 时另一 job 结算提前返回且不再通知、用户 steer 结束等待且不停止 job。goal_wait 的 waitFor 通过真实宿主核对其他 job 结算不结束等待、恢复时合并送达，以及已结算 ID 不进入等待。终端视图在真实 PTY job 上核对用户按键接管后模型写入返回 USER_CONTROL、Ctrl+G 交还、Ctrl+T 带回含用户与模型输入结果的屏幕、Ctrl+B 离开后 job 仍在运行。monitor 用真实进程核对 literal 与阈值 trigger、同行去重、冷却、detector 丢弃与改名，poll-diff 在样本变化时触发，file-watch 不带 command 运行并在文件事件时触发；真实宿主核对 monitor 事件使等待其自身 job 的 wait 提前返回、events 通道读取，以及已返回事件不再唤醒。
 
 询问协调的 1 项 Linux（Node 24.22.2）真实 SDK 聚合检查通过，使用公共 UI 包装器与 AskView 键盘输入核对 answered、timed_out、cancelled；两个真实 child 的父级问题与实际 pipe job 完成在原生询问期间暂存，恢复边界和 goal 请求合并为一条消息。超时或取消后目标等待新的用户 prompt；父级原生询问依次展示，排队不启动第二题期限，回答后两个 child 实际完成，已消费消息不再次唤醒。child 问题的父级协议期限独立管理。该检查通过受控 UI 上下文驱动实际组件和定时器，Windows 组合与真实手机 SSH 由 [询问待办](../todo/pi-suite/ask/index.md) 管理。
@@ -74,6 +76,8 @@ agents 的 8 项 Linux 离线检查使用真实 Pi SDK child 与 faux provider�
 定时调度另通过 Linux Pi 1.5.0 实际发布 CLI 的临时 PTY 验收：真实 agent_start 登记单次/周期/cron 并启动 child，原生详情八字段、Esc 保留、确认删除后不再触发；reload 继续，new 不继承，原生 resume 对过期单次明确报错且不回放。quit 中断实际 child，清理其受管 sleep 进程，结果落盘且 CLI 自然退出码为 0。该受控离线验收未增加永久测试条目，范围见 [CLI 调度阶段](../finished/pi-suite/agents/schedules-cli.md)。
 
 RPC 的 4 项 Linux 检查使用真实 SDK/faux 与公共事件总线，覆盖五通道和版本 2、工厂后的注册、重复绑定、reload 撤销/恢复、生命周期与用量、同步消费不触发父级请求、待发通知撤销、已结束引导拒绝、启动错误与显式模型/参数校验；排队即时返回、信号取消、满池绕过、普通级联停止和会话/嵌套/workflow 归属拒绝通过。指定 cwd 保留父级配置/扩展并隔离目标信任，结构化工具验证、纠正提示、JSON 结果及父工作区列表通过。Windows 与实际外部扩展组合按扩展专项继续验收。
+
+Linux Pi 1.5.0 实际发布 CLI 另加载独立外部 consumer，经真实命令调用公开 pi.events 的五个 RPC 通道；两种加载次序、ready/ping v2、reload 后唯一回复、真实 steer、目标 cwd 与不可信目标资源隔离、StructuredOutput 结果、同步 consume 无父级唤醒，以及 stop/quit 的真实 child/job 清理通过。consumer 不导入本包内部类或测试宿主，child 观察扩展由类型显式声明；临时验收未增加永久条目，受控 consumer 与外部业务/平台范围见 [独立扩展阶段](../finished/pi-suite/agents/rpc-cli.md)。
 
 Workflow 编排核心的 6 项 Linux 检查使用真实 Worker，覆盖流水线独立推进、parallel、嵌套阶段和共享并发/预算、结构化返回与 gate、排队期间暂停/跳过/重试及全部尝试用量。journal 成功且未改变的前缀、失败/变化后执行、schema 重检、含 child resume 的整段执行、文件损坏与明确 I/O 错误通过；JSON、metadata 纯字面量、确定性 globals、未支持选项、agent/item/nested 上限、未等待调用与无限循环 Worker 实际终止通过。
 

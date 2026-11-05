@@ -13,6 +13,7 @@
 - [PTY hands-free 与 dispatch 基础阶段](./pi-suite/jobs/hands-free-core.md) — 增量预算、静默终止、用户接管、共享等待与 reload 后目标唤醒；Linux 离线验收。
 - [CLI 预设与启动授权基础阶段](./pi-suite/jobs/cli-launch-core.md) — 内置/自定义预设、Pi fork 参数、字面量 prompt、用户级 launchPolicy 与共享 ask；Linux 离线验收。
 - [实际 Pi CLI 与终端接管阶段](./pi-suite/jobs/pi-cli.md) — 真实离线 Pi fork、复杂 prompt、公共 PTY 接管/交还/离开及上游 @ 边界。
+- [实际 Pi CLI 终端缩放与重新接管阶段](./pi-suite/jobs/terminal-resize.md) — 实际 /jobs attach、内核尺寸和 SIGWINCH、接管/交还、关闭后继续及重新 attach；Linux CLI 验收。
 - [实际 Codex/Claude 文本 PTY 阶段](./pi-suite/jobs/cli-pty.md) — Linux 真实 CLI、本地主对话 SSE、复杂 prompt、用户接管/交还和确认停止；工具执行见后续阶段，平台组合保留待办。
 - [实际 CLI 工具执行与 Linux 后代清理阶段](./pi-suite/jobs/cli-tools.md) — Codex exec_command、Claude Bash/Read，独立工具进程组的身份捕获与真实停止；Linux 受控验收。
 - [jobs 技能发布阶段](./pi-suite/jobs/skill.md) — 包声明、实际 Pi 资源发现/加载、原生调用与模块关闭行为。
@@ -32,6 +33,7 @@
 - [调度期限与本地时区组合阶段](./pi-suite/agents/schedule-timezone.md) — 同一 UTC 期限、跨时区恢复、日历夏令时、固定周期与错过周期相位；Linux SDK 验收。
 - [实际 Pi CLI 调度与退出组合阶段](./pi-suite/agents/schedules-cli.md) — 三种真实触发、原生详情和取消、reload/new/resume 及 quit 的 child/job 清理；Linux CLI 验收。
 - [子代理 RPC 基础阶段](./pi-suite/agents/rpc-core.md) — 五通道与版本 2、启动与归属、同步消费和公共通知、cwd 与结构化结果；Linux 离线验收。
+- [实际 Pi CLI 独立扩展 RPC 组合阶段](./pi-suite/agents/rpc-cli.md) — 独立 consumer、两种加载次序、reload、目标目录信任、结构化结果与真实清理；Linux CLI 验收。
 - [子代理 Workflow 编排核心阶段](./pi-suite/agents/workflow-core.md) — 上游 Worker、流水线、嵌套共享并发、控制与预算、journal 前缀恢复；Linux 离线验收。
 - [子代理 Workflow 宿主接入阶段](./pi-suite/agents/workflow-host.md) — 保存资源、共享执行/存储/等待/通知、固定 child 续接与原生控制；Linux SDK/进程验收。
 - [子代理类型开关与执行引用回收阶段](./pi-suite/agents/types-retention.md) — 统一 enabled 准入、原生类型菜单、完整历史与通知/reader/workflow 引用保留。
