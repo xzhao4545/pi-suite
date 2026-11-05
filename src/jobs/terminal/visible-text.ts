@@ -19,8 +19,3 @@ export function normalizeVisibleText(raw: string): string {
   // Progress redraws often emit the same final line many times; keep one with a count.
   return output.join('').replace(/^(.*)(?:\n\1$){2,}/gm, (block, line: string) => `${line}  [×${block.split('\n').length}]`);
 }
-
-/** Pipe output: drop terminal control sequences but keep text layout characters. */
-export function sanitizeText(raw: string): string {
-  return stripVTControlCharacters(raw).replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '');
-}

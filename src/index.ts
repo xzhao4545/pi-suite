@@ -13,6 +13,9 @@ import { JobsModule } from "./jobs/index.ts";
 import { registerJobTools } from "./jobs/tools.ts";
 import { registerJobsCommand } from "./jobs/viewer.ts";
 import { WaitRegistry, registerWait } from "./runtime/wait.ts";
+import { TasksModule } from "./tasks/index.ts";
+import { registerTaskTools } from "./tasks/tools.ts";
+import { registerTasksCommand } from "./tasks/viewer.ts";
 
 export default function piSuite(pi: ExtensionAPI): void {
   let config = loadConfig(process.cwd());
@@ -20,6 +23,8 @@ export default function piSuite(pi: ExtensionAPI): void {
   const dock = new Dock();
   const status = new StatusPublisher(dock);
   const notifications = new Notifications(pi, binding);
+  const tasks = config.modules.tasks ? new TasksModule(binding, dock) : undefined;
+  if (tasks) { registerTaskTools(pi, tasks); registerTasksCommand(pi, tasks, dock, notifications); tasks.registerReminders(pi, () => config); }
   const waits = new WaitRegistry();
   const goal = config.modules.goal ? new GoalManager(pi, binding, notifications, status, waits) : undefined;
   const ask = new AskManager(binding, notifications, dock, (answered, ctx) => goal?.askResult(answered, ctx));
@@ -27,7 +32,7 @@ export default function piSuite(pi: ExtensionAPI): void {
   const jobs = config.modules.jobs ? new JobsModule(pi, binding, notifications, status) : undefined;
   if (jobs) {
     const viewer = { jobs, dock, notifications, keys: () => config.jobs };
-    registerJobTools(pi, jobs, viewer, { ask, config: () => config }); registerJobsCommand(pi, viewer); waits.register(jobs);
+    registerJobTools(pi, jobs, viewer, { ask, config: () => config, tasks }); registerJobsCommand(pi, viewer); waits.register(jobs);
   }
   if (jobs) {
     registerWait(pi, waits);
@@ -39,7 +44,7 @@ export default function piSuite(pi: ExtensionAPI): void {
     registerGoalTools(pi, goal); registerGoalCommand(pi, goal, dock, notifications); registerGoalLifecycle(pi, goal);
   }
 
-  const bindSession = (ctx: Parameters<SessionBinding["bind"]>[0], reason: "startup" | "reload" | "new" | "resume" | "fork") => {
+  const bindSession = async (ctx: Parameters<SessionBinding["bind"]>[0], reason: "startup" | "reload" | "new" | "resume" | "fork", previousSessionFile?: string) => {
     // Tree navigation has no shutdown event. Revoke the old readers and timers before
     // rebinding, without appending their state into the branch the host just selected.
     ask.cancel(); goal?.detach(); jobs?.detach(); notifications.detach();
@@ -49,12 +54,14 @@ export default function piSuite(pi: ExtensionAPI): void {
     status.bind(ctx.ui, { goal: config.goal.display, agents: config.agents.display, jobs: config.jobs.display });
     goal?.restore(ctx, reason);
     jobs?.bind();
+    await tasks?.bind(ctx, { reason, previousSessionFile });
     notifications.flush();
   };
-  pi.on("session_start", (event, ctx) => bindSession(ctx, event.reason));
-  pi.on("session_tree", (_event, ctx) => { bindSession(ctx, "resume"); notifications.afterHostOperation(); });
+  pi.on("session_start", (event, ctx) => bindSession(ctx, event.reason, event.previousSessionFile));
+  pi.on("session_tree", async (_event, ctx) => { await bindSession(ctx, "resume"); notifications.afterHostOperation(); });
   pi.on("session_shutdown", event => {
     ask.cancel(); goal?.shutdown();
+    tasks?.detach();
     // Detach before revoking so pending job notices are cancelled under the old session ID.
     const quit = jobs?.shutdown(event.reason);
     notifications.detach(); status.detach(); dock.detach(binding.current?.ctx); binding.revoke();
@@ -69,7 +76,7 @@ export default function piSuite(pi: ExtensionAPI): void {
   pi.registerCommand("suite", {
     description: "Show pi-suite settings and implemented modules",
     handler: async (_args, ctx) => {
-      ctx.ui.notify(`pi-suite · ask_user ${config.modules.ask ? "enabled" : "disabled"} · jobs ${jobs ? "enabled" : "disabled"} · timeout ${config.ask.timeout}ms · maxRows ${config.ui.maxRows}`);
+      ctx.ui.notify(`pi-suite · ask_user ${config.modules.ask ? "enabled" : "disabled"} · tasks ${tasks ? "enabled" : "disabled"} · jobs ${jobs ? "enabled" : "disabled"} · timeout ${config.ask.timeout}ms · maxRows ${config.ui.maxRows}`);
     },
   });
 }

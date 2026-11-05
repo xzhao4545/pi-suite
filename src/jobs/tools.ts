@@ -18,10 +18,12 @@ import type { AskManager } from '../ask/index.ts';
 import type { SuiteConfig } from '../runtime/config.ts';
 import { agentSchema, agentCommand } from './launch/presets.ts';
 import { authorizeLaunch } from './launch/authorize.ts';
+import type { TasksModule } from '../tasks/index.ts';
+import { taskId as taskIdSchema } from '../tasks/types.ts';
 
 const id = objectId('job', 'job_3fa1c2d0');
 
-export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: ViewerDeps, launch: { ask: AskManager; config: () => SuiteConfig }): void {
+export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: ViewerDeps, launch: { ask: AskManager; config: () => SuiteConfig; tasks?: TasksModule }): void {
   pi.registerTool({
     name: 'job_start', label: 'Start Job',
     description: 'Start a command as a background job and return at once. mode=pipe (default) records stdout/stderr for builds, tests and batch work; mode=pty runs it in a terminal for REPLs and interactive programs. ' +
@@ -36,7 +38,7 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: Vie
       name: Type.Optional(Type.String({ maxLength: 80 })),
       cwd: Type.Optional(Type.String({ description: 'Resolved against the session cwd' })),
       timeoutMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 86400000, description: 'Omit for no limit; on expiry the job settles as timed_out' })),
-      taskId: Type.Optional(Type.String({ maxLength: 64 })),
+      taskId: Type.Optional(taskIdSchema),
       attach: Type.Optional(Type.Boolean({ description: 'pty only: open the terminal view now because the user must operate the program (login, prompts). The call returns when the user leaves the view; the job keeps running' })),
       monitor: Type.Optional(monitorSchema),
       handsFree: Type.Optional(handsFreeSchema),
@@ -54,6 +56,7 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: Vie
       const shell = resolvePiShell(ctx.cwd, ctx.isProjectTrusted());
       const cwd = resolve(ctx.cwd, params.cwd ?? '.');
       const command = agent ? agentCommand(agent, config.jobs.agents, ctx.sessionManager.getSessionFile()) : params.command;
+      const taskStore = params.taskId && launch.tasks ? await launch.tasks.executionTask(ctx, params.taskId) : undefined;
       let job: JobSummary;
       try {
         job = await manager.start({ ...request, command, cwd, ...owner }, shell, signal,
@@ -64,6 +67,10 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: Vie
           ...text([error.message], { started: false, reason: error.code }), terminate: true,
         };
         throw error;
+      }
+      if (taskStore && params.taskId) {
+        try { await taskStore.link(params.taskId, { jobId: job.id }); }
+        catch (error) { throw new ToolError('TASK_LINK_FAILED', `${job.id} started but task #${params.taskId} could not be linked: ${String(error)}; inspect the job with job_list`, job.id); }
       }
       const next = `read: job_read({"id":"${job.id}"})${job.mode === 'pty' ? ` · input: job_write({"id":"${job.id}","input":"…","submit":true})` : ''}`;
       if (!attach) return text([summaryLine(job), `name: ${displayName(job)}`, next], { job });

@@ -36,7 +36,7 @@ session_shutdown 只有 quit 停止全部 job，共享 10 秒期限并关闭新 
 
 | 工具 | 参数与行为 |
 | --- | --- |
-| job_start | command 或 agent、mode?（pipe 默认、pty）、name?、cwd?、timeoutMs?（省略不限时）、taskId?、attach?、monitor?、handsFree?；授权后启动并返回 ID，未匹配策略的命令先询问用户。agent 指定 preset、prompt、fork?，见 [CLI 预设与启动授权](launch.md)。attach 只用于需要用户直接操作程序的 PTY job（登录、交互提示），立即打开终端视图，用户离开视图后返回；非 PTY 或非交互界面在启动前返回 INVALID_ARGS。monitor 见下节；file-watch 不传 command 或 agent；handsFree 仅用于 PTY，见 [监督与委派](hands-free.md) |
+| job_start | command 或 agent、mode?（pipe 默认、pty）、name?、cwd?、timeoutMs?（省略不限时）、taskId?、attach?、monitor?、handsFree?；授权后启动并返回 ID，未匹配策略的命令先询问用户。tasks 启用时 taskId 须对应当前清单的子任务，job ID 写回其执行引用；任务与 job 状态分别管理。agent 指定 preset、prompt、fork?，见 [CLI 预设与启动授权](launch.md)。attach 只用于需要用户直接操作程序的 PTY job（登录、交互提示），立即打开终端视图，用户离开视图后返回；非 PTY 或非交互界面在启动前返回 INVALID_ARGS。monitor 见下节；file-watch 不传 command 或 agent；handsFree 仅用于 PTY，见 [监督与委派](hands-free.md) |
 | job_list | id 查看详情，或 state?（active 默认、finished、all）、scope?（session 默认、workspace）、cursor?、limit?（默认 20，最大 100）；id 与列表参数混用返回 INVALID_ARGS；其他或已崩溃 Pi 进程未结算的记录只在 all 中显示为 unsettled history |
 | job_read | id、stream?、offset?、limitBytes?、search?、context?；pipe 为 stdout（默认）、stderr、input，PTY 为 output（默认）、input，带 monitor 的 job 另有 events，其他组合返回 UNSUPPORTED_STREAM；PTY 输出转为可见文本，偏移仍指原始字节 |
 | job_write | id 与 input、keys、paste 之一，submit 追加回车，sensitive 不保存正文；endInput 关闭 pipe stdin；keys 仅 PTY；非运行状态返回 NOT_RUNNING |

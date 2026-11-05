@@ -7,7 +7,7 @@
 - 项目是单个 pnpm 包，包名为 pi-suite，package.json 设置 private: true。
 - Node.js 要求为 24 或更高，包管理器固定为 pnpm 12.6.0。
 - 源码使用 TypeScript 和 ESM；Pi 通过 package.json 的 pi.extensions 加载 src/index.ts。
-- src/index.ts 是唯一扩展入口，注册 ask_user、goal_complete/goal_blocked/goal_wait、job_start/job_list/job_read/job_write/job_stop、共享 wait、/goal、/jobs、/suite 及会话生命周期事件。
+- src/index.ts 是唯一扩展入口，注册 ask_user、goal_complete/goal_blocked/goal_wait、task_list/task_edit、job_start/job_list/job_read/job_write/job_stop、共享 wait、/goal、/tasks、/jobs、/suite 及会话生命周期事件。
 - 源码目录按 ui、runtime、ask、tasks、jobs/backends、goal、agents 划分；上游来源登记位于 third-party/UPSTREAM.md。
 - Pi 开发依赖固定为 1.5.0；jobs 运行依赖固定为 zigpty 0.1.6、@xterm/headless 5.5.0、@xterm/addon-serialize 0.13.0。依赖解析记录在 pnpm-lock.yaml。
 
@@ -17,6 +17,7 @@
 - [统一界面](./ui/index.md) — dock 高度预算、状态发布与原生历史组件。
 - [ask 接口与操作](./ask/index.md) — 默认值、批量、多选、超时、搜索及焦点。
 - [目标管理](./goal/index.md) — 持久目标、运行调度、宿主恢复、预算和操作。
+- [两级任务管理](./tasks/index.md) — 原子批量编辑、派生进度、会话存储、Dock 折叠、详情与临时提醒。
 - [执行任务](./jobs/index.md) — pipe/PTY job、记录与日志、停止证据、工具、通知、同进程保活、[PTY 监督与委派](./jobs/hands-free.md) 及 [CLI 预设与启动授权](./jobs/launch.md)。
 - [基线与验证](./validation.md) — 依赖来源、目标平台和必要检查范围。
 

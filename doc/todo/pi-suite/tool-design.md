@@ -2,7 +2,7 @@
 
 目标：ask、goal、tasks、jobs、agents 的模型工具使用同一套命名、参数、返回和错误约定，减少模型记忆多种风格的负担。
 
-当前状态：实施中；ask_user 的 timeoutMs 与 goal 工具的 goalId、repeatedTurns、resumeAfterMs 已按本规范改名并通过检查；job_start/list/read/write/stop、共享 wait（含其他对象结算、child 提问与用户插话的提前返回）与 goal_wait 的 waitFor 已实现，见 [执行任务](../../current/jobs/index.md) 与 [目标接口](../../current/goal/operations.md)。共享对象 ID、列表分页、读取、停止结果与错误码已抽取到 src/runtime/tools.ts 与 src/runtime/errors.ts，tasks/agents 工具尚未实现。
+当前状态：实施中；ask_user 的 timeoutMs 与 goal 工具的 goalId、repeatedTurns、resumeAfterMs 已按本规范改名并通过检查；job_start/list/read/write/stop、共享 wait（含其他对象结算、child 提问与用户插话的提前返回）与 goal_wait 的 waitFor 已实现，见 [执行任务](../../current/jobs/index.md) 与 [目标接口](../../current/goal/operations.md)。task_list/task_edit 的两级查询与原子批次已接入，见 [任务接口](../../current/tasks/index.md)。共享对象 ID、列表分页、读取、停止结果与错误码已抽取到 src/runtime/tools.ts 与 src/runtime/errors.ts，agents 工具尚未实现。
 
 影响范围：src 下各模块的工具注册、共享参数 schema、工具描述、doc/current 的接口文档及上游工具名映射。
 

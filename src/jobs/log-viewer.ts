@@ -8,7 +8,7 @@ import type { JobSummary, Stream } from './types.ts';
 import { isTerminal } from './state.ts';
 import { readJobLog } from './query.ts';
 import { summaryLine } from './index.ts';
-import { sanitizeText } from './terminal/visible-text.ts';
+import { sanitizeText } from '../runtime/text.ts';
 
 const REFRESH_MS = 250;
 /** A bounded byte window over the existing log. UI readers never own or stop a process. */

@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
 import { fileSource, readBounded, textSource } from "../../src/runtime/read.ts";
-import { normalizeVisibleText, sanitizeText } from "../../src/jobs/terminal/visible-text.ts";
+import { normalizeVisibleText } from "../../src/jobs/terminal/visible-text.ts";
+import { sanitizeText } from "../../src/runtime/text.ts";
 
 const plain = (text: string) => text;
 

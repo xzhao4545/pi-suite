@@ -5,7 +5,8 @@ import { bucket } from './state.ts';
 import type { JobReader } from './control.ts';
 import type { InputRecord, JobSummary, Stream, Workspace } from './types.ts';
 import { displayName } from './index.ts';
-import { normalizeVisibleText, sanitizeText } from './terminal/visible-text.ts';
+import { normalizeVisibleText } from './terminal/visible-text.ts';
+import { sanitizeText } from '../runtime/text.ts';
 import type { MonitorEvent } from './monitors/runtime.ts';
 
 /** Readable streams of one job; events exists only when a monitor was attached at start. */

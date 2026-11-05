@@ -34,6 +34,15 @@ jobs 导入 pi-background-jobs 0.1.3 与 pi-interactive-shell 0.18.0 的部分�
 | src/jobs/launch/config.ts | pi-interactive-shell config.ts 的默认预设与 launch-policy.ts 的精确匹配/优先级 | schema 与加载并入共享配置，逐键和字段合并；用户级规则，未设置也默认 ask |
 | src/jobs/launch/presets.ts | pi-interactive-shell spawn.ts 的 CLI 参数拼装与 Bash 转义 | 结构化 job_start.agent；删除 worktree 与 /spawn；prompt 前结束选项解析；Pi fork 复用宿主会话文件 |
 
-工具与通知不导入上游实现，按本包规范重写。其余文件尚未导入；tasks 与 agents 仍作为设计参考。按文件导入、改造与丢弃的计划见 [上游导入](../doc/todo/pi-suite/upstream-import.md)。pi-starship 0.65.2 用于外部 footer 契约参考及实际 extension_status 模块验证，不是本包依赖。导入其他模块时同步记录路径、许可证及具体重构边界。
+tasks 导入改造 @tintinweb/pi-tasks 0.9.1 的存储、依赖、会话与提醒机制，保留 [完整 MIT 许可证](./licenses/pi-tasks.txt)：
+
+| 本包文件 | 来源 | 改动 |
+| --- | --- | --- |
+| src/tasks/store.ts | src/task-store.ts | 保留 pid:uuid 锁、锁内重读、原子保存、快照与播种；锁等待改为异步，增加版本校验、同目标串行入口与复制后整批提交 |
+| src/tasks/model.ts | src/task-store.ts 的 CRUD 与依赖规则 | 两级 parentId，父级进度与反向边派生，保留自引用/不存在/二元环及未完成阻塞项警告，删除清理依赖 |
+| src/tasks/types.ts | src/types.ts | 状态统一为 todo/doing/done，增加两级结构、版本化 schema 与批量 changes |
+| src/tasks/index.ts | src/index.ts、task-paths.ts、reminder-cadence.ts | 按 cwd/会话定位存储，保留 fork 清单与计数器继承、内存模式、临时提醒；显示和反馈接入统一 Dock，执行引用通过 TaskStore.link |
+
+工具与通知不导入上游实现，按本包规范重写。agents 仍作为待导入模块，tasks 的 agent 执行恢复关联随其接入。按文件导入、改造与丢弃的计划见 [上游导入](../doc/todo/pi-suite/upstream-import.md)。pi-starship 0.65.2 用于外部 footer 契约参考及实际 extension_status 模块验证，不是本包依赖。导入其他模块时同步记录路径、许可证及具体重构边界。
 
 更新时先取得指定版本的 npm 发布包，与登记的 tarball integrity 对照来源；检查工具契约及公共宿主 API 差异，局部吸收所需改动，更新 sources.json、许可证及本登记，再运行对应契约与宿主检查。来源校验用于确保版权和基线可追踪，不以构建产物哈希代替功能验证。

@@ -5,7 +5,8 @@
 import { spawn } from 'node:child_process';
 import { open } from 'node:fs/promises';
 import { StringDecoder } from 'node:string_decoder';
-import { normalizeVisibleText, sanitizeText } from '../terminal/visible-text.ts';
+import { normalizeVisibleText } from '../terminal/visible-text.ts';
+import { sanitizeText } from '../../runtime/text.ts';
 import type { ResolvedShellConfig } from '../terminal/shell.ts';
 import type { CompiledMonitor, Strategy } from './compile.ts';
 

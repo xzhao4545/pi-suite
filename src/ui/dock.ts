@@ -1,8 +1,8 @@
 import type { Component, TUI } from "@earendil-works/pi-tui";
-import { truncateToWidth } from "@earendil-works/pi-tui";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-export interface DockRow { id: string; text: string; priority: number }
+export interface DockRow { id: string; text: string; priority: number; suffix?: string }
 export function heightBudget(rows: number, maxRows = 6, statusRow = false): number {
   // Reserve the native footer status line inside the suite's 20% allowance.
   const cap = rows < 28 ? 3 : Math.min(6, Math.floor(rows * 0.2));
@@ -44,8 +44,14 @@ export class Dock implements Component {
     const limit = this.dockAllowance(this.tui?.terminal.rows ?? 24);
     const rows = [...this.sources.values()].flatMap(source => source()).sort((a, b) => b.priority - a.priority);
     const shown = rows.slice(0, limit);
-    return shown.map((row, i) => truncateToWidth(
-      row.text + (i === shown.length - 1 && rows.length > limit ? ` · +${rows.length - limit}` : ""), width));
+    return shown.map((row, i) => {
+      const hidden = i === shown.length - 1 && rows.length > limit ? ` · +${rows.length - limit}` : "";
+      if (!row.suffix) return truncateToWidth(row.text + hidden, width);
+      // Progress belongs to the row contract, so a long title cannot push it off a phone.
+      const suffix = truncateToWidth(row.suffix + hidden, width);
+      const titleWidth = Math.max(0, width - visibleWidth(suffix) - 1);
+      return (titleWidth ? truncateToWidth(row.text, titleWidth, '') + ' ' : '') + suffix;
+    });
   }
 
   invalidate(): void { this.tui?.requestRender(); }

@@ -1,6 +1,6 @@
 # 统一界面
 
-Dock 是本包唯一常驻 widget，键为 pi-suite:dock。模块提交稳定 ID、文本和优先级；dock 按优先级分配可见行，末行显示隐藏数量。纯展示截断不会修改原始数据。
+Dock 是本包唯一常驻 widget，键为 pi-suite:dock。模块提交稳定 ID、文本和优先级；dock 按优先级分配可见行，末行显示隐藏数量。行可提供受保护的 suffix，任务完成比例与状态优先保留，标题在其余宽度内截断。纯展示截断不会修改原始数据。
 
 ## 高度与状态
 
@@ -18,6 +18,6 @@ Transcript 复用 Pi 的 UserMessageComponent、AssistantMessageComponent、Tool
 
 ScrollView 为历史与每个选项详情分别保存滚动位置及搜索内容，支持按行、按页、Home/End、搜索和下一匹配。终端支持的鼠标滚轮通过 Pi 的标准事件增强阅读。尺寸改变不初始化回答草稿或勾选集合。
 
-DetailsView 提供统一标题、滚动正文、搜索与可配置操作栏；静态 Markdown 与 jobs 动态日志使用同一框架。ScrollView 支持替换正文并保留阅读状态，调用方可要求下次渲染跟随底部；用户在渲染前滚动或开始搜索会取消该次跟随。日志只缓存当前字节窗口，具体操作见 [执行任务](../jobs/index.md#用户操作)。
+DetailsView 提供统一标题、滚动正文、搜索与可配置操作栏；静态 Markdown、tasks 快照与 jobs 动态日志使用同一框架。ScrollView 支持替换正文并保留阅读状态，调用方可要求下次渲染跟随底部；用户在渲染前滚动或开始搜索会取消该次跟随。日志只缓存当前字节窗口，具体操作见 [执行任务](../jobs/index.md#用户操作) 与 [任务操作](../tasks/operations.md)。
 
 [返回当前文档](../index.md)

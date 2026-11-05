@@ -2,7 +2,7 @@
 
 目标：tasks、jobs、agents 以上游发布包源码为基础导入改造，保留已解决的平台与并发边界，按文件记录导入、改造和丢弃范围。
 
-当前状态：实施中；四个上游发布包已下载核对，jobs 的后端、长期管理、PTY、monitor、hands-free 与 CLI 预设核心逻辑已按文件导入改造并登记来源，tasks 与 agents 待实施。本文件记录完整按文件处置结论。ask 与 goal 已按上游契约重写并通过两平台检查，不再改为导入。
+当前状态：实施中；四个上游发布包已下载核对，jobs 的后端、长期管理、PTY、monitor、hands-free 与 CLI 预设，以及 tasks 的两级存储、依赖、会话与提醒已按文件导入改造并登记来源，agents 待实施，task 的 agent 执行恢复关联随其接入。本文件记录完整按文件处置结论。ask 与 goal 已按上游契约重写并通过两平台检查，不再改为导入。
 
 影响范围：src/tasks、src/jobs、src/agents 与共享 runtime/ui，third-party 来源登记与许可证，package.json 运行依赖。
 
@@ -44,7 +44,7 @@
 src/
   runtime/        binding、notifications、config、wait（共享等待）
   ui/             dock、status、details、transcript、scroll、terminal（PTY 视图）
-  tasks/          store、paths、tools、reminders、index
+  tasks/          store、types、model、query、tools、viewer、index（会话与提醒）
   jobs/
     backends/     pipe、pty、windows-tree、posix-group
     terminal/     session、protocol、keys、visible-text
@@ -141,12 +141,12 @@ src/
 
 | 文件 | 行数 | 处置 |
 | --- | --- | --- |
-| src/task-store.ts | 402 | 导入改造。保留 pid:uuid 锁、原子保存、锁内重读和防御性加载；增加 parentId 两级约束、版本号与批量事务；保留 blockedBy 双向边及自引用/不存在/二元环警告 |
-| src/task-paths.ts | 65 | 导入，默认会话级存储 `<cwd>/.pi/tasks/tasks-<sessionId>.json` |
+| src/task-store.ts | 402 | 导入改造至 tasks/store、model。保留 pid:uuid 锁、原子保存、锁内重读和边界加载；等待改为异步，增加 parentId 两级约束、版本号与批量事务；保留 blockedBy 双向关系及自引用/不存在/二元环警告，反向边从保存数据派生 |
+| src/task-paths.ts | 65 | 会话路径逻辑导入 tasks/index，默认会话级存储 `<cwd>/.pi/tasks/tasks-<sessionId>.json` |
 | src/types.ts | 40 | 改造：状态改为 todo、doing、done，增加 parentId |
-| src/reminder-cadence.ts | 90 | 导入：任务长时间未更新时注入一次提醒，执行中缩短间隔；可配置关闭 |
+| src/reminder-cadence.ts | 90 | 规则导入 tasks/index：任务长时间未更新时注入一次临时提醒，执行中缩短间隔；共享配置可关闭 |
 | src/tasks-config.ts | 77 | 并入共享配置 tasks 节 |
-| src/index.ts | 1417 | 不导入工具实现，按 task_list/task_edit 重写；保留 new/resume/fork 重置、fork 继承父清单、工作区切换时重新定位存储、--no-session 内存模式、reload 后按 agentId 重新关联执行任务 |
+| src/index.ts | 1417 | 不导入工具实现，按 task_list/task_edit 重写；new/resume/fork 重置、fork 继承父清单、工作区切换时重新定位存储与 --no-session 内存模式导入 tasks/index；reload 后按 agentId 重新关联执行任务随 agents 接入 |
 | src/auto-clear.ts | 134 | 丢弃：按轮次删除已完成任务，与“折叠只改变显示”的规则冲突 |
 | src/task-sort.ts、task-glyphs.ts | 90、110 | 丢弃：显示由 dock 统一处理 |
 | src/process-tracker.ts | 140 | 丢弃：上游工具未调用，进程由 JobManager 管理 |
