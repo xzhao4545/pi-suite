@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { WAIT_ID_PATTERN } from '../runtime/tools.ts';
+import { ToolError } from '../runtime/errors.ts';
 import type { GoalManager } from "./manager.ts";
 
 const goalId = Type.String({ minLength: 1, description: "The exact goalId in the current active goal contract" });
@@ -10,7 +11,7 @@ export function registerGoalTools(pi: ExtensionAPI, manager: GoalManager): void 
     description: "Complete the active goal only after verifying every original requirement. Include the completion evidence in summary; partial or unverified work stays active.",
     parameters: Type.Object({ goalId, summary: Type.String({ minLength: 1, maxLength: 4000 }) }),
     async execute(_id, params, _signal, _update, ctx) {
-      if (!params.summary.trim()) throw new Error("Completion summary must include verification evidence");
+      if (!params.summary.trim()) throw new ToolError("INVALID_ARGS", "Completion summary must include verification evidence", params.goalId);
       manager.complete(params.goalId, params.summary, ctx);
       return { content: [{ type: "text", text: `Goal complete: ${params.summary}` }],
         details: { goalId: params.goalId, summary: params.summary }, terminate: true };
@@ -22,7 +23,7 @@ export function registerGoalTools(pi: ExtensionAPI, manager: GoalManager): void 
     parameters: Type.Object({ goalId, reason: Type.String({ minLength: 1, maxLength: 1000 }),
       evidence: Type.String({ minLength: 1, maxLength: 4000 }), repeatedTurns: Type.Integer({ minimum: 3 }) }),
     async execute(_id, params, _signal, _update, ctx) {
-      if (!params.reason.trim() || !params.evidence.trim()) throw new Error("Blocking requires a reason and concrete evidence");
+      if (!params.reason.trim() || !params.evidence.trim()) throw new ToolError("INVALID_ARGS", "Blocking requires a reason and concrete evidence", params.goalId);
       manager.block(params.goalId, params.reason, params.evidence, ctx);
       return { content: [{ type: "text", text: `Goal blocked: ${params.reason}` }], details: params, terminate: true };
     },
@@ -35,7 +36,7 @@ export function registerGoalTools(pi: ExtensionAPI, manager: GoalManager): void 
       waitFor: Type.Optional(Type.Array(Type.String({ pattern: WAIT_ID_PATTERN }), { minItems: 1, maxItems: 50 })),
       resumeAfterMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 2147483647 })) }, { additionalProperties: false }),
     async execute(_id, params, _signal, _update, ctx) {
-      if (!params.reason.trim()) throw new Error("Waiting requires an external wake reason");
+      if (!params.reason.trim()) throw new ToolError("INVALID_ARGS", "Waiting requires an external wake reason", params.goalId);
       const { waiting, settled } = manager.wait(params.goalId, params.reason, params.resumeAfterMs, ctx, params.waitFor);
       const note = settled.length ? `already settled: ${settled.join(", ")}` : undefined;
       if (!waiting) {

@@ -37,7 +37,7 @@
 - [活动数量状态](../../../todo/pi-suite/status.md)
 - [job 查询与控制](../../../todo/pi-suite/jobs/history-control.md)
 - [目标调度](../../../todo/pi-suite/goal.md)
-- [统一工具设计](../../../todo/pi-suite/tool-design.md)
+- [统一工具设计](../tool-design.md)
 
 ## 运行记录与历史
 
@@ -59,7 +59,7 @@ agent ID 用于稳定引用可恢复的会话；同一 agent 同时只保留一�
 
 ## 查询和控制接口
 
-保留上游 Agent、get_subagent_result、steer_subagent 的能力，按 [统一工具设计](../../../todo/pi-suite/tool-design.md) 改为 agent_start、agent_list、agent_read、agent_send、agent_stop 与共享 wait；查询、查看和停止各走 AgentManager 与同一个 child 记录，不为同一操作暴露多套参数。主从消息、提问转交和进度读取的完整规则见 [主从交互](interaction.md)。
+保留上游 Agent、get_subagent_result、steer_subagent 的能力，按 [统一工具设计](../tool-design.md) 改为 agent_start、agent_list、agent_read、agent_send、agent_stop 与共享 wait；查询、查看和停止各走 AgentManager 与同一个 child 记录，不为同一操作暴露多套参数。主从消息、提问转交和进度读取的完整规则见 [主从交互](interaction.md)。
 
 | 入口 | 契约 |
 | --- | --- |

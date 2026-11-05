@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
-import { acquireRuntime, PROTOCOL_VERSION } from '../../src/jobs/runtime.ts';
+import { acquireRuntime, PROTOCOL_VERSION, quitExistingRuntime } from '../../src/jobs/runtime.ts';
 import type { JobManager } from '../../src/jobs/manager.ts';
 import type { ControlBridge } from '../../src/jobs/control.ts';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
@@ -108,8 +108,8 @@ test('foreign directories and unknown occupied registrations stay unavailable wi
   const registration = globals[key], bridge = registration.control;
   let h: Awaited<ReturnType<typeof host>> | undefined;
   try {
-    assert.ok(bridge?.version === 2);
-    const {createdBy: _createdBy, ...legacyJobs} = bridge.jobs;
+    assert.ok(bridge?.version === 3);
+    const {createdBy: _createdBy, sessionJobs: _sessionJobs, ...legacyJobs} = bridge.jobs;
     registration.protocolVersion = PROTOCOL_VERSION - 1;
     registration.control = {version: 1, jobs: legacyJobs, quit: () => bridge.quit()};
     let view!: JobsModule;
@@ -124,6 +124,7 @@ test('foreign directories and unknown occupied registrations stay unavailable wi
     assert.equal(globals[key], registration);
     registration.protocolVersion = PROTOCOL_VERSION - 1; delete registration.control;
     assert.equal(acquireRuntime(root).mode, 'unavailable');
+    assert.equal(quitExistingRuntime(root), undefined);
     assert.equal(jobs.peek(legacyQuit.id).state, 'running');
     assert.ok(process.listeners('exit').includes(registration.exitListener));
     registration.control = bridge;

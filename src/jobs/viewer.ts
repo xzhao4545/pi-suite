@@ -7,7 +7,7 @@ import { ToolError } from '../runtime/errors.ts';
 import { isActive } from './state.ts';
 import { resolveWorkspace } from './workspace.ts';
 import { JobsModule, displayName, summaryLine } from './index.ts';
-import { jobDetail, listJobs, streamsOf, type ListScope, type ListState } from './query.ts';
+import { jobDetail, streamsOf, type ListScope, type ListState } from './query.ts';
 import { showJobLog } from './log-viewer.ts';
 import type { JobSummary, Stream } from './types.ts';
 
@@ -52,13 +52,13 @@ export function screenMessage(job: JobSummary, screen: string[]): string {
 
 const STATES: ListState[] = ['active', 'finished', 'all'];
 
-async function pickJob(ctx: ExtensionCommandContext, deps: ViewerDeps, state: ListState, scope: ListScope): Promise<string | undefined> {
+async function pickJob(ctx: ExtensionCommandContext, deps: ViewerDeps, state: ListState, scope: ListScope): Promise<JobSummary | undefined> {
   const workspace = await resolveWorkspace(ctx.cwd);
   let cursor: string | undefined;
   for (;;) {
-    const { rows, nextCursor, errors } = await listJobs(deps.jobs.control(), workspace, { state, scope, sessionId: ctx.sessionManager.getSessionId(), cursor, limit: 20 });
+    const { rows, nextCursor, errors } = await deps.jobs.list(workspace, { state, scope, cursor, limit: 20 }, ctx);
     for (const error of errors) ctx.ui.notify(`history error: ${error}`, 'warning');
-    const labels = new Map(rows.map(row => [`${summaryLine(row.job)} · ${displayName(row.job)}${row.unsettled ? ' · unsettled history' : ''}`, row.job.id]));
+    const labels = new Map(rows.map(row => [`${summaryLine(row.job)} · ${displayName(row.job)}${row.unsettled ? ' · unsettled history' : ''}`, row.job]));
     const more = nextCursor ? 'More…' : undefined;
     const filters = STATES.filter(item => item !== state).map(item => `Show ${item}`);
     const scopeToggle = scope === 'session' ? 'Show whole workspace' : 'Show this session only';
@@ -113,8 +113,8 @@ export function registerJobsCommand(pi: ExtensionAPI, deps: ViewerDeps): void {
       // Keep notices from starting a model turn while the user browses.
       const release = deps.notifications.hold();
       try {
-        const id = await pickJob(ctx, deps, (words.find(word => STATES.includes(word as ListState)) ?? 'active') as ListState, words.includes('workspace') ? 'workspace' : 'session');
-        if (id) await jobActions(pi, ctx, deps, id);
+        const job = await pickJob(ctx, deps, (words.find(word => STATES.includes(word as ListState)) ?? 'active') as ListState, words.includes('workspace') ? 'workspace' : 'session');
+        if (job) await jobActions(pi, ctx, deps, job.id, false, job.cwd);
       } finally { release(); }
     },
   });

@@ -41,13 +41,22 @@ test("binding revocation fences wakeups; blocked notifications coalesce without 
 
 test("status publishing deduplicates IDs, clears old bindings and honors status/dock placement", () => {
   const dock = new Dock(); const publisher = new StatusPublisher(dock);
+  let renders = 0;
+  const invalidate = dock.invalidate.bind(dock);
+  dock.invalidate = () => { renders++; invalidate(); };
   const writes: [string, string | undefined][] = [];
   const ui = { setStatus: (key: string, text?: string) => { writes.push([key, text]); } } as ExtensionContext["ui"];
   publisher.bind(ui, { goal: "status", agents: "status", jobs: "dock" });
   publisher.setGoal("goal 待答"); publisher.setActivities("agents", ["a", "a", "b"]); publisher.setActivities("jobs", ["j"]);
   assert.deepEqual(writes.at(-1), ["pi-suite:runtime", "agents 2"]);
-  const length = writes.length; publisher.setActivities("agents", ["b", "a"]); assert.equal(writes.length, length);
+  const length = writes.length, before = renders;
+  publisher.setActivities("agents", ["b", "a"]); publisher.setActivities("jobs", ["another-job"]); publisher.setGoal("goal 待答");
+  assert.equal(writes.length, length); assert.equal(renders, before, 'unchanged summaries do not invalidate Dock');
   assert.ok(dock.render(40).some(line => line.includes("jobs 1")));
   assert.ok(dock.render(40).every(line => !line.includes("agents 2") && !line.includes("goal")));
   publisher.detach(); assert.deepEqual(writes.slice(-2), [["goal", undefined], ["pi-suite:runtime", undefined]]);
+  writes.length = 0;
+  publisher.bind(ui, {goal: "status", agents: "status", jobs: "status"}, false);
+  publisher.setActivities("jobs", ["job"]); publisher.detach();
+  assert.ok(writes.every(([key]) => key !== "goal"), 'a disabled goal module leaves another provider’s status untouched');
 });

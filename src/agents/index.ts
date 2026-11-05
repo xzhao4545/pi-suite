@@ -37,6 +37,10 @@ export class AgentsModule implements Waitable {
     this.manager = manager ?? agentRuntime();
   }
   scope(ctx: ExtensionContext): ParentScope { return { ctx, run: this.parentRun, taskStore: this.tasks?.scope(ctx) ?? this.parentRun?.parent.taskStore }; }
+  visibleRunIds(ctx: ExtensionContext): string[] {
+    const scope = this.scope(ctx);
+    return this.manager.records().filter(record => this.manager.visible(record, scope)).map(record => record.runId);
+  }
   bind(): void {
     this.detach();
     const current = this.binding.current;

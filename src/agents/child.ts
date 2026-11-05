@@ -23,7 +23,8 @@ export function childSuite(pi: ExtensionAPI, run: Execution, manager: AgentManag
   const status = new StatusPublisher(dock), notices = new Notifications(pi, binding), waits = new WaitRegistry();
   const tasks = config.modules.tasks ? new TasksModule(binding, dock, run.parent.taskStore) : undefined;
   const agents = new AgentsModule(pi, binding, notices, status, tasks, run, manager);
-  const jobs = config.modules.jobs ? new JobsModule(pi, binding, notices, status) : undefined;
+  const creatorRoots = () => binding.current ? agents.visibleRunIds(binding.current.ctx) : [];
+  const jobs = config.modules.jobs ? new JobsModule(pi, binding, notices, status, creatorRoots) : undefined;
   const ask = { ask: (params: AskParams, _ctx: unknown, _config: unknown, signal?: AbortSignal) => askParent(run, params, config.ask.timeout, manager.changed, signal) };
   pi.registerTool({ name: 'ask_user', label: 'Ask parent', parameters: askSchema, executionMode: 'sequential',
     description: 'Ask your direct parent for information; wait for its explicit answer. timed_out/cancelled never means consent.',

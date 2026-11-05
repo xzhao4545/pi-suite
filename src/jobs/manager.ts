@@ -291,6 +291,10 @@ export class JobManager {
   }
   /** Complete creation scope across workspaces and notification owners, without pagination. */
   createdBy(runIds: string[]): JobSummary[] { return this.createdItems(runIds).map(item => this.view(item)); }
+  /** Session ownership spans working directories; branch visibility belongs to JobsModule. */
+  sessionJobs(sessionId: string): JobSummary[] {
+    return [...this.jobs.values()].filter(item => item.job.ownerSessionId === sessionId).map(item => this.view(item));
+  }
   /** Stop every job created by these agent runs or their descendants, including detached ones. */
   async stopCreatedBy(runIds: string[]): Promise<StopResult[]> {
     for (const runId of runIds) this.stoppingCreators.add(runId);

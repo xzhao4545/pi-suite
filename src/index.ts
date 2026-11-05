@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { getAgentDir, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { loadConfig } from "./runtime/config.ts";
 import { SessionBinding } from "./runtime/binding.ts";
 import { Notifications } from "./runtime/notifications.ts";
@@ -10,6 +10,7 @@ import { registerGoalTools } from "./goal/tools.ts";
 import { registerGoalCommand } from "./goal/commands.ts";
 import { registerGoalLifecycle } from "./goal/index.ts";
 import { JobsModule } from "./jobs/index.ts";
+import { quitExistingRuntime } from "./jobs/runtime.ts";
 import { registerJobTools } from "./jobs/tools.ts";
 import { registerJobsCommand } from "./jobs/viewer.ts";
 import { WaitRegistry, registerWait } from "./runtime/wait.ts";
@@ -17,17 +18,31 @@ import { TasksModule } from "./tasks/index.ts";
 import { registerTaskTools } from "./tasks/tools.ts";
 import { registerTasksCommand } from "./tasks/viewer.ts";
 import { AgentsModule } from "./agents/index.ts";
+import { quitExistingAgentRuntime } from "./agents/runtime.ts";
 import { registerAgentTools } from "./agents/tools.ts";
 import { registerAgentsCommand } from "./agents/viewer.ts";
+import { recordsIn } from "./agents/records.ts";
+import { visibleAgent } from "./agents/types.ts";
 import { registerAgentMentions } from "./agents/mentions/index.ts";
 import { AgentScheduler } from "./agents/schedules/index.ts";
 import { AgentRpc } from "./agents/rpc/index.ts";
 import { WorkflowsModule } from './agents/workflow/index.ts';
+import { quitExistingWorkflowRuntime } from './agents/workflow/manager.ts';
 import { registerWorkflowTool } from './agents/workflow/tools.ts';
 import { showWorkflows } from './agents/workflow/ui/menu.ts';
 
 export default function piSuite(pi: ExtensionAPI): void {
-  let config = loadConfig(process.cwd());
+  let bindSession: ReturnType<typeof createSuite> | undefined;
+  pi.on("session_start", (event, ctx) => {
+    // Factories have no session cwd. Admit modules once from the real context;
+    // reload creates a new activation, while new/resume/tree reuse these modules.
+    bindSession ??= createSuite(pi, ctx);
+    return bindSession(ctx, event.reason, event.previousSessionFile);
+  });
+}
+
+function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
+  let config = loadConfig(initial.cwd);
   const binding = new SessionBinding();
   const dock = new Dock();
   const status = new StatusPublisher(dock);
@@ -38,13 +53,21 @@ export default function piSuite(pi: ExtensionAPI): void {
   const goal = config.modules.goal ? new GoalManager(pi, binding, notifications, status, waits) : undefined;
   const ask = new AskManager(binding, notifications, dock, (answered, ctx) => goal?.askResult(answered, ctx));
   if (config.modules.ask) registerAsk(pi, ask, () => config);
-  const jobs = config.modules.jobs ? new JobsModule(pi, binding, notifications, status) : undefined;
+  const creatorRoots = () => {
+    const ctx = binding.current?.ctx;
+    if (!ctx) return [];
+    // Module switches remove tools, while saved parent records still identify jobs
+    // left by their children. Reading these references does not start an agent runtime.
+    return agents ? agents.visibleRunIds(ctx) : recordsIn(ctx.sessionManager.getBranch())
+      .filter(record => visibleAgent(record, {ctx})).map(record => record.runId);
+  };
+  const jobs = config.modules.jobs ? new JobsModule(pi, binding, notifications, status, creatorRoots) : undefined;
   const jobViewer = jobs ? { jobs, dock, notifications, keys: () => config.jobs } : undefined;
   if (jobs) {
     registerJobTools(pi, jobs, jobViewer!, { ask, config: () => config, tasks }); registerJobsCommand(pi, jobViewer!); waits.register(jobs);
   }
   const agents = config.modules.agents ? new AgentsModule(pi, binding, notifications, status, tasks) : undefined;
-  const agentJobViewer = agents ? {pi, viewer: jobViewer ?? {jobs: new JobsModule(pi, binding, notifications, status), dock, notifications, keys: () => config.jobs}} : undefined;
+  const agentJobViewer = agents ? {pi, viewer: jobViewer ?? {jobs: new JobsModule(pi, binding, notifications, status, creatorRoots), dock, notifications, keys: () => config.jobs}} : undefined;
   const schedules = agents ? new AgentScheduler(pi, binding, agents, notifications, () => config) : undefined;
   const agentRpc = agents ? new AgentRpc(pi, binding, agents, () => config) : undefined;
   const workflows = agents ? new WorkflowsModule(pi, binding, notifications, dock, agents) : undefined;
@@ -80,17 +103,16 @@ export default function piSuite(pi: ExtensionAPI): void {
     config = loadConfig(ctx.cwd);
     binding.bind(ctx);
     dock.bind(ctx, config.ui.maxRows);
-    status.bind(ctx.ui, { goal: config.goal.display, agents: config.agents.display, jobs: config.jobs.display });
+    status.bind(ctx.ui, { goal: config.goal.display, agents: config.agents.display, jobs: config.jobs.display }, goal !== undefined);
     goal?.restore(ctx, reason);
-    jobs?.bind();
     await tasks?.bind(ctx, { reason, previousSessionFile });
     agents?.manager.configure(config); agents?.bind();
+    jobs?.bind();
     workflows?.bind(); workflowTool?.bind(ctx);
-    await schedules?.bind(); startTool?.refreshSchema();
+    await schedules?.bind(); startTool?.refreshSchema(); mentions?.bind(ctx);
     agentRpc?.bind();
     notifications.flush();
   };
-  pi.on("session_start", (event, ctx) => bindSession(ctx, event.reason, event.previousSessionFile));
   pi.on("session_tree", async (_event, ctx) => { await bindSession(ctx, "resume"); notifications.afterHostOperation(); });
   pi.on("session_shutdown", event => {
     agentRpc?.detach();
@@ -98,9 +120,12 @@ export default function piSuite(pi: ExtensionAPI): void {
     ask.cancel(); goal?.shutdown();
     tasks?.detach();
     // Detach before revoking so pending job notices are cancelled under the old session ID.
-    const quit = (jobs ?? agentJobViewer?.viewer.jobs)?.shutdown(event.reason);
-    const agentQuit = event.reason === 'quit' ? agents?.manager.shutdown() : undefined;
-    const workflowQuit = event.reason === 'quit' ? workflows?.manager.shutdown() : undefined;
+    (jobs ?? agentJobViewer?.viewer.jobs)?.detach();
+    // Module switches change registration, not the lifetime of existing execution owners.
+    const agentDir = getAgentDir();
+    const quit = event.reason === 'quit' ? quitExistingRuntime(agentDir) : undefined;
+    const agentQuit = event.reason === 'quit' ? quitExistingAgentRuntime(agentDir) : undefined;
+    const workflowQuit = event.reason === 'quit' ? quitExistingWorkflowRuntime(agentDir) : undefined;
     const scheduleQuit = agentQuit?.then(() => schedules?.drain());
     workflows?.detach(); agents?.detach();
     notifications.detach(); status.detach(); dock.detach(binding.current?.ctx); binding.revoke();
@@ -118,4 +143,5 @@ export default function piSuite(pi: ExtensionAPI): void {
       ctx.ui.notify(`pi-suite · ask_user ${config.modules.ask ? "enabled" : "disabled"} · tasks ${tasks ? "enabled" : "disabled"} · agents ${agents ? "enabled" : "disabled"} · jobs ${jobs ? "enabled" : "disabled"} · timeout ${config.ask.timeout}ms · maxRows ${config.ui.maxRows}`);
     },
   });
+  return bindSession;
 }

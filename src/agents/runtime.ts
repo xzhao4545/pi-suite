@@ -7,8 +7,8 @@ import { getAgentDir } from '@earendil-works/pi-coding-agent';
 
 /** Reload changes listeners; existing SDK sessions and queued runs keep their owner. */
 const key = Symbol.for('pi-suite.agents.runtime.v1');
+const registry = globalThis as unknown as Record<symbol, Map<string, AgentManager> | undefined>;
 export function agentRuntime(): AgentManager {
-  const registry = globalThis as unknown as Record<symbol, Map<string, AgentManager> | undefined>;
   const managers = registry[key] ??= new Map();
   const agentDir = getAgentDir();
   if (!managers.has(agentDir) || managers.get(agentDir)!.closed) {
@@ -26,4 +26,9 @@ export function agentRuntime(): AgentManager {
     managers.set(agentDir, manager);
   }
   return managers.get(agentDir)!;
+}
+
+/** Query only: quit must not create an owner when agent tools are disabled. */
+export function quitExistingAgentRuntime(agentDir: string): Promise<void> | undefined {
+  return registry[key]?.get(agentDir)?.shutdown();
 }

@@ -6,7 +6,7 @@
 
 影响范围：agents 类型注册、输入拦截、调度存储、workflow worker、pi.events 通道、/agents 菜单、配置 agents 节。
 
-约束：工具名与参数按 [统一工具设计](../tool-design.md)；配置并入共享配置，不保留上游独立设置界面；调度与 workflow 启动的 child 与普通 child 使用同一记录、停止和通知路径。
+约束：工具名与参数按 [统一工具设计](../../../finished/pi-suite/tool-design.md)；配置并入共享配置，不保留上游独立设置界面；调度与 workflow 启动的 child 与普通 child 使用同一记录、停止和通知路径。
 
 相关当前文档：[公共运行时与配置](../../../current/runtime/index.md)。
 

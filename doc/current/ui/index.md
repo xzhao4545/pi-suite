@@ -8,7 +8,7 @@ Dock 是本包唯一常驻 widget，键为 pi-suite:dock。模块提交稳定 ID
 
 每行使用 Pi 的 ANSI 安全截断与可见字符宽度，不自动换行。展开的 Markdown 详情与字面量日志详情按宽度换行。第三方 widget 或 footer 的高度由其自身控制。
 
-StatusPublisher 是 goal 与 pi-suite:runtime 两个槽位的唯一写入方，原生 setStatus 更新/清除摘要。活动 ID 使用集合去重；文本不变时不重复写入。status 模式的摘要不在 dock 重复展示，dock 模式清除状态槽位，hidden 不建立常驻摘要。绑定撤销时清除本包的两个槽位。
+StatusPublisher 是本包 goal 与 pi-suite:runtime 摘要的共享写入方，原生 setStatus 更新/清除摘要。只有本次激活实际创建 GoalManager 时才持有 goal 键的写入/清除权；goal 模块关闭时绑定、重绑、reload 和 quit 均保留其他扩展的 goal 状态。活动 ID 使用集合去重；goal 文本或活动数量未变化时不刷新投影，也不请求 Dock 重绘；等数量的 ID 变化仍更新集合。status 模式的摘要不在 dock 重复展示，dock 模式清除状态槽位，hidden 不建立常驻摘要。绑定撤销时清除 pi-suite:runtime，并仅在本次激活持有 goal 键时清除该槽位。agents 按直接子级与分支可见记录计数，queued 不计入；jobs 的 session 列表与数量共用 [会话可见集合](../jobs/index.md#会话可见集合)，只计入当前运行时持有且活动的对象。
 
 goal 摘要从目标与调度状态派生；完成反馈显示 5 秒后清除，回调同时校验绑定与目标 ID。暂停、阻塞、请求失败与预算耗尽持续可见。Pi 原生 footer 读取 goal 键；pi-starship 0.65.2 使用 extension_status 模块读取同一键，其格式和数量上限由外部 footer 配置控制。目标详情通过 /goal 打开，复用 Markdown 与 ScrollView，并提供搜索和显式翻页操作。
 

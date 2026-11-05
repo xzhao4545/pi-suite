@@ -2,7 +2,7 @@
 
 目标：将已核对的发布包信息转为可验证的导入基线。
 
-当前状态：Windows 实际 Pi 1.5.0 与 Linux 同版本 SDK 已核对；七个参考发布包的来源元数据已登记，ask 契约与许可证已落地。tasks、jobs、agents 的保留能力与按文件处置已核对并记录在 [上游导入](upstream-import.md)，工具契约统一见 [统一工具设计](tool-design.md)。实际问题复现待实施。
+当前状态：Windows 实际 Pi 1.5.0 与 Linux 同版本 SDK 已核对；七个参考发布包的来源元数据已登记，ask 契约与许可证已落地。tasks、jobs、agents 的保留能力与按文件处置已核对并记录在 [上游导入](upstream-import.md)，工具契约统一见 [统一工具设计](../../finished/pi-suite/tool-design.md)。实际问题复现待实施。
 
 影响范围：六个扩展来源、Pi 宿主版本和平台复现。
 
@@ -23,9 +23,9 @@
 
 ## 关联计划
 
-- [架构与发布](architecture.md)
+- [架构与发布](../../finished/pi-suite/architecture.md)
 - [上游导入](upstream-import.md)
-- [统一工具设计](tool-design.md)
+- [统一工具设计](../../finished/pi-suite/tool-design.md)
 - [上游来源登记](../../../third-party/UPSTREAM.md)
 
 ## 2. 已核对的上游现状

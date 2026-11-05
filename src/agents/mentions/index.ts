@@ -1,7 +1,7 @@
 // Input dispatch adapted from @tintinweb/pi-subagents 0.23.0 src/index.ts (MIT).
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import type { SessionBinding } from '../../runtime/binding.ts';
-import { loadConfig, type SuiteConfig } from '../../runtime/config.ts';
+import type { SuiteConfig } from '../../runtime/config.ts';
 import type { AgentsModule } from '../index.ts';
 import { agentTypes } from '../catalog.ts';
 import { isReservedHandle, parseMention, stripAgentPrefix } from './grammar.ts';
@@ -25,19 +25,18 @@ export function registerAgentMentions(pi: ExtensionAPI, agents: AgentsModule, bi
   const cancel = () => { for (const controller of clones) controller.abort(); clones.clear(); };
   pi.on('session_before_switch', cancel);
   pi.on('session_shutdown', cancel);
-  pi.on('session_tree', (_event, ctx) => { cancel(); loadTypes(ctx); });
-  pi.on('session_start', (_event, ctx) => {
+  const bind = (ctx: Parameters<AgentsModule['scope']>[0]) => {
     cancel();
     // A session switch retains the host's provider stack; reload replaces the activation.
     // Discover types at bind/dispatch, rather than reading every markdown/package per key.
-    loadTypes(ctx, loadConfig(ctx.cwd));
+    loadTypes(ctx);
     if (ctx.mode !== 'tui' || providerRegistered) return;
     providerRegistered = true;
     ctx.ui.addAutocompleteProvider(current => createMentionProvider(current, roster, enabled, error => {
       binding.current?.ctx.ui.notify(`File completion failed: ${String(error)}`, 'error');
       console.error('[pi-suite] autocomplete provider failed', error);
     }));
-  });
+  };
   pi.on('input', async (event, ctx) => {
     // Print/RPC callers need a normal response; consuming their input would produce silence.
     // Attachments remain on the parent's request because agent_send accepts text only.
@@ -69,5 +68,5 @@ export function registerAgentMentions(pi: ExtensionAPI, agents: AgentsModule, bi
       .finally(() => { clones.delete(controller); });
     return { action: 'handled' };
   });
-  return { refreshTypes() { if (binding.current) loadTypes(binding.current.ctx); } };
+  return { bind, refreshTypes() { if (binding.current) loadTypes(binding.current.ctx); } };
 }

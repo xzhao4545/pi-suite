@@ -6,7 +6,7 @@
 
 影响范围：jobs、Windows/Linux 后端、日志、会话绑定和通知协调。
 
-约束：pipe 与 PTY 分别处理；第一阶段只承诺同一 Pi 进程内保活，独立 supervisor 属于后续可选专项；工具按 [统一工具设计](../tool-design.md)。
+约束：pipe 与 PTY 分别处理；第一阶段只承诺同一 Pi 进程内保活，独立 supervisor 属于后续可选专项；工具按 [统一工具设计](../../../finished/pi-suite/tool-design.md)。
 
 相关当前文档：[项目当前状态](../../../current/index.md)。
 

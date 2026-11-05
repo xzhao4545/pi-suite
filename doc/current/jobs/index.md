@@ -4,10 +4,10 @@ jobs 模块在同一 Pi 进程内管理 pipe 与 PTY 两种后台执行。实现
 
 ## 结构
 
-- JobManager（manager.ts）持有进程、PTY、日志和记录，不持有 Pi context。它注册在进程全局槽位 `pi-suite.jobs.runtime`，执行协议版本 6；reload 重新导入模块时复用同一 manager。
+- JobManager（manager.ts）持有进程、PTY、日志和记录，不持有 Pi context。它注册在进程全局槽位 `pi-suite.jobs.runtime`，执行协议版本 7；reload 重新导入模块时复用同一 manager。
 - JobsModule（index.ts）是每个扩展实例的会话绑定：只在会话绑定期间订阅 manager，发布当前会话的活动数量和结算通知；reload、new、resume、fork、树切换只撤销并重建订阅，不转移所有权。
 - 执行协议不兼容且占用中的 manager 仍有活动或未保存的 job 时，保留其注册和退出清理。相同 agentDir 且控制桥版本兼容时，进入受限模式：查询、日志、停止、指定 ID 的 wait/goal_wait 与 quit 通过原实现的闭包调用，活动数量继续更新；新启动、写入与终端 attach 返回 RUNTIME_UNAVAILABLE，自动结果与监督通知暂停。job 全部结束并保存后，/reload 替换空闲 manager，同时释放其退出监听。
-- 控制桥版本 2 暴露查询、日志路径、订阅、活动数量、停止、通知已读标记、创建归属查询 createdBy 与 quit；版本 1 保留其基础查询/停止/退出能力，创建归属查询明确返回 RUNTIME_UNAVAILABLE。保存记录和控制返回数据的契约变化需要同步提升控制桥版本。没有兼容控制桥或 agentDir 不同的占用注册保留退出清理，绑定时提示原因，工具返回 RUNTIME_UNAVAILABLE。
+- 控制桥版本 3 暴露查询、日志路径、订阅、活动数量、停止、通知已读标记、创建归属查询 createdBy、全 cwd 的直属 sessionJobs 与 quit。版本 2 支持 createdBy，版本 1 的创建归属查询明确返回 RUNTIME_UNAVAILABLE；版本 1/2 不提供完整 session 列表，明确返回 RUNTIME_UNAVAILABLE，workspace 查询、日志、停止与 quit 保留。绑定时提示一次状态仅包含当前分支直属活动 job，完整 child 聚合需要 v3。保存记录和控制返回数据的契约变化需要同步提升控制桥版本。没有兼容控制桥或 agentDir 不同的占用注册保留退出清理，绑定时提示原因，工具返回 RUNTIME_UNAVAILABLE。
 
 ## 记录与日志
 
@@ -32,9 +32,17 @@ stopCreatedBy(runIds) 按本次传入的 agent run/workflow ID 及祖先匹配�
 
 createdBy(runIds) 与 stopCreatedBy 共用创建归属选择，从当前运行时持有的全部 job 记录返回副本，不按 cwd、owner、branch 或分页截断；只读查询不关闭 creator。agents 的稳定 ID 查询汇总该 agent 全部 run 根，原生 Jobs 入口限定所选 run 的子树；活动筛选使用公共 isActive，包含非终态、cleanup=pending，以及 cleanup=unconfirmed 且尚未确认根进程退出的对象，任务引用不改变创建归属。
 
-modules.jobs=false 关闭 job 工具注册和会话订阅；agents 保留未绑定的 JobsModule 查询与查看同一进程 owner 的既有 job，reload 不停止或抹去这些 job。主会话 quit 通过该入口清理 owner，即使此前没有查询也适用。
+modules.jobs=false 关闭 job 工具注册和会话订阅；agents 保留未绑定的 JobsModule 查询与查看同一进程 owner 的既有 job，reload 不停止或抹去这些 job。主会话 quit 查询当前 agentDir 的既有运行时注册并清理 owner；jobs 与 agents 同时关闭或此前没有查询也适用，清理不创建新 manager。
 
 session_shutdown 只有 quit 停止全部 job，共享 10 秒期限并关闭新 job 准入；进程 exit 时用同步停止与保存兜底未结算对象。
+
+## 会话可见集合
+
+job_list 的 session 范围、/jobs 默认列表与状态数量共用 JobsModule 的会话范围：当前 owner 且 anchor 位于当前分支（或为 null）的直属 job，以及当前可见 agent 各次 run 根通过 createdBy 匹配的子树 job。运行时的直属 job 覆盖全部 cwd，agent 后代与已回收/结束运行留下的 job 同样可见；列表在存储读取完成后补入当前 owned 副本，按 job ID 去重，再筛状态与分页。活动数量对同一集合使用公共 isActive，不持久化冗余计数。
+
+工作区列表仍限定当前 workspace；session 列表可包含实际工具 cwd 不同的可见直属/child job，归属和通知 owner 保持原值。agents 模块关闭时，从当前分支保存的 agent 记录复用 visibleAgent 提取 run 根，不创建 AgentManager runtime。只有磁盘历史且没有运行时控制句柄的记录不计活动，不能根据历史 PID 重建进程。
+
+执行协议不兼容时，v3 控制桥保留完整 session 查询与计数；v1/v2 只能显示当前分支直属活动数量并在绑定时提示其范围，完整 session 查询明确拒绝。各版本受限运行时的新启动、写入和 attach 均遵循上述受限模式。
 
 ## 工具
 

@@ -31,7 +31,7 @@
 - [活动数量状态](../status.md)
 - [子代理停止边界](../../../finished/pi-suite/agents/runs.md)
 - [输出读取](output.md)
-- [统一工具设计](../tool-design.md)
+- [统一工具设计](../../../finished/pi-suite/tool-design.md)
 
 ## 记录与历史查看
 
@@ -68,7 +68,7 @@ Pi 重新启动后仍可读取保存的记录和日志，但不因此获得原�
 
 ## 查询和控制入口
 
-统一 manager 承担全部入口；工具名与共享参数按 [统一工具设计](../tool-design.md)，上游旧工具不再注册。
+统一 manager 承担全部入口；工具名与共享参数按 [统一工具设计](../../../finished/pi-suite/tool-design.md)，上游旧工具不再注册。
 
 | 入口 | 精简参数与返回 |
 | --- | --- |

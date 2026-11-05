@@ -25,7 +25,7 @@
 ## 关联计划
 
 - [运行记录与手动控制](history-control.md)
-- [统一工具设计](../tool-design.md)
+- [统一工具设计](../../../finished/pi-suite/tool-design.md)
 - [主从交互](../../../finished/pi-suite/agents/interaction.md)
 
 ## 读取方式

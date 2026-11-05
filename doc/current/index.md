@@ -7,7 +7,7 @@
 - 项目是单个 pnpm 包，包名为 pi-suite，package.json 设置 private: true。
 - Node.js 要求为 24 或更高，包管理器固定为 pnpm 12.6.0。
 - 源码使用 TypeScript 和 ESM；Pi 通过 package.json 的 pi.extensions 加载 src/index.ts。
-- src/index.ts 是唯一扩展入口，注册 ask_user、goal_complete/goal_blocked/goal_wait、task_list/task_edit、job_start/job_list/job_read/job_write/job_stop、agent_start/agent_list/agent_read/agent_send/agent_stop/agent_workflow、共享 wait、/goal、/tasks、/jobs、/agents、/suite 及会话生命周期事件。
+- src/index.ts 是唯一扩展入口，在首次真实 session_start 按 ctx.cwd 准入本次激活的模块，注册 ask_user、goal_complete/goal_blocked/goal_wait、task_list/task_edit、job_start/job_list/job_read/job_write/job_stop、agent_start/agent_list/agent_read/agent_send/agent_stop/agent_workflow、共享 wait、/goal、/tasks、/jobs、/agents、/suite 及会话生命周期事件。
 - 源码目录按 ui、runtime、ask、tasks、jobs/backends、goal、agents 划分；上游来源登记位于 third-party/UPSTREAM.md。
 - Pi 开发依赖固定为 1.5.0；jobs 运行依赖固定为 zigpty 0.1.6、@xterm/headless 5.5.0、@xterm/addon-serialize 0.13.0。依赖解析记录在 pnpm-lock.yaml。
 

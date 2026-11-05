@@ -2,7 +2,7 @@
 
 目标：统一发布 goal 状态、活动 subagent 数量和活动 job 数量，使手机终端能从简短状态栏了解执行情况。
 
-当前状态：共享发布器、goal 摘要、agents/jobs 数量、显示模式和去重已实现，原生 footer 与 pi-starship 接口已验证；workflow 的 Dock 进度和 child/gate 普通数量过滤已接入，见 [宿主接入阶段](../../finished/pi-suite/agents/workflow-host.md)。所属 child job 的主级聚合计数、复杂清理状态与平台综合布局待完成。
+当前状态：共享发布器、goal 摘要、agents/jobs 数量、显示模式和去重已实现，原生 footer 与 pi-starship 接口已验证；workflow 的 Dock 进度和 child/gate 普通数量过滤已接入，见 [宿主接入阶段](../../finished/pi-suite/agents/workflow-host.md)。当前 owner/branch 的直属 job 与可见 agent run 子树已共用完整 session 列表/数量范围，包含跨 cwd 和回收后代的遗留 job；活动筛选保留真实清理边界，数量/goal 摘要未变时不刷新 Dock。Windows 与完整第三方 footer、真实手机综合布局待验收。
 
 影响范围：ui/status、goal、AgentManager、JobManager、会话绑定与 dock 显示去重。
 
@@ -13,11 +13,12 @@
 ## 任务列表
 
 - [x] 通过共享发布入口维护 goal 和活动数量两个状态槽位
-- [ ] 按当前会话可见集合派生数量，明确等待、排队、停止与终态的计数
-- [ ] 合并生命周期更新，避免 token 级刷新和重复计数
+- [x] 按当前会话可见集合派生数量，明确等待、排队、停止与终态的计数
+- [x] 按摘要变化投影生命周期更新，避免 token 级刷新和重复计数
 - [x] 协调 status/dock/hidden 模式及零数量隐藏
 - [x] workflow 提交共享 Dock 进度，child 与 gate 不重复计入普通 agents/jobs 数量
-- [ ] 验证会话切换、reload、原生 footer 和 pi-starship 窄屏布局
+- [x] 验证会话切换、reload、原生 footer 40/60/120 列及 pi-starship extension_status 模块
+- [ ] Windows 与完整第三方 footer、真实手机 SSH 复核可见集合、复杂清理状态与窄屏布局
 
 ## 验收方式
 
@@ -48,17 +49,19 @@ ctx.ui.setStatus("pi-suite:runtime", "agents 2 · jobs 3");
 
 数量合并在同一状态槽位，减少 Starship 的 max_statuses 槽位占用；某一类为零时省略该段，两个数量都为零时清除 pi-suite:runtime。goal 独立更新，不因数量归零被清除。
 
-所有模块提供既有状态或生命周期变化，只有共享入口写这些键；不持久化冗余计数，不读取状态栏文字反推执行状态。创建、开始、进入/退出等待、停止请求、退出结算和会话绑定变更时更新；同一批事件合并刷新，数量没有变化时不重复 setStatus。无需模型调用、轮询或每个 token 刷新。
+所有模块提供既有状态或生命周期变化，只有本包共享入口写这些键，goal 键仅在本次激活实际启用 GoalManager 时持有；模块关闭时保留其他 provider 的 goal 状态，不随重绑配置值变化转移 ownership；不持久化冗余计数，不读取状态栏文字反推执行状态。创建、开始、进入/退出等待、停止请求、退出结算和会话绑定变更时更新；仅 goal 摘要或活动数量变化时刷新投影；等数量的 ID 变化更新集合而不重复 setStatus 或请求 Dock 重绘。无需模型调用、轮询或每个 token 刷新。
 
 ## 计数范围与口径
 
-默认统计当前绑定主会话可见的执行集合，与 jobs/agents 详情列表的默认归属过滤共用逻辑：包括当前分支引用的对象及所属 child 的执行对象。按实际 job ID 和 subagent 执行 ID 去重，不把主 agent 计入 subagent 数量。
+默认统计当前绑定主会话可见的执行集合，与 jobs/agents 详情列表的默认归属过滤共用逻辑：直属 job 按 ownerSessionId 和当前 branch 的 anchor 过滤，汇总完整运行时 sessionJobs 与可见 agent run 根的 createdBy 子树，覆盖全部实际 cwd、已结束/已回收后代的遗留 job；列表在存储读取后补入当前 owned 副本，分页前按 ID 去重，workspace 范围仍限定当前工作区。agents 模块关闭时复用当前分支保存的 agent 记录和 visibleAgent 提取根，不创建新 AgentManager runtime。按实际 job ID 和 subagent 执行 ID 去重，不把主 agent 计入 subagent 数量。
 
 - subagent 活动数包含已开始且尚未结算的执行：启动中、运行中、等待用户/父 agent/任务/宿主、停止中。等待回答仍是活动执行，不因暂时没有模型流而消失；child 向父 agent 提问时同样计入。workflow 内的 child 计入其 workflow 详情，不计入 agents 数量。
 - 排队未开始的 subagent、已结束执行，以及仅保留会话但没有未结算运行的 idle subagent 不计入活动数；排队数在详情中单独查看。
-- job 活动数包含 starting、running、stopping；workflow gate 由 workflow 详情和进度承载，不计入普通 jobs 数量。当前 manager 中退出清理仍 pending/unconfirmed 的执行保留在活动集合，并在详情明确“清理待确认”，避免尚未确认停止就显示空闲。
+- job 活动数包含 starting、running、stopping；workflow gate 由 workflow 详情和进度承载，不计入普通 jobs 数量。当前 manager 中 cleanup=pending 或 cleanup=unconfirmed 且尚未确认根进程退出的执行保留在活动集合，并在详情明确“清理待确认”，避免尚未确认停止就显示空闲。
 - 只剩持久历史、没有当前可控句柄的记录不当作已知活动 job；历史中的未确认状态保留诊断，不能把保存的 PID 当作当前运行证据。
 - completed、failed、stopped、timed_out 等已结算对象不计入活动数量；历史列表仍可查询。
+
+占用的执行协议不兼容时，控制桥 v3 保留完整 session 查询与计数；v1/v2 状态仅显示当前分支直属活动 job，绑定时提示一次该范围，完整 session 列表明确返回 RUNTIME_UNAVAILABLE。workspace 查询、日志、停止和 quit 保留，不将能力不足解释为没有 child job。
 
 这里的数字表示活动执行数量，不能推导 CPU 利用率或正在发送的模型请求数量。用户切到别的会话时，原执行可继续，但摘要只展示新绑定可见对象；workspace 范围的列表可以查看其他会话对象，不自动转移所有权或通知归属。
 

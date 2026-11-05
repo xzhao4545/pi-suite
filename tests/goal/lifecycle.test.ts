@@ -3,13 +3,29 @@ import assert from "node:assert/strict";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { host, complete, goalId } from "../support/host.ts";
 
-test("real host continues an unfinished goal once, then terminates on verified completion", { timeout: 15000 }, async () => {
+test("real host rejects invalid goal evidence, continues unfinished work once, then terminates on verified completion", { timeout: 15000 }, async () => {
   const h = await host();
+  const errors: string[] = [];
   try {
-    h.faux.setResponses([fauxAssistantMessage("Implemented; checking"), complete]);
+    h.faux.setResponses([
+      context => fauxAssistantMessage(fauxToolCall("goal_complete", { goalId: goalId(context), summary: " " })),
+      context => {
+        errors.push(JSON.stringify(context.messages.findLast(message => message.role === "toolResult")));
+        return fauxAssistantMessage(fauxToolCall("goal_blocked", { goalId: goalId(context), reason: "blocker", evidence: " ", repeatedTurns: 3 }));
+      },
+      context => {
+        errors.push(JSON.stringify(context.messages.findLast(message => message.role === "toolResult")));
+        return fauxAssistantMessage(fauxToolCall("goal_wait", { goalId: goalId(context), reason: " " }));
+      },
+      context => {
+        errors.push(JSON.stringify(context.messages.findLast(message => message.role === "toolResult")));
+        return fauxAssistantMessage("Implemented; checking");
+      }, complete,
+    ]);
     await h.session.prompt("/goal Implement and verify"); await h.idle();
-    assert.equal(h.faux.state.callCount, 2);
-    assert.equal(h.goal()?.status, "completed"); assert.equal(h.goal()?.turns, 2);
+    assert.equal(errors.length, 3); for (const error of errors) assert.match(error, /INVALID_ARGS:/);
+    assert.equal(h.faux.state.callCount, 5);
+    assert.equal(h.goal()?.status, "completed"); assert.equal(h.goal()?.turns, 5);
     assert.equal(h.statuses.get("goal"), "goal 完成");
     assert.ok(h.writes.includes("goal 运行")); assert.ok(h.writes.includes("goal 宿主恢复"));
     assert.ok(h.session.sessionManager.getBranch().some(e => e.type === "custom_message" && e.customType === "pi-suite:notification"));

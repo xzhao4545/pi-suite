@@ -9,7 +9,7 @@ import { resolvePiShell } from './terminal/shell.ts';
 import { resolveWorkspace } from './workspace.ts';
 import { isTerminal } from './state.ts';
 import { JobsModule, displayName, summaryLine } from './index.ts';
-import { jobDetail, listJobs, readJobLog } from './query.ts';
+import { jobDetail, readJobLog } from './query.ts';
 import { attachJob, screenMessage, type ViewerDeps } from './viewer.ts';
 import { monitorSchema } from './monitors/compile.ts';
 import { handsFreeSchema } from './monitors/hands-free.ts';
@@ -96,9 +96,9 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: Vie
           `read: job_read({"id":"${job.id}"${job.mode === 'pipe' && job.state === 'failed' ? ',"stream":"stderr"' : ''}})`], { job, live });
       }
       const state = params.state ?? 'active';
-      const { rows, nextCursor, errors } = await listJobs(manager, workspace, {
-        state, scope: params.scope ?? 'session', sessionId: ctx.sessionManager.getSessionId(), cursor: params.cursor, limit: params.limit ?? LIST_LIMITS.defaultLimit,
-      });
+      const { rows, nextCursor, errors } = await jobs.list(workspace, {
+        state, scope: params.scope ?? 'session', cursor: params.cursor, limit: params.limit ?? LIST_LIMITS.defaultLimit,
+      }, ctx);
       return text([
         `${rows.length} ${state} job${rows.length === 1 ? '' : 's'} (${params.scope ?? 'session'})`,
         ...rows.map(row => `${summaryLine(row.job)} · ${displayName(row.job)}${row.unsettled ? ' · unsettled history' : ''}`),

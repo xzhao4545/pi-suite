@@ -14,7 +14,7 @@ import { closeAgent } from './runner.ts';
 import { buildParentContext } from './resources/context.ts';
 import { captureParent } from './parent.ts';
 import { assignHandle, handleBase } from './mentions/grammar.ts';
-import { active, isTopLevelAgent, recordWorkspace, type AgentEventKind, type AgentRecord, type Execution, type ParentScope, type Pool, type StartAgent, type StartOptions } from './types.ts';
+import { active, isTopLevelAgent, recordWorkspace, visibleAgent, type AgentEventKind, type AgentRecord, type Execution, type ParentScope, type Pool, type StartAgent, type StartOptions } from './types.ts';
 
 const allocate = (prefix: string) => `${prefix}_${randomBytes(4).toString('hex')}`;
 export class AgentManager {
@@ -110,9 +110,7 @@ export class AgentManager {
     return { record, run: this.runs.get(record.runId) };
   }
   visible(record: AgentRecord, scope: ParentScope): boolean {
-    if (scope.run) return record.parentRunId === scope.run.record.runId;
-    return isTopLevelAgent(record) && record.ownerSessionId === scope.ctx.sessionManager.getSessionId()
-      && (record.anchorEntryId === null || scope.ctx.sessionManager.getBranch().some(entry => entry.id === record.anchorEntryId));
+    return visibleAgent(record, scope);
   }
   /** Workflow children report questions to their real parent without exposing ordinary steering. */
   questionVisible(record: AgentRecord, scope: ParentScope): boolean {

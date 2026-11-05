@@ -31,7 +31,7 @@
 
 ## 接入接口与职责
 
-Pi 提供 `ctx.ui.setStatus(key, text)`，状态由 footer 的 `getExtensionStatuses()` 读取；设为 undefined 可清除，更新会请求 TUI 刷新。原版 pi-goal 已使用稳定键 `goal`，本包继续使用此键，便于复用用户现有的 Starship 图标与样式配置。加载本包 goal 时应移除原版 pi-goal，避免两个提供者写同一状态。
+Pi 提供 `ctx.ui.setStatus(key, text)`，状态由 footer 的 `getExtensionStatuses()` 读取；设为 undefined 可清除，更新会请求 TUI 刷新。原版 pi-goal 已使用稳定键 `goal`，本包继续使用此键，便于复用用户现有的 Starship 图标与样式配置。加载本包 goal 时应移除原版 pi-goal，避免两个提供者写同一状态。本包 goal 模块关闭时，StatusPublisher 不写入或清除 goal 键，绑定、new/resume/fork/tree、reload 和 quit 保留其他 provider 的状态；ownership 依据本次激活实际创建的 GoalManager，模块开关变更需 reload 生效。
 
 ```ts
 ctx.ui.setStatus("goal", "goal 待答");

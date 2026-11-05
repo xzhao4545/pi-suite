@@ -47,6 +47,11 @@ export interface ParentScope {
 }
 export const isTopLevelAgent = (record: Pick<AgentRecord, 'parentAgentId' | 'workflowId'>): boolean =>
   record.parentAgentId === undefined && record.workflowId === undefined;
+export function visibleAgent(record: AgentRecord, scope: ParentScope): boolean {
+  if (scope.run) return record.parentRunId === scope.run.record.runId;
+  return isTopLevelAgent(record) && record.ownerSessionId === scope.ctx.sessionManager.getSessionId()
+    && (record.anchorEntryId === null || scope.ctx.sessionManager.getBranch().some(entry => entry.id === record.anchorEntryId));
+}
 export const recordWorkspace = (record: AgentRecord): string => record.configCwd ?? record.cwd;
 export type AgentEventKind = 'created' | 'started' | 'completed' | 'failed' | 'steered' | 'compacted' | 'usage';
 export type StartOptions = {

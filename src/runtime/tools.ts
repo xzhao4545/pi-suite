@@ -4,7 +4,7 @@ import { READ_LIMITS } from './read.ts';
 import { ToolError } from './errors.ts';
 
 /**
- * Shared model-tool conventions (doc/todo/pi-suite/tool-design.md): one shape for IDs, list
+ * Shared model-tool conventions (doc/current/runtime/tools.md): one shape for IDs, list
  * filters, cursors, reads and stop results. jobs, agents and tasks build their parameters from
  * these pieces so equal meanings keep equal names, units, limits and exclusivity rules.
  */

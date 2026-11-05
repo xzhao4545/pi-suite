@@ -32,7 +32,7 @@ Linux（Node 24.22.2）新增 4 项检查覆盖真实前台转后台的调用释
 
 - [统一界面](../../../todo/pi-suite/ui.md)
 - [任务引用](../../../todo/pi-suite/tasks.md)
-- [统一框架边界](../../../todo/pi-suite/architecture.md)
+- [统一框架边界](../architecture.md)
 - [子代理运行记录与手动控制](runs.md)
 - [主从交互](interaction.md)
 - [活动数量状态](../../../todo/pi-suite/status.md)

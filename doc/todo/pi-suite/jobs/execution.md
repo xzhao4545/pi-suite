@@ -26,7 +26,7 @@
 
 - [同进程保活](session-lifecycle.md)
 - [跨进程保活](persistent-runtime.md)
-- [架构与发布](../architecture.md)
+- [架构与发布](../../../finished/pi-suite/architecture.md)
 - [运行记录与手动控制](history-control.md)
 
 ## 6. jobs：融合交互 shell 与后台执行
@@ -40,7 +40,7 @@
 
 job 元数据统一包括 ID、workspace、ownerSession、可选 taskId、创建 agentId/agentRunId 及可追溯父级执行链、mode、status、创建/开始/结束时间、耗时、退出与停止/清理信息、输入记录和日志位置。创建归属从运行上下文取得，用于 subagent 停止时级联清理；通知按照原会话和分支引用投递，切换到其他会话不会把旧任务结果误发给新模型。
 
-模型工具按 [统一工具设计](../tool-design.md) 注册 job_start、job_list、job_read、job_write、job_stop 与共享 wait，内部走同一个 manager；上游 interactive_shell 与 background_job_* 不再注册，旧调用方式不保留。attach/detach 是用户在 /jobs 详情或终端视图中的操作，不注册为模型工具。
+模型工具按 [统一工具设计](../../../finished/pi-suite/tool-design.md) 注册 job_start、job_list、job_read、job_write、job_stop 与共享 wait，内部走同一个 manager；上游 interactive_shell 与 background_job_* 不再注册，旧调用方式不保留。attach/detach 是用户在 /jobs 详情或终端视图中的操作，不注册为模型工具。
 
 | job_start 参数 | 规则 |
 | --- | --- |

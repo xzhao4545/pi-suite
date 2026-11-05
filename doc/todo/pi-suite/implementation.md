@@ -2,7 +2,7 @@
 
 目标：按照依赖关系分阶段落地，并记录必要验收结论。
 
-当前状态：基线元数据、共享界面、ask、目标与两级任务基础能力已落地；默认答案、批量专项和目标生命周期基础阶段通过两平台离线检查，两级任务基础阶段通过 Linux 检查。完整第三方 footer、手机 SSH、任务执行恢复关联、执行任务与子代理综合验收仍按本计划实施。
+当前状态：基线元数据、共享界面、ask、目标与两级任务基础能力已落地；默认答案、批量专项和目标生命周期基础阶段通过两平台离线检查，两级任务基础阶段通过 Linux 检查。单包架构与统一工具规范、完整 session job 可见集和活动投影已通过 Linux 验收；完整第三方 footer、手机 SSH、任务执行恢复关联的跨平台组合、执行任务与子代理平台综合验收仍按本计划实施。
 
 影响范围：全部功能模块、两平台及手机 SSH 场景。
 
@@ -16,8 +16,8 @@
 - [ ] 实现统一 dock 与 ask
 - [x] 修正 goal 状态与续跑（真实 jobs/agents 综合通知在对应模块接入后验收）
 - [ ] 接入 goal 状态栏摘要，验证原生 footer 与 pi-starship 布局
-- [ ] 统一工具规范：改名 ask/goal 已有参数，抽取共享 schema 与 wait
-- [ ] 注册 agent/job 活动数量，接入活动与已结束记录查看及手动停止
+- [x] 统一工具规范：改名 ask/goal 已有参数，抽取共享 schema/返回类型与 wait
+- [x] 注册 agent/job 活动数量，接入活动与已结束记录查看及手动停止（实现与 Linux 验收完成，平台组合见状态栏/模块待办）
 - [ ] 导入改造 jobs 并验证同进程保活、输出读取与监视
 - [ ] 导入改造两级 tasks、agents 及主从交互与扩展能力，原生 agents 查看
 - [ ] 按需确认并实施跨进程保活
@@ -30,7 +30,7 @@
 
 - [基线核对](upstream-baseline.md)
 - [上游导入](upstream-import.md)
-- [统一工具设计](tool-design.md)
+- [统一工具设计](../../finished/pi-suite/tool-design.md)
 - [用户询问](ask/index.md)
 - [执行任务](jobs/index.md)
 - [子代理](agents/index.md)
@@ -40,7 +40,7 @@
 1. **建立基线。** 核对 Windows/Linux 实际 Pi 和扩展版本；记录源码来源、许可证；在两平台复现原问题，确定要保留的现有工具契约。Linux 不设发行版专项，不安装新的发行版。
 2. **统一 dock + ask。** 先解决手机显示挤压、聊天查阅和默认/禁用超时；这也是后续 tasks/agents/jobs 的 UI 基础。
 3. **goal 状态修正。** 区分目标状态和运行状态，验证 retry、compact、reload 的事件顺序和续跑次数；从同一状态派生 footer 摘要，验证原生状态栏与 pi-starship 联动。
-4. **统一工具规范。** 按 [统一工具设计](tool-design.md) 改名已注册的 ask/goal 参数，抽取共享 ID、列表、读取、等待和停止 schema，实现共享 wait 的接口与通知撤销规则。
+4. **统一工具规范。** 按 [统一工具设计](../../finished/pi-suite/tool-design.md) 改名已注册的 ask/goal 参数，抽取共享 ID、列表、读取、等待和停止 schema，实现共享 wait 的接口与通知撤销规则。
 5. **融合 jobs。** 按 [上游导入](upstream-import.md) 导入 pi-background-jobs 与 pi-interactive-shell 的保留文件；先完成同进程 reload/resume 保活和 Windows/Linux 两种后端，再统一通知、运行/历史查询、输入输出、读取搜索与截断、监视与委派、耗时与手动停止，并提供活动数量。
 6. **两级 tasks + agents。** 任务提供查询与批量增删改、父级完成比例和自动折叠；agents 导入上游执行与扩展能力，增加提问转交与进度读取，保留已结束记录和手动停止，改用原生消息渲染并提供活动数量。
 7. **可选持久 supervisor。** 仅在需要跨 Pi 进程重新 attach 时实施。

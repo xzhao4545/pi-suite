@@ -16,7 +16,7 @@
 - [x] 按宿主最终结算判断错误或继续
 - [x] 处理 compact/reload/会话绑定与目标恢复
 - [ ] 统一 goal/job/agent 的继续请求和去重：公共协调器与合并契约已实现，待 jobs/agents 接入后验收实际通知
-- [x] 按 [统一工具设计](tool-design.md) 改用 camelCase 参数，goal_wait 增加 waitFor
+- [x] 按 [统一工具设计](../../finished/pi-suite/tool-design.md) 改用 camelCase 参数，goal_wait 增加 waitFor
 - [x] 保留显式暂停、Esc、完成和预算的控制语义
 - [ ] 从目标与调度状态派生单条状态栏摘要，兼容 Pi 原生 footer 与 pi-starship：摘要、原生 footer 与 Starship 状态模块已验证，完整布局见关联专项
 
@@ -29,7 +29,7 @@
 - [执行任务生命周期](jobs/session-lifecycle.md)
 - [等待用户](ask/interaction.md)
 - [子代理](agents/index.md)
-- [统一工具设计](tool-design.md)
+- [统一工具设计](../../finished/pi-suite/tool-design.md)
 - [goal 状态栏联动](goal-status.md)
 
 ## 7. goal：目标状态与一次模型运行分开

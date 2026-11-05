@@ -41,11 +41,15 @@ export type ListScope = 'session' | 'workspace';
 export interface ListQuery { state: ListState; scope: ListScope; sessionId: string; cursor?: string; limit: number }
 export interface ListRow { job: JobSummary; live: boolean; unsettled: boolean }
 export interface ListResult { rows: ListRow[]; nextCursor?: string; errors: string[] }
+export interface SessionScope { jobs(): JobSummary[]; visible(job: JobSummary): boolean }
 
-export async function listJobs(manager: JobReader, workspace: Workspace, query: ListQuery): Promise<ListResult> {
+export async function listJobs(manager: JobReader, workspace: Workspace, query: ListQuery, session?: SessionScope): Promise<ListResult> {
   const { jobs, errors } = await manager.list(workspace);
-  const rows = jobs.map(({ job, live }) => ({ job, live, unsettled: bucket(job, live) === 'unsettled' }))
-    .filter(row => !isWorkflowGate(row.job) && (query.scope === 'workspace' || row.job.ownerSessionId === query.sessionId) &&
+  const merged = new Map(jobs.map(row => [row.job.id, row]));
+  // Storage yields to lifecycle changes; use current owned views when merging live jobs.
+  if (query.scope === 'session') for (const job of session?.jobs() ?? []) merged.set(job.id, {job, live: true});
+  const rows = [...merged.values()].map(({ job, live }) => ({ job, live, unsettled: bucket(job, live) === 'unsettled' }))
+    .filter(row => !isWorkflowGate(row.job) && (query.scope === 'workspace' || (session ? session.visible(row.job) : row.job.ownerSessionId === query.sessionId)) &&
       (query.state === 'all' || bucket(row.job, row.live) === query.state));
   const { page, nextCursor } = paginate(rows, row => row.job, query.cursor, query.limit);
   return { rows: page, nextCursor, errors };

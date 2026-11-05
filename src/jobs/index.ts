@@ -5,14 +5,15 @@ import type { SessionBinding } from '../runtime/binding.ts';
 import type { Notifications } from '../runtime/notifications.ts';
 import type { Settlement, Waitable } from '../runtime/wait.ts';
 import type { StatusPublisher } from '../ui/status.ts';
-import { isTerminal } from './state.ts';
+import { isActive, isTerminal } from './state.ts';
 import { acquireRuntime, quitRuntime, type RuntimeHandle } from './runtime.ts';
 import type { JobManager } from './manager.ts';
 import { ToolError } from '../runtime/errors.ts';
-import { isWorkflowGate, type JobSummary } from './types.ts';
+import { isWorkflowGate, type JobSummary, type Workspace } from './types.ts';
 import type { MonitorEvent } from './monitors/runtime.ts';
 import type { HandsFreeUpdate } from './monitors/hands-free.ts';
 import type { JobControl } from './control.ts';
+import { listJobs, type ListQuery, type SessionScope } from './query.ts';
 
 export function displayName(job: JobSummary): string {
   return stripVTControlCharacters(job.name).replace(/[\x00-\x1f\x7f-\x9f]/g, ' ').trim() || job.id;
@@ -63,7 +64,8 @@ export class JobsModule implements Waitable {
   private queuedEvents = new Map<string, number>();
   private queuedUpdates = new Map<string, number>();
 
-  constructor(private pi: ExtensionAPI, private binding: SessionBinding, private notifications: Notifications, private status: StatusPublisher) {}
+  constructor(private pi: ExtensionAPI, private binding: SessionBinding, private notifications: Notifications, private status: StatusPublisher,
+    private creatorRoots: () => string[] = () => []) {}
 
   private runtime(): RuntimeHandle { return this.handle ??= acquireRuntime(getAgentDir()); }
   manager(): JobManager {
@@ -79,15 +81,35 @@ export class JobsModule implements Waitable {
   createdBy(runIds: string[]): JobSummary[] {
     const handle = this.runtime();
     if (handle.mode === 'active') return handle.manager.createdBy(runIds);
-    if (handle.mode === 'restricted' && handle.control.version === 2) return handle.control.jobs.createdBy(runIds);
+    if (handle.mode === 'restricted' && handle.control.version !== 1) return handle.control.jobs.createdBy(runIds);
     throw new ToolError('RUNTIME_UNAVAILABLE', handle.mode === 'unavailable' ? handle.reason
       : 'This jobs owner uses control bridge v1; creation ownership queries require v2. History reads, stop and quit remain available');
+  }
+  sessionJobs(sessionId: string): JobSummary[] {
+    const handle = this.runtime();
+    if (handle.mode === 'active') return handle.manager.sessionJobs(sessionId);
+    if (handle.mode === 'restricted' && handle.control.version === 3) return handle.control.jobs.sessionJobs(sessionId);
+    throw new ToolError('RUNTIME_UNAVAILABLE', handle.mode === 'unavailable' ? handle.reason
+      : `This jobs owner uses control bridge v${handle.control.version}; complete session queries require v3. Workspace history reads, stop and quit remain available`);
+  }
+  private sessionScope(ctx: ExtensionContext, restricted = false): SessionScope {
+    const sessionId = ctx.sessionManager.getSessionId(), branch = new Set(ctx.sessionManager.getBranch().map(entry => entry.id));
+    const roots = new Set(restricted ? [] : this.creatorRoots());
+    return {jobs: () => [...(restricted ? this.control().activeIds(sessionId).map(id => this.control().peek(id)) : this.sessionJobs(sessionId)),
+      ...(roots.size ? this.createdBy([...roots]) : [])], visible: job => !isWorkflowGate(job) && (job.ownerSessionId === sessionId
+      && (job.anchorEntryId === null || branch.has(job.anchorEntryId)) || !!job.creator
+      && [job.creator.runId, ...job.creator.ancestors].some(runId => roots.has(runId)))};
+  }
+  list(workspace: Workspace, query: Omit<ListQuery, 'sessionId'>, ctx: ExtensionContext) {
+    return listJobs(this.control(), workspace, {...query, sessionId: ctx.sessionManager.getSessionId()},
+      query.scope === 'session' ? this.sessionScope(ctx) : undefined);
   }
   get executionAvailable(): boolean { return this.runtime().mode === 'active'; }
   bind(): void {
     this.detach();
     const handle = this.runtime();
-    if (handle.mode !== 'active') this.binding.current?.ctx.ui.notify(handle.reason, 'warning');
+    if (handle.mode !== 'active') this.binding.current?.ctx.ui.notify(handle.reason + (handle.mode === 'restricted' && handle.control.version !== 3
+      ? '. Status shows direct jobs on this branch only; complete session lists and child job aggregation require control bridge v3' : ''), 'warning');
     if (handle.mode === 'unavailable') return;
     this.unsubscribe = this.control().subscribe(() => this.refresh());
     this.refresh();
@@ -135,12 +157,10 @@ export class JobsModule implements Waitable {
   private refresh(): void {
     const current = this.binding.current;
     if (!this.handle || this.handle.mode === 'unavailable' || !current) return;
-    if (this.handle.mode === 'restricted') {
-      this.status.setActivities('jobs', this.handle.control.jobs.activeIds(current.sessionId));
-      return;
-    }
+    const scope = this.sessionScope(current.ctx, this.handle.mode === 'restricted' && this.handle.control.version !== 3);
+    this.status.setActivities('jobs', scope.jobs().filter(job => scope.visible(job) && isActive(job)).map(job => job.id));
+    if (this.handle.mode === 'restricted') return;
     const manager = this.handle.manager;
-    this.status.setActivities('jobs', manager.activeIds(current.sessionId));
     const updates = manager.unseenUpdates().filter(({ job }) => this.visible(job));
     // Takeover, stopping or exit invalidates progress already queued while the host was busy.
     for (const id of this.queuedUpdates.keys()) if (!updates.some(item => item.job.id === id)) {

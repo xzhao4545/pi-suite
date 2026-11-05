@@ -193,8 +193,10 @@ export class GoalManager {
     this.transition(this.goal.waiting === "user" ? "waiting_user" : this.goal.waiting === "jobs" ? "waiting_jobs" : "idle"); this.save();
   }
   requireOwned(id: string, ctx: ExtensionContext): Goal {
-    if (!this.goal || this.goal.id !== id || this.goal.status !== "active" || !this.owned || ctx.sessionManager.getSessionId() !== this.binding.current?.sessionId) {
-      throw new Error("The tool call does not own the active goalId");
+    if (!this.goal || this.goal.id !== id) throw new ToolError("NOT_FOUND", "Use the exact goalId from the active goal contract", id);
+    if (this.goal.status !== "active") throw new ToolError("NOT_RUNNING", `Goal is ${this.goal.status}; ask the user to start or resume a goal`, id);
+    if (!this.owned || ctx.sessionManager.getSessionId() !== this.binding.current?.sessionId) {
+      throw new ToolError("STALE_BINDING", "The tool call does not own the current goal; use the active goal contract in its owning session", id);
     }
     return this.goal;
   }

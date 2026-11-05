@@ -2,7 +2,7 @@
 
 目标：ask、goal、tasks、jobs、agents 的模型工具使用同一套命名、参数、返回和错误约定，减少模型记忆多种风格的负担。
 
-当前状态：实施中；ask_user 的 timeoutMs 与 goal 工具的 goalId、repeatedTurns、resumeAfterMs 已按本规范改名并通过检查；job_start/list/read/write/stop、共享 wait（含其他对象结算、child 提问与用户插话的提前返回）与 goal_wait 的 waitFor 已实现，见 [执行任务](../../current/jobs/index.md) 与 [目标接口](../../current/goal/operations.md)。task_list/task_edit 的两级查询与原子批次已接入，见 [任务接口](../../current/tasks/index.md)。共享对象 ID、列表分页、读取、停止结果与错误码已抽取到 src/runtime/tools.ts 与 src/runtime/errors.ts；agent_start/list/read/send/stop 与 agent_workflow 已注册，共享 wait 和 goal_wait 支持 wf_ ID，见 [agents 操作](../../current/agents/operations.md) 与 [Workflow 操作](../../current/agents/workflow/operations.md)。
+当前状态：统一命名、共享参数/schema、返回类型、结果摘要与模型工具错误边界已实现；ask_user 的 timeoutMs 与 goal 工具的 goalId、repeatedTurns、resumeAfterMs 已按本规范改名并通过检查；job_start/list/read/write/stop、共享 wait（含其他对象结算、child 提问与用户插话的提前返回）与 goal_wait 的 waitFor 已实现，见 [执行任务](../../current/jobs/index.md) 与 [目标接口](../../current/goal/operations.md)。task_list/task_edit 的两级查询与原子批次已接入，见 [任务接口](../../current/tasks/index.md)。共享对象 ID、列表分页、读取、停止结果与错误码已抽取到 src/runtime/tools.ts 与 src/runtime/errors.ts；agent_start/list/read/send/stop 与 agent_workflow 已注册，共享 wait 和 goal_wait 支持 wf_ ID，见 [agents 操作](../../current/agents/operations.md) 与 [Workflow 操作](../../current/agents/workflow/operations.md)。
 
 影响范围：src 下各模块的工具注册、共享参数 schema、工具描述、doc/current 的接口文档及上游工具名映射。
 
@@ -14,22 +14,26 @@
 
 - [x] 把 goal 工具参数改为 camelCase（goalId、repeatedTurns、resumeAfterMs），ask_user 的 timeout 改为 timeoutMs
 - [x] goal_wait 增加 waitFor，支持指定 job/agent/workflow 结算或期限到达时恢复目标
-- [ ] 抽取共享 schema：对象 ID、列表筛选与分页、输出读取、等待和停止结果
+- [x] 抽取共享 schema 与返回类型：对象 ID、列表筛选与分页、输出读取、等待和停止结果
 - [x] 按本规范注册 tasks、jobs、agents 工具与共享 wait
-- [ ] 统一结果首行、details 结构与错误码
-- [ ] 同步 doc/current 接口文档，删除旧名与旧参数描述
+- [x] 统一结果摘要、details 结构与错误码
+- [x] 同步 doc/current 接口文档，删除旧名与旧参数描述
 
 ## 验收方式
 
 逐个核对已注册工具的名称、参数、默认值和返回结构；相同含义的参数在各模块名称、单位、默认值与互斥规则一致。上游旧工具名不再注册。离线 SDK 检查覆盖共享 schema 的边界：id 与列表参数互斥、分页游标、读取偏移与搜索、等待超时、重复停止。
 
+## 验收结论
+
+共享参数/schema 与返回类型通过对应 jobs、agents、tasks、wait 和字节读取的 Linux SDK/契约检查。goal 模型工具的 3 项定向检查覆盖 INVALID_ARGS、NOT_FOUND、NOT_RUNNING 与 STALE_BINDING；session job 列表与状态数量的 1 项聚合及升级控制 2 项检查覆盖 owner/branch、跨 cwd child 归属、分页前去重和 v1/v2/v3 能力边界。稳定规范维护在 [模型工具契约](../../current/runtime/tools.md)，各模块入口见 current 的对应文档。完整第三方 footer、平台与真实手机操作组合由 [实施计划](../../todo/pi-suite/implementation.md) 管理。
+
 ## 关联计划
 
-- [上游导入方式](upstream-import.md)
-- [jobs 输出读取](jobs/output.md)
-- [agents 主从交互](../../finished/pi-suite/agents/interaction.md)
-- [两级任务管理](tasks.md)
-- [目标状态与续跑](goal.md)
+- [上游导入方式](../../todo/pi-suite/upstream-import.md)
+- [jobs 输出读取](../../todo/pi-suite/jobs/output.md)
+- [agents 主从交互](agents/interaction.md)
+- [两级任务管理](../../todo/pi-suite/tasks.md)
+- [目标状态与续跑](../../todo/pi-suite/goal.md)
 
 ## 命名
 
@@ -60,7 +64,7 @@
 | task | 清单内递增数字字符串 | 删除后不复用 |
 | goal | UUID | 来自当前目标契约，运行归属校验 |
 
-wait 通过前缀区分 job、agent 与 workflow，不需要额外类型字段。agent 的 name 是便于用户 @提及 的句柄；工具的 id 参数同时接受 agent ID 或唯一 name，name 不唯一时报错并列出候选 ID。
+wait 通过前缀区分 job、agent 与 workflow，不需要额外类型字段。agent 的 handle/alias 便于用户 @提及；模型工具 id 使用稳定 agent ID，不接受名称，runId 按需选择历史执行。提及投递与补全复用普通发送路径，见 [agents 操作](../../current/agents/operations.md)。
 
 ## 共享参数
 
@@ -73,13 +77,13 @@ wait 通过前缀区分 job、agent 与 workflow，不需要额外类型字段�
 | cursor / limit | limit 默认 20，最大 100 | 返回 nextCursor；按创建时间倒序，稳定排序 |
 | offset / limitBytes | limitBytes 默认 16384，最大 65536 | 按原始字节分页并处理 UTF-8 边界 |
 | search / context | search 为正则，可写 /re/flags；context 默认 2，最大 20 | 返回匹配行及前后行 |
-| timeoutMs | 各工具注明默认与上限 | 只结束等待或询问，不停止执行对象 |
+| timeoutMs | 各工具注明默认与上限 | wait/ask 只结束本次调用或询问；job_start 控制运行期限并停止超时 job |
 
 冲突参数明确报错，不按隐式优先级取舍。所有列表只返回短摘要；长命令、日志、transcript 和结果正文只经 read 读取。
 
 ## 返回
 
-文本结果第一行固定为对象摘要，例如：
+单对象结果首行显示对象摘要；列表与 wait 显示集合摘要，goal 显示目标动作。对象摘要例如：
 
 ```text
 job_3fa1c2d0 completed · exit 0 · 12.4s · pipe
@@ -88,7 +92,7 @@ agent_9b21e4aa waiting(parent) · 3 turns · 41s · 待答 1 题
 
 其后是必要的补充行，最后一行给出可执行的后续入口，例如 `read: job_read({"id":"job_3fa1c2d0","stream":"stderr"})`。details 携带同一信息的结构化版本。
 
-状态取值在 jobs 与 agents 间一致：
+jobs 与 agents 共用生命周期语义，各领域保留适用状态；jobs 的超时为 timed_out，agents 的轮数限制为 limited：
 
 | 状态 | 含义 | 是否计入活动数量 |
 | --- | --- | --- |
@@ -96,35 +100,35 @@ agent_9b21e4aa waiting(parent) · 3 turns · 41s · 待答 1 题
 | starting / running | 启动中、运行中 | 是 |
 | waiting | 已开始，等待 user、parent、job 或 host；附 waitingFor | 是 |
 | stopping | 已请求停止，等待退出与清理结算 | 是 |
-| completed / failed / stopped / timed_out | 已结算 | 否；清理 pending/unconfirmed 时仍计入活动 |
+| completed / failed / stopped / timed_out / limited | 已结算的领域终态 | 否；job 清理 pending 或 unconfirmed 且 !rootExited 时仍计入活动 |
 
 stop 统一返回 `{ requested, state, cleanup, affected[] }`。affected 列出级联涉及的 child 与 job 及各自真实状态；存在 pending/unconfirmed 时摘要行明确写出，不报告“全部停止”。
 
-read 统一返回 `{ text, stream, offset, nextOffset, totalBytes, endOfStream, truncated?, matches? }`。默认读取的截断方式见 [jobs 输出读取](jobs/output.md)，agent_read 使用同一规则。
+read 统一返回 `{ text, stream, offset, nextOffset, totalBytes, endOfStream, truncated?, matches? }`。默认读取的截断方式见 [jobs 输出读取](../../todo/pi-suite/jobs/output.md)，agent_read 使用同一规则。
 
-错误使用稳定代码并在消息中指出可用的下一步：INVALID_ARGS、NOT_FOUND、AMBIGUOUS_NAME、HISTORY_READ_ONLY（只有历史，无当前控制句柄）、NOT_RUNNING、USER_CONTROL（用户接管终端中）、STALE_BINDING、CLOSING、UNSUPPORTED_STREAM。
+错误使用稳定代码并在消息中指出可用的下一步：INVALID_ARGS、NOT_FOUND、AMBIGUOUS_NAME、HISTORY_READ_ONLY（只有历史，无当前控制句柄）、NOT_RUNNING、USER_CONTROL（用户接管终端中）、STALE_BINDING、CLOSING、UNSUPPORTED_STREAM、RUNTIME_UNAVAILABLE。goal 模型工具的空白参数为 INVALID_ARGS，未知 goalId 为 NOT_FOUND，非 active 目标为 NOT_RUNNING，失效修订/绑定或非所属会话为 STALE_BINDING；命令交互与持久记录解析保留各自错误边界。领域还可使用明确的类型、深度、任务关联等错误码。
 
 ## 工具清单
 
 | 工具 | 参数 | 说明 |
 | --- | --- | --- |
-| ask_user | question 或 questions、options、allowMultiple、allowFreeform、defaultAnswer、defaultOptionId(s)、allowComment、timeoutMs | 仅改名 timeout→timeoutMs；在 child 会话中转交父 agent，见 [主从交互](../../finished/pi-suite/agents/interaction.md) |
+| ask_user | question 或 questions、options、allowMultiple、allowFreeform、defaultAnswer、defaultOptionId(s)、allowComment、timeoutMs | 仅改名 timeout→timeoutMs；在 child 会话中转交父 agent，见 [主从交互](agents/interaction.md) |
 | goal_complete | goalId、summary | |
 | goal_blocked | goalId、reason、evidence、repeatedTurns | |
 | goal_wait | goalId、reason、waitFor?、resumeAfterMs? | waitFor 为 job/agent/workflow ID 数组；省略时等待任一已安排的外部事件 |
-| task_list | id?、parentId?、includeDone?、detail? | 见 [两级任务管理](tasks.md) |
+| task_list | id?、parentId?、includeDone?、detail? | 见 [两级任务管理](../../todo/pi-suite/tasks.md) |
 | task_edit | changes[] | 批量增删改 |
-| job_start | command 或 agent、mode?、name?、cwd?、timeoutMs?、taskId?、attach?、monitor?、handsFree? | 见 [执行任务管理](jobs/execution.md) 与 [监视与委派](jobs/monitors.md) |
+| job_start | command 或 agent、mode?、name?、cwd?、timeoutMs?、taskId?、attach?、monitor?、handsFree? | 见 [执行任务管理](../../todo/pi-suite/jobs/execution.md) 与 [监视与委派](../../todo/pi-suite/jobs/monitors.md) |
 | job_list | id? 或 state?、scope?、cursor?、limit? | |
 | job_read | id、stream?、offset?、limitBytes?、search?、context? | stream：stdout、stderr、output、input、events |
 | job_write | id、input?、keys?、paste?、submit?、sensitive? | input/keys/paste 三选一 |
 | job_stop | id | |
-| agent_start | prompt、description、type?、name?、model?、thinking?、maxTurns?、background?、inheritContext?、taskId?、schedule? | background 默认 true；false 时等待结果，child 提问时提前返回。model/thinking 优先于 TUI 类型配置与 frontmatter，见 [模型与 thinking 配置](agents/models.md) |
+| agent_start | prompt、description、type?、name?、model?、thinking?、maxTurns?、background?、inheritContext?、taskId?、schedule? | background 默认 true；false 时等待结果，child 提问时提前返回。model/thinking 优先于 TUI 类型配置与 frontmatter，见 [模型与 thinking 配置](../../todo/pi-suite/agents/models.md) |
 | agent_list | id? 或 state?、scope?、cursor?、limit? | id 时返回进度详情 |
 | agent_read | id、runId?、stream?、offset?、limitBytes?、search?、context? | stream 为 result 或 transcript |
 | agent_send | id、message | 按 agent 状态回答提问、引导运行或恢复会话，返回实际 action |
 | agent_stop | id、runId? | 级联停止嵌套 child 及所属 job |
-| agent_workflow | script? 或 scriptPath? 或 name?、args?、resumeFromRunId? | 见 [agents 扩展能力](agents/extensions.md) |
+| agent_workflow | script? 或 scriptPath? 或 name?、args?、resumeFromRunId? | 见 [agents 扩展能力](../../todo/pi-suite/agents/extensions.md) |
 | wait | ids、mode?、timeoutMs? | 见下节 |
 
 attach/detach、详情查看、停止确认与清理历史属于用户操作，经 /jobs、/agents 界面和快捷键完成，不注册为模型工具。job_start 的 attach 只在需要用户直接操作程序时立即打开终端视图。
@@ -171,4 +175,4 @@ wait 是一次阻塞的工具调用，结束条件如下（参照 omp：任一�
 | TaskOutput/TaskStop/TaskExecute | agent_read/wait、agent_stop、agent_start(taskId) |
 | goal_id、repeated_turns、resume_after_ms | goalId、repeatedTurns、resumeAfterMs |
 
-[返回扩展包待办索引](index.md)
+[返回已完成专项](../index.md)

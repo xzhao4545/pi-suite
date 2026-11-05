@@ -1,4 +1,4 @@
-/** Stable error codes shared by every model tool (doc/todo/pi-suite/tool-design.md). */
+/** Stable error codes shared by every model tool (doc/current/runtime/tools.md). */
 export type ToolErrorCode =
   | 'INVALID_ARGS' | 'NOT_FOUND' | 'AMBIGUOUS_NAME' | 'HISTORY_READ_ONLY' | 'NOT_RUNNING' | 'USER_CONTROL'
   | 'STALE_BINDING' | 'CLOSING' | 'UNSUPPORTED_STREAM' | (string & {});

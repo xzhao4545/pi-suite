@@ -133,8 +133,8 @@ export class WorkflowManager {
   }
 }
 const key = Symbol.for('pi-suite.workflows.runtime.v1');
+const globals = globalThis as unknown as Record<symbol, Map<string, WorkflowManager> | undefined>;
 export function workflowRuntime(): WorkflowManager {
-  const globals = globalThis as unknown as Record<symbol, Map<string, WorkflowManager> | undefined>;
   const managers = globals[key] ??= new Map(), agentDir = getAgentDir();
   if (!managers.has(agentDir) || managers.get(agentDir)!.closed) {
     const runtime = acquireRuntime(agentDir);
@@ -144,4 +144,9 @@ export function workflowRuntime(): WorkflowManager {
     }));
   }
   return managers.get(agentDir)!;
+}
+
+/** Module admission does not own the lifetime of an already running Worker. */
+export function quitExistingWorkflowRuntime(agentDir: string): Promise<void> | undefined {
+  return globals[key]?.get(agentDir)?.shutdown();
 }

@@ -8,7 +8,7 @@
 
 状态包括 queued、starting、running、waiting、stopping、completed、failed、stopped 和 limited。排队项在 queued 列表单独查看；启动、运行、等待与清理中的 child 计入活动数量。等待父级回答仍计入活动数量；maxTurns 限制的执行为 limited。用量按 Pi SessionStats 计算本次执行的差值；耗时从实际开始到结束，包含工具与父级回答等待。
 
-后台启动立即返回 ID。前台启动等待最终结果，当前父级的任一直接 child 提问都会使其提前返回；提前返回后的最终结果进入统一通知。父级 Esc 取消尚未返回的前台调用与其 child，后台 child 继续运行。reload、会话切换和树导航更换监听绑定，执行 owner 保持稳定；quit 取消活动执行。
+后台启动立即返回 ID。前台启动等待最终结果，当前父级的任一直接 child 提问都会使其提前返回；提前返回后的最终结果进入统一通知。父级 Esc 取消尚未返回的前台调用与其 child，后台 child 继续运行。reload、会话切换和树导航更换监听绑定，执行 owner 保持稳定；quit 从当前 agentDir 的既有进程注册取消并等待活动执行，即使 agents/jobs 模块全部关闭也适用，不为退出清理创建新 Manager。
 
 正在等待真实 agent_start 前台调用的顶级普通 child 可从查看器单向转为后台；queued、stopping、已结算、嵌套、workflow、RPC 与普通恢复运行不具备该调用契约。Manager 将 chargedPool 从 foreground 转为 background，释放前台槽位并唤醒队列；后台池已满也允许既有执行转入，实际占用计数仍参与后续排队。前台工具返回 backgrounded:true，撤销其等待和 abort 绑定，父级后续取消不停止该 child；background 写入既有 run 记录，最终结果由统一通知消费。
 

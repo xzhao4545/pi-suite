@@ -33,7 +33,7 @@
 
 - [运行记录与手动控制](runs.md)
 - [扩展能力](../../../todo/pi-suite/agents/extensions.md)
-- [统一工具设计](../../../todo/pi-suite/tool-design.md)
+- [统一工具设计](../tool-design.md)
 - [用户询问](../../../todo/pi-suite/ask/index.md)
 - [目标调度](../../../todo/pi-suite/goal.md)
 
