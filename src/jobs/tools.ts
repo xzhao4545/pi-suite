@@ -1,22 +1,21 @@
 import { resolve } from 'node:path';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
-import { fileSource, readBounded, type ReadPage } from '../runtime/read.ts';
+import { fileSource } from '../runtime/read.ts';
 import { ToolError } from '../runtime/errors.ts';
 import { LIST_LIMITS, listFields, objectId, readFields, rejectContextWithoutSearch, rejectListWithId, textResult as text, type StopOutcome } from '../runtime/tools.ts';
 import { translateInput } from './terminal/keys.ts';
-import { normalizeVisibleText, sanitizeText } from './terminal/visible-text.ts';
 import { resolvePiShell } from './terminal/shell.ts';
 import { resolveWorkspace } from './workspace.ts';
 import { isTerminal } from './state.ts';
 import { JobsModule, displayName, summaryLine } from './index.ts';
-import { jobDetail, listJobs, renderInput } from './query.ts';
-import type { InputRecord, JobSummary, Stream } from './types.ts';
+import { jobDetail, listJobs, readJobLog } from './query.ts';
+import { attachJob, screenMessage, type ViewerDeps } from './viewer.ts';
+import type { InputRecord, Stream } from './types.ts';
 
 const id = objectId('job', 'job_3fa1c2d0');
-const STREAMS: Record<JobSummary['mode'], Stream[]> = { pipe: ['stdout', 'stderr', 'input'], pty: ['output', 'input'] };
 
-export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule): void {
+export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: ViewerDeps): void {
   pi.registerTool({
     name: 'job_start', label: 'Start Job',
     description: 'Start a command as a background job and return at once. mode=pipe (default) records stdout/stderr for builds, tests and batch work; mode=pty runs it in a terminal for REPLs and interactive programs. ' +
@@ -28,14 +27,24 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule): void {
       cwd: Type.Optional(Type.String({ description: 'Resolved against the session cwd' })),
       timeoutMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 86400000, description: 'Omit for no limit; on expiry the job settles as timed_out' })),
       taskId: Type.Optional(Type.String({ maxLength: 64 })),
+      attach: Type.Optional(Type.Boolean({ description: 'pty only: open the terminal view now because the user must operate the program (login, prompts). The call returns when the user leaves the view; the job keeps running' })),
     }, { additionalProperties: false }),
     async execute(_callId, params, signal, _update, ctx) {
       const manager = jobs.manager();
+      const { attach, ...request } = params;
+      // Reject before starting: a job the user cannot reach would run unattended.
+      if (attach && params.mode !== 'pty') throw new ToolError('INVALID_ARGS', 'attach needs mode pty');
+      if (attach && ctx.mode !== 'tui') throw new ToolError('INVALID_ARGS', 'attach needs the interactive terminal UI; start without attach and use job_write');
       const owner = JobsModule.owner(ctx);
       const shell = resolvePiShell(ctx.cwd, ctx.isProjectTrusted());
-      const job = await manager.start({ ...params, cwd: resolve(ctx.cwd, params.cwd ?? '.'), ...owner }, shell, signal);
-      return text([summaryLine(job), `name: ${displayName(job)}`,
-        `read: job_read({"id":"${job.id}"})${job.mode === 'pty' ? ` · input: job_write({"id":"${job.id}","input":"…","submit":true})` : ''}`], { job });
+      const job = await manager.start({ ...request, cwd: resolve(ctx.cwd, params.cwd ?? '.'), ...owner }, shell, signal);
+      const next = `read: job_read({"id":"${job.id}"})${job.mode === 'pty' ? ` · input: job_write({"id":"${job.id}","input":"…","submit":true})` : ''}`;
+      if (!attach) return text([summaryLine(job), `name: ${displayName(job)}`, next], { job });
+      const exit = await attachJob(ctx, viewer, job.id, signal);
+      const now = manager.peek(job.id);
+      return text([summaryLine(now), `name: ${displayName(now)}`,
+        exit.action === 'transfer' ? screenMessage(now, exit.screen) : 'The user left the terminal view; read the output to see what happened.', next],
+      { job: now, attach: exit.action });
     },
   });
 
@@ -78,13 +87,8 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule): void {
       rejectContextWithoutSearch(params);
       const manager = jobs.manager();
       const { job } = await manager.get(params.id, await resolveWorkspace(ctx.cwd));
-      const stream = (params.stream ?? (job.mode === 'pty' ? 'output' : 'stdout')) as Stream;
-      if (!STREAMS[job.mode].includes(stream)) throw new ToolError('UNSUPPORTED_STREAM', `${job.mode} jobs have streams ${STREAMS[job.mode].join(', ')}`, job.id);
-      const render = stream === 'input' ? renderInput : job.mode === 'pty' ? normalizeVisibleText : sanitizeText;
-      const source = await fileSource(manager.logPath(job, stream));
-      let page: ReadPage;
-      try { page = await readBounded(source, { offset: params.offset, limitBytes: params.limitBytes, search: params.search, context: params.context }, render); }
-      finally { await source.close(); }
+      const page = await readJobLog(manager, job, params.stream as Stream | undefined, { offset: params.offset, limitBytes: params.limitBytes, search: params.search, context: params.context });
+      const stream = page.stream;
       let stderrNote: string | undefined;
       if (job.mode === 'pipe' && stream === 'stdout' && params.offset === undefined && params.search === undefined) {
         const stderr = await fileSource(manager.logPath(job, 'stderr'));
@@ -95,7 +99,7 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule): void {
         `${summaryLine(job)} · ${stream} bytes ${page.offset}-${page.nextOffset} of ${page.totalBytes}${page.matches !== undefined ? ` · ${page.matches} matches` : ''}`,
         stderrNote, page.text,
         page.endOfStream ? undefined : `more: job_read({"id":"${job.id}","stream":"${stream}","offset":${page.nextOffset}${params.search ? `,"search":${JSON.stringify(params.search)}` : ''}})`,
-      ], { ...page, stream });
+      ], page);
     },
   });
 

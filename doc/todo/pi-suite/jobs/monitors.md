@@ -2,7 +2,7 @@
 
 目标：保留 pi-interactive-shell 的输出 monitor 与 hands-free/dispatch，使模型可以监视输出模式、委派 CLI agent 并在需要时被唤醒，用户随时接管。
 
-当前状态：待实施；保留范围由用户确认，不保留 Jev 语义监督与语义输出裁剪。导入文件见 [上游导入](../upstream-import.md)。
+当前状态：实施中；PTY 终端视图中的用户接管与交还已随 attach 实现（见 [执行任务](../../../current/jobs/index.md)），hands-free 暂停更新待 hands-free 实现时接入。monitor、hands-free、dispatch 与 CLI agent 预设待实施；保留范围由用户确认，不保留 Jev 语义监督与语义输出裁剪。导入文件见 [上游导入](../upstream-import.md)。
 
 影响范围：JobManager、PTY 会话、monitor 编译、hands-free 状态机、统一通知、PTY 终端视图与配置 jobs 节。
 
@@ -17,7 +17,7 @@
 - [ ] 实现 hands-free 的静默或定时更新与总字符预算
 - [ ] 实现 dispatch 的宽限期、静默结束与超时结算
 - [ ] 实现 CLI agent 预设与 launchPolicy
-- [ ] 实现 PTY 视图中的用户接管与交还，同步操作说明
+- [x] 实现 PTY 视图中的用户接管与交还，同步操作说明
 
 ## 验收方式
 

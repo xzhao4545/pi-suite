@@ -11,6 +11,7 @@ import { registerGoalCommand } from "./goal/commands.ts";
 import { registerGoalLifecycle } from "./goal/index.ts";
 import { JobsModule } from "./jobs/index.ts";
 import { registerJobTools } from "./jobs/tools.ts";
+import { registerJobsCommand } from "./jobs/viewer.ts";
 import { WaitRegistry, registerWait } from "./runtime/wait.ts";
 
 export default function piSuite(pi: ExtensionAPI): void {
@@ -24,7 +25,10 @@ export default function piSuite(pi: ExtensionAPI): void {
   const ask = new AskManager(binding, notifications, dock, (answered, ctx) => goal?.askResult(answered, ctx));
   if (config.modules.ask) registerAsk(pi, ask, () => config);
   const jobs = config.modules.jobs ? new JobsModule(pi, binding, notifications, status) : undefined;
-  if (jobs) { registerJobTools(pi, jobs); waits.register(jobs); }
+  if (jobs) {
+    const viewer = { jobs, dock, notifications, keys: () => config.jobs };
+    registerJobTools(pi, jobs, viewer); registerJobsCommand(pi, viewer); waits.register(jobs);
+  }
   if (jobs) {
     registerWait(pi, waits);
     // Extension-sent messages (our own notices) are not the user and must not end a wait.

@@ -2,7 +2,7 @@
 
 目标：融合交互 shell 和非交互后台任务，共用管理、日志与通知。
 
-当前状态：实施中；pipe 与 PTY 执行、记录、工具与通知已实现并在 Windows（Git Bash）和 Linux 通过检查，见 [执行任务](../../../current/jobs/index.md)。attach 进行中：已写入但尚未接入入口、也没有测试的部分有 src/ui/terminal.ts 的 TerminalView、src/jobs/query.ts 的共享列表查询（job_list 仍用自身实现）、manager 的用户接管（userControl/returnControl，job_write 在接管时返回 USER_CONTROL）、PTY 结束后保留最后一屏，以及配置 jobs.detachKey/returnKey/transferKey（默认 ctrl+b、ctrl+g、ctrl+t）。待做：/jobs 命令、job_start 的 attach 参数、job_list 改用共享查询、Ctrl+T 发送屏幕、视图测试与文档；终端缩放验证与 monitor 待实施。
+当前状态：实施中；pipe 与 PTY 执行、记录、工具与通知已实现并在 Windows（Git Bash）和 Linux 通过检查，见 [执行任务](../../../current/jobs/index.md)。/jobs 列表与详情、job_start 的 attach、终端视图（用户接管、Ctrl+G 交还、Ctrl+T 发送屏幕、Ctrl+B 离开）已实现，终端视图契约在 Linux 通过检查，Windows 待复核。终端缩放的两平台实际验证与 monitor 待实施。
 
 影响范围：JobManager、pipe/PTY 后端、工具入口、日志和任务元数据。
 
@@ -14,7 +14,7 @@
 
 - [x] 统一任务元数据、日志和通知入口
 - [x] 实现 pipe 与 PTY 两种执行模式
-- [ ] 实现输入、查看、attach/detach 和停止
+- [x] 实现输入、查看、attach/detach 和停止
 - [x] 保留已结束 job 历史及起止时间、耗时，向共享状态栏提供活动数量
 - [ ] 分别验证 Windows 与 Linux 平台后端
 

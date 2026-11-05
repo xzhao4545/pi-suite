@@ -35,7 +35,7 @@ session_shutdown 只有 quit 停止全部 job，共享 10 秒期限并关闭新 
 
 | 工具 | 参数与行为 |
 | --- | --- |
-| job_start | command、mode?（pipe 默认、pty）、name?、cwd?、timeoutMs?（省略不限时）、taskId?；立即返回 ID |
+| job_start | command、mode?（pipe 默认、pty）、name?、cwd?、timeoutMs?（省略不限时）、taskId?、attach?；立即返回 ID。attach 只用于需要用户直接操作程序的 PTY job（登录、交互提示），立即打开终端视图，用户离开视图后返回；非 PTY 或非交互界面在启动前返回 INVALID_ARGS |
 | job_list | id 查看详情，或 state?（active 默认、finished、all）、scope?（session 默认、workspace）、cursor?、limit?（默认 20，最大 100）；id 与列表参数混用返回 INVALID_ARGS；其他或已崩溃 Pi 进程未结算的记录只在 all 中显示为 unsettled history |
 | job_read | id、stream?、offset?、limitBytes?、search?、context?；pipe 为 stdout（默认）、stderr、input，PTY 为 output（默认）、input，其他组合返回 UNSUPPORTED_STREAM；PTY 输出转为可见文本，偏移仍指原始字节 |
 | job_write | id 与 input、keys、paste 之一，submit 追加回车，sensitive 不保存正文；endInput 关闭 pipe stdin；keys 仅 PTY；非运行状态返回 NOT_RUNNING |
@@ -48,12 +48,28 @@ session_shutdown 只有 quit 停止全部 job，共享 10 秒期限并关闭新 
 
 job 结算后，属于当前会话且启动时的分支叶子仍在当前分支上的，经共享 Notifications 投递一次（请求 ID `job:<id>`），消息发出后持久标记 notified。wait 或 job_stop 已返回的结算会撤销该通知。Esc 中止后，本会话尚未通知的 job 不再自动唤醒，结果随下一条用户消息送达。
 
+## 用户操作
+
+`/jobs [active|finished|all] [workspace]` 打开 job 列表，默认当前会话的活动 job；列表内可切换筛选、范围并翻页。选择 job 后可查看详情、读取各通道（与 job_read 相同的默认截断）、对运行中的 PTY job 打开终端视图（已结束的 PTY 显示最后一屏），以及在确认后停止运行中的 job。只有历史记录的 job 只读。浏览期间暂缓结算通知，关闭后合并送达。
+
+终端视图显示 headless 终端屏幕，宽度随视图调整 PTY：
+
+| 按键（可配置） | 行为 |
+| --- | --- |
+| 任意其他按键 | 发送给程序；用户接管输入，模型的 job_write 返回 USER_CONTROL |
+| Ctrl+G（returnKey） | 把输入交还模型，视图保持打开 |
+| Ctrl+T（transferKey） | 离开视图并把当前屏幕文本发给模型；/jobs 中作为新消息，job_start attach 中写入工具结果 |
+| Ctrl+B（detachKey） | 离开视图，job 继续运行；程序已退出时 Esc 也可离开 |
+| Shift+↑/↓ | 滚动终端回滚区，不发送输入 |
+
+离开视图都会把输入交还模型，不停止 job。视图中的按键与 job_write 走同一输入入口，按 sensitive 记录，只保存时间、来源与字节数。视图打开期间暂缓结算通知，避免在用户操作时开始模型回复。
+
 ## Shell
 
 pipe 与 PTY 都使用 Pi 自身的 Bash 选择（settings 的 shellPath，否则 Pi 的默认查找）。Windows 上若选中 WSL 的 `C:\Windows\System32\bash.exe`，命令经 stdin 传入：pipe job 无法再接收 job_write 输入，PTY job 直接报错，需要在 settings.json 设置 Git Bash 的 shellPath。
 
 ## 未实现
 
-attach/detach 终端视图与 /jobs 详情、monitor、hands-free/dispatch、CLI agent 预设、用户接管、events 通道，以及跨 Pi 进程重新 attach，均由 [执行任务待办](../../todo/pi-suite/jobs/index.md) 管理。
+monitor、hands-free/dispatch、CLI agent 预设、events 通道、终端缩放的平台验证，以及跨 Pi 进程重新 attach，均由 [执行任务待办](../../todo/pi-suite/jobs/index.md) 管理。
 
 [返回当前文档](../index.md)

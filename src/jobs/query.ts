@@ -1,8 +1,23 @@
 import { paginate } from '../runtime/tools.ts';
+import { ToolError } from '../runtime/errors.ts';
+import { fileSource, readBounded, type ReadPage, type ReadRequest } from '../runtime/read.ts';
 import { bucket } from './state.ts';
 import type { JobManager } from './manager.ts';
-import type { InputRecord, JobSummary, Workspace } from './types.ts';
+import type { InputRecord, JobSummary, Stream, Workspace } from './types.ts';
 import { displayName } from './index.ts';
+import { normalizeVisibleText, sanitizeText } from './terminal/visible-text.ts';
+
+export const STREAMS: Record<JobSummary['mode'], Stream[]> = { pipe: ['stdout', 'stderr', 'input'], pty: ['output', 'input'] };
+
+/** One log read for job_read and the /jobs viewer: stream check, PTY visible text, bounded page. */
+export async function readJobLog(manager: JobManager, job: JobSummary, requested: Stream | undefined, request: ReadRequest): Promise<ReadPage & { stream: Stream }> {
+  const stream = requested ?? (job.mode === 'pty' ? 'output' : 'stdout');
+  if (!STREAMS[job.mode].includes(stream)) throw new ToolError('UNSUPPORTED_STREAM', `${job.mode} jobs have streams ${STREAMS[job.mode].join(', ')}`, job.id);
+  const render = stream === 'input' ? renderInput : job.mode === 'pty' ? normalizeVisibleText : sanitizeText;
+  const source = await fileSource(manager.logPath(job, stream));
+  try { return { ...await readBounded(source, request, render), stream }; }
+  finally { await source.close(); }
+}
 
 /** Filters shared by job_list and /jobs: same buckets and session scope as the status count. */
 export type ListState = 'active' | 'finished' | 'all';

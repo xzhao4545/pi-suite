@@ -13,11 +13,11 @@
   "ask": { "timeout": 120000, "historyKey": "ctrl+h" },
   "goal": { "display": "status" },
   "agents": { "display": "status" },
-  "jobs": { "display": "status" }
+  "jobs": { "display": "status", "detachKey": "ctrl+b", "returnKey": "ctrl+g", "transferKey": "ctrl+t" }
 }
 ```
 
-modules.ask 与 modules.goal 在扩展加载时决定是否注册对应模块；改变开关后使用 /reload。会话绑定时重新读取配置。maxRows 范围为 1–6；timeout 为 0–2147483647 的整数毫秒，0 不设期限。historyKey 使用 Pi 的按键标识。公共显示配置接受 status/dock/hidden，不接管 footer。
+modules.ask、modules.goal 与 modules.jobs 在扩展加载时决定是否注册对应模块；改变开关后使用 /reload。会话绑定时重新读取配置。maxRows 范围为 1–6；timeout 为 0–2147483647 的整数毫秒，0 不设期限。historyKey 与 jobs 终端视图的 detachKey（离开视图）、returnKey（交还模型）、transferKey（发送屏幕）使用 Pi 的按键标识。公共显示配置接受 status/dock/hidden，不接管 footer。
 
 ## 会话和通知
 

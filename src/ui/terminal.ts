@@ -30,6 +30,7 @@ export class TerminalView implements Component {
   private unsubscribe: () => void;
   private error?: string;
   private height = 1;
+  private finished = false;
 
   constructor(private tui: TUI, private theme: Theme, private source: TerminalSource, private keys: TerminalKeys,
     private options: TerminalViewOptions, private done: (result: TerminalExit) => void) {
@@ -57,7 +58,10 @@ export class TerminalView implements Component {
     try { this.options.write(data); } catch (error) { this.error = error instanceof Error ? error.message : String(error); this.tui.requestRender(); }
   }
   invalidate(): void {}
-  private finish(action: TerminalExit['action']): void {
+  /** Leaves the view; also used when the host aborts the attaching tool call. */
+  finish(action: TerminalExit['action']): void {
+    if (this.finished) return;
+    this.finished = true;
     const screen = this.source.getViewportLines();
     this.dispose();
     this.done({ action, screen });
