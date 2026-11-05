@@ -7,7 +7,7 @@ import { ToolError } from '../runtime/errors.ts';
 import { isActive, isTerminal } from './state.ts';
 import { resolveWorkspace } from './workspace.ts';
 import { JobsModule, displayName, summaryLine } from './index.ts';
-import { STREAMS, jobDetail, listJobs, readJobLog, type ListScope, type ListState } from './query.ts';
+import { jobDetail, listJobs, readJobLog, streamsOf, type ListScope, type ListState } from './query.ts';
 import type { JobSummary, Stream } from './types.ts';
 
 export interface ViewerDeps { jobs: JobsModule; dock: Dock; notifications: Notifications; keys: () => TerminalKeys }
@@ -78,7 +78,7 @@ async function jobActions(pi: ExtensionAPI, ctx: ExtensionCommandContext, deps: 
     const { job, live } = await manager.get(id, await resolveWorkspace(ctx.cwd));
     const attach = live && job.mode === 'pty' && manager.terminal(id) ? (isActive(job) ? 'Attach terminal' : 'View last screen') : undefined;
     const stop = live && !isTerminal(job.state) ? 'Stop job' : undefined;
-    const actions = [attach, 'Details', ...STREAMS[job.mode].map(stream => `Read ${stream}`), stop, 'Back'].filter(item => item !== undefined);
+    const actions = [attach, 'Details', ...streamsOf(job).map(stream => `Read ${stream}`), stop, 'Back'].filter(item => item !== undefined);
     const choice = await ctx.ui.select(`${summaryLine(job)} · ${displayName(job)}`, actions);
     if (choice === undefined || choice === 'Back') return;
     if (choice === attach) {

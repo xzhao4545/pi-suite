@@ -6,14 +6,29 @@ import type { JobManager } from './manager.ts';
 import type { InputRecord, JobSummary, Stream, Workspace } from './types.ts';
 import { displayName } from './index.ts';
 import { normalizeVisibleText, sanitizeText } from './terminal/visible-text.ts';
+import type { MonitorEvent } from './monitors/runtime.ts';
 
-export const STREAMS: Record<JobSummary['mode'], Stream[]> = { pipe: ['stdout', 'stderr', 'input'], pty: ['output', 'input'] };
+/** Readable streams of one job; events exists only when a monitor was attached at start. */
+export function streamsOf(job: JobSummary): Stream[] {
+  return [...job.mode === 'pty' ? ['output'] as const : ['stdout', 'stderr'] as const, 'input', ...job.monitor ? ['events'] as const : []];
+}
+
+/** events.jsonl as one line per event: number, time, trigger, stream and the matched line or diff. */
+function renderEvents(raw: string): string {
+  return raw.split('\n').map(line => {
+    if (!line.trim()) return line;
+    let event: MonitorEvent;
+    try { event = JSON.parse(line); } catch { return line; }
+    return `#${event.eventId} ${event.at} ${event.triggerId} ${event.stream}: ${sanitizeText(event.lineOrDiff)}${event.detectorError ? ` · detector failed: ${event.detectorError}` : ''}`;
+  }).join('\n');
+}
 
 /** One log read for job_read and the /jobs viewer: stream check, PTY visible text, bounded page. */
 export async function readJobLog(manager: JobManager, job: JobSummary, requested: Stream | undefined, request: ReadRequest): Promise<ReadPage & { stream: Stream }> {
   const stream = requested ?? (job.mode === 'pty' ? 'output' : 'stdout');
-  if (!STREAMS[job.mode].includes(stream)) throw new ToolError('UNSUPPORTED_STREAM', `${job.mode} jobs have streams ${STREAMS[job.mode].join(', ')}`, job.id);
-  const render = stream === 'input' ? renderInput : job.mode === 'pty' ? normalizeVisibleText : sanitizeText;
+  const streams = streamsOf(job);
+  if (!streams.includes(stream)) throw new ToolError('UNSUPPORTED_STREAM', `${job.id} has streams ${streams.join(', ')}`, job.id);
+  const render = stream === 'input' ? renderInput : stream === 'events' ? renderEvents : job.mode === 'pty' ? normalizeVisibleText : sanitizeText;
   const source = await fileSource(manager.logPath(job, stream));
   try { return { ...await readBounded(source, request, render), stream }; }
   finally { await source.close(); }

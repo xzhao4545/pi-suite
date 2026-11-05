@@ -2,7 +2,7 @@
 
 目标：保留 pi-interactive-shell 的输出 monitor 与 hands-free/dispatch，使模型可以监视输出模式、委派 CLI agent 并在需要时被唤醒，用户随时接管。
 
-当前状态：实施中；PTY 终端视图中的用户接管与交还已随 attach 实现（见 [执行任务](../../../current/jobs/index.md)），hands-free 暂停更新待 hands-free 实现时接入。monitor、hands-free、dispatch 与 CLI agent 预设待实施；保留范围由用户确认，不保留 Jev 语义监督与语义输出裁剪。导入文件见 [上游导入](../upstream-import.md)。
+当前状态：实施中；stream、poll-diff、file-watch 三种 monitor（trigger、阈值、冷却、去重、detector）、events 通道与唤醒已实现并在 Linux 通过检查，见 [执行任务](../../../current/jobs/index.md)；PTY 终端视图中的用户接管与交还已随 attach 实现，hands-free 暂停更新待 hands-free 实现时接入。hands-free、dispatch 与 CLI agent 预设待实施；保留范围由用户确认，不保留 Jev 语义监督与语义输出裁剪。导入文件见 [上游导入](../upstream-import.md)。
 
 影响范围：JobManager、PTY 会话、monitor 编译、hands-free 状态机、统一通知、PTY 终端视图与配置 jobs 节。
 
@@ -12,8 +12,8 @@
 
 ## 任务列表
 
-- [ ] 实现 stream、poll-diff、file-watch 三种 monitor 及 trigger 匹配、阈值、冷却与去重
-- [ ] 记录 monitor 事件历史，job_read 增加 events 通道
+- [x] 实现 stream、poll-diff、file-watch 三种 monitor 及 trigger 匹配、阈值、冷却与去重
+- [x] 记录 monitor 事件历史，job_read 增加 events 通道
 - [ ] 实现 hands-free 的静默或定时更新与总字符预算
 - [ ] 实现 dispatch 的宽限期、静默结束与超时结算
 - [ ] 实现 CLI agent 预设与 launchPolicy
@@ -39,11 +39,11 @@ job_start 的 monitor 与 handsFree 只用于 PTY 或 pipe 中适用的模式，
 | handsFree | updateMode?（onQuiet 默认、interval）、quietMs?（默认 8000）、updateIntervalMs?（默认 60000）、autoExitOnQuiet?（dispatch 默认 true）、graceMs?（默认 15000） |
 | agent | CLI 预设键（pi、codex、claude、cursor 或配置中的自定义键）与 prompt，代替 command |
 
-file-watch 自行生成监视命令，不能同时提供 command 或 agent。threshold 对正则捕获组做数值比较（lt、lte、gt、gte、eq）。detector 外部命令从 stdin 接收候选事件 JSON，在 stdout 返回是否通知。
+file-watch 自行生成监视命令，不能同时提供 command 或 agent。trigger 的 regex 与 job_read search 同语法（`/re/flags`，裸模式不区分大小写）。threshold 对正则捕获组做数值比较（lt、lte、gt、gte、eq）。detector 外部命令从 stdin 接收候选事件 JSON，在 stdout 返回是否通知；detector 失败时候选事件附错误照常投递。
 
 ## monitor 唤醒
 
-每个匹配事件生成结构化记录：eventId、时间、strategy、triggerId、匹配文本、所在行或差异、stream。事件以请求 ID `job:<id>:monitor` 进入统一通知，同一边界内的多个事件合并；monitor 停止（流结束、脚本失败、手动停止、超时）时再通知一次生命周期结果。事件历史持久保存，经 job_read 的 events 通道分页读取，不另设查询工具。
+每个匹配事件生成结构化记录：eventId、时间、strategy、triggerId、匹配文本、所在行或差异、stream。事件以请求 ID `job:<id>:monitor` 进入统一通知，同一 job 的未送达事件合并为一条（新事件数与最新 10 条）；monitor 随 job 退出而停止，停止前读完剩余日志，生命周期结果并入 job 结算通知（首行附事件数）。事件历史持久保存，经 job_read 的 events 通道分页读取，不另设查询工具。wait 在 monitor 事件时提前返回，goal_wait 的 waitFor 包含该 job 时也由事件恢复。
 
 ## hands-free 与 dispatch
 

@@ -1,5 +1,5 @@
 // Adapted from pi-background-jobs 0.1.3 src/store.ts (MIT, third-party/licenses/pi-background-jobs.txt).
-// Layout: <agentDir>/pi-suite/jobs/<workspaceHash>/<jobId>/{job.json,stdout.log,stderr.log,output.log,input.jsonl}.
+// Layout: <agentDir>/pi-suite/jobs/<workspaceHash>/<jobId>/{job.json,stdout.log,stderr.log,output.log,input.jsonl,events.jsonl}.
 // A single job.json replaces meta/result: every write is an atomic rename, so a reader never
 // sees a partial record. Log reading lives in read.ts; this module owns paths and history.
 import { lstatSync, realpathSync, mkdirSync, writeFileSync, renameSync, unlinkSync, existsSync } from 'node:fs';
@@ -18,7 +18,7 @@ function contained(root: string, path: string): boolean {
   const rel = relative(root, path);
   return rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
 }
-export const LOG_FILES: Record<Stream, string> = { stdout: 'stdout.log', stderr: 'stderr.log', output: 'output.log', input: 'input.jsonl' };
+export const LOG_FILES: Record<Stream, string> = { stdout: 'stdout.log', stderr: 'stderr.log', output: 'output.log', input: 'input.jsonl', events: 'events.jsonl' };
 
 export class JobStore {
   private base: string;
@@ -66,7 +66,7 @@ export class JobStore {
     }
   }
   async create(job: JobSummary): Promise<void> {
-    const streams: Stream[] = job.mode === 'pty' ? ['output', 'input'] : ['stdout', 'stderr', 'input'];
+    const streams: Stream[] = [...job.mode === 'pty' ? ['output', 'input'] as const : ['stdout', 'stderr', 'input'] as const, ...job.monitor ? ['events'] as const : []];
     try {
       for (const stream of streams) await writeFile(this.logPath(job, stream), '', { flag: 'wx', mode: 0o600 });
       await this.save(job);
@@ -90,6 +90,10 @@ export class JobStore {
   }
   async appendInput(job: JobSummary, record: InputRecord): Promise<void> {
     await appendFile(this.logPath(job, 'input'), JSON.stringify(record) + '\n', { mode: 0o600 });
+  }
+  /** Monitor events, one JSON line each; job_read renders them through the events stream. */
+  async appendEvent(job: JobSummary, event: object): Promise<void> {
+    await appendFile(this.logPath(job, 'events'), JSON.stringify(event) + '\n', { mode: 0o600 });
   }
   async logBytes(job: JobSummary): Promise<number> {
     let bytes = 0;

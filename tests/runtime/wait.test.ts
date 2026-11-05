@@ -16,7 +16,7 @@ class Fake implements Waitable {
   settlement(id: string): Settlement { return this.items.get(id)!; }
   unread(): Settlement[] { return [...this.items.values()].filter(item => (item.settled || item.question) && !this.seen.has(item.id)); }
   subscribe(listener: () => void): () => void { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
-  consume(id: string): void { this.seen.add(id); }
+  consume(item: Settlement): void { this.seen.add(item.id); }
 }
 function fixture() {
   const registry = new WaitRegistry(), jobs = new Fake("job_"), agents = new Fake("agent_");

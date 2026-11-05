@@ -12,6 +12,8 @@ import { launchPty } from './backends/pty-job.ts';
 import type { ResolvedShellConfig } from './terminal/shell.ts';
 import type { PtyTerminalSession } from './terminal/session.ts';
 import { ToolError } from '../runtime/errors.ts';
+import { compileMonitor, type CompiledMonitor } from './monitors/compile.ts';
+import { JobMonitor, type MonitorEvent } from './monitors/runtime.ts';
 import { errnoCode, LIMITS, type InputRecord, type JobSummary, type StartRequest, type StopReason, type StopResult, type Stream, type Workspace } from './types.ts';
 
 const JOB_ID = /^job_[a-f0-9]{8}$/;
@@ -24,7 +26,12 @@ type Owned = {
   inputQueue: Promise<void>;
   /** Set while the user types in the terminal view; model input is refused until control returns. */
   userControl?: boolean;
+  watcher?: JobMonitor;
+  /** Monitor events not yet delivered to the model, newest last, capped for the notice digest. */
+  pendingEvents: MonitorEvent[];
 };
+/** Events kept for one notice; the count still covers every undelivered event. */
+const NOTICE_EVENTS = 10;
 const abortError = () => new DOMException('Operation aborted', 'AbortError');
 
 /**
@@ -86,7 +93,10 @@ export class JobManager {
 
   async start(request: StartRequest, shell: ResolvedShellConfig, signal?: AbortSignal): Promise<JobSummary> {
     const mode = request.mode ?? 'pipe';
-    if (!request.command.trim() || request.command.length > 32768 || (request.name?.length ?? 0) > 80 ||
+    // A monitor decides the command the job runs: its poll loop, or a generated file watcher.
+    const monitor: CompiledMonitor | undefined = request.monitor ? compileMonitor(request.monitor, request.command, shell) : undefined;
+    const command = monitor?.command ?? request.command;
+    if (!command?.trim() || command.length > 32768 || (request.name?.length ?? 0) > 80 ||
       (request.timeoutMs !== undefined && (!Number.isInteger(request.timeoutMs) || request.timeoutMs < 1 || request.timeoutMs > LIMITS.maxRunMs))) {
       throw new ToolError('INVALID_ARGS', 'command must be 1-32768 characters, name at most 80, timeoutMs 1-86400000');
     }
@@ -99,13 +109,16 @@ export class JobManager {
     const id = this.store.allocate(workspace);
     const job: JobSummary = {
       schemaVersion: 1, id, workspace, ownerRuntimeId: this.runtimeId, ownerSessionId: request.ownerSessionId,
-      anchorEntryId: request.anchorEntryId, name: request.name?.trim() || request.command.trim().split('\n')[0].slice(0, 80),
-      command: request.command, cwd: request.cwd, mode, ...(request.taskId ? { taskId: request.taskId } : {}),
-      ...(request.creator ? { creator: request.creator } : {}), state: 'starting', createdAt: new Date().toISOString(),
+      anchorEntryId: request.anchorEntryId,
+      name: request.name?.trim() || (request.monitor?.fileWatch ? `watch ${request.monitor.fileWatch.path}` : command.trim().split('\n')[0]).slice(0, 80),
+      command, cwd: request.cwd, mode, ...(request.taskId ? { taskId: request.taskId } : {}),
+      ...(request.creator ? { creator: request.creator } : {}),
+      ...(request.monitor ? { monitor: { config: request.monitor, events: 0, notifiedEvents: 0 } } : {}),
+      state: 'starting', createdAt: new Date().toISOString(),
       ...(request.timeoutMs ? { timeoutMs: request.timeoutMs } : {}), exitCode: null,
       cleanup: { state: 'not_required', scope: [], rootExited: false },
     };
-    const item: Owned = { job, launched: false, ready: Promise.withResolvers(), saveQueue: Promise.resolve(), inputQueue: Promise.resolve() };
+    const item: Owned = { job, launched: false, ready: Promise.withResolvers(), saveQueue: Promise.resolve(), inputQueue: Promise.resolve(), pendingEvents: [] };
     // Registered before any await so a concurrent creator stop or quit includes this job.
     this.jobs.set(id, item);
     if (this.creatorStopping(request.creator)) job.stopReason = 'agent';
@@ -117,7 +130,7 @@ export class JobManager {
       const run = mode === 'pty'
         ? await launchPty({ command: job.command, cwd: job.cwd, shell, outputPath: this.store.logPath(job, 'output'), cols: request.cols ?? 120, rows: request.rows ?? 30 })
         : await launchPipe({ command: job.command, cwd: job.cwd, shell, stdoutPath: this.store.logPath(job, 'stdout'), stderrPath: this.store.logPath(job, 'stderr') });
-      this.install(item, run);
+      this.install(item, run, monitor && { monitor, shell });
       await this.persist(item);
     } catch (error) {
       if (!item.run) {
@@ -144,7 +157,7 @@ export class JobManager {
     if (this.closing) throw new ToolError('CLOSING', 'Pi is quitting; no new jobs');
     if (signal?.aborted) throw abortError();
   }
-  private install(item: Owned, run: Tracked): void {
+  private install(item: Owned, run: Tracked, watch?: { monitor: CompiledMonitor; shell: ResolvedShellConfig }): void {
     const job = item.job;
     item.run = run;
     job.startedAt = new Date(run.spawnedAt).toISOString();
@@ -153,9 +166,17 @@ export class JobManager {
       item.timeoutTimer = setTimeout(() => { void this.stop(job.id, 'timeout').catch(() => {}); }, job.timeoutMs);
       item.timeoutTimer.unref();
     }
+    if (watch) {
+      const streams: Stream[] = job.mode === 'pty' ? ['output'] : ['stdout', 'stderr'];
+      item.watcher = new JobMonitor(watch.monitor, JobMonitor.sources(streams.map(stream => ({ path: this.store.logPath(job, stream), stream: stream as MonitorEvent['stream'] })), job.mode === 'pty'),
+        watch.shell, job.cwd, candidate => this.recordEvent(item, candidate));
+    }
     // Exit is the only settlement evidence; a stop request alone never settles the job.
-    void run.exited.then(exit => {
+    void run.exited.then(async exit => {
       clearTimeout(item.timeoutTimer);
+      // The logs are flushed by now; the monitor matches the last lines before the job settles,
+      // so a settled job never reports fewer events than its output holds.
+      try { await item.watcher?.stop(); } catch (error) { this.setError(item, `monitor: ${String(error)}`); }
       job.exitCode = exit.code; job.signal = exit.signal;
       job.endedAt = new Date().toISOString();
       job.elapsedMs = Math.round(performance.now() - run.startedMonotonic);
@@ -166,6 +187,14 @@ export class JobManager {
       void this.persist(item);
       this.changed();
     });
+    this.changed();
+  }
+  private recordEvent(item: Owned, candidate: Omit<MonitorEvent, 'eventId' | 'at'>): void {
+    const monitor = item.job.monitor!;
+    const event: MonitorEvent = { eventId: ++monitor.events, at: new Date().toISOString(), ...candidate };
+    item.pendingEvents = [...item.pendingEvents, event].slice(-NOTICE_EVENTS);
+    item.inputQueue = item.inputQueue.then(() => this.store.appendEvent(item.job, event)).catch(error => { this.setError(item, `monitor event not saved: ${String(error)}`); this.changed(); });
+    void this.persist(item);
     this.changed();
   }
 
@@ -306,6 +335,19 @@ export class JobManager {
   /** Settled, unnotified jobs; JobsModule decides session and branch eligibility. */
   unnotified(): JobSummary[] {
     return [...this.jobs.values()].filter(item => item.launched && isTerminal(item.job.state) && !item.job.notified && (!item.stopPromise || item.stopDone)).map(item => this.view(item));
+  }
+  /** Jobs with monitor events the model has not seen, with the newest of them for the notice. */
+  unseenEvents(): { job: JobSummary; count: number; recent: MonitorEvent[] }[] {
+    return [...this.jobs.values()].filter(item => item.job.monitor && item.job.monitor.events > item.job.monitor.notifiedEvents)
+      .map(item => ({ job: this.view(item), count: item.job.monitor!.events - item.job.monitor!.notifiedEvents, recent: item.pendingEvents }));
+  }
+  /** Events up to upTo were delivered (notice or wait); later events stay pending. */
+  markEventsNotified(id: string, upTo: number): void {
+    const item = this.jobs.get(id), monitor = item?.job.monitor;
+    if (!monitor || upTo <= monitor.notifiedEvents) return;
+    monitor.notifiedEvents = Math.min(upTo, monitor.events);
+    item.pendingEvents = item.pendingEvents.filter(event => event.eventId > monitor.notifiedEvents);
+    void this.persist(item);
   }
 
   private async monitorJobs(): Promise<void> {

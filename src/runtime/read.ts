@@ -47,8 +47,11 @@ function utf8Start(buffer: Buffer): number {
 function formatBytes(bytes: number): string {
   return bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KiB` : `${(bytes / 1048576).toFixed(1)} MiB`;
 }
-/** Invalid caller input to a read, such as a bad search pattern, is a tool INVALID_ARGS error. */
-function compileSearch(search: string): RegExp {
+/**
+ * Search and monitor trigger patterns: `/re/flags`, or a bare pattern matched case-insensitively.
+ * Invalid caller input is a tool INVALID_ARGS error.
+ */
+export function compileSearch(search: string): RegExp {
   const literal = /^\/(.*)\/([a-z]*)$/s.exec(search);
   try { return literal ? new RegExp(literal[1], literal[2].replace('g', '')) : new RegExp(search, 'i'); }
   catch (error) { throw new ToolError('INVALID_ARGS', `Invalid search pattern: ${error instanceof Error ? error.message : String(error)}`); }

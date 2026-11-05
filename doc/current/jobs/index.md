@@ -10,7 +10,7 @@ jobs 模块在同一 Pi 进程内管理 pipe 与 PTY 两种后台执行。实现
 
 ## 记录与日志
 
-记录保存在 `<agentDir>/pi-suite/jobs/<workspaceHash>/<jobId>/`：job.json 每次以原子重命名写入；pipe 有 stdout.log、stderr.log，PTY 有 output.log；两种模式都有 input.jsonl。workspace 为 git 顶层目录，非仓库时为 cwd。
+记录保存在 `<agentDir>/pi-suite/jobs/<workspaceHash>/<jobId>/`：job.json 每次以原子重命名写入；pipe 有 stdout.log、stderr.log，PTY 有 output.log；两种模式都有 input.jsonl，带 monitor 的 job 另有 events.jsonl。workspace 为 git 顶层目录，非仓库时为 cwd。
 
 - ID 为 job_ 加 8 位十六进制。
 - 记录含命令、cwd、mode、ownerSession、启动时的分支叶子、可选 taskId 与创建归属（agentId、runId、祖先 runId）、起止时间、退出码或信号、停止原因、清理证据与错误。
@@ -35,18 +35,34 @@ session_shutdown 只有 quit 停止全部 job，共享 10 秒期限并关闭新 
 
 | 工具 | 参数与行为 |
 | --- | --- |
-| job_start | command、mode?（pipe 默认、pty）、name?、cwd?、timeoutMs?（省略不限时）、taskId?、attach?；立即返回 ID。attach 只用于需要用户直接操作程序的 PTY job（登录、交互提示），立即打开终端视图，用户离开视图后返回；非 PTY 或非交互界面在启动前返回 INVALID_ARGS |
+| job_start | command、mode?（pipe 默认、pty）、name?、cwd?、timeoutMs?（省略不限时）、taskId?、attach?、monitor?；立即返回 ID。attach 只用于需要用户直接操作程序的 PTY job（登录、交互提示），立即打开终端视图，用户离开视图后返回；非 PTY 或非交互界面在启动前返回 INVALID_ARGS。monitor 见下节；file-watch 不传 command |
 | job_list | id 查看详情，或 state?（active 默认、finished、all）、scope?（session 默认、workspace）、cursor?、limit?（默认 20，最大 100）；id 与列表参数混用返回 INVALID_ARGS；其他或已崩溃 Pi 进程未结算的记录只在 all 中显示为 unsettled history |
-| job_read | id、stream?、offset?、limitBytes?、search?、context?；pipe 为 stdout（默认）、stderr、input，PTY 为 output（默认）、input，其他组合返回 UNSUPPORTED_STREAM；PTY 输出转为可见文本，偏移仍指原始字节 |
+| job_read | id、stream?、offset?、limitBytes?、search?、context?；pipe 为 stdout（默认）、stderr、input，PTY 为 output（默认）、input，带 monitor 的 job 另有 events，其他组合返回 UNSUPPORTED_STREAM；PTY 输出转为可见文本，偏移仍指原始字节 |
 | job_write | id 与 input、keys、paste 之一，submit 追加回车，sensitive 不保存正文；endInput 关闭 pipe stdin；keys 仅 PTY；非运行状态返回 NOT_RUNNING |
 | job_stop | id；返回真实状态、requested、cleanup 与 affected |
-| wait | ids（job_/agent_ 前缀，1–50）、mode?（all 默认、any）、timeoutMs?（默认 300000，最大 3600000）；超时或取消只结束等待，不停止对象。除 ids 按 mode 满足外，当前会话可见的其他对象结算（列在 also 下并撤销其通知）、直接 child 提问、用户插话（steer）也提前返回；details.reason 为 condition、other、question、user 或 timeout |
+| wait | ids（job_/agent_ 前缀，1–50）、mode?（all 默认、any）、timeoutMs?（默认 300000，最大 3600000）；超时或取消只结束等待，不停止对象。除 ids 按 mode 满足外，当前会话可见的其他对象结算（列在 also 下并撤销其通知）、monitor 事件（包括被等待 job 自身的）、直接 child 提问、用户插话（steer）也提前返回；details.reason 为 condition、question、event、other、user 或 timeout |
 
 结果首行格式为 `job_3fa1c2d0 completed · exit 0 · 12.4s · pipe`，清理未确认时附 cleanup 状态，最后一行给出后续调用。
 
 ## 通知
 
 job 结算后，属于当前会话且启动时的分支叶子仍在当前分支上的，经共享 Notifications 投递一次（请求 ID `job:<id>`），消息发出后持久标记 notified。wait 或 job_stop 已返回的结算会撤销该通知。Esc 中止后，本会话尚未通知的 job 不再自动唤醒，结果随下一条用户消息送达。
+
+## monitor
+
+job_start 的 monitor 让模型在输出匹配时被唤醒，pipe 与 PTY 都可用。monitor 读取 job 自己的日志文件（每 250 ms 追读新字节），日志仍是输出的唯一来源。
+
+| 字段 | 规则 |
+| --- | --- |
+| strategy | stream（默认）逐行匹配完整行；poll-diff 每 poll.intervalMs（默认 5000，最小 250）循环执行 command，样本变化时匹配，首个样本作为基线；file-watch 由本包生成 Node fs.watch 命令监视 fileWatch.path（recursive?、events? 为 rename/change），输出 `CHANGE 名称` 等行后按 stream 匹配，不能同时传 command |
+| triggers | 1–20 个，id 唯一；literal 或 regex 二选一。regex 与 job_read search 同语法：`/re/flags`，或裸模式不区分大小写。threshold（captureGroup、op 为 lt/lte/gt/gte/eq、value）比较捕获的数值 |
+| dedupeExactLine | 默认 true，同一 trigger 的同一行（或差异摘要）只触发一次 |
+| cooldownMs | 同一 trigger 两次触发的最小间隔；trigger 自己的 cooldownMs 优先 |
+| detector | command 从 stdin 接收候选事件 JSON，stdout 返回 true/false 或 `{"emit":bool,"triggerId"?,"matchedText"?,"lineOrDiff"?}`，空输出视为通过；timeoutMs 默认 3000。detector 失败时候选事件附 detectorError 照常投递，不静默丢弃。需要以参数接收命令的 Bash |
+
+PTY 行先按回车覆写转为可见文本，pipe 行去除控制字符。事件按 eventId 递增写入 events.jsonl（时间、strategy、triggerId、匹配文本、行或差异、stream），job.json 记录 monitor 配置、事件数与已送达数。job 退出时先读完剩余日志并等待 detector，再结算，结算结果的首行附 `events N`。
+
+未送达的事件以请求 ID `job:<id>:monitor` 进入共享 Notifications，同一 job 只保留一条，带新事件数与最新 10 条；它与结算通知在同一边界合并。wait 返回的事件不再通知；Esc 后改为下一轮送达。goal_wait 的 waitFor 包含该 job 时，它的 monitor 事件也恢复目标。
 
 ## 用户操作
 
@@ -70,6 +86,6 @@ pipe 与 PTY 都使用 Pi 自身的 Bash 选择（settings 的 shellPath，否�
 
 ## 未实现
 
-monitor、hands-free/dispatch、CLI agent 预设、events 通道、终端缩放的平台验证，以及跨 Pi 进程重新 attach，均由 [执行任务待办](../../todo/pi-suite/jobs/index.md) 管理。
+hands-free/dispatch、CLI agent 预设、终端缩放的平台验证，以及跨 Pi 进程重新 attach，均由 [执行任务待办](../../todo/pi-suite/jobs/index.md) 管理。
 
 [返回当前文档](../index.md)

@@ -7,23 +7,27 @@ import { ToolError } from './errors.ts';
  * observes their change signals and never stops anything. A settlement the model has seen
  * through wait is consumed, so the shared notifier does not deliver it again.
  */
-export type Settlement = { id: string; state: string; summary: string; settled: boolean; question?: boolean };
+/**
+ * event: newest monitor event ID this entry reports. Such entries describe progress of a running
+ * object, so they surface even for waited IDs, and consuming one leaves the result pending.
+ */
+export type Settlement = { id: string; state: string; summary: string; settled: boolean; question?: boolean; event?: number };
 export interface Waitable {
   readonly prefix: string;
   settlement(id: string): Settlement;
   /**
-   * Objects visible to the current session that the model has not seen yet: settled results
-   * not delivered or consumed, and open questions from direct children not yet returned.
+   * Entries visible to the current session that the model has not seen yet: settled results not
+   * delivered or consumed, open questions from direct children, and undelivered monitor events.
    */
   unread(): Settlement[];
   subscribe(listener: () => void): () => void;
-  /** Marks a result or question as seen; it must leave unread() and the notification queue. */
-  consume(id: string): void;
+  /** Marks a result, question or event batch as seen; it must leave unread() and the notification queue. */
+  consume(item: Settlement): void;
 }
 export const WAIT_LIMITS = { maxIds: 50, defaultMs: 300000, maxMs: 3600000 };
 
-/** Why a wait returned: its own condition, a child question, another visible settlement, a user message, or the timeout. */
-export type WaitReason = 'condition' | 'question' | 'other' | 'user' | 'timeout';
+/** Why a wait returned: its own condition, a child question, a monitor event, another visible settlement, a user message, or the timeout. */
+export type WaitReason = 'condition' | 'question' | 'event' | 'other' | 'user' | 'timeout';
 export type WaitResult = { results: Settlement[]; others: Settlement[]; pending: string[]; timedOut: boolean; reason: WaitReason };
 
 export class WaitRegistry {
@@ -56,21 +60,23 @@ export class WaitRegistry {
 
   /**
    * Resolves when the ids condition holds, when any visible job or agent settles or a direct
-   * child asks, when the user sends a steering message, at the timeout, or when the signal aborts.
+   * child asks, when a monitor event fires (also on a waited job), when the user sends a steering
+   * message, at the timeout, or when the signal aborts.
    */
   async wait(ids: string[], mode: 'any' | 'all', timeoutMs: number, signal?: AbortSignal): Promise<WaitResult> {
     const unique = [...new Set(ids)];
     const sources = unique.map(id => this.source(id));
     const all = Object.values(this.sources);
     const snapshot = () => unique.map((id, index) => sources[index].settlement(id));
-    const others = () => all.flatMap(source => source.unread()).filter(item => !unique.includes(item.id));
+    // A waited ID's own result is already in results; its monitor events are reported beside it.
+    const others = () => all.flatMap(source => source.unread()).filter(item => item.event !== undefined || !unique.includes(item.id));
     const done = Promise.withResolvers<WaitResult>();
     let finished = false;
     const finish = (reason: WaitReason) => {
       if (finished) return;
       finished = true;
       const results = snapshot(), extra = others();
-      for (const item of [...results, ...extra]) if (item.settled || item.question) this.source(item.id).consume(item.id);
+      for (const item of [...results, ...extra]) if (item.settled || item.question || item.event !== undefined) this.source(item.id).consume(item);
       done.resolve({ results, others: extra, pending: results.filter(result => !result.settled).map(result => result.id),
         timedOut: reason === 'timeout', reason });
     };
@@ -80,6 +86,7 @@ export class WaitRegistry {
       if (mode === 'any' ? results.some(result => result.settled) : results.every(result => result.settled)) return finish('condition');
       const extra = others();
       if (extra.some(item => item.question)) finish('question');
+      else if (extra.some(item => item.event !== undefined)) finish('event');
       else if (extra.length) finish('other');
     };
     const unsubscribe = all.map(source => source.subscribe(check));
@@ -100,14 +107,15 @@ export class WaitRegistry {
 
 const HEADLINE: Record<WaitReason, string> = {
   condition: '', timeout: ' · timed out', other: ' · returned early: another job or agent settled',
-  question: ' · returned early: an agent asked a question', user: ' · returned early: the user sent a message',
+  question: ' · returned early: an agent asked a question', event: ' · returned early: a monitor event fired',
+  user: ' · returned early: the user sent a message',
 };
 
 export function registerWait(pi: ExtensionAPI, registry: WaitRegistry): void {
   pi.registerTool({
     name: 'wait', label: 'Wait',
     description: 'Wait for jobs or agents (ids like job_… / agent_…) to settle. mode=all (default) or any. ' +
-      'Also returns early when any other job or agent of this session settles, a child agent asks a question, or the user sends a message; ' +
+      'Also returns early when any other job or agent of this session settles, a monitor event fires (including on a waited job), a child agent asks a question, or the user sends a message; ' +
       'check pending and call wait again if still needed. Timeout or cancel only ends the wait; nothing is stopped.',
     parameters: Type.Object({
       ids: Type.Array(Type.String({ pattern: '^(job|agent)_[a-f0-9]{8}$' }), { minItems: 1, maxItems: WAIT_LIMITS.maxIds }),

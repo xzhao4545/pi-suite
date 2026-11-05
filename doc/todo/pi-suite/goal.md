@@ -69,6 +69,6 @@ goal 的常驻摘要默认通过 Pi 的 setStatus 发布，由原生 footer 或 
 
 ## 等待指定执行对象
 
-goal_wait 的 waitFor 为 job/agent ID 数组。指定时目标保持 waiting_jobs，直到其中全部对象结算或单次期限到达再请求继续；其他对象的结算通知照常排队，在恢复时合并为一条消息，但不提前结束这次等待。当前会话任一直接 child 提问（请求 ID `agent:<agentId>:ask`）不受 waitFor 限制，立即唤醒主 agent，这次运行同时结束等待；主 agent 回答后可重新调用 goal_wait。用户新输入照常开始新一轮并结束等待。省略 waitFor 时保持现有语义：任一外部唤醒或期限恢复工作。waitFor 中不存在的 ID 在调用时报错，已结算的 ID 在结果中列出，已全部结算时不进入等待。Pi 重启后只剩历史记录、或所属模块已关闭的 ID 不再阻挡恢复。
+goal_wait 的 waitFor 为 job/agent ID 数组。指定时目标保持 waiting_jobs，直到其中全部对象结算或单次期限到达再请求继续；其他对象的结算通知照常排队，在恢复时合并为一条消息，但不提前结束这次等待。当前会话任一直接 child 提问（请求 ID `agent:<agentId>:ask`）不受 waitFor 限制，立即唤醒主 agent，这次运行同时结束等待；主 agent 回答后可重新调用 goal_wait。waitFor 中 job 的 monitor 事件（请求 ID `job:<id>:monitor`）同样恢复目标，因为模型挂 monitor 就是为了被它唤醒。用户新输入照常开始新一轮并结束等待。省略 waitFor 时保持现有语义：任一外部唤醒或期限恢复工作。waitFor 中不存在的 ID 在调用时报错，已结算的 ID 在结果中列出，已全部结算时不进入等待。Pi 重启后只剩历史记录、或所属模块已关闭的 ID 不再阻挡恢复。
 
-与共享 wait 的区别：wait 是本轮内的阻塞调用，其他对象结算、child 提问和用户插话都会让它提前返回；goal_wait 结束本轮，只有 waitFor 对象、child 提问、期限和用户输入能恢复目标。
+与共享 wait 的区别：wait 是本轮内的阻塞调用，其他对象结算、monitor 事件、child 提问和用户插话都会让它提前返回；goal_wait 结束本轮，只有 waitFor 对象的结算与 monitor 事件、child 提问、期限和用户输入能恢复目标。
