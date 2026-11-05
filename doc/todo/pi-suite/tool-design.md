@@ -2,7 +2,7 @@
 
 目标：ask、goal、tasks、jobs、agents 的模型工具使用同一套命名、参数、返回和错误约定，减少模型记忆多种风格的负担。
 
-当前状态：实施中；ask_user 的 timeoutMs 与 goal 工具的 goalId、repeatedTurns、resumeAfterMs 已按本规范改名并通过检查；job_start/list/read/write/stop 与共享 wait 已注册，见 [执行任务](../../current/jobs/index.md)。goal_wait 的 waitFor、tasks/agents 工具与跨模块共享 schema 尚未实现。
+当前状态：实施中；ask_user 的 timeoutMs 与 goal 工具的 goalId、repeatedTurns、resumeAfterMs 已按本规范改名并通过检查；job_start/list/read/write/stop、共享 wait（含其他对象结算、child 提问与用户插话的提前返回）与 goal_wait 的 waitFor 已实现，见 [执行任务](../../current/jobs/index.md) 与 [目标接口](../../current/goal/operations.md)。共享对象 ID、列表分页、读取、停止结果与错误码已抽取到 src/runtime/tools.ts 与 src/runtime/errors.ts，tasks/agents 工具尚未实现。
 
 影响范围：src 下各模块的工具注册、共享参数 schema、工具描述、doc/current 的接口文档及上游工具名映射。
 
@@ -13,7 +13,7 @@
 ## 任务列表
 
 - [x] 把 goal 工具参数改为 camelCase（goalId、repeatedTurns、resumeAfterMs），ask_user 的 timeout 改为 timeoutMs
-- [ ] goal_wait 增加 waitFor，只在指定 job/agent 结算或期限到达时恢复目标
+- [x] goal_wait 增加 waitFor，只在指定 job/agent 结算或期限到达时恢复目标
 - [ ] 抽取共享 schema：对象 ID、列表筛选与分页、输出读取、等待和停止结果
 - [ ] 按本规范注册 tasks、jobs、agents 工具与共享 wait
 - [ ] 统一结果首行、details 结构与错误码
@@ -136,10 +136,22 @@ attach/detach、详情查看、停止确认与清理历史属于用户操作，�
 | mode | any 或 all，默认 all |
 | timeoutMs | 默认 300000，最大 3600000；更长等待使用 goal_wait 或结束本轮等待通知 |
 
-返回每个 ID 的当前状态、已结算对象的结果摘要（退出码、耗时、结果首段）、pending 列表和 timedOut。超时、取消或 Esc 只结束等待，不停止执行对象。
+返回每个 ID 的当前状态、已结算对象的结果摘要（退出码、耗时、结果首段）、pending 列表、timedOut 与返回原因 reason。超时、取消或 Esc 只结束等待，不停止执行对象。job 与 agent 共用这一个 wait，一次调用可混合两类 ID。
 
-- wait 已返回的结算结果从统一通知队列撤销，避免同一结果再唤醒一次。
-- 被等待的 agent 提问时立即返回该问题，mode 为 all 时同样返回，避免主 agent 等待一个正在等它回答的 child。
+wait 是一次阻塞的工具调用，结束条件如下（参照 omp：任一后台结果、消息或用户插话都结束等待；不同处是本包保留 ids 与 mode）：
+
+| 事件 | 处理 | reason |
+| --- | --- | --- |
+| ids 按 mode 满足（any 任一结算，all 全部结算） | 返回 | condition |
+| 当前会话可见的其他 job/agent 结算（不在 ids 中） | 提前返回，结果列在 also 下，pending 列出仍未结算的 ids | other |
+| 当前会话任一直接 child 提问，无论是否在 ids 中 | 立即返回该问题，mode 为 all 时同样返回，避免主 agent 等待一个正在等它回答的 child | question |
+| 用户在等待期间发送插话（steer） | 提前返回，Pi 随后处理该消息；等待开始前已排队未处理的插话使 wait 立即返回 | user |
+| 期限到达 | 返回 | timeout |
+
+- mode 为 all 时，ids 中部分对象结算不算返回条件，按 all 继续等待。
+- 可见范围与结算通知相同：属于当前会话、启动位置在当前分支上；Esc 后转为下一轮送达的结果不再参与。
+- follow-up 消息与本包自己的通知不打断 wait；follow-up 本来就在本轮结束后才处理。
+- wait 已返回的结算结果（包括 also 下的）从统一通知队列撤销，避免同一结果再唤醒一次；已返回的问题不再重复返回。
 - 没有 goal 时，后台对象结算后由统一通知在宿主 idle 时请求一次继续；有 goal 时按目标的自动工作许可调度。
 
 ## 上游工具映射

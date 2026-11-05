@@ -7,7 +7,8 @@ import { readdir, readFile, writeFile, rename, rm, stat, unlink, appendFile } fr
 import { join, relative, sep, isAbsolute } from 'node:path';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { isTerminal } from './state.ts';
-import { JobError, type JobSummary, type Workspace, type Stream, type InputRecord } from './types.ts';
+import { ToolError } from '../runtime/errors.ts';
+import type { JobSummary, Workspace, Stream, InputRecord } from './types.ts';
 
 const JOB_ID = /^job_[a-f0-9]{8}$/;
 const HASH = /^[a-f0-9]{64}$/;
@@ -28,12 +29,12 @@ export class JobStore {
   }
   // Also used during synchronous process exit. Reject links at every owned level.
   private secure(path: string, createDirs = false): void {
-    if (!contained(this.root, path)) throw new JobError('UNSAFE_PATH', 'Job path leaves managed directory');
+    if (!contained(this.root, path)) throw new ToolError('UNSAFE_PATH', 'Job path leaves managed directory');
     let current = this.base;
     for (const piece of relative(this.base, path).split(sep).filter(Boolean)) {
       current = join(current, piece);
       try {
-        if (lstatSync(current).isSymbolicLink() || !contained(this.base, realpathSync(current))) throw new JobError('UNSAFE_PATH', 'Managed path redirected by a link');
+        if (lstatSync(current).isSymbolicLink() || !contained(this.base, realpathSync(current))) throw new ToolError('UNSAFE_PATH', 'Managed path redirected by a link');
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
         if (createDirs) mkdirSync(current, { mode: 0o700 });
@@ -42,7 +43,7 @@ export class JobStore {
     }
   }
   directory(job: Pick<JobSummary, 'id' | 'workspace'>): string {
-    if (!JOB_ID.test(job.id) || !HASH.test(job.workspace.hash)) throw new JobError('UNSAFE_PATH', 'Invalid internal job identity');
+    if (!JOB_ID.test(job.id) || !HASH.test(job.workspace.hash)) throw new ToolError('UNSAFE_PATH', 'Invalid internal job identity');
     const dir = join(this.root, job.workspace.hash, job.id);
     this.secure(dir);
     return dir;
@@ -69,7 +70,7 @@ export class JobStore {
     try {
       for (const stream of streams) await writeFile(this.logPath(job, stream), '', { flag: 'wx', mode: 0o600 });
       await this.save(job);
-    } catch (error) { throw new JobError('STORAGE_ERROR', String(error), job.id); }
+    } catch (error) { throw new ToolError('STORAGE_ERROR', String(error), job.id); }
   }
   async save(job: JobSummary): Promise<void> {
     const dir = this.directory(job), dest = join(dir, 'job.json'), temp = join(dir, `.${randomUUID()}.tmp`);
@@ -77,14 +78,14 @@ export class JobStore {
     try {
       await writeFile(temp, JSON.stringify(job), { flag: 'wx', mode: 0o600 });
       await rename(temp, dest);
-    } catch (error) { throw new JobError('STORAGE_ERROR', String(error), job.id); }
+    } catch (error) { throw new ToolError('STORAGE_ERROR', String(error), job.id); }
     finally { await unlink(temp).catch(() => {}); }
   }
   saveSync(job: JobSummary): void {
     const dir = this.directory(job), dest = join(dir, 'job.json'), temp = join(dir, `.${randomUUID()}.tmp`);
     this.secure(dest);
     try { writeFileSync(temp, JSON.stringify(job), { flag: 'wx', mode: 0o600 }); renameSync(temp, dest); }
-    catch (error) { throw new JobError('STORAGE_ERROR', String(error), job.id); }
+    catch (error) { throw new ToolError('STORAGE_ERROR', String(error), job.id); }
     finally { try { unlinkSync(temp); } catch {} }
   }
   async appendInput(job: JobSummary, record: InputRecord): Promise<void> {
@@ -96,7 +97,7 @@ export class JobStore {
     return bytes;
   }
   async workspaceBytes(workspace: Workspace): Promise<number> {
-    if (!HASH.test(workspace.hash)) throw new JobError('UNSAFE_PATH', 'Invalid workspace hash');
+    if (!HASH.test(workspace.hash)) throw new ToolError('UNSAFE_PATH', 'Invalid workspace hash');
     const count = async (path: string): Promise<number> => {
       this.secure(path);
       let info;
@@ -110,7 +111,7 @@ export class JobStore {
   }
   /** History of one workspace. Corrupt records are reported per job instead of failing the list. */
   async list(workspace: Workspace): Promise<{ jobs: JobSummary[]; errors: string[] }> {
-    if (!HASH.test(workspace.hash)) throw new JobError('UNSAFE_PATH', 'Invalid workspace hash');
+    if (!HASH.test(workspace.hash)) throw new ToolError('UNSAFE_PATH', 'Invalid workspace hash');
     const root = join(this.root, workspace.hash); this.secure(root);
     const jobs: JobSummary[] = [], errors: string[] = [];
     let ids: string[];
@@ -127,13 +128,13 @@ export class JobStore {
     const job = JSON.parse(await readFile(path, 'utf8')) as JobSummary;
     if (job?.schemaVersion !== 1 || job.id !== id || job.workspace?.hash !== workspace.hash || job.workspace.key !== workspace.key ||
       !STATES.includes(job.state) || !['pipe', 'pty'].includes(job.mode) || typeof job.command !== 'string' ||
-      typeof job.ownerSessionId !== 'string' || !CLEANUP.includes(job.cleanup?.state)) throw new JobError('CORRUPT_HISTORY', 'Unsupported or mismatched job record', id);
+      typeof job.ownerSessionId !== 'string' || !CLEANUP.includes(job.cleanup?.state)) throw new ToolError('CORRUPT_HISTORY', 'Unsupported or mismatched job record', id);
     return job;
   }
   async remove(job: JobSummary): Promise<void> {
     // Check disk state again; the caller's snapshot cannot authorize deleting live history.
     const stored = await this.load(job.workspace, job.id);
-    if (!isTerminal(stored.state) || ['pending', 'unconfirmed'].includes(stored.cleanup.state)) throw new JobError('JOB_OCCUPIED', 'Cannot delete an active or unconfirmed job', job.id);
+    if (!isTerminal(stored.state) || ['pending', 'unconfirmed'].includes(stored.cleanup.state)) throw new ToolError('JOB_OCCUPIED', 'Cannot delete an active or unconfirmed job', job.id);
     await rm(this.directory(job), { recursive: true });
   }
 }

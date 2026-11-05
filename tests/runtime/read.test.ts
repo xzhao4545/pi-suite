@@ -4,7 +4,7 @@ import { createWriteStream, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
-import { fileSource, readBounded, ReadArgumentError, textSource } from "../../src/runtime/read.ts";
+import { fileSource, readBounded, textSource } from "../../src/runtime/read.ts";
 import { normalizeVisibleText, sanitizeText } from "../../src/jobs/terminal/visible-text.ts";
 
 const plain = (text: string) => text;
@@ -71,7 +71,7 @@ test("search returns line numbers, byte offsets and context, and resumes after t
   assert.equal(first.matches! + second.matches!, 67); assert.equal(second.endOfStream, true);
   const insensitive = await readBounded(textSource("A\nERROR x\n"), { search: "error" }, plain);
   assert.equal(insensitive.matches, 1);
-  await assert.rejects(readBounded(source, { search: "(" }, plain), ReadArgumentError);
+  await assert.rejects(readBounded(source, { search: "(" }, plain), (error: { code?: string }) => error.code === "INVALID_ARGS");
 });
 
 test("PTY output reads as final visible text; pipe output drops control sequences", () => {

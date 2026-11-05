@@ -28,13 +28,21 @@ export function registerGoalTools(pi: ExtensionAPI, manager: GoalManager): void 
   });
   pi.registerTool({
     name: "goal_wait", label: "Goal Wait", executionMode: "sequential",
-    description: "Wait for an arranged external job/event, with an optional single wake deadline. Call alone; ordinary unfinished work should continue instead.",
+    description: "Wait for an arranged external job/agent/event, with an optional single wake deadline. waitFor lists job_/agent_ IDs: the goal resumes only when all of them settle (or one asks a question) or the deadline passes; other notices do not end the wait. " +
+      "Without waitFor any external wake resumes it. Call alone; ordinary unfinished work should continue instead.",
     parameters: Type.Object({ goalId, reason: Type.String({ minLength: 1, maxLength: 1000 }),
-      resumeAfterMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 2147483647 })) }),
+      waitFor: Type.Optional(Type.Array(Type.String({ pattern: "^(job|agent)_[a-f0-9]{8}$" }), { minItems: 1, maxItems: 50 })),
+      resumeAfterMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 2147483647 })) }, { additionalProperties: false }),
     async execute(_id, params, _signal, _update, ctx) {
       if (!params.reason.trim()) throw new Error("Waiting requires an external wake reason");
-      manager.wait(params.goalId, params.reason, params.resumeAfterMs, ctx);
-      return { content: [{ type: "text", text: `Goal waiting: ${params.reason}` }], details: params, terminate: true };
+      const { waiting, settled } = manager.wait(params.goalId, params.reason, params.resumeAfterMs, ctx, params.waitFor);
+      const note = settled.length ? `already settled: ${settled.join(", ")}` : undefined;
+      if (!waiting) {
+        return { content: [{ type: "text", text: `Not waiting: every waitFor object has already settled (${settled.join(", ")}). Read their results and continue.` }],
+          details: { ...params, waiting, settled } };
+      }
+      return { content: [{ type: "text", text: [`Goal waiting: ${params.reason}`, note].filter(Boolean).join("\n") }],
+        details: { ...params, waiting, settled }, terminate: true };
     },
   });
 }

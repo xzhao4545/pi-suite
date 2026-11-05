@@ -31,13 +31,6 @@ export type StartRequest = {
 };
 export type InputRecord = { at: string; source: 'model' | 'user' | 'parent'; kind: 'text' | 'keys' | 'paste'; text?: string; bytes: number; sensitive?: boolean };
 export type StopResult = { job: JobSummary; requested: boolean };
-export class JobError extends Error {
-  code: string; jobId?: string;
-  constructor(code: string, message: string, jobId?: string) {
-    // The code leads the message because tool errors reach the model as text only.
-    super(`${code}: ${message}`); this.name = 'JobError'; this.code = code; this.jobId = jobId;
-  }
-}
 /** Node system error code, if the value carries one. */
 export function errnoCode(error: unknown): string | undefined {
   return error instanceof Error && 'code' in error && typeof error.code === 'string' ? error.code : undefined;
@@ -45,7 +38,6 @@ export function errnoCode(error: unknown): string | undefined {
 export const LIMITS = {
   // timeoutMs is optional: an omitted timeout means no run-time limit.
   maxRunMs: 86400000,
-  defaultReadBytes: 16384, maxReadBytes: 65536,
   jobLogBytes: 104857600, workspaceBytes: 1073741824,
   monitorMs: 1000, stopMs: 10000, quitMs: 10000, exitFallbackMs: 3000, termGraceMs: 250,
 } as const;

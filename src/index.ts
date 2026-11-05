@@ -19,13 +19,18 @@ export default function piSuite(pi: ExtensionAPI): void {
   const dock = new Dock();
   const status = new StatusPublisher(dock);
   const notifications = new Notifications(pi, binding);
-  const goal = config.modules.goal ? new GoalManager(pi, binding, notifications, status) : undefined;
+  const waits = new WaitRegistry();
+  const goal = config.modules.goal ? new GoalManager(pi, binding, notifications, status, waits) : undefined;
   const ask = new AskManager(binding, notifications, dock, (answered, ctx) => goal?.askResult(answered, ctx));
   if (config.modules.ask) registerAsk(pi, ask, () => config);
   const jobs = config.modules.jobs ? new JobsModule(pi, binding, notifications, status) : undefined;
-  const waits = new WaitRegistry();
   if (jobs) { registerJobTools(pi, jobs); waits.register(jobs); }
-  if (jobs) registerWait(pi, waits);
+  if (jobs) {
+    registerWait(pi, waits);
+    // Extension-sent messages (our own notices) are not the user and must not end a wait.
+    pi.on("input", event => { if (event.streamingBehavior === "steer" && event.source !== "extension") waits.userSteered(); });
+    pi.on("message_start", event => { if (event.message.role === "user") waits.steeringDelivered(); });
+  }
   if (goal) {
     registerGoalTools(pi, goal); registerGoalCommand(pi, goal, dock, notifications); registerGoalLifecycle(pi, goal);
   }
@@ -52,7 +57,11 @@ export default function piSuite(pi: ExtensionAPI): void {
     return quit;
   });
   pi.on("agent_before_settle", event => { goal?.beforeSettle(event); return notifications.beforeSettle(event); });
-  pi.on("agent_settled", event => { goal?.settled(event.aborted); if (event.aborted) jobs?.pauseWakes(); notifications.flush(); });
+  pi.on("agent_settled", event => {
+    waits.steeringDelivered(); goal?.settled(event.aborted);
+    if (event.aborted) jobs?.pauseWakes();
+    notifications.flush();
+  });
   pi.registerCommand("suite", {
     description: "Show pi-suite settings and implemented modules",
     handler: async (_args, ctx) => {

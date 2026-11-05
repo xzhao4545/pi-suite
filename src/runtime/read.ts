@@ -1,4 +1,5 @@
 import { open, type FileHandle } from 'node:fs/promises';
+import { ToolError } from './errors.ts';
 
 /**
  * Shared output reading for job logs and agent transcripts. Offsets are always raw source
@@ -46,14 +47,11 @@ function utf8Start(buffer: Buffer): number {
 function formatBytes(bytes: number): string {
   return bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KiB` : `${(bytes / 1048576).toFixed(1)} MiB`;
 }
-/** Invalid caller input to a read, such as a bad search pattern; tools map it to INVALID_ARGS. */
-export class ReadArgumentError extends Error {
-  readonly code = 'INVALID_ARGS';
-}
+/** Invalid caller input to a read, such as a bad search pattern, is a tool INVALID_ARGS error. */
 function compileSearch(search: string): RegExp {
   const literal = /^\/(.*)\/([a-z]*)$/s.exec(search);
   try { return literal ? new RegExp(literal[1], literal[2].replace('g', '')) : new RegExp(search, 'i'); }
-  catch (error) { throw new ReadArgumentError(`Invalid search pattern: ${error instanceof Error ? error.message : String(error)}`); }
+  catch (error) { throw new ToolError('INVALID_ARGS', `Invalid search pattern: ${error instanceof Error ? error.message : String(error)}`); }
 }
 
 /** Streams complete lines with their starting byte offsets from [from, to). */

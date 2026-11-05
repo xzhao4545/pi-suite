@@ -40,7 +40,7 @@ session_shutdown 只有 quit 停止全部 job，共享 10 秒期限并关闭新 
 | job_read | id、stream?、offset?、limitBytes?、search?、context?；pipe 为 stdout（默认）、stderr、input，PTY 为 output（默认）、input，其他组合返回 UNSUPPORTED_STREAM；PTY 输出转为可见文本，偏移仍指原始字节 |
 | job_write | id 与 input、keys、paste 之一，submit 追加回车，sensitive 不保存正文；endInput 关闭 pipe stdin；keys 仅 PTY；非运行状态返回 NOT_RUNNING |
 | job_stop | id；返回真实状态、requested、cleanup 与 affected |
-| wait | ids（job_/agent_ 前缀，1–50）、mode?（all 默认、any）、timeoutMs?（默认 300000，最大 3600000）；超时或取消只结束等待 |
+| wait | ids（job_/agent_ 前缀，1–50）、mode?（all 默认、any）、timeoutMs?（默认 300000，最大 3600000）；超时或取消只结束等待，不停止对象。除 ids 按 mode 满足外，当前会话可见的其他对象结算（列在 also 下并撤销其通知）、直接 child 提问、用户插话（steer）也提前返回；details.reason 为 condition、other、question、user 或 timeout |
 
 结果首行格式为 `job_3fa1c2d0 completed · exit 0 · 12.4s · pipe`，清理未确认时附 cleanup 状态，最后一行给出后续调用。
 
@@ -54,6 +54,6 @@ pipe 与 PTY 都使用 Pi 自身的 Bash 选择（settings 的 shellPath，否�
 
 ## 未实现
 
-attach/detach 终端视图与 /jobs 详情、monitor、hands-free/dispatch、CLI agent 预设、用户接管、events 通道、goal_wait 的 waitFor，以及跨 Pi 进程重新 attach，均由 [执行任务待办](../../todo/pi-suite/jobs/index.md) 管理。
+attach/detach 终端视图与 /jobs 详情、monitor、hands-free/dispatch、CLI agent 预设、用户接管、events 通道，以及跨 Pi 进程重新 attach，均由 [执行任务待办](../../todo/pi-suite/jobs/index.md) 管理。
 
 [返回当前文档](../index.md)

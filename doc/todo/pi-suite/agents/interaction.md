@@ -16,7 +16,7 @@
 - [ ] agent_send 按 child 状态回答提问、引导运行或恢复会话，并返回实际 action
 - [ ] agent_list(id) 返回进度详情，agent_read 读取运行中与已结束的 transcript 和结果
 - [ ] 完成、失败、停止与提问经统一 Notifications 投递，已读取结果撤销通知
-- [ ] wait 与前台 agent_start 在被等待的 child 提问时提前返回问题
+- [ ] wait 与前台 agent_start 在当前会话任一直接 child 提问时提前返回问题（共享 wait 已按此实现，待 agents 接入 unread 后验收）
 - [ ] 嵌套 child 的提问只交给其直接父 agent
 
 ## 验收方式
@@ -56,7 +56,7 @@ child 会话中注册同名 ask_user，参数沿用统一 schema，使父 agent 
 5. timeoutMs 规则与 ask_user 相同：省略用配置默认值，0 不设期限。期限到达时 child 收到 timed_out，不能当作同意或默认答案。
 6. 父 agent 调用 agent_stop 时，挂起的提问以 cancelled 结束并进入正常停止流程；对已超时或已结束的问题调用 agent_send 返回 NOT_RUNNING。
 
-父 agent 正在 wait 或前台 agent_start 中等待该 child 时，等待直接返回问题，避免父等子、子等父。嵌套 child 的提问交给其直接父 agent：直接父正在等待时由等待返回；直接父以后台方式启动该 child 时，问题作为引导消息插入直接父的当前执行。上游在父执行结算时停止其嵌套 child，因此不存在直接父已结束而孙级仍在提问的情况。
+父 agent 正在 wait 或前台 agent_start 中等待时，它的任一直接 child 提问都使等待直接返回问题，不限于正在等待的那个 child，避免父等子、子等父或提问的 child 卡到等待超时。嵌套 child 的提问交给其直接父 agent：直接父正在等待时由等待返回；直接父以后台方式启动该 child 时，问题作为引导消息插入直接父的当前执行。上游在父执行结算时停止其嵌套 child，因此不存在直接父已结束而孙级仍在提问的情况。goal_wait 的 waitFor 也不阻挡提问通知，见 [目标状态与续跑](../goal.md)。
 
 child 提问期间计入 agents 活动数量；goal 调度不因 child 提问进入 waiting_user，主 agent 收到通知后按普通继续处理。
 

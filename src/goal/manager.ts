@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { AgentBeforeSettleEvent, ExtensionAPI, ExtensionContext, MessageEndEvent, SessionStartEvent } from "@earendil-works/pi-coding-agent";
 import type { SessionBinding, Binding } from "../runtime/binding.ts";
-import type { Notifications } from "../runtime/notifications.ts";
+import { isQuestion, type Notifications } from "../runtime/notifications.ts";
 import type { StatusPublisher } from "../ui/status.ts";
+import type { WaitRegistry } from "../runtime/wait.ts";
+import { ToolError } from "../runtime/errors.ts";
 import { GOAL_ENTRY, goalContract, goalSummary, restoreGoal, type Goal, type GoalStatus, type Schedule } from "./state.ts";
 
 export class GoalManager {
@@ -13,11 +15,17 @@ export class GoalManager {
   private runBinding?: Binding;
   private runningSince?: number;
   private lastError?: string;
-  private waitTimer?: ReturnType<typeof setTimeout>;
-  private completedTimer?: ReturnType<typeof setTimeout>;
+  private waitTimer?: NodeJS.Timeout;
+  private waitWatch?: () => void;
+  private completedTimer?: NodeJS.Timeout;
 
-  constructor(private pi: ExtensionAPI, private binding: SessionBinding, private notifications: Notifications, private status: StatusPublisher) {
-    notifications.setAdmission(() => !this.goal || this.goal.status === "active" && this.goal.automatic && this.goal.waiting !== "user");
+  constructor(private pi: ExtensionAPI, private binding: SessionBinding, private notifications: Notifications, private status: StatusPublisher,
+    private waits: WaitRegistry) {
+    // While waitFor objects are pending, other settlement notices merge silently instead of
+    // waking the model. A direct child's question still wakes it: the child is waiting for an
+    // answer, and the run that answers it ends this wait (startRun clears it).
+    notifications.setAdmission(ids => !this.goal || this.goal.status === "active" && this.goal.automatic && this.goal.waiting !== "user" &&
+      (!this.goal.waitFor || ids.some(isQuestion)));
   }
   private get requestId(): string { return `goal:${this.goal!.id}`; }
   private get owned(): boolean {
@@ -56,16 +64,15 @@ export class GoalManager {
     this.armCompletion();
   }
   detach(): void {
-    this.cancelRequest(); this.elapsed();
-    clearTimeout(this.waitTimer); clearTimeout(this.completedTimer);
-    this.waitTimer = undefined; this.completedTimer = undefined;
+    this.cancelRequest(); this.elapsed(); this.disarmWait();
+    clearTimeout(this.completedTimer); this.completedTimer = undefined;
     this.runGoalId = undefined; this.runBinding = undefined;
     this.schedule = "detached";
     this.status.setGoal(undefined);
   }
   shutdown(): void { if (this.goal) this.save(); this.detach(); }
   start(text: string, ctx: ExtensionContext, budget?: number): void {
-    this.cancelRequest(); this.elapsed(); clearTimeout(this.waitTimer); clearTimeout(this.completedTimer);
+    this.cancelRequest(); this.elapsed(); this.disarmWait(); clearTimeout(this.completedTimer);
     const abortOldRun = this.owned && !ctx.isIdle();
     this.goal = { id: randomUUID(), revision: 0, text, budget, status: "active", automatic: true, usedTokens: 0,
       elapsedMs: 0, turns: 0, progress: "" };
@@ -80,7 +87,7 @@ export class GoalManager {
       this.goal.text = text; this.goal.revision++;
       // A changed objective invalidates its arranged job wait as well as old tools.
       // An unanswered user prompt keeps its explicit resume requirement.
-      if (this.goal.waiting === "jobs") { delete this.goal.waiting; delete this.goal.resumeAt; clearTimeout(this.waitTimer); }
+      if (this.goal.waiting === "jobs") this.clearWait();
     }
     if (budget !== undefined) this.goal.budget = budget;
     this.save();
@@ -95,20 +102,20 @@ export class GoalManager {
     if (!this.goal || this.goal.status === "completed") throw new Error("No unfinished goal to resume");
     if (this.goal.budget !== undefined && this.goal.usedTokens >= this.goal.budget) throw new Error("Raise the token budget above current usage before resuming");
     this.goal.status = "active"; this.goal.automatic = true;
-    delete this.goal.waiting; delete this.goal.resumeAt; delete this.goal.error;
-    clearTimeout(this.waitTimer); this.transition("idle"); this.save(); this.request();
+    this.clearWait(); delete this.goal.error;
+    this.transition("idle"); this.save(); this.request();
   }
   clear(ctx: ExtensionContext): void {
     const abortRun = this.owned;
-    this.cancelRequest(); this.elapsed(); clearTimeout(this.waitTimer); clearTimeout(this.completedTimer);
+    this.cancelRequest(); this.elapsed(); this.disarmWait(); clearTimeout(this.completedTimer);
     this.goal = undefined; this.transition("idle"); this.save();
     if (abortRun) ctx.abort();
   }
   private stop(status: GoalStatus, error?: string): void {
-    this.cancelRequest(); clearTimeout(this.waitTimer);
+    this.cancelRequest();
     this.goal!.status = status; this.goal!.automatic = false;
     if (error) this.goal!.error = error;
-    delete this.goal!.waiting; delete this.goal!.resumeAt;
+    this.clearWait();
     this.transition("idle"); this.save();
   }
   private request(): void {
@@ -123,7 +130,7 @@ export class GoalManager {
     this.runBinding = this.binding.current;
     if (this.owned && this.goal?.status === "active") {
       this.cancelRequest(); this.goal.automatic = true;
-      delete this.goal.waiting; delete this.goal.resumeAt; clearTimeout(this.waitTimer);
+      this.clearWait();
       this.save();
     }
     return this.owned;
@@ -131,9 +138,7 @@ export class GoalManager {
   startRun(): void {
     if (!this.owned) return;
     this.cancelRequest();
-    if (this.goal?.waiting === "jobs") {
-      delete this.goal.waiting; delete this.goal.resumeAt; clearTimeout(this.waitTimer); this.save();
-    }
+    if (this.goal?.waiting === "jobs") { this.clearWait(); this.save(); }
     this.transition("running");
   }
   endRun(error?: string): void {
@@ -199,19 +204,53 @@ export class GoalManager {
   block(id: string, reason: string, evidence: string, ctx: ExtensionContext): void {
     this.requireOwned(id, ctx); this.goal!.progress = evidence; this.stop("blocked", reason);
   }
-  wait(id: string, reason: string, delay: number | undefined, ctx: ExtensionContext): void {
-    const goal = this.requireOwned(id, ctx); this.cancelRequest(); goal.waiting = "jobs"; goal.progress = reason;
+  /**
+   * waitFor resumes only after every listed job/agent settles (or one asks its parent), or at
+   * the deadline. IDs already settled are reported and skipped; if none remain, nothing waits.
+   */
+  wait(id: string, reason: string, delay: number | undefined, ctx: ExtensionContext, waitFor?: string[]): { waiting: boolean; settled: string[] } {
+    const goal = this.requireOwned(id, ctx);
+    const ids = [...new Set(waitFor ?? [])];
+    // Unknown IDs throw NOT_FOUND/HISTORY_READ_ONLY here, so the model sees them at the call.
+    const settled = ids.filter(item => this.waits.settlement(item).settled);
+    if (ids.length && settled.length === ids.length) return { waiting: false, settled };
+    this.cancelRequest(); goal.waiting = "jobs"; goal.progress = reason;
+    if (ids.length) goal.waitFor = ids.filter(item => !settled.includes(item)); else delete goal.waitFor;
     if (delay !== undefined) goal.resumeAt = Date.now() + delay; else delete goal.resumeAt;
     this.transition("waiting_jobs"); this.save(); this.armWait();
+    return { waiting: true, settled };
+  }
+  private disarmWait(): void {
+    clearTimeout(this.waitTimer); this.waitTimer = undefined;
+    this.waitWatch?.(); this.waitWatch = undefined;
+  }
+  /** Leaves any arranged wait: timer, watch and the persisted wait fields. */
+  private clearWait(): void {
+    this.disarmWait();
+    if (this.goal) { delete this.goal.waiting; delete this.goal.resumeAt; delete this.goal.waitFor; }
+  }
+  private waitedDone(ids: string[]): boolean {
+    // After a Pi restart a listed object can be history only. It can no longer settle in this
+    // process, so it stops holding the goal instead of blocking it forever.
+    const states = ids.map(item => {
+      try { return this.waits.settlement(item); } catch (error) { if (error instanceof ToolError) return undefined; throw error; }
+    });
+    return states.every(state => !state || state.settled) || states.some(state => state?.question);
   }
   private armWait(): void {
-    clearTimeout(this.waitTimer);
+    this.disarmWait();
     const goal = this.goal, captured = this.binding.current;
-    if (!goal?.resumeAt || !captured) return;
-    this.waitTimer = setTimeout(() => {
+    if (goal?.waiting !== "jobs" || !captured) return;
+    const resume = () => {
       if (!this.binding.isCurrent(captured) || this.goal?.id !== goal.id || this.goal.waiting !== "jobs") return;
-      delete this.goal.waiting; delete this.goal.resumeAt; this.transition("idle"); this.save(); this.request();
-    }, Math.max(0, goal.resumeAt - Date.now()));
+      this.clearWait(); this.transition("idle"); this.save(); this.request();
+    };
+    if (goal.resumeAt) this.waitTimer = setTimeout(resume, Math.max(0, goal.resumeAt - Date.now()));
+    if (!goal.waitFor) return;
+    // A module disabled since the wait was arranged cannot report; its IDs no longer hold the goal.
+    const ids = goal.waitFor.filter(item => this.waits.has(item));
+    if (this.waitedDone(ids)) { resume(); return; }
+    this.waitWatch = this.waits.watch(ids, () => { if (this.waitedDone(ids)) resume(); });
   }
   private armCompletion(): void {
     clearTimeout(this.completedTimer);

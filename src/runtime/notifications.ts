@@ -3,13 +3,20 @@ import type { SessionBinding } from "./binding.ts";
 
 /** One delivery path for job, agent and goal wakeups; UI readers never send follow-ups. */
 type Pending = { text: string; delivered?: () => void };
+/** A child's question to its parent uses request ID `agent:<agentId>:ask` (agents/interaction.md). */
+export const isQuestion = (requestId: string): boolean => requestId.startsWith("agent:") && requestId.endsWith(":ask");
 export class Notifications {
   private pending = new Map<string, Map<string, Pending>>();
   private blockers = new Set<symbol>();
-  private admission = () => true;
+  private admission: (requestIds: string[]) => boolean = () => true;
   private idleTimer?: NodeJS.Timeout;
   constructor(private pi: ExtensionAPI, private binding: SessionBinding) {}
-  setAdmission(admission: () => boolean): void { this.admission = admission; }
+  /** Decides from the queued request IDs whether this batch may wake the model now. */
+  setAdmission(admission: (requestIds: string[]) => boolean): void { this.admission = admission; }
+  private admitted(sessionId: string): boolean {
+    const messages = this.pending.get(sessionId);
+    return Boolean(messages?.size) && this.admission([...messages!.keys()]);
+  }
 
   cancel(sessionId: string, id: string): void { this.pending.get(sessionId)?.delete(id); }
   has(sessionId: string, id: string): boolean { return this.pending.get(sessionId)?.has(id) ?? false; }
@@ -37,11 +44,11 @@ export class Notifications {
 
   beforeSettle(event: AgentBeforeSettleEvent): BoundaryResult | undefined {
     const active = this.binding.current;
-    if (!active || this.blockers.size || !this.admission() || event.outcome !== "completed") return;
+    if (!active || this.blockers.size || event.outcome !== "completed") return;
     // Existing host/extension work already has a runnable continuation. Leave our batch for
     // the next boundary instead of adding another request or changing its ordering.
     if (event.continue || event.context.pendingMessages.length) return;
-    if (!this.pending.get(active.sessionId)?.size) return;
+    if (!this.admitted(active.sessionId)) return;
     return { continue: true, entries: [{ type: "custom_message", customType: "pi-suite:notification",
       content: this.take(active.sessionId), display: false }] };
   }
@@ -62,8 +69,8 @@ export class Notifications {
 
   flush(): void {
     const active = this.binding.current;
-    if (!active || this.blockers.size || !this.admission() || !active.ctx.isIdle() || active.ctx.hasPendingMessages()) return;
-    if (!this.pending.get(active.sessionId)?.size) return;
+    if (!active || this.blockers.size || !active.ctx.isIdle() || active.ctx.hasPendingMessages()) return;
+    if (!this.admitted(active.sessionId)) return;
     this.pi.sendMessage({ customType: "pi-suite:notification", content: this.take(active.sessionId), display: true },
       { triggerTurn: true, deliverAs: "followUp" });
   }

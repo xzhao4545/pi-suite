@@ -11,6 +11,8 @@ const goalSchema = Type.Object({
   elapsedMs: Type.Number({ minimum: 0 }), turns: Type.Integer({ minimum: 0 }),
   progress: Type.String(), error: Type.Optional(Type.String()),
   resumeAt: Type.Optional(Type.Number()), completedAt: Type.Optional(Type.Number()),
+  // goal_wait waitFor: the goal resumes only after all these job/agent IDs settle (or one asks).
+  waitFor: Type.Optional(Type.Array(Type.String())),
 }, { additionalProperties: false });
 const entrySchema = Type.Object({ version: Type.Literal(1), goal: Type.Union([goalSchema, Type.Null()]) });
 export type GoalStatus = "active" | "paused" | "blocked" | "failed" | "completed" | "budget_limited";

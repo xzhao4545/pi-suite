@@ -15,7 +15,8 @@ test("pipe job records stdout/stderr, exit code and monotonic elapsed time", { t
   const jobs = manager();
   try {
     const started = await jobs.start({ command: "echo out; echo err >&2; exit 3", cwd: cwd(), ...owner }, shell);
-    assert.match(started.id, /^job_[a-f0-9]{8}$/); assert.equal(started.state, "running");
+    // start() returns after the record is saved; a fast command may already have exited by then.
+    assert.match(started.id, /^job_[a-f0-9]{8}$/); assert.notEqual(started.state, "starting");
     const job = await settled(jobs, started.id);
     assert.equal(job.state, "failed"); assert.equal(job.exitCode, 3);
     assert.equal(job.cleanup.state, "not_required"); assert.ok(job.elapsedMs! >= 0 && job.endedAt);

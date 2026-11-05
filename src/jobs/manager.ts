@@ -11,7 +11,8 @@ import { launchPipe } from './backends/pipe.ts';
 import { launchPty } from './backends/pty-job.ts';
 import type { ResolvedShellConfig } from './terminal/shell.ts';
 import type { PtyTerminalSession } from './terminal/session.ts';
-import { errnoCode, JobError, LIMITS, type InputRecord, type JobSummary, type StartRequest, type StopReason, type StopResult, type Stream, type Workspace } from './types.ts';
+import { ToolError } from '../runtime/errors.ts';
+import { errnoCode, LIMITS, type InputRecord, type JobSummary, type StartRequest, type StopReason, type StopResult, type Stream, type Workspace } from './types.ts';
 
 const JOB_ID = /^job_[a-f0-9]{8}$/;
 type Owned = {
@@ -87,12 +88,12 @@ export class JobManager {
     const mode = request.mode ?? 'pipe';
     if (!request.command.trim() || request.command.length > 32768 || (request.name?.length ?? 0) > 80 ||
       (request.timeoutMs !== undefined && (!Number.isInteger(request.timeoutMs) || request.timeoutMs < 1 || request.timeoutMs > LIMITS.maxRunMs))) {
-      throw new JobError('INVALID_ARGS', 'command must be 1-32768 characters, name at most 80, timeoutMs 1-86400000');
+      throw new ToolError('INVALID_ARGS', 'command must be 1-32768 characters, name at most 80, timeoutMs 1-86400000');
     }
     this.admit(signal);
     const workspace = await resolveWorkspace(request.cwd);
     if (await this.store.workspaceBytes(workspace) >= LIMITS.workspaceBytes) {
-      throw new JobError('WORKSPACE_CAPACITY', 'Workspace job history reached 1 GiB; clear finished jobs first');
+      throw new ToolError('WORKSPACE_CAPACITY', 'Workspace job history reached 1 GiB; clear finished jobs first');
     }
     this.admit(signal);
     const id = this.store.allocate(workspace);
@@ -112,7 +113,7 @@ export class JobManager {
     signal?.addEventListener('abort', onAbort, { once: true });
     try {
       await this.store.create(job);
-      if (job.stopReason || this.closing || signal?.aborted) throw new JobError('START_NOT_COMMITTED', 'Start cancelled before spawn', id);
+      if (job.stopReason || this.closing || signal?.aborted) throw new ToolError('START_NOT_COMMITTED', 'Start cancelled before spawn', id);
       const run = mode === 'pty'
         ? await launchPty({ command: job.command, cwd: job.cwd, shell, outputPath: this.store.logPath(job, 'output'), cols: request.cols ?? 120, rows: request.rows ?? 30 })
         : await launchPipe({ command: job.command, cwd: job.cwd, shell, stdoutPath: this.store.logPath(job, 'stdout'), stderrPath: this.store.logPath(job, 'stderr') });
@@ -121,7 +122,7 @@ export class JobManager {
     } catch (error) {
       if (!item.run) {
         // Never spawned: no runtime to report and nothing to clean up.
-        job.state = job.stopReason || error instanceof JobError && error.code === 'START_NOT_COMMITTED' ? 'stopped' : 'failed';
+        job.state = job.stopReason || error instanceof ToolError && error.code === 'START_NOT_COMMITTED' ? 'stopped' : 'failed';
         job.stopReason ??= job.state === 'stopped' ? (this.closing ? 'quit' : 'start_aborted') : undefined;
         job.endedAt = new Date().toISOString();
         job.cleanup = { state: 'not_required', scope: [], rootExited: true };
@@ -135,12 +136,12 @@ export class JobManager {
     }
     if (job.stopReason || this.closing || signal?.aborted) {
       await this.stop(id, signal?.aborted ? 'start_aborted' : 'quit');
-      throw new JobError('START_NOT_COMMITTED', `Job was stopped during start; inspect with job_list({"id":"${id}"})`, id);
+      throw new ToolError('START_NOT_COMMITTED', `Job was stopped during start; inspect with job_list({"id":"${id}"})`, id);
     }
     return this.view(item);
   }
   private admit(signal?: AbortSignal): void {
-    if (this.closing) throw new JobError('CLOSING', 'Pi is quitting; no new jobs');
+    if (this.closing) throw new ToolError('CLOSING', 'Pi is quitting; no new jobs');
     if (signal?.aborted) throw abortError();
   }
   private install(item: Owned, run: Tracked): void {
@@ -243,9 +244,9 @@ export class JobManager {
   /** Input goes to the program first; the record is written after and only proves it was sent. */
   write(id: string, data: string, record: Omit<InputRecord, 'at' | 'bytes'>): JobSummary {
     const item = this.owned(id), job = item.job, run = item.run;
-    if (!run || run.exitObserved || job.state !== 'running') throw new JobError('NOT_RUNNING', `${id} is ${job.state} and does not accept input`, id);
-    if (item.userControl && record.source !== 'user') throw new JobError('USER_CONTROL', `The user controls ${id} in the terminal view; wait until control returns`, id);
-    try { run.write(data); } catch (error) { throw new JobError('NOT_RUNNING', String(error instanceof Error ? error.message : error), id); }
+    if (!run || run.exitObserved || job.state !== 'running') throw new ToolError('NOT_RUNNING', `${id} is ${job.state} and does not accept input`, id);
+    if (item.userControl && record.source !== 'user') throw new ToolError('USER_CONTROL', `The user controls ${id} in the terminal view; wait until control returns`, id);
+    try { run.write(data); } catch (error) { throw new ToolError('NOT_RUNNING', String(error instanceof Error ? error.message : error), id); }
     if (record.source === 'user' && !item.userControl) { item.userControl = true; this.changed(); }
     const entry: InputRecord = { at: new Date().toISOString(), ...record, bytes: Buffer.byteLength(data) };
     if (entry.sensitive) delete entry.text;
@@ -255,7 +256,7 @@ export class JobManager {
   /** Close pipe stdin so programs that read to end of input can finish. */
   endInput(id: string): JobSummary {
     const item = this.owned(id);
-    if (!item.run?.endInput || item.run.exitObserved) throw new JobError('NOT_RUNNING', `${id} has no open stdin`, id);
+    if (!item.run?.endInput || item.run.exitObserved) throw new ToolError('NOT_RUNNING', `${id} has no open stdin`, id);
     item.run.endInput();
     return this.view(item);
   }
@@ -269,21 +270,21 @@ export class JobManager {
   }
 
   private owned(id: string): Owned {
-    if (!JOB_ID.test(id)) throw new JobError('INVALID_ARGS', 'id must look like job_1a2b3c4d');
+    if (!JOB_ID.test(id)) throw new ToolError('INVALID_ARGS', 'id must look like job_1a2b3c4d');
     const item = this.jobs.get(id);
-    if (!item) throw new JobError('HISTORY_READ_ONLY', `${id} is not controlled by this Pi process; history can still be read`, id);
+    if (!item) throw new ToolError('HISTORY_READ_ONLY', `${id} is not controlled by this Pi process; history can still be read`, id);
     return item;
   }
   isLive(id: string): boolean { return this.jobs.has(id); }
   /** Current view of a job this process controls; throws for unknown or history-only IDs. */
   peek(id: string): JobSummary { return this.view(this.owned(id)); }
   async get(id: string, workspace: Workspace): Promise<{ job: JobSummary; live: boolean }> {
-    if (!JOB_ID.test(id)) throw new JobError('INVALID_ARGS', 'id must look like job_1a2b3c4d');
+    if (!JOB_ID.test(id)) throw new ToolError('INVALID_ARGS', 'id must look like job_1a2b3c4d');
     const item = this.jobs.get(id);
     if (item) return { job: this.view(item), live: true };
     try { return { job: await this.store.load(workspace, id), live: false }; }
     catch (error) {
-      if (errnoCode(error) === 'ENOENT') throw new JobError('NOT_FOUND', `No job ${id} in this workspace`, id);
+      if (errnoCode(error) === 'ENOENT') throw new ToolError('NOT_FOUND', `No job ${id} in this workspace`, id);
       throw error;
     }
   }

@@ -16,7 +16,7 @@
 - [x] 按宿主最终结算判断错误或继续
 - [x] 处理 compact/reload/会话绑定与目标恢复
 - [ ] 统一 goal/job/agent 的继续请求和去重：公共协调器与合并契约已实现，待 jobs/agents 接入后验收实际通知
-- [ ] 按 [统一工具设计](tool-design.md) 改用 camelCase 参数，goal_wait 增加 waitFor
+- [x] 按 [统一工具设计](tool-design.md) 改用 camelCase 参数，goal_wait 增加 waitFor
 - [x] 保留显式暂停、Esc、完成和预算的控制语义
 - [ ] 从目标与调度状态派生单条状态栏摘要，兼容 Pi 原生 footer 与 pi-starship：摘要、原生 footer 与 Starship 状态模块已验证，完整布局见关联专项
 
@@ -69,4 +69,6 @@ goal 的常驻摘要默认通过 Pi 的 setStatus 发布，由原生 footer 或 
 
 ## 等待指定执行对象
 
-goal_wait 的 waitFor 为 job/agent ID 数组。指定时目标保持 waiting_jobs，直到其中全部对象结算或单次期限到达再请求继续；其他对象的结算通知照常合并，但不提前结束这次等待。child 向父 agent 提问也结束等待，使主 agent 能够回答。省略 waitFor 时保持现有语义：任一外部唤醒或期限恢复工作。waitFor 中不存在或已结算的 ID 在调用时明确报告，已全部结算时不进入等待。
+goal_wait 的 waitFor 为 job/agent ID 数组。指定时目标保持 waiting_jobs，直到其中全部对象结算或单次期限到达再请求继续；其他对象的结算通知照常排队，在恢复时合并为一条消息，但不提前结束这次等待。当前会话任一直接 child 提问（请求 ID `agent:<agentId>:ask`）不受 waitFor 限制，立即唤醒主 agent，这次运行同时结束等待；主 agent 回答后可重新调用 goal_wait。用户新输入照常开始新一轮并结束等待。省略 waitFor 时保持现有语义：任一外部唤醒或期限恢复工作。waitFor 中不存在的 ID 在调用时报错，已结算的 ID 在结果中列出，已全部结算时不进入等待。Pi 重启后只剩历史记录、或所属模块已关闭的 ID 不再阻挡恢复。
+
+与共享 wait 的区别：wait 是本轮内的阻塞调用，其他对象结算、child 提问和用户插话都会让它提前返回；goal_wait 结束本轮，只有 waitFor 对象、child 提问、期限和用户输入能恢复目标。

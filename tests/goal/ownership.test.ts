@@ -6,6 +6,7 @@ import { Notifications } from "../../src/runtime/notifications.ts";
 import { GoalManager } from "../../src/goal/manager.ts";
 import { Dock } from "../../src/ui/dock.ts";
 import { StatusPublisher } from "../../src/ui/status.ts";
+import { WaitRegistry } from "../../src/runtime/wait.ts";
 
 function fixture() {
   const binding = new SessionBinding();
@@ -18,7 +19,7 @@ function fixture() {
     ui: { setStatus: (key: string, text?: string) => statuses.set(key, text) },
   } as unknown as ExtensionContext;
   binding.bind(ctx); status.bind(ctx.ui, { goal: "status", agents: "status", jobs: "status" });
-  const manager = new GoalManager(pi, binding, notifications, status);
+  const manager = new GoalManager(pi, binding, notifications, status, new WaitRegistry());
   const run = () => { manager.beforeStart(true); manager.startRun(); };
   return { manager, binding, notifications, ctx, run, statuses, sent };
 }

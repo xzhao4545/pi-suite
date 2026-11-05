@@ -8,7 +8,8 @@ import type { StatusPublisher } from '../ui/status.ts';
 import { isTerminal } from './state.ts';
 import { acquireRuntime, quitRuntime, type RuntimeHandle } from './runtime.ts';
 import type { JobManager } from './manager.ts';
-import { JobError, type JobSummary } from './types.ts';
+import { ToolError } from '../runtime/errors.ts';
+import type { JobSummary } from './types.ts';
 
 export function displayName(job: JobSummary): string {
   return stripVTControlCharacters(job.name).replace(/[\x00-\x1f\x7f-\x9f]/g, ' ').trim() || job.id;
@@ -46,7 +47,7 @@ export class JobsModule implements Waitable {
   private runtime(): RuntimeHandle { return this.handle ??= acquireRuntime(getAgentDir()); }
   manager(): JobManager {
     const handle = this.runtime();
-    if (handle.mode !== 'active') throw new JobError('RUNTIME_UNAVAILABLE', handle.reason);
+    if (handle.mode !== 'active') throw new ToolError('RUNTIME_UNAVAILABLE', handle.reason);
     return handle.manager;
   }
   bind(): void {
@@ -80,17 +81,20 @@ export class JobsModule implements Waitable {
     this.refresh();
   }
 
+  /** Settled, unnotified jobs of the bound session whose start leaf is on the current branch. */
+  private eligible(manager: JobManager): JobSummary[] {
+    const current = this.binding.current!;
+    const branch = new Set(current.ctx.sessionManager.getBranch().map(entry => entry.id));
+    // A job started on another branch reports only after the user returns to that branch.
+    return manager.unnotified().filter(job => job.ownerSessionId === current.sessionId && (job.anchorEntryId === null || branch.has(job.anchorEntryId)));
+  }
   private refresh(): void {
     const current = this.binding.current;
     if (this.handle?.mode !== 'active' || !current) return;
     const manager = this.handle.manager;
     this.status.setActivities('jobs', manager.activeIds(current.sessionId));
-    const ready = manager.unnotified().filter(job => job.ownerSessionId === current.sessionId && !this.queued.has(job.id));
-    if (!ready.length) return;
-    const branch = new Set(current.ctx.sessionManager.getBranch().map(entry => entry.id));
-    for (const job of ready) {
-      // A job started on another branch reports only after the user returns to that branch.
-      if (job.anchorEntryId !== null && !branch.has(job.anchorEntryId)) continue;
+    for (const job of this.eligible(manager)) {
+      if (this.queued.has(job.id)) continue;
       if (manager.quietWakes.has(job.id)) {
         manager.markNotified(job.id);
         this.pi.sendMessage({ customType: 'pi-suite:notification', content: resultNotice(job), display: true }, { deliverAs: 'nextTurn' });
@@ -104,6 +108,12 @@ export class JobsModule implements Waitable {
   settlement(id: string): Settlement {
     const job = this.manager().peek(id);
     return { id, state: job.state, summary: summaryLine(job), settled: isTerminal(job.state) };
+  }
+  unread(): Settlement[] {
+    if (this.handle?.mode !== 'active' || !this.binding.current) return [];
+    const manager = this.handle.manager;
+    return this.eligible(manager).filter(job => !manager.quietWakes.has(job.id))
+      .map(job => ({ id: job.id, state: job.state, summary: summaryLine(job), settled: true }));
   }
   subscribe(listener: () => void): () => void { return this.manager().subscribe(listener); }
   /** A result returned by wait must not wake the model a second time. */

@@ -96,3 +96,50 @@ test("job_list filters, rejects mixed id and list arguments, and job_stop report
     assert.equal(h.faux.state.callCount, 6);
   } finally { await h.dispose(); }
 });
+
+test("wait on one job returns when another of this session settles; that result is not delivered again", { timeout: 30000 }, async () => {
+  const h = await host({ root: agentDir(), tools: TOOLS });
+  let fast = "", slow = "";
+  try {
+    h.faux.setResponses([
+      () => fauxAssistantMessage(fauxToolCall("job_start", { command: "sleep 0.5; echo fast" })),
+      context => { fast = jobId(context); return fauxAssistantMessage(fauxToolCall("job_start", { command: "sleep 30" })); },
+      context => { slow = jobId(context); return fauxAssistantMessage(fauxToolCall("wait", { ids: [slow], timeoutMs: 20000 })); },
+      context => {
+        const text = lastToolText(context);
+        assert.match(text, /^wait 0\/1 settled · returned early: another job or agent settled/);
+        assert.match(text, new RegExp(`also:\\n${fast} completed · exit 0`)); assert.match(text, new RegExp(`pending: ${slow}`));
+        return fauxAssistantMessage(fauxToolCall("job_stop", { id: slow }));
+      },
+      () => fauxAssistantMessage("done"),
+    ]);
+    await h.session.prompt("Run both"); await h.idle();
+    await sleep(300); await h.idle();
+    assert.equal(h.faux.state.callCount, 5);
+    assert.equal(notices(h.session.sessionManager.getBranch(), fast).length, 0);
+  } finally { await h.dispose(); }
+});
+
+test("a user steering message ends a running wait without stopping the job", { timeout: 30000 }, async () => {
+  const h = await host({ root: agentDir(), tools: TOOLS });
+  let id = "";
+  try {
+    h.faux.setResponses([
+      () => fauxAssistantMessage(fauxToolCall("job_start", { command: "sleep 30" })),
+      context => { id = jobId(context); return fauxAssistantMessage(fauxToolCall("wait", { ids: [id], timeoutMs: 20000 })); },
+      context => {
+        assert.match(lastToolText(context), new RegExp(`^wait 0/1 settled · returned early: the user sent a message\\n${id} running`));
+        assert.match(JSON.stringify(context.messages.at(-1)), /check the logs instead/);
+        return fauxAssistantMessage(fauxToolCall("job_stop", { id }));
+      },
+      () => fauxAssistantMessage("stopped"),
+    ]);
+    const run = h.session.prompt("Start and wait");
+    const deadline = Date.now() + 10000;
+    while (h.faux.state.callCount < 2 && Date.now() < deadline) await sleep(20);
+    await sleep(200);
+    await h.session.prompt("check the logs instead", { streamingBehavior: "steer" });
+    await run; await h.idle();
+    assert.equal(h.faux.state.callCount, 4);
+  } finally { await h.dispose(); }
+});

@@ -1,47 +1,20 @@
 import { resolve } from 'node:path';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
-import { fileSource, readBounded, ReadArgumentError, READ_LIMITS, type ReadPage } from '../runtime/read.ts';
+import { fileSource, readBounded, type ReadPage } from '../runtime/read.ts';
+import { ToolError } from '../runtime/errors.ts';
+import { LIST_LIMITS, listFields, objectId, readFields, rejectContextWithoutSearch, rejectListWithId, textResult as text, type StopOutcome } from '../runtime/tools.ts';
 import { translateInput } from './terminal/keys.ts';
 import { normalizeVisibleText, sanitizeText } from './terminal/visible-text.ts';
 import { resolvePiShell } from './terminal/shell.ts';
 import { resolveWorkspace } from './workspace.ts';
-import { bucket, isTerminal } from './state.ts';
+import { isTerminal } from './state.ts';
 import { JobsModule, displayName, summaryLine } from './index.ts';
-import { JobError, type InputRecord, type JobSummary, type Stream } from './types.ts';
+import { jobDetail, listJobs, renderInput } from './query.ts';
+import type { InputRecord, JobSummary, Stream } from './types.ts';
 
-const id = Type.String({ pattern: '^job_[a-f0-9]{8}$', description: 'Job ID, e.g. job_3fa1c2d0' });
-const LIST = { defaultLimit: 20, maxLimit: 100 };
+const id = objectId('job', 'job_3fa1c2d0');
 const STREAMS: Record<JobSummary['mode'], Stream[]> = { pipe: ['stdout', 'stderr', 'input'], pty: ['output', 'input'] };
-
-function text(lines: (string | undefined)[], details: unknown) {
-  return { content: [{ type: 'text' as const, text: lines.filter(line => line !== undefined).join('\n') }], details };
-}
-function detail(job: JobSummary): string[] {
-  return [
-    `name: ${displayName(job)}`, `cwd: ${job.cwd}`,
-    `command: ${job.command.length > 2000 ? `${job.command.slice(0, 2000)}… [${job.command.length} chars]` : job.command}`,
-    `created ${job.createdAt}${job.startedAt ? ` · started ${job.startedAt}` : ''}${job.endedAt ? ` · ended ${job.endedAt}` : ''}`,
-    ...(job.timeoutMs ? [`timeoutMs: ${job.timeoutMs}`] : []),
-    `cleanup: ${job.cleanup.state}${job.cleanup.error ? ` (${job.cleanup.error})` : ''}`,
-    ...(job.error ? [`error: ${job.error}`] : []),
-    ...(job.taskId ? [`task: ${job.taskId}`] : []),
-    ...(job.creator ? [`created by ${job.creator.agentId} ${job.creator.runId}`] : []),
-  ];
-}
-function cursorOf(job: JobSummary): string { return Buffer.from(`${job.createdAt}|${job.id}`).toString('base64url'); }
-function newestFirst(a: JobSummary, b: JobSummary): number {
-  return b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id);
-}
-function renderInput(raw: string): string {
-  return raw.split('\n').map(line => {
-    if (!line.trim()) return line;
-    try {
-      const record = JSON.parse(line) as InputRecord;
-      return `${record.at} ${record.source} ${record.kind} ${record.sensitive ? '[sensitive input sent]' : JSON.stringify(record.text ?? '')}`;
-    } catch { return line; }
-  }).join('\n');
-}
 
 export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule): void {
   pi.registerTool({
@@ -69,39 +42,26 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule): void {
   pi.registerTool({
     name: 'job_list', label: 'List Jobs',
     description: 'List jobs as short summaries, or give id for one job\'s detail. state: active (default), finished or all; scope: session (default) or workspace. Unsettled records from another or crashed Pi process appear only under all.',
-    parameters: Type.Object({
-      id: Type.Optional(id),
-      state: Type.Optional(Type.Union([Type.Literal('active'), Type.Literal('finished'), Type.Literal('all')])),
-      scope: Type.Optional(Type.Union([Type.Literal('session'), Type.Literal('workspace')])),
-      cursor: Type.Optional(Type.String({ maxLength: 200 })),
-      limit: Type.Optional(Type.Integer({ minimum: 1, maximum: LIST.maxLimit })),
-    }, { additionalProperties: false }),
+    parameters: Type.Object({ id: Type.Optional(id), ...listFields(['active', 'finished', 'all'] as const) }, { additionalProperties: false }),
     async execute(_callId, params, _signal, _update, ctx) {
       const manager = jobs.manager();
       const workspace = await resolveWorkspace(ctx.cwd);
+      rejectListWithId(params);
       if (params.id !== undefined) {
-        if (params.state ?? params.scope ?? params.cursor ?? params.limit) throw new JobError('INVALID_ARGS', 'id cannot be combined with state, scope, cursor or limit');
         const { job, live } = await manager.get(params.id, workspace);
-        return text([summaryLine(job), ...detail(job), ...(live ? [] : ['history only: not controlled by this Pi process']),
+        return text([summaryLine(job), ...jobDetail(job), ...(live ? [] : ['history only: not controlled by this Pi process']),
           `read: job_read({"id":"${job.id}"${job.mode === 'pipe' && job.state === 'failed' ? ',"stream":"stderr"' : ''}})`], { job, live });
       }
-      const state = params.state ?? 'active', sessionId = ctx.sessionManager.getSessionId();
-      const { jobs: all, errors } = await manager.list(workspace);
-      let rows = all.filter(row => (params.scope === 'workspace' || row.job.ownerSessionId === sessionId) &&
-        (state === 'all' || bucket(row.job, row.live) === state)).map(row => row.job).sort(newestFirst);
-      if (params.cursor) {
-        const [createdAt, after] = Buffer.from(params.cursor, 'base64url').toString().split('|');
-        if (!after) throw new JobError('INVALID_ARGS', 'cursor is not a job_list nextCursor');
-        rows = rows.filter(job => newestFirst(job, { createdAt, id: after } as JobSummary) > 0);
-      }
-      const limit = params.limit ?? LIST.defaultLimit, page = rows.slice(0, limit);
-      const nextCursor = rows.length > limit ? cursorOf(page.at(-1)!) : undefined;
+      const state = params.state ?? 'active';
+      const { rows, nextCursor, errors } = await listJobs(manager, workspace, {
+        state, scope: params.scope ?? 'session', sessionId: ctx.sessionManager.getSessionId(), cursor: params.cursor, limit: params.limit ?? LIST_LIMITS.defaultLimit,
+      });
       return text([
-        `${page.length} ${state} job${page.length === 1 ? '' : 's'} (${params.scope ?? 'session'})`,
-        ...page.map(job => `${summaryLine(job)} · ${displayName(job)}${state === 'all' && bucket(job, manager.isLive(job.id)) === 'unsettled' ? ' · unsettled history' : ''}`),
+        `${rows.length} ${state} job${rows.length === 1 ? '' : 's'} (${params.scope ?? 'session'})`,
+        ...rows.map(row => `${summaryLine(row.job)} · ${displayName(row.job)}${row.unsettled ? ' · unsettled history' : ''}`),
         ...errors.map(error => `history error: ${error}`),
-        nextCursor ? `more: job_list({"state":"${state}","cursor":"${nextCursor}"})` : undefined,
-      ], { jobs: page, nextCursor, errors });
+        nextCursor ? `more: job_list({"state":"${state}"${params.scope ? `,"scope":"${params.scope}"` : ''},"cursor":"${nextCursor}"})` : undefined,
+      ], { jobs: rows.map(row => row.job), nextCursor, errors });
     },
   });
 
@@ -112,26 +72,19 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule): void {
     parameters: Type.Object({
       id,
       stream: Type.Optional(Type.Union(['stdout', 'stderr', 'output', 'input'].map(value => Type.Literal(value)))),
-      offset: Type.Optional(Type.Integer({ minimum: 0 })),
-      limitBytes: Type.Optional(Type.Integer({ minimum: 64, maximum: READ_LIMITS.maxBytes })),
-      search: Type.Optional(Type.String({ minLength: 1, maxLength: 500 })),
-      context: Type.Optional(Type.Integer({ minimum: 0, maximum: READ_LIMITS.maxContext })),
+      ...readFields,
     }, { additionalProperties: false }),
     async execute(_callId, params, _signal, _update, ctx) {
-      if (params.context !== undefined && params.search === undefined) throw new JobError('INVALID_ARGS', 'context requires search');
+      rejectContextWithoutSearch(params);
       const manager = jobs.manager();
       const { job } = await manager.get(params.id, await resolveWorkspace(ctx.cwd));
       const stream = (params.stream ?? (job.mode === 'pty' ? 'output' : 'stdout')) as Stream;
-      if (!STREAMS[job.mode].includes(stream)) throw new JobError('UNSUPPORTED_STREAM', `${job.mode} jobs have streams ${STREAMS[job.mode].join(', ')}`, job.id);
+      if (!STREAMS[job.mode].includes(stream)) throw new ToolError('UNSUPPORTED_STREAM', `${job.mode} jobs have streams ${STREAMS[job.mode].join(', ')}`, job.id);
       const render = stream === 'input' ? renderInput : job.mode === 'pty' ? normalizeVisibleText : sanitizeText;
       const source = await fileSource(manager.logPath(job, stream));
       let page: ReadPage;
-      try {
-        page = await readBounded(source, { offset: params.offset, limitBytes: params.limitBytes, search: params.search, context: params.context }, render);
-      } catch (error) {
-        if (error instanceof ReadArgumentError) throw new JobError('INVALID_ARGS', error.message, job.id);
-        throw error;
-      } finally { await source.close(); }
+      try { page = await readBounded(source, { offset: params.offset, limitBytes: params.limitBytes, search: params.search, context: params.context }, render); }
+      finally { await source.close(); }
       let stderrNote: string | undefined;
       if (job.mode === 'pipe' && stream === 'stdout' && params.offset === undefined && params.search === undefined) {
         const stderr = await fileSource(manager.logPath(job, 'stderr'));
@@ -163,16 +116,16 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule): void {
       const manager = jobs.manager();
       const job = manager.peek(params.id);
       const given = [params.input, params.keys, params.paste].filter(value => value !== undefined).length;
-      if (given > 1 || (!given && !params.submit && !params.endInput)) throw new JobError('INVALID_ARGS', 'Give exactly one of input, keys or paste (or only submit/endInput)', job.id);
-      if (job.mode === 'pipe' && params.keys) throw new JobError('INVALID_ARGS', 'keys need a pty job; pipe stdin takes input or paste', job.id);
-      if (job.mode === 'pty' && params.endInput) throw new JobError('INVALID_ARGS', 'endInput is pipe only; send keys ["ctrl+d"] to a pty', job.id);
+      if (given > 1 || (!given && !params.submit && !params.endInput)) throw new ToolError('INVALID_ARGS', 'Give exactly one of input, keys or paste (or only submit/endInput)', job.id);
+      if (job.mode === 'pipe' && params.keys) throw new ToolError('INVALID_ARGS', 'keys need a pty job; pipe stdin takes input or paste', job.id);
+      if (job.mode === 'pty' && params.endInput) throw new ToolError('INVALID_ARGS', 'endInput is pipe only; send keys ["ctrl+d"] to a pty', job.id);
       const kind: InputRecord['kind'] = params.keys ? 'keys' : params.paste !== undefined ? 'paste' : 'text';
       let data: string;
       try {
         data = params.keys ? translateInput({ keys: params.keys })
           : params.paste !== undefined ? (job.mode === 'pty' ? translateInput({ paste: params.paste }) : params.paste)
           : params.input ?? '';
-      } catch (error) { throw new JobError('INVALID_ARGS', String(error instanceof Error ? error.message : error), job.id); }
+      } catch (error) { throw new ToolError('INVALID_ARGS', String(error instanceof Error ? error.message : error), job.id); }
       if (params.submit) data += job.mode === 'pty' ? '\r' : '\n';
       const shown = params.keys ? params.keys.join(' ') : params.paste ?? params.input ?? '';
       let current = data ? manager.write(job.id, data, { source: 'model', kind, text: params.submit ? `${shown}⏎` : shown, sensitive: params.sensitive }) : job;
@@ -194,10 +147,11 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule): void {
       // The model already sees this settlement; a later wake for it would repeat the result.
       if (isTerminal(job.state)) jobs.consume(job.id);
       const unproven = job.cleanup.state === 'pending' || job.cleanup.state === 'unconfirmed';
+      const outcome: StopOutcome = { requested, state: job.state, cleanup: job.cleanup.state, affected: [{ id: job.id, state: job.state, cleanup: job.cleanup.state }] };
       return text([summaryLine(job),
         requested ? (unproven ? `stop requested; cleanup ${job.cleanup.state}${job.cleanup.error ? `: ${job.cleanup.error}` : ''}` : 'stopped; managed processes confirmed gone')
           : 'already settled; no stop sent',
-        `read: job_read({"id":"${job.id}"})`], { requested, state: job.state, cleanup: job.cleanup, affected: [{ id: job.id, state: job.state, cleanup: job.cleanup.state }], job });
+        `read: job_read({"id":"${job.id}"})`], { ...outcome, job });
     },
   });
 }
