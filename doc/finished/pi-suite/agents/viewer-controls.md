@@ -33,8 +33,8 @@ Linux（Node 24.22.2）新增 4 项检查覆盖真实前台转后台的调用释
 - [统一界面](../../../todo/pi-suite/ui.md)
 - [任务引用](../../../todo/pi-suite/tasks.md)
 - [统一框架边界](../../../todo/pi-suite/architecture.md)
-- [子代理运行记录与手动控制](../../../todo/pi-suite/agents/runs.md)
-- [主从交互](../../../todo/pi-suite/agents/interaction.md)
+- [子代理运行记录与手动控制](runs.md)
+- [主从交互](interaction.md)
 - [活动数量状态](../../../todo/pi-suite/status.md)
 
 ## 8. agents：复用主 agent 的消息渲染
@@ -52,7 +52,7 @@ Linux（Node 24.22.2）新增 4 项检查覆盖真实前台转后台的调用释
 
 如果未来必须把 Pi 原有主聊天区直接变成任意 agent 的视角，公共扩展接口目前未提供完整替换入口，再评估一个很小的 Pi 核心扩展点。第一版不先 fork Pi 核心，也不依赖私有字段。
 
-已结束 subagent 可继续读取结果和原生 transcript；完成后从常驻行收起不删除历史。手动停止沿用 child 的实际取消与结算流程，一并停止其嵌套 child 和所属后台 job；具体创建归属、启动竞争与停止结算见 [子代理运行记录与手动控制](../../../todo/pi-suite/agents/runs.md)。
+已结束 subagent 可继续读取结果和原生 transcript；完成后从常驻行收起不删除历史。手动停止沿用 child 的实际取消与结算流程，一并停止其嵌套 child 和所属后台 job；具体创建归属、启动竞争与停止结算见 [子代理运行记录与手动控制](runs.md)。
 
 查看器保留上游 conversation-viewer 的操作语义：x 按两次停止所选 runId，第一次按下后提示“再按 x 停止”，其他任意按键取消待确认；可接收消息的 run 默认选中 Message，Enter 关闭详情并打开输入，提交后按 agent_send 语义投递，返回时保留滚动、搜索与展开状态。已结束、结算中或同一 agent 的旧 run 不发送消息，不因延迟提交恢复会话；workflow 只回答当前可见的挂起问题。搜索与输入拥有文字按键。只读历史不提供快捷停止入口。键位与提示文案维护在 [操作说明](../../../current/agents/operations.md)。
 

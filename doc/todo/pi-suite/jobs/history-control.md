@@ -29,7 +29,7 @@
 - [执行模式与后端](execution.md)
 - [同进程保活](session-lifecycle.md)
 - [活动数量状态](../status.md)
-- [子代理停止边界](../agents/runs.md)
+- [子代理停止边界](../../../finished/pi-suite/agents/runs.md)
 - [输出读取](output.md)
 - [统一工具设计](../tool-design.md)
 
@@ -93,4 +93,4 @@ id 查询忽略列表筛选并返回详情；state/scope/cursor/limit 是列表�
 
 subagent 发起的 job 由运行上下文自动记录创建归属；停止该 subagent 时，AgentManager 调用同一 JobManager 停止它及所属后代创建的活动 job，不需要模型逐项调用 job_stop。job 归属与 task/agent 的展示引用分开，执行已 detach 或创建 child 已完成仍参与级联清理。关闭视图、会话切换和 reload 仅改变绑定，不触发该停止流程。
 
-注册和启动 job 时检查创建执行是否已在停止，并先记录受管对象；若停止与启动同时发生，继续将该 job 纳入同一停止请求。停止返回 child/job 的真实结算信息，pending/unconfirmed 继续可查询，日志与历史保留。具体运行子树与执行标识规则见 [子代理停止边界](../agents/runs.md)。
+注册和启动 job 时检查创建执行是否已在停止，并先记录受管对象；若停止与启动同时发生，继续将该 job 纳入同一停止请求。停止返回 child/job 的真实结算信息，pending/unconfirmed 继续可查询，日志与历史保留。具体运行子树与执行标识规则见 [子代理停止边界](../../../finished/pi-suite/agents/runs.md)。

@@ -27,7 +27,7 @@ CLI 启动的 6 项检查覆盖预设字段合并、用户级策略与精确命�
 
 日志查看的 3 项检查在 Linux 使用真实 pipe job，覆盖底部实时跟随、滚动与搜索保留位置、UTF-8 分次写入、关闭详情后进程继续及退出后补读最终输出；历史核对有界尾窗、前后字节翻页、字面量 Markdown 与 40/60/120 列渲染，列表核对同一筛选集合插入新记录后的游标稳定、会话/workspace 范围与已结束详情。Windows 与完整 /jobs 交互选择流程继续由历史控制专项验收。
 
-升级控制边界的 2 项检查在 Linux 使用真实宿主 reload 与受控进程，核对执行协议不兼容时查询/日志/停止/指定 ID 等待、活动计数和 quit 可用，新启动与写入明确拒绝，占用注册与退出监听保留，以及空闲替换和历史只读。不同 agentDir 与缺少兼容控制桥的占用注册保持不可接管。另以真实 monitor detector 延迟最终结算，核对已观测自然退出时重复 stop 等待完整事件、requested:false、退出码 0 和 completed 状态。Windows 升级边界与停止竞争由对应专项验收。
+升级控制边界的 2 项检查在 Linux 使用真实宿主 reload 与受控进程，核对执行协议不兼容时查询/日志/停止/指定 ID 等待、活动计数和 quit 可用，新启动与写入明确拒绝，占用注册与退出监听保留，以及空闲替换和历史只读。不同 agentDir 与缺少兼容控制桥的占用注册保持不可接管。创建归属查询核对完整 owned 集合、跨 cwd/owner/branch 与返回副本；v2 控制桥支持 createdBy，v1 明确拒绝新查询且保留读取、停止与 quit。另以真实 monitor detector 延迟最终结算，核对已观测自然退出时重复 stop 等待完整事件、requested:false、退出码 0 和 completed 状态。Windows 升级边界与停止竞争由对应专项验收。
 
 tasks 的 8 项检查在 Linux 覆盖两级批量原子编辑、稳定短 ID、移动与重新打开后的派生进度、依赖反向关系及警告、两个真实进程并发写入同一文件、异步锁等待、无效文件与取消不覆盖。真实 SDK 核对 new/resume/fork/reload 清单独立、内存模式与 job 引用；临时提醒不进入持久 transcript，doing 间隔与项目关闭配置生效。40/60/120 列核对 Dock 完成比例保留、完成反馈与共享详情阅读状态。Windows 与真实手机的界面、并发组合由任务专项管理。
 
@@ -35,7 +35,11 @@ tasks 的 8 项检查在 Linux 覆盖两级批量原子编辑、稳定短 ID、�
 
 agents 的 8 项 Linux 离线检查使用真实 Pi SDK child 与 faux provider，覆盖两池队列与排队停止、原生前台问题/回答、嵌套免占位、共享 TaskStore、run 恢复与结束叶子、配置模型来源、真实 abort 与问题超时；真实 pipe job 核对已结束 child 的遗留 job 清理且同级 job 保持运行。模型配置另有 5 项检查，覆盖 /agents 类型写回与即时 agent_start、旧执行独立、当前请求不中断与下一请求切换、持久 individual 恢复、认证丢失、取消不写入、40/120 列原生选择和 transcript 阅读保留，以及配置逐字段位置/删除后的用户值与无效文件拒绝。
 
-主从交互的 3 项 Linux 真实 SDK 聚合检查通过，覆盖多 run 的读取/通知消费隔离与边界合并、旧 run 的 wait others 返回和已取消 signal 入口；真实多 child any/all、ids 外问题优先、状态/活动数量/进度读取及提问消费通过。嵌套 FG/BG 问题只到直接父级，主会话 SDK Esc 或 wait 超时后 child 保留 waiting，回答可继续结算；jobs/工具参数摘要等未完成范围见 [交互待办](../todo/pi-suite/agents/interaction.md)。
+主从交互的 3 项 Linux 真实 SDK 聚合检查通过，覆盖多 run 的读取/通知消费隔离与边界合并、旧 run 的 wait others 返回和已取消 signal 入口；真实多 child any/all、ids 外问题优先、状态/活动数量/进度读取及提问消费通过。嵌套 FG/BG 问题只到直接父级，主会话 SDK Esc 或 wait 超时后 child 保留 waiting，回答可继续结算；进度字段与结果通知的验收见 [主从交互专项](../finished/pi-suite/agents/interaction.md)，平台与真实手机组合由 [扩展专项](../todo/pi-suite/agents/extensions.md) 管理。
+
+进度与通知的 3 项 Linux（Node 24.22.2）真实 SDK 聚合检查通过，覆盖并发工具参数摘要与有界正文、排队/等待父级状态、活动用量与流式进度、稳定 agent ID 的全部 run 根和回收后代所属 job；正文最近 20 个 run 不截断 details 或归属集合。创建归属查询不可用时保留明确原因；失败结果通知含实际 SDK 用量和错误，读取按 run 撤销待发结果。
+
+所属 Jobs 的 2 项 Linux（Node 24.22.2）原生组件/真实 SDK 检查通过，覆盖所选 run 子树与回收后代、不同 cwd、同 agent 新 run 和无关 job 排除、单独停止选中 job、Transcript 滚动/搜索/折叠与执行引用保留；真实新会话的 foreign PTY 历史允许日志且隐藏 attach/stop，通知 hold 退出后一次释放。modules.jobs=false 保留同 owner 的既有 job 查询，主会话 quit 即使未查询也完成清理。Windows 与真实手机 SSH 组合由 [扩展专项](../todo/pi-suite/agents/extensions.md) 管理。
 
 停止竞争的 3 项 Linux 聚合检查通过，覆盖同步 abort/event/changed 重入只清理一次、整批排队目标取消与回调 drain、清理期间及 task I/O 后的新 run 准入、旧 run 停止不影响新执行和 sweep 后同范围合并。真实 job 核对回收后代的祖先清理、授权等待期间停止阻止后续启动；父级最终结算核对自然终态 child、清理失败与父级 job 清理均等待全部 done，并保留正确终态和错误。
 
@@ -59,6 +63,6 @@ Workflow 宿主的 5 项 Linux（Node 24.22.2）真实 SDK/faux 与进程检查�
 
 公共基础的 46 项离线检查及类型检查在 Windows（Node 24.22.2）和 Linux（已有 WSL/nvm 环境，Node 24.14.0）通过，日常检查在 5 分钟内。共享 wait 提前返回、goal_wait waitFor、终端视图与 monitor 的 11 项检查目前只在 Linux 通过，Windows 待复核。另在 Windows 执行 pi-starship 0.65.2 实际 extension_status 模块，验证 goal/runtime 槽位读取、数量上限与空状态。这些检查证明当前询问、目标、执行任务及共享组件的契约；终端缩放、/jobs 交互选择流程、真实手机 SSH 输入、完整第三方 footer 布局和后续业务模块综合生命周期由 [完整实施计划](../todo/pi-suite/implementation.md) 管理。
 
-当前 Linux（Node 24.22.2）检查集共 142 项，全量检查通过，无跳过项，耗时 13.49 秒，类型检查通过。检查覆盖询问、目标、任务、执行、子代理、workflow 和共享组件的当前契约。平台适用范围按上述各专项结论区分。
+当前 Linux（Node 24.22.2）检查集共 147 项，经全量检查与定向复核通过，无跳过项，类型检查通过；日常检查耗时在 5 分钟内。检查覆盖询问、目标、任务、执行、子代理、workflow 和共享组件的当前契约。平台适用范围按上述各专项结论区分。
 
 [返回当前文档](./index.md)

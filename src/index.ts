@@ -39,11 +39,12 @@ export default function piSuite(pi: ExtensionAPI): void {
   const ask = new AskManager(binding, notifications, dock, (answered, ctx) => goal?.askResult(answered, ctx));
   if (config.modules.ask) registerAsk(pi, ask, () => config);
   const jobs = config.modules.jobs ? new JobsModule(pi, binding, notifications, status) : undefined;
+  const jobViewer = jobs ? { jobs, dock, notifications, keys: () => config.jobs } : undefined;
   if (jobs) {
-    const viewer = { jobs, dock, notifications, keys: () => config.jobs };
-    registerJobTools(pi, jobs, viewer, { ask, config: () => config, tasks }); registerJobsCommand(pi, viewer); waits.register(jobs);
+    registerJobTools(pi, jobs, jobViewer!, { ask, config: () => config, tasks }); registerJobsCommand(pi, jobViewer!); waits.register(jobs);
   }
   const agents = config.modules.agents ? new AgentsModule(pi, binding, notifications, status, tasks) : undefined;
+  const agentJobViewer = agents ? {pi, viewer: jobViewer ?? {jobs: new JobsModule(pi, binding, notifications, status), dock, notifications, keys: () => config.jobs}} : undefined;
   const schedules = agents ? new AgentScheduler(pi, binding, agents, notifications, () => config) : undefined;
   const agentRpc = agents ? new AgentRpc(pi, binding, agents, () => config) : undefined;
   const workflows = agents ? new WorkflowsModule(pi, binding, notifications, dock, agents) : undefined;
@@ -52,13 +53,14 @@ export default function piSuite(pi: ExtensionAPI): void {
   let startTool: ReturnType<typeof registerAgentTools> | undefined;
   let mentions: ReturnType<typeof registerAgentMentions> | undefined;
   if (agents) {
-    startTool = registerAgentTools(pi, agents, waits, () => config, schedules);
+    startTool = registerAgentTools(pi, agents, waits, () => config, schedules, agentJobViewer!.viewer.jobs);
     registerAgentsCommand(pi, agents, dock, notifications, () => config, cwd => {
       config = loadConfig(cwd); mentions?.refreshTypes();
       if (binding.current) workflowTool?.refreshTypes(binding.current.ctx);
     }, schedules,
       workflows && workflowTool ? {available: () => workflowTool.enabled,
-        show: ctx => showWorkflows(ctx, {workflows, agents, dock, config: () => config})} : undefined); waits.register(agents);
+        show: ctx => showWorkflows(ctx, {workflows, agents, dock, config: () => config, jobs: agentJobViewer})} : undefined,
+      agentJobViewer); waits.register(agents);
     mentions = registerAgentMentions(pi, agents, binding, () => config, startTool);
   }
   if (jobs || agents) {
@@ -96,7 +98,7 @@ export default function piSuite(pi: ExtensionAPI): void {
     ask.cancel(); goal?.shutdown();
     tasks?.detach();
     // Detach before revoking so pending job notices are cancelled under the old session ID.
-    const quit = jobs?.shutdown(event.reason);
+    const quit = (jobs ?? agentJobViewer?.viewer.jobs)?.shutdown(event.reason);
     const agentQuit = event.reason === 'quit' ? agents?.manager.shutdown() : undefined;
     const workflowQuit = event.reason === 'quit' ? workflows?.manager.shutdown() : undefined;
     const scheduleQuit = agentQuit?.then(() => schedules?.drain());

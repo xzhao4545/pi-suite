@@ -284,15 +284,18 @@ export class JobManager {
     if (delay <= 0) expired(); else item.stopTimer = setTimeout(expired, delay);
   }
 
+  private createdItems(runIds: string[]): Owned[] {
+    const roots = new Set(runIds);
+    return [...this.jobs.values()].filter(({job}) => job.creator &&
+      [job.creator.runId, ...job.creator.ancestors].some(runId => roots.has(runId)));
+  }
+  /** Complete creation scope across workspaces and notification owners, without pagination. */
+  createdBy(runIds: string[]): JobSummary[] { return this.createdItems(runIds).map(item => this.view(item)); }
   /** Stop every job created by these agent runs or their descendants, including detached ones. */
   async stopCreatedBy(runIds: string[]): Promise<StopResult[]> {
     for (const runId of runIds) this.stoppingCreators.add(runId);
-    // Closed creators stay closed for future launches; this operation reports only
-    // its own subtree so an unrelated earlier cleanup cannot poison its outcome.
-    const roots = new Set(runIds);
-    const targets = [...this.jobs.values()].filter(({job}) => job.creator &&
-      [job.creator.runId, ...job.creator.ancestors].some(runId => roots.has(runId)));
-    return Promise.all(targets.map(item => this.stop(item.job.id, 'agent')));
+    // Closed creators stay closed for future launches; selection matches the public query.
+    return Promise.all(this.createdItems(runIds).map(item => this.stop(item.job.id, 'agent')));
   }
   private creatorStopping(creator: StartRequest['creator']): boolean {
     return !!creator && [creator.runId, ...creator.ancestors].some(runId => this.stoppingCreators.has(runId));

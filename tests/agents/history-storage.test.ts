@@ -49,6 +49,7 @@ test('saved agent reads never repair files and reject corrupt storage, invalid l
       {name: 'future-record', text: `${JSON.stringify(header)}\n${JSON.stringify({...custom, data: {...saved, version: 2}})}`, error: /Invalid agent record/},
       {name: 'bad-record', text: `${JSON.stringify(header)}\n${JSON.stringify({...custom, data: {...saved, ancestors: 'wrong'}})}`, error: /Invalid agent record/},
       {name: 'bad-id', text: `${JSON.stringify(header)}\n${JSON.stringify({...custom, data: {...saved, id: 'unaddressable'}})}`, error: /Invalid agent record/},
+      {name: 'bad-usage', text: `${JSON.stringify(header)}\n${JSON.stringify({...custom, data: {...saved, usage: {tokens: {input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0}, cost: 'wrong'}}})}`, error: /Invalid agent record/},
     ];
     for (const fixture of invalid) {
       const broken = join(root, `${fixture.name}.jsonl`); writeFileSync(broken, fixture.text);

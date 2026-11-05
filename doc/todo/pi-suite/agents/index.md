@@ -2,7 +2,7 @@
 
 目标：以上游 pi-subagents 为基础导入改造 subagent 执行、记录、查看、主从交互与扩展能力，接入统一工具、界面和通知。
 
-当前状态：实施中；同进程执行、两池队列、核心类型、run 记录、恢复、工具/查看器、父级提问、任务共享与 job 级联停止已接入，Linux 8 项契约验收通过，见 [基础阶段](../../../finished/pi-suite/agents/core.md)；类型模型写回与单 agent 实时配置见 [模型基础阶段](../../../finished/pi-suite/agents/models-core.md)，扩展、技能、包资源与 memory 见 [资源基础阶段](../../../finished/pi-suite/agents/resources-core.md)。@handle 输入与克隆启动见 [提及基础阶段](../../../finished/pi-suite/agents/mentions-core.md)。定时调度见 [调度基础阶段](../../../finished/pi-suite/agents/schedules-core.md)。RPC 五通道见 [RPC 基础阶段](../../../finished/pi-suite/agents/rpc-core.md)。workflow 编排核心见 [核心阶段](../../../finished/pi-suite/agents/workflow-core.md)，宿主/工具/原生控制见 [宿主接入阶段](../../../finished/pi-suite/agents/workflow-host.md)。类型开关菜单与 Execution 回收见 [类型与回收阶段](../../../finished/pi-suite/agents/types-retention.md)；workspace 持久历史发现与只读查询见 [历史发现阶段](../../../finished/pi-suite/agents/history-discovery.md)，停止竞争与主从交互生命周期见 [生命周期阶段](../../../finished/pi-suite/agents/lifecycle.md)，所属 job 详情、工具参数摘要、通知用量/错误正文与平台组合待完成。保留范围与按文件处置见 [上游导入](../upstream-import.md)。
+当前状态：实施中；同进程执行、两池队列、核心类型、run 记录、恢复、工具/查看器、父级提问、任务共享与 job 级联停止已接入，Linux 8 项契约验收通过，见 [基础阶段](../../../finished/pi-suite/agents/core.md)；类型模型写回与单 agent 实时配置见 [模型基础阶段](../../../finished/pi-suite/agents/models-core.md)，扩展、技能、包资源与 memory 见 [资源基础阶段](../../../finished/pi-suite/agents/resources-core.md)。@handle 输入与克隆启动见 [提及基础阶段](../../../finished/pi-suite/agents/mentions-core.md)。定时调度见 [调度基础阶段](../../../finished/pi-suite/agents/schedules-core.md)。RPC 五通道见 [RPC 基础阶段](../../../finished/pi-suite/agents/rpc-core.md)。workflow 编排核心见 [核心阶段](../../../finished/pi-suite/agents/workflow-core.md)，宿主/工具/原生控制见 [宿主接入阶段](../../../finished/pi-suite/agents/workflow-host.md)。类型开关菜单与 Execution 回收见 [类型与回收阶段](../../../finished/pi-suite/agents/types-retention.md)；workspace 持久历史发现与只读查询见 [历史发现阶段](../../../finished/pi-suite/agents/history-discovery.md)，停止竞争与主从交互生命周期见 [生命周期阶段](../../../finished/pi-suite/agents/lifecycle.md)，所属活动 job 详情与控制见 [运行记录专项](../../../finished/pi-suite/agents/runs.md)，工具参数摘要、进度正文与通知用量/错误见 [主从交互专项](../../../finished/pi-suite/agents/interaction.md)；这些范围已通过 Linux 验收，平台组合待完成。保留范围与按文件处置见 [上游导入](../upstream-import.md)。
 
 影响范围：AgentManager、child 会话、agent_* 工具、/agents 命令、统一 dock、状态栏与通知。
 
@@ -13,8 +13,8 @@
 ## 任务列表
 
 - [x] [原生会话查看与快捷控制](../../../finished/pi-suite/agents/viewer-controls.md)
-- [ ] [运行记录与手动控制](runs.md)
-- [ ] [主从交互](interaction.md)
+- [x] [运行记录与手动控制](../../../finished/pi-suite/agents/runs.md)
+- [x] [主从交互](../../../finished/pi-suite/agents/interaction.md)
 - [ ] [扩展能力](extensions.md)
 - [ ] [模型与 thinking 配置](models.md)
 

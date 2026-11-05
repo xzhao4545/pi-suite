@@ -24,9 +24,9 @@
 - [ ] Windows 与真实手机 SSH 复核 @handle/文件补全、活动引导、结束恢复、克隆启动与会话切换
 - [ ] Windows、实际 CLI 与手机 SSH 复核本地时区的 cron/周期/单次、切换与退出、调度详情和取消
 - [ ] Windows 与真实手机 SSH 复核 workflow 的 shell/gate 清理、长名称选择、child/gate 查看、控制与 journal 重放
-- [ ] Windows 与真实手机 SSH 复核原生 child 查看器的流式/工具部分结果、搜索与阅读位置、消息输入、两次停止和真实前台转后台
+- [ ] Windows 与真实手机 SSH 复核原生 child 查看器的流式/工具部分结果、搜索与阅读位置、消息输入、两次停止、真实前台转后台与 Jobs 日志/单独停止/只读入口
 - [ ] Windows 与真实手机 SSH 复核 workspace 持久历史的默认/自定义/符号链接目录、fork 与 workflow 引用、分页和原生只读边界
-- [ ] Windows 与真实手机 SSH 复核多 child/嵌套提问、run 级通知消费、同步停止竞争及级联 job 清理
+- [ ] Windows 与真实手机 SSH 复核多 child/嵌套提问、进度参数与所属活动 jobs、run 级用量/错误通知及消费、同步停止竞争及级联 job 清理
 
 ## 验收方式
 
@@ -34,8 +34,8 @@
 
 ## 关联计划
 
-- [运行记录与手动控制](runs.md)
-- [主从交互](interaction.md)
+- [运行记录与手动控制](../../../finished/pi-suite/agents/runs.md)
+- [主从交互](../../../finished/pi-suite/agents/interaction.md)
 - [上游导入](../upstream-import.md)
 
 ## 自定义 agent 类型

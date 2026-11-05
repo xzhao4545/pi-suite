@@ -42,7 +42,11 @@ export function childSuite(pi: ExtensionAPI, run: Execution, manager: AgentManag
   }
   // A type toggle changes admission for newly requested descendants, even while their
   // parent keeps the tools/resources with which it already started.
-  if (run.type.allowedSubagents && !run.isolated && run.record.ancestors.length + 1 < config.agents.maxDepth) registerAgentTools(pi, agents, waits, () => loadConfig(run.configCwd));
+  if (run.type.allowedSubagents && !run.isolated && run.record.ancestors.length + 1 < config.agents.maxDepth) {
+    // Turning off job tools does not erase jobs created before reload. This unbound
+    // facade reads the same process owner without registering tools or notifications.
+    registerAgentTools(pi, agents, waits, () => loadConfig(run.configCwd), undefined, jobs ?? new JobsModule(pi, binding, notices, status));
+  }
   waits.register(agents); registerWait(pi, waits);
   pi.on('session_start', async (_event, ctx) => {
     binding.bind(ctx);

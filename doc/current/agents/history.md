@@ -33,7 +33,7 @@ AgentManager 的 workspace 查询从 Pi 会话文件和既有 suite 记录发现
 
 `agent_list({scope:"workspace"})` 和 `/agents workspace` 先发现历史，再按既有筛选与分页读取。未知 ID 的 agent_list、agent_read、agent_send 和 agent_stop 使用公共 lookup 发现，并核对当前 configCwd；agent_send 继续核对直接父级与当前分支，发现历史不赋予发送或恢复权限。
 
-原生 workspace 菜单中，其他 owner 或当前分支之外的已结算记录只提供 Transcript；其查看器只保留阅读、Tools/Thinking 展开和 Back。当前 owner/分支可见的结束记录仍可修改之后恢复使用的模型覆盖，或通过记录菜单清理遗留 job。真实运行句柄保留既有控制契约；工具 agent_stop 仍按当前工作区和运行子树处理，嵌套调用保持直接 child 准入。
+原生 workspace 菜单中，其他 owner 或当前分支之外的已结算记录提供 Transcript 和只读 Jobs；其查看器保留阅读、Tools/Thinking 展开、Jobs 和 Back。Jobs 复用 job 详情和日志，隐藏 attach 与 stop，创建归属查询不可用时明确报错。当前 owner/分支可见的结束记录仍可修改之后恢复使用的模型覆盖，或通过记录菜单清理遗留 job。真实运行句柄保留既有控制契约；工具 agent_stop 仍按当前工作区和运行子树处理，嵌套调用保持直接 child 准入。
 
 完整命令、默认筛选和键位见 [工具与操作](operations.md)。
 

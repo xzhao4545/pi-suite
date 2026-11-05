@@ -30,7 +30,7 @@
 - [goal 状态栏联动](goal-status.md)
 - [统一面板布局](ui.md)
 - [job 查询与控制](jobs/history-control.md)
-- [子代理记录与控制](agents/runs.md)
+- [子代理记录与控制](../../finished/pi-suite/agents/runs.md)
 
 ## 发布契约
 

@@ -8,7 +8,7 @@ import type { ScrollView } from '../../../ui/scroll.ts';
 import { showJobLog } from '../../../jobs/log-viewer.ts';
 import { resolveWorkspace } from '../../../jobs/workspace.ts';
 import type { AgentsModule } from '../../index.ts';
-import { showAgent } from '../../viewer.ts';
+import { showAgent, type AgentJobViewer } from '../../viewer.ts';
 import type { OwnedWorkflowTask } from '../entry.ts';
 import { workflowSummary, type WorkflowsModule } from '../index.ts';
 import { workflowActive } from '../manager.ts';
@@ -16,7 +16,7 @@ import { collapse, displayState } from '../progress/index.ts';
 import { listSavedWorkflows, readSavedWorkflow } from '../saved.ts';
 import { WorkflowProgress } from './progress.ts';
 
-type Deps = {workflows: WorkflowsModule; agents: AgentsModule; dock: Dock; config: () => SuiteConfig};
+type Deps = {workflows: WorkflowsModule; agents: AgentsModule; dock: Dock; config: () => SuiteConfig; jobs?: AgentJobViewer};
 export async function showWorkflow(ctx: ExtensionContext, deps: Deps, task: OwnedWorkflowTask): Promise<void> {
   let reader: ScrollView | undefined, selectedAgent: string | undefined;
   const content = new WorkflowProgress(task);
@@ -59,7 +59,7 @@ export async function showWorkflow(ctx: ExtensionContext, deps: Deps, task: Owne
       const control = await selectValue(ctx, `#${row.index} ${row.label}`, controls.map(label => ({value: label, label})));
       if (control === 'Transcript') {
         const record = deps.agents.manager.get(row.recordId!).record;
-        await showAgent(ctx, deps.agents, deps.dock, record.id, record.runId, deps.config);
+        await showAgent(ctx, deps.agents, deps.dock, record.id, record.runId, deps.config, false, deps.jobs);
       } else if (control?.startsWith('Gate ')) {
         const jobs = manager.jobManager(), {job, live} = await jobs.get(row.gateJobId!, await resolveWorkspace(task.cwd));
         await showJobLog(ctx, deps.dock, jobs, job, control === 'Gate stdout' ? 'stdout' : 'stderr', live);

@@ -24,7 +24,7 @@
 
 停止先关闭对应运行子树的准入，再取消真实 child 会话与工具信号、等待结算，并调用 JobManager.stopCreatedBy 清理所属活动 job。child 的 job_start 自动携带 agentId、runId 和 ancestors；模型不维护归属名单。JobManager 在异步授权与启动期间仍识别已关闭的 creator，防止停止期间启动遗漏的进程。
 
-agent_stop 不指定 runId 时覆盖该 agent 各次运行及其后代创建的活动 job；指定时限定该次运行子树。已结束 child 留下的 job 也参与清理。同一范围的停止操作先登记共享 promise，再统一转换全部目标状态：排队目标移出队列并完成 stopped 结算，活动目标进入 stopping，之后才触发 abort、事件和订阅回调。同范围同步重入加入原操作；回调中的 configure/drain 不能启动排队后代，不影响同级或主会话创建的 job。job 清理失败时仍等待 child 完成结算后再报告错误，后续 stop 可以重新清理。JobManager 的本次清理结果只匹配传入 run ID 及 ancestors，累计关闭的 creator 仅用于后续准入。
+agent_stop 不指定 runId 时覆盖该 agent 各次运行及其后代创建的活动 job；指定时限定该次运行子树。已结束 child 留下的 job 也参与清理。同一范围的停止操作先登记共享 promise，再统一转换全部目标状态：排队目标移出队列并完成 stopped 结算，活动目标进入 stopping，之后才触发 abort、事件和订阅回调。同范围同步重入加入原操作；回调中的 configure/drain 不能启动排队后代，不影响同级或主会话创建的 job。job 清理失败时仍等待 child 完成结算后再报告错误，后续 stop 可以重新清理。JobManager 的本次清理结果只匹配传入 run ID 及 ancestors，累计关闭的 creator 仅用于后续准入。进度和原生 Jobs 入口通过共用同一归属选择的 createdBy 查询，活动筛选与范围见 [进度与结果通知](progress.md#所属活动-jobs)。
 
 父执行结算前等待全部尚未 settled 的直接嵌套 child。仍在活动的 child 通过真实 stop 取消；已经产生终态但仍在会话关闭、记录落盘等最终结算的 child 等待其原 done，保留自然终态，不重复改为 stopped。任一 child 或父级所属 job 清理失败时，仍等待其他最终结算后报告错误，父级记录为 failed。父级 done、通知和活动数量以这条最终结算边界为准。
 

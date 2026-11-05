@@ -4,17 +4,20 @@ import type { SuiteConfig } from '../runtime/config.ts';
 import { ToolError } from '../runtime/errors.ts';
 import { readBounded, textSource } from '../runtime/read.ts';
 import { sanitizeText } from '../runtime/text.ts';
-import { LIST_LIMITS, listFields, objectId, paginate, readFields, registerBoundTool, rejectContextWithoutSearch, rejectListWithId, textResult as text } from '../runtime/tools.ts';
+import { LIST_LIMITS, listFields, newestFirst, objectId, paginate, readFields, registerBoundTool, rejectContextWithoutSearch, rejectListWithId, textResult as text } from '../runtime/tools.ts';
 import type { WaitRegistry } from '../runtime/wait.ts';
 import { taskId } from '../tasks/types.ts';
 import { thinkingSchema } from './catalog.ts';
-import { AgentsModule, agentSummary, summaryLine } from './index.ts';
+import { AgentsModule, agentSummary, summaryLine, usageText } from './index.ts';
 import { active, executing, recordWorkspace } from './types.ts';
 import { transcript, transcriptText } from './records.ts';
 import type { AgentScheduler } from './schedules/index.ts';
+import type { JobsModule } from '../jobs/index.ts';
+import type { JobSummary } from '../jobs/types.ts';
+import { isActive as jobActive } from '../jobs/state.ts';
 
 const id = objectId('agent', 'agent_3fa1c2d0'), runId = objectId('run', 'run_3fa1c2d0');
-export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits: WaitRegistry, config: () => SuiteConfig, scheduler?: AgentScheduler) {
+export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits: WaitRegistry, config: () => SuiteConfig, scheduler?: AgentScheduler, jobs?: Pick<JobsModule, 'createdBy'>) {
   let scheduling = Boolean(scheduler && config().agents.scheduling);
   const startFields = { prompt: Type.String({ minLength: 1 }), type: Type.Optional(Type.String({ minLength: 1 })),
     name: Type.Optional(Type.String({ maxLength: 80 })), background: Type.Optional(Type.Boolean()),
@@ -83,9 +86,25 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
       if (params.id) {
         const { record, run } = await agents.manager.lookup(params.id, scope, config(), undefined, signal);
         const runs = agents.manager.records().filter(item => item.id === record.id).map(agentSummary);
-        return text([summaryLine(record), `model: ${record.model} (${record.modelSource}) · thinking: ${record.thinking} (${record.thinkingSource})`,
+        const recent = [...runs].sort((a, b) => newestFirst({ createdAt: a.createdAt, id: a.runId }, { createdAt: b.createdAt, id: b.runId })).slice(0, LIST_LIMITS.defaultLimit);
+        let created: JobSummary[] = [], jobsUnavailable = jobs ? undefined : 'Owned job query unavailable';
+        if (jobs) try { created = await jobs.createdBy(runs.map(item => item.runId)); }
+        catch (error) {
+          if (!(error instanceof ToolError) || error.code !== 'RUNTIME_UNAVAILABLE') throw error;
+          jobsUnavailable = error.message;
+        }
+        const ownedJobs = created.filter(jobActive).map(job => ({ id: job.id, name: job.name, state: job.state, cleanup: job.cleanup.state }));
+        return text([summaryLine(record), `state: ${record.state}${run?.question ? ' · waitingFor: parent' : ''}`,
+          record.activity ? `activity: ${record.activity}` : undefined,
+          `turns: ${record.turns ?? 0} · toolUses: ${record.toolUses ?? 0} · elapsedMs: ${record.elapsedMs ?? 0}`,
+          record.lastUpdateAt ? `lastUpdateAt: ${record.lastUpdateAt}` : undefined, usageText(record),
+          `runs: ${recent.length}/${runs.length}${runs.length > recent.length ? ` · ${runs.length - recent.length} more via workspace history` : ''} · ${recent.map(item => `${item.runId} ${item.state}`).join(', ')}`,
+          `model: ${record.model} (${record.modelSource}) · thinking: ${record.thinking} (${record.thinkingSource})`,
           record.error, run?.question ? agents.settlement(record.id).summary : undefined,
-          `read: agent_read({"id":"${record.id}"})`], { agent: agentSummary(record), runs, question: run?.question?.params, waitingFor: run?.question ? 'parent' : undefined });
+          jobsUnavailable ? `jobs unavailable: ${jobsUnavailable}` : `jobs: ${ownedJobs.length} active`,
+          ...ownedJobs.map(job => `${job.id} ${job.state} · cleanup ${job.cleanup} · read: job_read({"id":"${job.id}"})`),
+          `read: agent_read({"id":"${record.id}"})`], { agent: agentSummary(record), runs, jobs: ownedJobs, jobsUnavailable,
+          question: run?.question?.params, waitingFor: run?.question ? 'parent' : undefined });
       }
       if (params.scope === 'workspace') await agents.manager.discover(scope, config(), signal);
       const state: string = params.state ?? 'active';

@@ -12,8 +12,29 @@ import type { ScrollView } from '../ui/scroll.ts';
 import type { AgentScheduler } from './schedules/index.ts';
 import { showSchedules } from './schedules/menu.ts';
 import { selectValue } from '../ui/select.ts';
+import { jobActions, type ViewerDeps } from '../jobs/viewer.ts';
+import { isActive as jobActive } from '../jobs/state.ts';
+import { displayName as jobName, summaryLine as jobSummary } from '../jobs/index.ts';
 
-export async function showAgent(ctx: ExtensionContext, agents: Pick<AgentsModule, 'manager' | 'scope'>, dock: Dock, id: string, runId: string, config: () => SuiteConfig, readonly = false): Promise<void> {
+export type AgentJobViewer = { pi: ExtensionAPI; viewer: ViewerDeps };
+async function showAgentJobs(ctx: ExtensionContext, deps: AgentJobViewer, runId: string, readonly: boolean): Promise<void> {
+  const release = deps.viewer.notifications.hold();
+  let selected: string | undefined;
+  try { for (;;) {
+    // Creator ancestry selects the entire execution subtree, including jobs left by
+    // collected children. Task references and another run of this agent do not confer ownership.
+    const jobs = deps.viewer.jobs.createdBy([runId]).filter(jobActive);
+    if (!jobs.length) { ctx.ui.notify('No active jobs owned by this run'); return; }
+    selected = await selectValue(ctx, 'Jobs owned by this run and its descendants', jobs.map(job => ({
+      value: job.id, label: `${jobSummary(job)} · ${jobName(job)}`,
+    })), selected);
+    if (selected === undefined) return;
+    const job = jobs.find(job => job.id === selected)!;
+    await jobActions(deps.pi, ctx, deps.viewer, job.id, readonly, job.cwd);
+  } } finally { release(); }
+}
+
+export async function showAgent(ctx: ExtensionContext, agents: Pick<AgentsModule, 'manager' | 'scope'>, dock: Dock, id: string, runId: string, config: () => SuiteConfig, readonly = false, jobs?: AgentJobViewer): Promise<void> {
   const release = agents.manager.retain(runId);
   let content: Transcript | undefined, reader: ScrollView | undefined;
   const get = () => agents.manager.get(id, runId);
@@ -25,7 +46,7 @@ export async function showAgent(ctx: ExtensionContext, agents: Pick<AgentsModule
   };
   try { for (;;) {
     dock.setDetail(true);
-    let action: 'model' | 'message' | 'stop' | undefined;
+    let action: 'model' | 'message' | 'stop' | 'jobs' | undefined;
     try {
       await ctx.ui.custom<void>((tui, _theme, _keys, done) => {
         content ??= new Transcript(tui, get().record.cwd, name => get().run?.renderers?.get(name));
@@ -34,6 +55,7 @@ export async function showAgent(ctx: ExtensionContext, agents: Pick<AgentsModule
           { label: 'Message', available: canMessage, run: () => { action = 'message'; done(); } },
           { label: 'Tools', run: () => { content!.toggleTools(); view.invalidate(); } },
           { label: 'Thinking', run: () => { content!.toggleThinking(); view.invalidate(); } },
+          { label: 'Jobs', available: () => jobs !== undefined, run: () => { action = 'jobs'; done(); } },
           { label: 'Model / thinking', available: () => !readonly, run: () => { action = 'model'; done(); } },
           { label: 'Background', key: 'b', available: () => !readonly && agents.manager.canSendToBackground(id, runId), run: () => { agents.manager.sendToBackground(id, runId); } },
           { label: 'Stop subtree', key: 'x', confirm: '再按 x 停止', available: canStop, run: () => { action = 'stop'; done(); } },
@@ -60,7 +82,8 @@ export async function showAgent(ctx: ExtensionContext, agents: Pick<AgentsModule
     // Close custom UI before opening an editor or awaiting lifecycle control. The same
     // reader survives these trips, while its run stays retained throughout.
     try {
-      if (action === 'model') await editAgentModel(ctx, agents.manager, id, config());
+      if (action === 'jobs') await showAgentJobs(ctx, jobs!, runId, readonly);
+      else if (action === 'model') await editAgentModel(ctx, agents.manager, id, config());
       else if (action === 'message') {
         const message = (await ctx.ui.input(get().run?.question ? 'Answer parent question' : 'Message agent'))?.trim();
         if (!message) continue;
@@ -77,7 +100,7 @@ export async function showAgent(ctx: ExtensionContext, agents: Pick<AgentsModule
   } } finally { release(); }
 }
 export function registerAgentsCommand(pi: ExtensionAPI, agents: AgentsModule, dock: Dock, notices: Notifications, config: () => SuiteConfig, reload: (cwd: string) => void, scheduler?: AgentScheduler,
-  workflows?: {available(): boolean; show(ctx: ExtensionContext): Promise<void>}): void {
+  workflows?: {available(): boolean; show(ctx: ExtensionContext): Promise<void>}, jobs?: AgentJobViewer): void {
   pi.registerCommand('agents', { description: 'Read child sessions and workspace history, configure models and stop execution trees', handler: async (args, ctx) => {
     if (ctx.mode !== 'tui') { ctx.ui.notify('Use agent_list and agent_read outside the terminal UI'); return; }
     const release = notices.hold();
@@ -105,11 +128,12 @@ export function registerAgentsCommand(pi: ExtensionAPI, agents: AgentsModule, do
       const run = agents.manager.get(record.id, record.runId).run;
       // Discovery preserves ownership. Archived foreign branches can be read, while
       // live handles and the current branch keep their existing management contract.
-      const readonly = !agents.manager.visible(record, scope) && (!run || run.settled);
+      const readonly = !agents.manager.visible(record, scope) && (!run || run.settled === true);
       const title = `${summaryLine(record)}\nModel: ${record.model} (${record.modelSource})\nThinking: ${record.thinking} (${record.thinkingSource})`;
-      const actions = ['Transcript', ...readonly ? [] : ['Model / thinking', 'Stop child, nested agents and jobs']];
+      const actions = ['Transcript', ...jobs ? ['Jobs'] : [], ...readonly ? [] : ['Model / thinking', 'Stop child, nested agents and jobs']];
       const action = workspace ? await selectValue(ctx, title.replace(/\n/g, ' · '), actions.map(label => ({ value: label, label }))) : await ctx.ui.select(title, actions);
-      if (action === 'Transcript') await showAgent(ctx, agents, dock, record.id, record.runId, config, readonly);
+      if (action === 'Transcript') await showAgent(ctx, agents, dock, record.id, record.runId, config, readonly, jobs);
+      else if (action === 'Jobs') await showAgentJobs(ctx, jobs!, record.runId, readonly);
       else if (action === 'Model / thinking') await editAgentModel(ctx, agents.manager, record.id, config());
       else if (action) {
         const outcome = await agents.manager.stop(record.id, record.runId);

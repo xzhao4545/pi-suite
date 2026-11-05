@@ -76,6 +76,13 @@ export class JobsModule implements Waitable {
     if (handle.mode === 'unavailable') throw new ToolError('RUNTIME_UNAVAILABLE', handle.reason);
     return handle.mode === 'active' ? handle.manager : handle.control.jobs;
   }
+  createdBy(runIds: string[]): JobSummary[] {
+    const handle = this.runtime();
+    if (handle.mode === 'active') return handle.manager.createdBy(runIds);
+    if (handle.mode === 'restricted' && handle.control.version === 2) return handle.control.jobs.createdBy(runIds);
+    throw new ToolError('RUNTIME_UNAVAILABLE', handle.mode === 'unavailable' ? handle.reason
+      : 'This jobs owner uses control bridge v1; creation ownership queries require v2. History reads, stop and quit remain available');
+  }
   get executionAvailable(): boolean { return this.runtime().mode === 'active'; }
   bind(): void {
     this.detach();
@@ -99,8 +106,12 @@ export class JobsModule implements Waitable {
   /** reload/new/resume/fork only detach; quit applies the stop-all policy. */
   shutdown(reason: string): Promise<void> | undefined {
     this.detach();
-    if (reason !== 'quit' || !this.handle || this.handle.mode === 'unavailable') return;
-    return this.handle.mode === 'active' ? quitRuntime(this.handle.manager) : this.handle.control.quit();
+    if (reason !== 'quit') return;
+    // Disabling job tools only removes their binding. The agent runtime still owns
+    // existing jobs, so quit must resolve that owner even if this facade never queried it.
+    const handle = this.runtime();
+    if (handle.mode === 'unavailable') return;
+    return handle.mode === 'active' ? quitRuntime(handle.manager) : handle.control.quit();
   }
   /** Esc pauses automatic wake for this session's unnotified jobs; results then wait for the next user turn. */
   pauseWakes(): void {

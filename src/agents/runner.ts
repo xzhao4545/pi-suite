@@ -5,6 +5,7 @@ import { AGENT_ENTRY, resultText } from './records.ts';
 import { childResources, resourcePath } from './resources/loader.ts';
 import { installExtensionToolScope } from './resources/scope.ts';
 import { createStructuredCapture, createStructuredOutputTool, structuredRetryPrompt } from './output/tool.ts';
+import { sanitizeText } from '../runtime/text.ts';
 
 export async function executeAgent(run: Execution, factory: ExtensionFactory, changed: () => void,
   emitEvent: (kind: AgentEventKind, details?: Record<string, unknown>) => void): Promise<void> {
@@ -42,9 +43,18 @@ export async function executeAgent(run: Execution, factory: ExtensionFactory, ch
   }
   run.liveResults = new Map();
   const before = session.getSessionStats();
+  const updateUsage = () => {
+    const usage = session.getSessionStats(); record.usage = { tokens: Object.fromEntries(Object.entries(usage.tokens)
+      .map(([key, value]) => [key, value - before.tokens[key as keyof typeof before.tokens]])) as typeof usage.tokens, cost: usage.cost - before.cost };
+  };
+  const inflight = new Map<string, string>();
   let turns = 0;
   const unsubscribe = session.subscribe(event => {
     if (event.type === 'entry_appended' && event.entry.type === 'custom' && event.entry.customType === AGENT_ENTRY) return;
+    // SDK message_end precedes persistence and ordinary messages emit no entry_appended.
+    // Tool start and turn end run after persistence, so stats include billed messages.
+    if (event.type === 'tool_execution_start' || event.type === 'turn_end' || event.type === 'entry_appended'
+      && (event.entry.type === 'usage' || (event.entry.type === 'compaction' || event.entry.type === 'branch_summary') && event.entry.usage)) updateUsage();
     if (event.type === 'message_update') run.streamingEntry = { type: 'message', id: `stream:${record.runId}`, parentId: manager.getLeafId(), timestamp: new Date(event.message.timestamp).toISOString(), message: event.message };
     else if (event.type === 'message_end') run.streamingEntry = undefined;
     if (event.type === 'tool_execution_update') run.liveResults!.set(event.toolCallId, { type: 'message', id: `stream:${event.toolCallId}`, parentId: manager.getLeafId(), timestamp: new Date().toISOString(),
@@ -55,11 +65,18 @@ export async function executeAgent(run: Execution, factory: ExtensionFactory, ch
       record.turns = turns; record.activity = 'Generating response';
       if (run.maxTurns && turns > run.maxTurns) { record.state = 'limited'; run.controller.abort(); }
     }
-    if (event.type === 'tool_execution_start') { record.toolUses = (record.toolUses ?? 0) + 1; record.activity = `tool ${event.toolName}`; }
-    if (event.type === 'tool_execution_end') record.activity = 'Generating response';
+    if (event.type === 'tool_execution_start') {
+      record.toolUses = (record.toolUses ?? 0) + 1;
+      const args = sanitizeText(JSON.stringify(event.args)).replace(/\s+/g, ' ');
+      inflight.set(event.toolCallId, `tool ${event.toolName} ${args.length > 180 ? `${args.slice(0, 177)}...` : args}`);
+    }
+    if (event.type === 'tool_execution_end') inflight.delete(event.toolCallId);
+    // Concurrent calls end independently; one completed call must not hide the others.
+    if (event.type === 'tool_execution_start' || event.type === 'tool_execution_end') record.activity = [...inflight.values()].join(' · ') || 'Generating response';
     if (event.type === 'agent_settled' && event.aborted) run.controller.abort();
     if (event.type === 'message_end' && event.message.role === 'assistant') emitEvent('usage', { usage: event.message.usage });
     if (event.type === 'compaction_end' && event.result && !event.aborted) {
+      updateUsage();
       record.compactionCount = (record.compactionCount ?? 0) + 1;
       const info = { reason: event.reason, tokensBefore: event.result.tokensBefore, compactionCount: record.compactionCount };
       run.options.onCompaction?.(info); emitEvent('compacted', info);
@@ -90,8 +107,7 @@ export async function executeAgent(run: Execution, factory: ExtensionFactory, ch
       if (capture.json === undefined) errors.push(capture.lastError ?? 'Agent did not report StructuredOutput');
       else { record.structuredJson = capture.json; record.result = capture.json; }
     }
-    const usage = session.getSessionStats(); record.usage = { tokens: Object.fromEntries(Object.entries(usage.tokens)
-      .map(([key, value]) => [key, value - before.tokens[key as keyof typeof before.tokens]])) as typeof usage.tokens, cost: usage.cost - before.cost };
+    updateUsage();
     if (last?.type === 'message' && last.message.role === 'assistant' && last.message.stopReason === 'error') errors.push(last.message.errorMessage ?? 'Model request failed');
     if (errors.length) throw new Error(errors.join('; '));
   } finally {

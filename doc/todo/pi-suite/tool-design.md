@@ -27,7 +27,7 @@
 
 - [上游导入方式](upstream-import.md)
 - [jobs 输出读取](jobs/output.md)
-- [agents 主从交互](agents/interaction.md)
+- [agents 主从交互](../../finished/pi-suite/agents/interaction.md)
 - [两级任务管理](tasks.md)
 - [目标状态与续跑](goal.md)
 
@@ -108,7 +108,7 @@ read 统一返回 `{ text, stream, offset, nextOffset, totalBytes, endOfStream, 
 
 | 工具 | 参数 | 说明 |
 | --- | --- | --- |
-| ask_user | question 或 questions、options、allowMultiple、allowFreeform、defaultAnswer、defaultOptionId(s)、allowComment、timeoutMs | 仅改名 timeout→timeoutMs；在 child 会话中转交父 agent，见 [主从交互](agents/interaction.md) |
+| ask_user | question 或 questions、options、allowMultiple、allowFreeform、defaultAnswer、defaultOptionId(s)、allowComment、timeoutMs | 仅改名 timeout→timeoutMs；在 child 会话中转交父 agent，见 [主从交互](../../finished/pi-suite/agents/interaction.md) |
 | goal_complete | goalId、summary | |
 | goal_blocked | goalId、reason、evidence、repeatedTurns | |
 | goal_wait | goalId、reason、waitFor?、resumeAfterMs? | waitFor 为 job/agent/workflow ID 数组；省略时等待任一已安排的外部事件 |

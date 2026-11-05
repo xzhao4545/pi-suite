@@ -107,7 +107,7 @@ test('unknown saved IDs retain send ownership and workspace cleanup while foreig
         assert.match(rows, /Transcript/); assert.doesNotMatch(rows, /Model \/ thinking|Stop child/);
       }
       if (view instanceof DetailsView) {
-        assert.deepEqual(view.actions.filter(action => action.available?.() !== false).map(action => action.label), ['Tools', 'Thinking', 'Back']);
+        assert.deepEqual(view.actions.filter(action => action.available?.() !== false).map(action => action.label), ['Tools', 'Thinking', 'Jobs', 'Back']);
         assert.match(view.render(400).map(stripVTControlCharacters).join('\n'), /first saved/);
       }
     });

@@ -18,6 +18,14 @@ export function agentSummary(record: AgentRecord) {
   const { prompt, result, ...summary } = record;
   return { ...summary, promptSummary: prompt.slice(0, 200), resultSummary: result?.slice(0, 500) };
 }
+export function usageText(record: AgentRecord): string | undefined {
+  const usage = record.usage;
+  return usage && `usage: input ${usage.tokens.input} · output ${usage.tokens.output} · cacheRead ${usage.tokens.cacheRead} · cacheWrite ${usage.tokens.cacheWrite} · total ${usage.tokens.total} · cost $${usage.cost.toFixed(6)}`;
+}
+function resultSummary(record: AgentRecord): string {
+  return [summaryLine(record), usageText(record), record.error ? `error: ${sanitizeText(record.error).slice(0, 500)}` : undefined,
+    record.result?.slice(0, 500), `read: agent_read({"id":"${record.id}","runId":"${record.runId}"})`].filter(value => value !== undefined).join('\n');
+}
 export class AgentsModule implements Waitable {
   readonly prefix = 'agent_';
   readonly manager: AgentManager;
@@ -76,7 +84,7 @@ export class AgentsModule implements Waitable {
     const { record, run } = this.manager.get(id);
     const question = run?.question && !run.question.seen;
     return { id, runId: record.runId, state: record.state, settled: !active(record.state), question: Boolean(question),
-      summary: question ? questionText(run!) : `${summaryLine(record)}${record.error ? `\n${record.error}` : ''}` };
+      summary: question ? questionText(run!) : active(record.state) ? summaryLine(record) : resultSummary(record) };
   }
   unread(): Settlement[] {
     const current = this.binding.current;
@@ -87,7 +95,7 @@ export class AgentsModule implements Waitable {
         const record = this.manager.view(run);
         const item: Settlement = { id: record.id, runId: record.runId, state: record.state, settled: !active(record.state),
           question: Boolean(run.question && !run.question.seen), summary: run.question && !run.question.seen ? questionText(run) : summaryLine(record) };
-        return item.question ? item : { ...item, summary: `Agent result: ${item.summary}\n${(run.record.result ?? '').slice(0, 500)}\nread: agent_read({"id":"${run.record.id}","runId":"${run.record.runId}"})` };
+        return item.question ? item : { ...item, summary: `Agent result: ${resultSummary(record)}` };
       });
   }
   subscribe(listener: () => void): () => void { return this.manager.subscribe(listener); }

@@ -3,6 +3,7 @@
 agents 使用同进程 Pi child 会话。执行层、两池队列、类型发现与记录引用由 @tintinweb/pi-subagents 0.23.0 导入改造，来源见 [上游登记](../../../third-party/UPSTREAM.md)。工具、任务、等待、通知和查看器接入公共框架。
 
 - [执行与记录](runtime.md) — 并发、运行标识、取消、持久会话、历史位置与 Execution 回收。
+- [进度与结果通知](progress.md) — 当前工具参数、用量、所属活动 jobs 与按 run 消费的结果摘要。
 - [持久历史发现与只读查询](history.md) — 默认/配置目录和持久引用、文件缓存、完整分支、合并与操作归属。
 - [工具与操作](operations.md) — agent_*、/agents、@handle 提及与补全、父级提问和模型来源。
 - [类型、模型与 thinking 配置](models.md) — 启用开关、逐字段写回、单独修改、下一请求与恢复。

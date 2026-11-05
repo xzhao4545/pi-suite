@@ -18,6 +18,8 @@ const recordSchema = Type.Object({
   model: string, modelSource: string, thinking: string, thinkingSource: string,
   configCwd: Type.Optional(string), parentAgentId: Type.Optional(agentId), parentRunId: Type.Optional(runId),
   sessionFile: Type.Optional(string), endLeafId: Type.Optional(Type.Union([string, Type.Null()])),
+  usage: Type.Optional(Type.Object({tokens: Type.Object(Object.fromEntries(
+    ['input', 'output', 'cacheRead', 'cacheWrite', 'total'].map(key => [key, Type.Number()]))), cost: Type.Number()})),
   result: Type.Optional(string), error: Type.Optional(string), individual: Type.Optional(Type.Object({model: Type.Optional(string), thinking: Type.Optional(string)})),
 }, {additionalProperties: true});
 /** Validate saved suite data once, before it can enter Manager or workflow history. */

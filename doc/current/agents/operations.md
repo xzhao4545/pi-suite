@@ -3,7 +3,7 @@
 | 入口 | 当前行为 |
 | --- | --- |
 | agent_start | prompt、type?、name?、background?、model?、thinking?、maxTurns?、taskId?、inheritContext?、isolated?、schedule?；普通执行 background 默认 true，类型 run_in_background 优先；schedule 登记未来后台任务 |
-| agent_list | id 查进度详情和历史 run；列表 state 为 active/queued/finished/all，默认 active；scope 为 session/workspace，默认 session；cursor/limit 分页，默认 20、最多 100 |
+| agent_list | id 查进度详情、全部已知 run 及其所属活动 jobs，字段见 [进度与通知](progress.md)；列表 state 为 active/queued/finished/all，默认 active；scope 为 session/workspace，默认 session；cursor/limit 分页，默认 20、最多 100 |
 | agent_read | id、runId?；活动默认 transcript，结束默认 result；offset/limitBytes/search/context 使用 [共享读取规则](../jobs/index.md) |
 | agent_send | id、message；返回 answered、steered、queued 或 resumed，只有直接父级可以发送；停止/清理尚未结束时不能恢复为新 run |
 | agent_stop | id、runId?；取消运行子树及其创建的活动 job，返回真实状态和 cleanup |
@@ -14,9 +14,9 @@
 
 ## /agents
 
-`/agents` 选择 active、queued、finished 或 all；也可使用 `/agents all` 等直接指定筛选。选择一条 run 后可查看 Transcript、修改该 agent 的 Model / thinking，或选择“Stop child, nested agents and jobs”停止该运行范围。Types · enable / model / thinking 和 `/agents types` 显示全部类型，包括 disabled 类型；Enable、Disable、Use definition 与 Model / thinking 配置类型，写回位置和作用范围见 [类型配置](models.md)。
+`/agents` 选择 active、queued、finished 或 all；也可使用 `/agents all` 等直接指定筛选。选择一条 run 后可查看 Transcript、通过 Jobs 查看该 run 子树创建的活动 job、修改该 agent 的 Model / thinking，或选择“Stop child, nested agents and jobs”停止该运行范围。Types · enable / model / thinking 和 `/agents types` 显示全部类型，包括 disabled 类型；Enable、Disable、Use definition 与 Model / thinking 配置类型，写回位置和作用范围见 [类型配置](models.md)。
 
-Workspace records 或 `/agents workspace [active|queued|finished|all]` 查看当前配置工作区的完整记录，默认 all；列表发现保存于默认/当前配置目录及可达引用的其他主会话、分支和 child 历史，按 runId 保持原生选择身份。其他 owner 或当前分支之外的已结算记录只提供 Transcript，详情隐藏 Message、Model / thinking、Background 和 Stop subtree，仍可阅读及展开 Tools/Thinking。当前 owner/分支可见的结束记录保留模型覆盖与记录菜单的遗留 job 清理；真实运行句柄沿用既有控制。浏览不切换主会话、不转移归属或通知，发现到的中断运行显示 failed。
+Workspace records 或 `/agents workspace [active|queued|finished|all]` 查看当前配置工作区的完整记录，默认 all；列表发现保存于默认/当前配置目录及可达引用的其他主会话、分支和 child 历史，按 runId 保持原生选择身份。其他 owner 或当前分支之外的已结算记录提供 Transcript 和只读 Jobs，详情隐藏 Message、Model / thinking、Background 和 Stop subtree，仍可阅读及展开 Tools/Thinking。当前 owner/分支可见的结束记录保留模型覆盖与记录菜单的遗留 job 清理；真实运行句柄沿用既有控制。浏览不切换主会话、不转移归属或通知，发现到的中断运行显示 failed。
 
 Scheduled agents 与 `/agents schedules` 查看当前会话的调度，选择一项后可确认取消；创建使用 agent_start 的 schedule，规则、开关、时间与已触发运行的控制见 [定时调度](schedules.md)。
 
@@ -26,16 +26,18 @@ Workflows 与 `/agents workflows` 查看当前会话与分支的编排、保存�
 
 - ↑↓、PageUp/PageDown、Home/End 滚动；鼠标滚轮滚动。
 - `/` 搜索；n/N 查下一个/上一个；搜索内 Esc 退出搜索。
-- ←→ 选择当前可用的 Message、Tools、Thinking、Model / thinking、Background、Stop subtree 或 Back；Enter 执行动作；Esc 返回。
+- ←→ 选择当前可用的 Message、Tools、Thinking、Jobs、Model / thinking、Background、Stop subtree 或 Back；Enter 执行动作；Esc 返回。
 - 可接收消息的运行默认选中 Message，Enter 打开输入。提交后按 agent_send 返回 answered、steered 或 queued；空输入或取消返回阅读。输入结束时重新检查所选 run，已结束、结算中或同一 agent 的旧 run 不发送，也不隐式恢复。
 - x 按两次停止所选 run 及其嵌套 child/所属 job；第一次提示“再按 x 停止”，其他按键取消确认。已结束或结算中的 run 隐藏快捷停止；从操作栏选中 Stop subtree 后 Enter 同样进入确认。
 - b 将正在等待真实 agent_start 前台调用返回的顶级普通运行转为后台，立即释放前台调用；排队、停止中、已结束、嵌套、workflow、RPC 和普通恢复运行不提供此操作。后台池已满时仍可转入，后续启动继续按池上限排队。转入后父级 Esc 不停止该 child，最终结果通过统一通知送达。
 
-Message 输入与 Model / thinking 选择在关闭当前详情后打开，返回后保留滚动、搜索和展开状态。搜索框和输入框拥有文字按键，输入 x 或 b 只输入文字。普通消息限当前主会话的直接 child；workflow 查看器只允许回答当前可见且已挂起的问题，普通引导与恢复由 workflow 控制。
+Message 输入、Model / thinking 选择与 Jobs 在关闭当前详情后打开，返回后保留滚动、搜索和展开状态。搜索框和输入框拥有文字按键，输入 x 或 b 只输入文字。普通消息限当前主会话的直接 child；workflow 查看器只允许回答当前可见且已挂起的问题，普通引导与恢复由 workflow 控制。
+
+记录菜单和 Transcript 的 Jobs 按所选 run 子树查询所属活动 job；选择 job 后复用 [jobs 操作界面](../jobs/index.md#用户操作)，使用该 job 的 cwd，允许详情、各日志通道和单独停止。只读历史隐藏 attach 与 stop，仍可阅读详情和日志；返回所属列表时刷新活动集合并保留选择 ID。没有所属活动 job 时明确提示，退出 Jobs 不停止 agent。
 
 进入查看器持有公共通知阻塞令牌；关闭后恢复通知投递，主会话保持原绑定。关闭查看器只结束阅读。
 
-打开会话及其消息输入、模型选择往返期间保留其内存 transcript，阅读期间不会回收。关闭后，结束超过 10 分钟的内存对话内容可以释放，记录、结果与持久会话仍保留；非持久 transcript 释放后不可阅读或恢复，边界见 [执行引用回收](runtime.md#执行引用回收)。
+打开会话及其消息输入、模型选择、Jobs 往返期间保留其内存 transcript，阅读期间不会回收。关闭后，结束超过 10 分钟的内存对话内容可以释放，记录、结果与持久会话仍保留；非持久 transcript 释放后不可阅读或恢复，边界见 [执行引用回收](runtime.md#执行引用回收)。
 
 ## @handle 提及
 

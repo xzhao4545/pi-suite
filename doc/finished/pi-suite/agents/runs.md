@@ -2,7 +2,7 @@
 
 目标：查看活动和已结束的 subagent，保留结果及原生会话历史，并允许用户停止指定 subagent 的当前执行。
 
-当前状态：基础执行、结果/会话引用、独立 runId、恢复、历史结束叶子、列表、真实取消、嵌套与遗留 job 清理已接入，见 [基础阶段](../../../finished/pi-suite/agents/core.md)。Execution 定期回收、通知与 reader/workflow 保留引用、持久/非持久历史边界见 [类型与回收阶段](../../../finished/pi-suite/agents/types-retention.md)；workspace 持久历史发现、完整分支汇总、增量解析与原生只读查询通过 Linux 离线验收，范围见 [历史发现阶段](../../../finished/pi-suite/agents/history-discovery.md)，停止竞争通过 Linux 聚合验收，见 [生命周期阶段](../../../finished/pi-suite/agents/lifecycle.md)；所属 job 详情及平台组合继续推进。
+当前状态：基础执行、结果/会话引用、独立 runId、恢复、历史结束叶子、列表、真实取消、嵌套与遗留 job 清理已接入，见 [基础阶段](core.md)。Execution 定期回收、通知与 reader/workflow 保留引用、持久/非持久历史边界见 [类型与回收阶段](types-retention.md)；workspace 持久历史发现、完整分支汇总、增量解析与原生只读查询通过 Linux 离线验收，范围见 [历史发现阶段](history-discovery.md)，停止竞争通过 Linux 聚合验收，见 [生命周期阶段](lifecycle.md)；所属活动 job 详情、日志跳转与单独停止已接入，并通过 2 项 Linux 原生组件/真实 SDK 检查；平台组合由 [扩展专项](../../../todo/pi-suite/agents/extensions.md) 管理。
 
 影响范围：AgentManager、Pi child session、持久结果引用、agents 列表/查看器、停止信号及状态栏数量。
 
@@ -20,20 +20,24 @@
 - [x] 将活动数量提供给共享状态栏发布器
 - [x] 回收结束超过 10 分钟的 Execution，保留完整历史记录、结果、通知/reader/workflow 引用和遗留 job 归属
 - [x] 从默认/配置目录与可达持久引用发现 workspace 完整分支历史，按 runId 查询并保留原生只读边界，读取不修复会话文件
-- [ ] 在 agents 详情展示所属活动 job，并提供日志跳转与单独停止入口
+- [x] 在 agents 详情展示所属活动 job，并提供日志跳转与单独停止入口
 
 ## 验收方式
 
 核对运行中、排队、成功、失败、手动停止和恢复后再次运行的记录；完成后读取结果并打开会话，查看不会产生模型请求。停止目标 child 时，同时取消嵌套执行和它们启动的后台 job；验证停止期间启动 job、已结束 child 遗留 job、重复 stop 和停止/自然完成竞争。不影响主 agent、同级 agent 及其创建的 job。reload 后仍可从持久引用查看已结束结果；旧回调不能覆盖新一次执行。
 
+## 验收结论
+
+所属 Jobs 的 2 项 Linux（Node 24.22.2）原生组件/真实 SDK 聚合检查通过。覆盖所选 run 与回收后代的归属、cross-cwd、同 agent 新 run 与无关 job 排除、只停止选中单项、Transcript reader 状态和执行引用；新会话 foreign PTY 历史只读允许日志，隐藏 attach/stop，通知阻塞退出后合并释放。modules.jobs=false 保留已有 job，主会话 quit 清理不依赖此前查询。基础记录、历史发现和停止竞争的验收范围沿用上述对应阶段；Windows 与真实手机组合保留在 [扩展专项](../../../todo/pi-suite/agents/extensions.md)。
+
 ## 关联计划
 
-- [原生会话查看器](../../../finished/pi-suite/agents/viewer-controls.md)
+- [原生会话查看器](viewer-controls.md)
 - [主从交互](interaction.md)
-- [活动数量状态](../status.md)
-- [job 查询与控制](../jobs/history-control.md)
-- [目标调度](../goal.md)
-- [统一工具设计](../tool-design.md)
+- [活动数量状态](../../../todo/pi-suite/status.md)
+- [job 查询与控制](../../../todo/pi-suite/jobs/history-control.md)
+- [目标调度](../../../todo/pi-suite/goal.md)
+- [统一工具设计](../../../todo/pi-suite/tool-design.md)
 
 ## 运行记录与历史
 
@@ -43,7 +47,7 @@ Workspace records 与 `/agents workspace [active|queued|finished|all]` 默认 al
 
 每项展示 agent ID、名称/类型、任务摘要、ownerSession/parentAgent、本次执行标识、状态、开始/结束时间、运行耗时、用量、结果摘要与错误；完整输入、assistant 回复和工具结果在 child transcript 中按需查看。
 
-活动执行可以实时查看；已结束执行仍可以读取结果并打开同一个原生消息查看器，保留 Markdown、代码块、thinking 和工具调用/结果折叠。关闭查看器只退出阅读。详细渲染规则维护在 [当前操作](../../../current/agents/operations.md)，专项设计与验收见 [原生会话查看器](../../../finished/pi-suite/agents/viewer-controls.md)，不另建文本版历史渲染器。
+活动执行可以实时查看；已结束执行仍可以读取结果并打开同一个原生消息查看器，保留 Markdown、代码块、thinking 和工具调用/结果折叠。关闭查看器只退出阅读。详细渲染规则维护在 [当前操作](../../../current/agents/operations.md)，专项设计与验收见 [原生会话查看器](viewer-controls.md)，不另建文本版历史渲染器。
 
 复用 Pi SessionManager 与上游 subagents:record 的会话条目（本包类型名为 pi-suite:agent-record）、child session 文件引用，避免另建一套会话数据库。默认保存完整 child session 和最终记录；内存对象释放后仍能通过引用查历史。主动选择不持久化的 agent 明确标记历史范围，不能承诺 Pi 退出后还能查看未保存的 transcript。上游的嵌套 child 默认不持久化，保留该默认值并在记录中标注。
 
@@ -55,13 +59,13 @@ agent ID 用于稳定引用可恢复的会话；同一 agent 同时只保留一�
 
 ## 查询和控制接口
 
-保留上游 Agent、get_subagent_result、steer_subagent 的能力，按 [统一工具设计](../tool-design.md) 改为 agent_start、agent_list、agent_read、agent_send、agent_stop 与共享 wait；查询、查看和停止各走 AgentManager 与同一个 child 记录，不为同一操作暴露多套参数。主从消息、提问转交和进度读取的完整规则见 [主从交互](interaction.md)。
+保留上游 Agent、get_subagent_result、steer_subagent 的能力，按 [统一工具设计](../../../todo/pi-suite/tool-design.md) 改为 agent_start、agent_list、agent_read、agent_send、agent_stop 与共享 wait；查询、查看和停止各走 AgentManager 与同一个 child 记录，不为同一操作暴露多套参数。主从消息、提问转交和进度读取的完整规则见 [主从交互](interaction.md)。
 
 | 入口 | 契约 |
 | --- | --- |
 | agent_list | 无 id 时 state? 为 active/queued/finished/all，默认 active；scope? 为 session/workspace，默认 session；cursor?/limit? 分页；返回短 ID、执行标识、状态、摘要和耗时，不附整段对话。有 id 时返回该 agent 的进度详情 |
 | agent_read | id、runId?；stream 为 result（结算后默认）或 transcript（运行中默认）；offset/limitBytes/search/context 与 job_read 相同；已完成、失败、停止记录仍可读取 |
-| agents 查看器 | 按记录打开活动或历史 child transcript，历史绑定该次执行结束位置；只有在底部自动跟随活动输出 |
+| agents 查看器 | 按记录打开活动或历史 child transcript，历史绑定该次执行结束位置；只有在底部自动跟随活动输出；记录菜单与 Transcript 的 Jobs 查看所选 run 子树的所属活动 job |
 | agent_stop | id、runId?；默认停止该 agent 的当前执行、所属嵌套执行及它们创建的活动 job；指定 runId 时限定到对应运行子树；返回 child/job 的真实停止进度，保留会话、结果和日志 |
 | agent_send | 运行中为引导消息，提问等待中为回答，已结束为恢复会话并开始新一次执行；返回实际 action；查看历史与这些动作分开 |
 | wait | ids 可包含 agent ID；仅控制本次调用是否等待，超时或取消不停止后台 child，需要明确调用 agent_stop |
@@ -72,11 +76,11 @@ agent ID 用于稳定引用可恢复的会话；同一 agent 同时只保留一�
 
 停止请求交给 child 的 AbortController/AgentSession abort 及工具取消信号，同时通过 JobManager 请求停止所属后台 job。进入停止中并等待 child 执行、嵌套 child 和 job 退出/清理结算；仅设置 stopped 标志或发送一条“请停止”消息不作为完成停止的依据。尚未返回的工具或尚未确认退出的 job 明确显示停止中或清理待确认，不虚构成功。
 
-取消尚未开始的排队项会移出队列并记录停止原因，不创建 child 执行。停止先登记同范围共享操作、整批转换目标状态，再触发取消和订阅回调，重复停止合并已有停止请求；已经结算的 agent 仍检查其所属活动 job 并清理，原执行结果保持原终态。主模型停止请求、UI 停止和 child 自身结束竞争时按运行标识结算一次，旧执行的回调不能结束恢复后的新执行。父级最终结算等待所有未 settled 直接 child，自然终态不重复改为 stopped，清理期间不准入同 agent 的新 run；验收范围见 [生命周期阶段](../../../finished/pi-suite/agents/lifecycle.md)。
+取消尚未开始的排队项会移出队列并记录停止原因，不创建 child 执行。停止先登记同范围共享操作、整批转换目标状态，再触发取消和订阅回调，重复停止合并已有停止请求；已经结算的 agent 仍检查其所属活动 job 并清理，原执行结果保持原终态。主模型停止请求、UI 停止和 child 自身结束竞争时按运行标识结算一次，旧执行的回调不能结束恢复后的新执行。父级最终结算等待所有未 settled 直接 child，自然终态不重复改为 stopped，清理期间不准入同 agent 的新 run；验收范围见 [生命周期阶段](lifecycle.md)。
 
 停止某个 subagent 时，同时取消其未结算的直属及后续嵌套 subagent 执行，并停止目标 agent 与这些后代创建的所有所属活动 job，包括已经结束的后代仍留在运行的 job；保留各自历史。按实际创建归属选择目标，不因某个 task 或 agent 仅引用了别人的 job 就转移所有权。一次请求汇总 child 和 job 的停止进度，不以父项单独改状态代替实际清理。
 
-child 中同步执行的工具按其取消能力停止；已经由 JobManager 持有的后台 job 同样参与此次级联停止，pipe/PTY 以及已 detach 的 job 都适用。独立 manager 负责保活与实际进程控制，创建归属负责停止范围；detach 仅退出交互，不解除该归属。agents 详情展示所属 job，并保留跳转后单独停止的入口。外部请求已产生的副作用不能因 abort 自动回滚。
+child 中同步执行的工具按其取消能力停止；已经由 JobManager 持有的后台 job 同样参与此次级联停止，pipe/PTY 以及已 detach 的 job 都适用。独立 manager 负责保活与实际进程控制，创建归属负责停止范围；detach 仅退出交互，不解除该归属。agents 记录菜单和 Transcript 提供 Jobs，按所选 run 子树展示所属活动 job；详情、各日志通道、终端交互与单独停止复用公共 job 操作界面，使用 job 自己的 cwd。只读历史允许详情和日志，隐藏 attach 与 stop；返回时刷新活动集合并保留选择，Transcript 的滚动、搜索、Tools/Thinking 状态与执行引用沿用原 reader。浏览保持通知阻塞，退出界面不停止 agent。外部请求已产生的副作用不能因 abort 自动回滚。
 
 job_start 从 child 运行上下文自动记录创建 agent ID、执行标识和可追溯的父级执行链，模型不提交或维护级联名单。默认按 agent ID 停止时，包含该 agent 及其后代此前执行仍拥有的活动 job；指定执行标识时只处理该次运行及其后代创建的 job。从 manager 查询完整归属集合，不能因列表分页、面板折叠或工作区筛选遗漏目标。父级关系和 job 归属不因 child 完成、内存记录释放或会话切换而丢失。
 
@@ -85,3 +89,5 @@ job_start 从 child 运行上下文自动记录创建 agent ID、执行标识和
 一次 agent_stop 返回受影响的 child/job ID、已结束项和 pending/unconfirmed 摘要，可通过既有查询入口继续核对。child 模型停止不代表级联操作已经完成；存在未确认 job 时不能报告“全部停止”，对应活动数量也不能提前归零。仅有历史而无可控运行句柄时明确报告无法确认停止，不根据历史 PID 杀进程。
 
 被实际中止的执行产生明确 stopped 结果，保留部分输出与错误；已结束执行的原结果不重写，不把关联任务标为 done，也不把 goal 自动改为完成。等待方收到结果后按用户指令决定后续；manager 不自行重启已停止 child。第一版不额外承诺活动 subagent 跨 Pi 进程保活，已保存历史可读取与恢复执行是不同能力。
+
+[返回已完成专项](../../index.md)

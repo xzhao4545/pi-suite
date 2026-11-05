@@ -18,8 +18,8 @@
 - [x] 区分回答、超时和取消，并处理排队计时
 - [ ] 验证 goal waiting_user、多个 agent 排队与真实 job 完成通知暂存
 - [ ] 在真实手机 SSH 终端核对查阅与输入操作
-- [ ] 按 [统一工具设计](../tool-design.md) 将 timeout 参数改名为 timeoutMs
-- [ ] subagent 会话中的 ask_user 转交父 agent，见 [主从交互](../agents/interaction.md)
+- [x] 按 [统一工具设计](../tool-design.md) 使用毫秒单位的 timeoutMs
+- [x] subagent 会话中的 ask_user 转交父 agent，见 [主从交互](../../../finished/pi-suite/agents/interaction.md)
 
 ## 验收方式
 
@@ -40,7 +40,7 @@
 
 这不依赖不存在的公共“替换主聊天区”API，也不修改 Pi 私有 chatContainer。快捷键可配置，并提供面板上的入口，避免手机必须输入复杂组合键。
 
-保持 `ask_user` 原工具名，按 [统一工具设计](../tool-design.md) 使用毫秒单位的 `timeoutMs`（当前实现仍为 `timeout`，待统一改名）：
+保持 `ask_user` 原工具名，按 [统一工具设计](../tool-design.md) 使用毫秒单位的 `timeoutMs`：
 
 ```json
 {"question":"选哪种方案？"}

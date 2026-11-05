@@ -4,7 +4,7 @@ import type { Dock } from '../ui/dock.ts';
 import { showDetails } from '../ui/details.ts';
 import { TerminalView, type TerminalExit, type TerminalKeys } from '../ui/terminal.ts';
 import { ToolError } from '../runtime/errors.ts';
-import { isActive, isTerminal } from './state.ts';
+import { isActive } from './state.ts';
 import { resolveWorkspace } from './workspace.ts';
 import { JobsModule, displayName, summaryLine } from './index.ts';
 import { jobDetail, listJobs, streamsOf, type ListScope, type ListState } from './query.ts';
@@ -73,12 +73,13 @@ async function pickJob(ctx: ExtensionCommandContext, deps: ViewerDeps, state: Li
   }
 }
 
-async function jobActions(pi: ExtensionAPI, ctx: ExtensionCommandContext, deps: ViewerDeps, id: string): Promise<void> {
+export async function jobActions(pi: ExtensionAPI, ctx: ExtensionContext, deps: ViewerDeps, id: string, readonly = false, cwd = ctx.cwd): Promise<void> {
   const manager = deps.jobs.control();
-  for (;;) {
-    const { job, live } = await manager.get(id, await resolveWorkspace(ctx.cwd));
-    const attach = deps.jobs.executionAvailable && live && job.mode === 'pty' && deps.jobs.manager().terminal(id) ? (isActive(job) ? 'Attach terminal' : 'View last screen') : undefined;
-    const stop = live && !isTerminal(job.state) ? 'Stop job' : undefined;
+  const release = deps.notifications.hold();
+  try { for (;;) {
+    const { job, live } = await manager.get(id, await resolveWorkspace(cwd));
+    const attach = !readonly && deps.jobs.executionAvailable && live && job.mode === 'pty' && deps.jobs.manager().terminal(id) ? (isActive(job) ? 'Attach terminal' : 'View last screen') : undefined;
+    const stop = !readonly && live && isActive(job) ? 'Stop job' : undefined;
     const actions = [attach, 'Details', ...streamsOf(job).map(stream => `Read ${stream}`), stop, 'Back'].filter(item => item !== undefined);
     const choice = await ctx.ui.select(`${summaryLine(job)} · ${displayName(job)}`, actions);
     if (choice === undefined || choice === 'Back') return;
@@ -97,7 +98,7 @@ async function jobActions(pi: ExtensionAPI, ctx: ExtensionCommandContext, deps: 
     const stream = choice.startsWith('Read ') ? choice.slice(5) as Stream : undefined;
     if (stream) await showJobLog(ctx, deps.dock, manager, job, stream, live);
     else await showDetails(ctx, deps.dock, job.id, [...jobDetail(job), ...live ? [] : ['history only: not controlled by this Pi process']].map(line => `- ${line}`).join('\n'));
-  }
+  } } finally { release(); }
 }
 
 /** /jobs [active|finished|all] [workspace]: list, details, logs, attach and stop for the user. */

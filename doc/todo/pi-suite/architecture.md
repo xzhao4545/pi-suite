@@ -75,6 +75,6 @@ settings 第一版统一为用户级默认值加项目级覆盖，包括模块�
 
 goal 增加 status/dock/hidden 显示选择，默认复用 Pi 状态发布接口，不接管 footer；pi-starship 作为可选的外部状态栏扩展保留，不纳入本包 fork 或运行依赖。联动契约见 [goal 状态栏联动](goal-status.md)。
 
-agents/jobs 复用相同显示取值，由共享入口合成活动数量状态；运行记录、持久历史和手动停止分别归 AgentManager 与 JobManager，ui 不持有进程控制权。公共契约见 [状态栏摘要](status.md)、[子代理运行记录](agents/runs.md) 和 [job 记录](jobs/history-control.md)。
+agents/jobs 复用相同显示取值，由共享入口合成活动数量状态；运行记录、持久历史和手动停止分别归 AgentManager 与 JobManager，ui 不持有进程控制权。公共契约见 [状态栏摘要](status.md)、[子代理运行记录](../../finished/pi-suite/agents/runs.md) 和 [job 记录](jobs/history-control.md)。
 
 用户已明确不添加多语言支持。本包不引入 locale 配置、翻译表或语言切换；界面沿用现有固定文案，问题、说明和回答继续按原文显示。
