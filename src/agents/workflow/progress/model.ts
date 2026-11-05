@@ -59,10 +59,11 @@ function groupByPhase(
 
   const byPhase = new Map<number, { phaseIndex: number; title: string; agents: WorkflowAgentEntry[] }>();
   for (const agent of agents) {
-    const phaseIndex = agent.phaseIndex ?? 0;
+    // Unphased work has its own bucket; index 0 is already the first real phase.
+    const phaseIndex = agent.phaseIndex ?? -1;
     let group = byPhase.get(phaseIndex);
     if (!group) {
-      group = { phaseIndex, title: phaseTitles.get(phaseIndex) ?? `Phase ${phaseIndex}`, agents: [] };
+      group = { phaseIndex, title: phaseIndex === -1 ? 'Agents' : phaseTitles.get(phaseIndex) ?? `Phase ${phaseIndex}`, agents: [] };
       byPhase.set(phaseIndex, group);
     }
     group.agents.push(agent);
@@ -108,14 +109,10 @@ function placeholder(title: string): PhaseGroup {
   return { title, status: "not-started", agents: [], doneCount: 0, totalCount: 0, tokens: 0, durationMs: 0 };
 }
 
-const normalizeTitle = (title: string) => title.toLowerCase().trim();
-
 /**
  * Reconcile the phases declared in `meta` with the phases actually observed.
  *
- * Matching is fuzzy on purpose: a script may call `phase("Review")` against a
- * declared `{ title: "Review changed files" }`, and Claude Code treats those as
- * the same phase when either title is a prefix of the other. Each observed
+ * Titles identify phases exactly, as the script description promises. Each observed
  * group is consumed at most once, declared-but-unseen phases render as
  * not-started placeholders, and observed groups with no declaration are
  * appended after — that is how an undeclared `phase()` "gets its own group".
@@ -128,11 +125,9 @@ function mergePhases(
   const merged: PhaseGroup[] = [];
 
   for (const phase of declared ?? []) {
-    const wanted = normalizeTitle(phase.title);
     const match = observed.find(group => {
       if (consumed.has(group)) return false;
-      const actual = normalizeTitle(group.title);
-      return actual === wanted || actual.startsWith(wanted) || wanted.startsWith(actual);
+      return group.title === phase.title;
     });
     if (match) {
       consumed.add(match);

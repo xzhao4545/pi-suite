@@ -39,8 +39,10 @@ export type StartAgent = {
   type?: string; prompt: string; name?: string; background?: boolean; model?: string; thinking?: Thinking;
   maxTurns?: number; taskId?: string; inheritContext?: boolean; isolated?: boolean;
 };
+export type ParentContext = Pick<ExtensionContext, 'cwd' | 'model' | 'modelRegistry' | 'thinkingLevel' | 'sessionManager' | 'isProjectTrusted' | 'getSystemPrompt'>;
 export interface ParentScope {
-  ctx: ExtensionContext; run?: Execution; taskStore?: TaskStore;
+  ctx: ParentContext; run?: Execution; taskStore?: TaskStore;
+  owner?: Pick<AgentRecord, 'ownerSessionId' | 'anchorEntryId'>;
 }
 export const isTopLevelAgent = (record: Pick<AgentRecord, 'parentAgentId' | 'workflowId'>): boolean =>
   record.parentAgentId === undefined && record.workflowId === undefined;

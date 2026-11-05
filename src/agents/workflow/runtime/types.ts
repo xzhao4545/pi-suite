@@ -160,7 +160,7 @@ export interface WorkflowHost {
    * would mark unverified work as verified, so the runtime fails the call
    * instead of skipping it.
    */
-  runGate?(command: string, options: { agentId: string }): Promise<WorkflowGateResult>;
+  runGate?(command: string, options: { agentId: string; onStarted?(jobId: string): void }): Promise<WorkflowGateResult>;
   /**
    * Resolve a nested `workflow()` reference to source.
    *
@@ -220,6 +220,8 @@ export interface RunWorkflowOptions {
   args?: unknown;
   host: WorkflowHost;
   signal?: AbortSignal;
+  /** Validated once by the core, before the Worker and its first progress batch. */
+  onMeta?(meta: WorkflowMeta): void;
   /** Fired per batch, not per entry — see the worker's progress batching. */
   onProgress?(entries: readonly WorkflowEntry[]): void;
   concurrency?: number;

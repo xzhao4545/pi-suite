@@ -11,6 +11,7 @@ import { hydrate, transcript } from './records.ts';
 import { answerParent } from './questions.ts';
 import { closeAgent } from './runner.ts';
 import { buildParentContext } from './resources/context.ts';
+import { captureParent } from './parent.ts';
 import { assignHandle, handleBase } from './mentions/grammar.ts';
 import { active, isTopLevelAgent, type AgentEventKind, type AgentRecord, type Execution, type ParentScope, type Pool, type StartAgent, type StartOptions } from './types.ts';
 
@@ -69,8 +70,15 @@ export class AgentManager {
     return isTopLevelAgent(record) && record.ownerSessionId === scope.ctx.sessionManager.getSessionId()
       && (record.anchorEntryId === null || scope.ctx.sessionManager.getBranch().some(entry => entry.id === record.anchorEntryId));
   }
+  /** Workflow children report questions to their real parent without exposing ordinary steering. */
+  questionVisible(record: AgentRecord, scope: ParentScope): boolean {
+    return this.visible(record, scope) || !scope.run && record.workflowId !== undefined
+      && record.parentAgentId === undefined && record.ownerSessionId === scope.ctx.sessionManager.getSessionId()
+      && (record.anchorEntryId === null || scope.ctx.sessionManager.getBranch().some(entry => entry.id === record.anchorEntryId));
+  }
   async start(request: StartAgent, scope: ParentScope, config: SuiteConfig, previous?: AgentRecord,
-    options: StartOptions = {}): Promise<Execution> {
+    options: StartOptions = {}, continuation?: Execution): Promise<Execution> {
+    scope = captureParent(scope);
     options.signal?.throwIfAborted();
     if (this.closing || scope.run && (!active(scope.run.record.state) || this.closedRuns.has(scope.run.record.runId))) {
       throw new ToolError('NOT_RUNNING', 'Parent run no longer admits children');
@@ -79,14 +87,16 @@ export class AgentManager {
     // A target-directory child reports its tools' cwd as untrusted. Carry the opened
     // project's distinct trust with its config root through every nested generation.
     const configTrusted = scope.run?.configTrusted ?? scope.ctx.isProjectTrusted();
-    const type = resolveType(configCwd, previous?.type ?? request.type ?? 'general-purpose', { trusted: configTrusted, packageGate: config.agents.packageAgents });
+    const type = continuation?.type ?? resolveType(configCwd, previous?.type ?? request.type ?? 'general-purpose', { trusted: configTrusted, packageGate: config.agents.packageAgents });
     if (scope.run) {
       if (scope.run.isolated) throw new ToolError('AGENT_TYPE', 'An isolated child cannot start nested agents');
       const allowed = scope.run.type.allowedSubagents;
       if (!allowed || allowed !== 'all' && !allowed.includes(type.name)) throw new ToolError('AGENT_TYPE', `${scope.run.record.type} cannot start ${type.name}`);
       if (scope.run.record.ancestors.length + 1 >= config.agents.maxDepth) throw new ToolError('AGENT_DEPTH', 'agents.maxDepth reached');
     }
-    const settings = resolveSettings(scope.ctx, type, request, config, previous?.individual);
+    const settings = continuation ? { model: continuation.model, modelSource: continuation.record.modelSource,
+      thinking: continuation.record.thinking, thinkingSource: continuation.record.thinkingSource }
+      : resolveSettings(scope.ctx, type, request, config, previous?.individual);
     const taskStore = scope.taskStore;
     if (request.taskId && taskStore) {
       const task = (await taskStore.snapshot()).tasks.find(task => task.id === request.taskId);
@@ -99,7 +109,7 @@ export class AgentManager {
     if ([...this.runs.values()].some(run => run.record.id === id && !run.settled)) throw new ToolError('ALREADY_RUNNING', `${id} already has an unsettled execution`, id);
     // Handles and user aliases share a namespace across this owner's runs. Persisting them
     // keeps a completed/resumed agent addressable without renumbering after reload or /tree.
-    const taken = new Set(this.records().filter(record => record.ownerSessionId === scope.ctx.sessionManager.getSessionId() && record.id !== id)
+    const taken = new Set(this.records().filter(record => record.ownerSessionId === scope.owner!.ownerSessionId && record.id !== id)
       .flatMap(record => [record.handle, record.alias].filter((name): name is string => name !== undefined)));
     const workflowId = scope.run?.record.workflowId ?? options.workflowId;
     const handle = scope.run || workflowId ? undefined : previous?.handle ?? assignHandle(handleBase(type.name), taken);
@@ -108,8 +118,7 @@ export class AgentManager {
     // A timer has no foreground caller or launch-time conversation; provenance selects
     // background delivery and suppresses inherited text without changing the type definition.
     const record: AgentRecord = { version: 1, id, runId: allocate('run'), type: type.name, name: request.name ?? previous?.name ?? type.displayName ?? type.name, handle, alias,
-      prompt: request.prompt, cwd: options.cwd ?? previous?.cwd ?? scope.ctx.cwd, configCwd, ownerSessionId: scope.run?.record.ownerSessionId ?? scope.ctx.sessionManager.getSessionId(),
-      anchorEntryId: scope.run?.record.anchorEntryId ?? scope.ctx.sessionManager.getLeafId(),
+      prompt: request.prompt, cwd: options.cwd ?? previous?.cwd ?? scope.ctx.cwd, configCwd, ...scope.owner!,
       parentAgentId: scope.run?.record.id, parentRunId: scope.run?.record.runId,
       ancestors: scope.run ? [...scope.run.record.ancestors, scope.run.record.runId] : [],
       background: options.scheduleId ? true : type.runInBackground ?? request.background ?? true, scheduleId: options.scheduleId, workflowId, description: options.description, state: 'queued', createdAt: new Date(Math.max(Date.now(), previous ? Date.parse(previous.createdAt) + 1 : 0)).toISOString(),
@@ -120,7 +129,7 @@ export class AgentManager {
     const run: Execution = { record, type, model: settings.model, parent: scope, controller: new AbortController(),
       done: Promise.withResolvers(), pendingMessages: [], consumed: false, notifyResult: options.detached, maxTurns: type.maxTurns ?? request.maxTurns, request, config,
       isolated: type.isolated ?? request.isolated, bypassQueue: options.bypassQueue, configCwd, configTrusted, options,
-      inheritedContext: !options.scheduleId && (type.inheritContext ?? request.inheritContext) ? buildParentContext(scope.ctx) : undefined };
+      inheritedContext: !continuation && !options.scheduleId && (type.inheritContext ?? request.inheritContext) ? buildParentContext(scope.ctx) : undefined };
     // Preserve a non-persisted transcript for same-process resume using the SDK's session tree.
     if (previous && !previous.sessionFile) {
       run.entries = transcript(previous, this.runs.get(previous.runId));
@@ -146,6 +155,12 @@ export class AgentManager {
       catch (error) { throw new ToolError('TASK_LINK_FAILED', `${id} started but task #${request.taskId} could not be linked: ${String(error)}`, id); }
     }
     return run;
+  }
+  /** Workflow continuation keeps its launch contract while using the SDK's existing session tree. */
+  resume(run: Execution, prompt: string, signal: AbortSignal, onSpawned?: (id: string) => void): Promise<Execution> {
+    if (!run.settled) throw new ToolError('ALREADY_RUNNING', `${run.record.id} is still settling`, run.record.id);
+    if (!run.sessionManager && !run.record.sessionFile) throw new ToolError('HISTORY_READ_ONLY', 'No workflow child session to continue', run.record.id);
+    return this.start({ ...run.request, prompt }, run.parent, run.config, run.record, { ...run.options, signal, onSpawned }, run);
   }
   private room(pool: Pool): boolean { return !this.limits[pool] || this.counts[pool] < this.limits[pool]; }
   private pool(run: Execution): Pool | undefined {
@@ -196,8 +211,8 @@ export class AgentManager {
   }
   async send(id: string, message: string, scope: ParentScope, config: SuiteConfig) {
     const { record, run } = this.get(id);
+    if (run?.question && this.questionVisible(record, scope)) { answerParent(run, message); return { action: 'answered' as const, run }; }
     if (!this.visible(record, scope)) throw new ToolError('NOT_OWNER', `${id} is not a direct child of this session`, id);
-    if (run?.question) { answerParent(run, message); return { action: 'answered' as const, run }; }
     if (run && !run.settled && !active(run.record.state)) throw new ToolError('NOT_RUNNING', `${id} is settling`, id);
     if (record.state === 'stopping') throw new ToolError('NOT_RUNNING', `${id} is ${record.state}`, id);
     if (run && active(record.state)) {

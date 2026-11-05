@@ -9,7 +9,7 @@ import { isTerminal } from './state.ts';
 import { acquireRuntime, quitRuntime, type RuntimeHandle } from './runtime.ts';
 import type { JobManager } from './manager.ts';
 import { ToolError } from '../runtime/errors.ts';
-import type { JobSummary } from './types.ts';
+import { isWorkflowGate, type JobSummary } from './types.ts';
 import type { MonitorEvent } from './monitors/runtime.ts';
 import type { HandsFreeUpdate } from './monitors/hands-free.ts';
 import type { JobControl } from './control.ts';
@@ -119,7 +119,7 @@ export class JobsModule implements Waitable {
   private visible(job: JobSummary): boolean {
     const current = this.binding.current!;
     // A job started on another branch reports only after the user returns to that branch.
-    return job.ownerSessionId === current.sessionId && (job.anchorEntryId === null || current.ctx.sessionManager.getBranch().some(entry => entry.id === job.anchorEntryId));
+    return !isWorkflowGate(job) && job.ownerSessionId === current.sessionId && (job.anchorEntryId === null || current.ctx.sessionManager.getBranch().some(entry => entry.id === job.anchorEntryId));
   }
   private refresh(): void {
     const current = this.binding.current;

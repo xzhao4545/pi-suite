@@ -116,7 +116,9 @@ port.on("message", function (message) {
   if (!waiter) return;
   pendingCalls.delete(message.callId);
   if (message.ok) {
-    waiter.resolve(message.value);
+    // The host carries the effective schema flag, including child continuation.
+    // Parse here with the script realm so both initial and resumed values have its prototypes.
+    waiter.resolve(message.structured ? realmParse(message.value) : message.value);
     return;
   }
   const error = new Error(message.error || "The workflow host rejected the call.");

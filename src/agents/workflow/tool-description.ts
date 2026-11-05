@@ -23,9 +23,8 @@
  * Additions with no upstream counterpart: `gate`, `resume`, `effort: "minimal"`,
  * the saved-workflow directories, and the reject-unknown-options guarantee.
  *
- * Kept out of index.ts purely for size. `{{placeholder}}` tokens are rendered by
- * the same substitution pass agent_start's description uses, so a
- * user-authored override can interpolate the live agent roster.
+ * Kept separate for size. `{{typeList}}` is replaced with the enabled agent roster
+ * when the tool binds to the current session.
  */
 
 /**
@@ -194,4 +193,4 @@ Use this tool for multi-step orchestration where control flow should be determin
 
 ## Resume
 
-The tool result includes a runId. To resume after a pause, kill, or script edit, relaunch with agent_workflow({scriptPath, resumeFromRunId}) — the longest unchanged prefix of agent() calls returns cached results instantly; the first edited/new call and everything after it runs live. Same script + same args → 100% cache hit. It is a prefix and not a lookup: a later call that still matches is not reused once an earlier one has changed. A journaled failure ends the prefix, so resuming a run that died at agent 5 retries exactly agent 5. Same session only, and the run must have finished — stop it from /agents → Workflows first. Before diagnosing why a completed workflow returned an empty or unexpected result, Read the run's \`<run id>.workflow.jsonl\` beside its script — it records each agent's actual return value; do not assume cached results are non-empty. Date.now()/Math.random()/new Date() are unavailable in scripts (they would break this) — stamp results after the workflow returns, or pass timestamps via args.`;
+The tool result includes id (the wf_ run ID), scriptPath and resultPath. To resume after a stopped run or script edit, relaunch with agent_workflow({scriptPath, resumeFromRunId}) — the longest unchanged prefix of agent() calls returns cached results instantly; the first edited/new call and everything after it runs live. Same script + same args reuse the successful prefix. Runs containing opts.resume execute in full, since cached text cannot restore a child session. It is a prefix and not a lookup: a later call that still matches is not reused once an earlier one has changed. A journaled failure ends the prefix, so resuming a run that died at agent 5 retries exactly agent 5. Same session only, and the run must have finished — stop it from /agents → Workflows first. Before diagnosing why a completed workflow returned an empty or unexpected result, Read the run's \`journal.jsonl\` beside its script — it records each agent's actual return value; do not assume cached results are non-empty. Date.now()/Math.random()/new Date() are unavailable in scripts (they would break this) — stamp results after the workflow returns, or pass timestamps via args.`;

@@ -14,6 +14,7 @@ export async function runWorkflow(options: RunWorkflowOptions): Promise<Workflow
   assertBoundarySafe(options.args, "args");
 
   const { meta, body } = validateScript(script);
+  options.onMeta?.(meta);
   const agentCap = options.agentCap ?? WORKFLOW_AGENT_CAP;
   const itemCap = options.itemCap ?? WORKFLOW_ITEM_CAP;
   const semaphore = new Semaphore(options.concurrency ?? workflowConcurrency());
@@ -160,14 +161,14 @@ export async function runWorkflow(options: RunWorkflowOptions): Promise<Workflow
       options.onProgress?.(entries);
     };
 
-    const respond = (callId: number, ok: boolean, value?: unknown, error?: string, fatal?: boolean) => {
+    const respond = (callId: number, ok: boolean, value?: unknown, error?: string, fatal?: boolean, structured = false) => {
       // Cleared before the settled check: a launch answered by a run that is
       // already finishing is not an unawaited launch either.
       openLaunches.delete(callId);
       if (settled) return;
       // `spent` rides on every response, so the worker's `budget.spent()` is a
       // mirror of this number rather than a second tally of its own.
-      worker.postMessage({ type: "response", callId, ok, value, error, fatal, spent: spentOutputTokens });
+      worker.postMessage({ type: "response", callId, ok, value, error, fatal, structured, spent: spentOutputTokens });
     };
 
     const finish = (result: Omit<WorkflowRunResult, "meta" | "progress" | "agentCount" | "replayedCount">) => {
@@ -253,7 +254,7 @@ export async function runWorkflow(options: RunWorkflowOptions): Promise<Workflow
       // is a script bug, so it is fatal like a typo'd resume label — folding it
       // into a null would surface as an agent that mysteriously returned
       // nothing, and it costs no model call to say so here.
-      let compiledSchema: CompiledSchema | undefined;
+      let compiledSchema: CompiledSchema | undefined = resumed?.schema;
       if (payload.schema !== undefined) {
         const compilation = compileJsonSchema(payload.schema);
         if (!compilation.ok) {
@@ -341,7 +342,7 @@ export async function runWorkflow(options: RunWorkflowOptions): Promise<Workflow
         // resume of a resume must not have to walk back through a chain of
         // earlier files to find the prefix.
         recordJournal?.({ index, key: replayed.key, ok: true, text: replayedText });
-        respond(callId, true, replayedText);
+        respond(callId, true, replayedText, undefined, undefined, compiledSchema !== undefined);
         return;
       }
 
@@ -405,6 +406,7 @@ export async function runWorkflow(options: RunWorkflowOptions): Promise<Workflow
             attempt > 1 ? { attempt, lastAttemptReason: "user-retry" as const } : {};
 
           const startedAt = Date.now();
+          base.gateJobId = undefined;
           emit([{ ...base, queuedAt, startedAt, ...attemptMark }]);
 
           // Mutates `base` rather than emitting a standalone patch: every later
@@ -464,6 +466,7 @@ export async function runWorkflow(options: RunWorkflowOptions): Promise<Workflow
                 label,
                 agentType,
                 ...(model !== undefined ? { model } : {}),
+                ...(compiledSchema !== undefined ? { schema: compiledSchema } : {}),
               });
               // Re-checked here, not just in the child's tool: this is the one
               // place that decides the script's value matches the schema it
@@ -476,7 +479,10 @@ export async function runWorkflow(options: RunWorkflowOptions): Promise<Workflow
                 result = applySchema(result, compiledSchema);
               }
               if (result.ok && payload.gate !== undefined && runGate !== undefined) {
-                result = await applyGate(result, payload.gate, agentId, runGate);
+                result = await applyGate(result, payload.gate, agentId, runGate, jobId => {
+                  base.gateJobId = jobId;
+                  emit([{ ...base, queuedAt, startedAt, ...attemptMark, lastProgressAt: Date.now() }]);
+                });
               }
             }
           } catch (error) {
@@ -521,7 +527,7 @@ export async function runWorkflow(options: RunWorkflowOptions): Promise<Workflow
             const text = result.text ?? "";
             emit([{ ...common, state: "done", resultPreview: preview(text) }]);
             recordJournal?.({ index, key, ok: true, text, ...resumeMark });
-            respond(callId, true, text);
+            respond(callId, true, text, undefined, undefined, compiledSchema !== undefined);
             return;
           }
           // Recorded as a failure rather than left out: a gap would be read as an

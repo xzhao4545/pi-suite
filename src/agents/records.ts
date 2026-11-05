@@ -15,7 +15,7 @@ export function recordsIn(entries: readonly SessionEntry[]): AgentRecord[] {
 }
 /** A detached parent's startup entry still points to the child's durable final run entry. */
 export function hydrate(record: AgentRecord): AgentRecord {
-  if (!active(record.state) || !record.sessionFile) return record;
+  if ((!active(record.state) && record.result !== undefined) || !record.sessionFile) return record;
   const saved = recordsIn(SessionManager.open(record.sessionFile).getEntries()).find(run => run.runId === record.runId);
   return saved ?? { ...record, state: 'failed', error: 'Execution is no longer owned by this Pi process; the saved transcript is available' };
 }

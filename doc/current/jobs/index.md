@@ -4,7 +4,7 @@ jobs 模块在同一 Pi 进程内管理 pipe 与 PTY 两种后台执行。实现
 
 ## 结构
 
-- JobManager（manager.ts）持有进程、PTY、日志和记录，不持有 Pi context。它注册在进程全局槽位 `pi-suite.jobs.runtime`，执行协议版本 4；reload 重新导入模块时复用同一 manager。
+- JobManager（manager.ts）持有进程、PTY、日志和记录，不持有 Pi context。它注册在进程全局槽位 `pi-suite.jobs.runtime`，执行协议版本 5；reload 重新导入模块时复用同一 manager。
 - JobsModule（index.ts）是每个扩展实例的会话绑定：只在会话绑定期间订阅 manager，发布当前会话的活动数量和结算通知；reload、new、resume、fork、树切换只撤销并重建订阅，不转移所有权。
 - 执行协议不兼容且占用中的 manager 仍有活动或未保存的 job 时，保留其注册和退出清理。相同 agentDir 且控制桥版本兼容时，进入受限模式：查询、日志、停止、指定 ID 的 wait/goal_wait 与 quit 通过原实现的闭包调用，活动数量继续更新；新启动、写入与终端 attach 返回 RUNTIME_UNAVAILABLE，自动结果与监督通知暂停。job 全部结束并保存后，/reload 替换空闲 manager，同时释放其退出监听。
 - 控制桥版本为 1，接口仅暴露查询、日志路径、订阅、活动数量、停止、通知已读标记与 quit。保存记录和控制返回数据的契约变化需要同步提升控制桥版本。没有兼容控制桥或 agentDir 不同的占用注册保留退出清理，绑定时提示原因，工具返回 RUNTIME_UNAVAILABLE。
@@ -14,7 +14,7 @@ jobs 模块在同一 Pi 进程内管理 pipe 与 PTY 两种后台执行。实现
 记录保存在 `<agentDir>/pi-suite/jobs/<workspaceHash>/<jobId>/`：job.json 每次以原子重命名写入；pipe 有 stdout.log、stderr.log，PTY 有 output.log；两种模式都有 input.jsonl，带 monitor 的 job 另有 events.jsonl。workspace 为 git 顶层目录，非仓库时为 cwd。
 
 - ID 为 job_ 加 8 位十六进制。
-- 记录含命令、cwd、mode、ownerSession、启动时的分支叶子、可选 taskId 与创建归属（agentId、runId、祖先 runId）、起止时间、退出码或信号、停止原因、清理证据与错误。
+- 记录含命令、cwd、mode、ownerSession、启动时的分支叶子、可选 taskId 与创建归属（agentId 或 workflowId、runId、祖先 run/workflow ID）、起止时间、退出码或信号、停止原因、清理证据与错误。workflow gate 使用同一执行和日志存储，普通 jobs 列表、状态与通知按归属隐藏，查看入口见 [Workflow 操作](../agents/workflow/operations.md)。
 - elapsedMs 使用单调计时，运行中随查询更新，退出时固定；未启动的失败不记录耗时。
 - 输入记录只表示已发送；sensitive 输入只保存时间、来源、方式和字节数。
 - 单个 job 日志达到 100 MiB 时以 log_limit 停止；workspace 历史达到 1 GiB 时拒绝新 job。没有工作区独占锁。
@@ -28,7 +28,7 @@ jobs 模块在同一 Pi 进程内管理 pipe 与 PTY 两种后台执行。实现
 
 期限内无法确认时清理为 unconfirmed，job 继续计入活动数量。重复 stop 合并到进行中的请求；已结算 job 返回既有结果，不再发送终止。进程已观测到退出、最终 monitor 仍在处理时，stop 等待已有结算并返回 requested:false，保留自然退出码与状态。只有历史、无当前控制句柄的 job 返回 HISTORY_READ_ONLY，不按历史 PID 操作。
 
-stopCreatedBy(runIds) 停止这些 agent 执行及其后代创建的全部 job，包括已 detach 的 job；停止期间才启动的同归属 job 不再启动，返回 START_NOT_COMMITTED。
+stopCreatedBy(runIds) 按本次传入的 agent run/workflow ID 及祖先匹配其创建的全部 job，包括已 detach 的 job；累计关闭的 creator 仅拒绝后续准入，不扩大本次结果范围。停止期间才启动的同归属 job 不再启动，返回 START_NOT_COMMITTED。
 
 session_shutdown 只有 quit 停止全部 job，共享 10 秒期限并关闭新 job 准入；进程 exit 时用同步停止与保存兜底未结算对象。
 
@@ -41,7 +41,7 @@ session_shutdown 只有 quit 停止全部 job，共享 10 秒期限并关闭新 
 | job_read | id、stream?、offset?、limitBytes?、search?、context?；pipe 为 stdout（默认）、stderr、input，PTY 为 output（默认）、input，带 monitor 的 job 另有 events，其他组合返回 UNSUPPORTED_STREAM；PTY 输出转为可见文本，偏移仍指原始字节 |
 | job_write | id 与 input、keys、paste 之一，submit 追加回车，sensitive 不保存正文；endInput 关闭 pipe stdin；keys 仅 PTY；非运行状态返回 NOT_RUNNING |
 | job_stop | id；返回真实状态、requested、cleanup 与 affected |
-| wait | ids（job_/agent_ 前缀，1–50）、mode?（all 默认、any）、timeoutMs?（默认 300000，最大 3600000）；超时或取消只结束等待，不停止对象。除 ids 按 mode 满足外，当前会话可见的其他对象结算（列在 also 下并撤销其通知）、monitor 事件与 hands-free 更新（包括被等待 job 自身的）、直接 child 提问、用户插话（steer）也提前返回；details.reason 为 condition、question、event、other、user 或 timeout |
+| wait | ids（job_/agent_/wf_ 前缀，1–50）、mode?（all 默认、any）、timeoutMs?（默认 300000，最大 3600000）；超时或取消只结束等待，不停止对象。除 ids 按 mode 满足外，当前会话可见的其他对象结算（列在 also 下并撤销其通知）、monitor 事件与 hands-free 更新（包括被等待 job 自身的）、直接 child 提问、用户插话（steer）也提前返回；details.reason 为 condition、question、event、other、user 或 timeout |
 
 结果首行格式为 `job_3fa1c2d0 completed · exit 0 · 12.4s · pipe`，清理未确认时附 cleanup 状态，最后一行给出后续调用。
 

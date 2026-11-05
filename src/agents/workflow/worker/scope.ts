@@ -189,7 +189,7 @@ async function agentIn(scope, prompt, opts) {
     if (schema !== undefined) {
       throw new Error(
         "agent() opts.resume and opts.schema are mutually exclusive: a resumed child re-prompts the session it "
-          + "already had, whose tool set was fixed when it started — it has no StructuredOutput tool to answer through."
+          + "already had, whose schema and tool set were fixed when it started."
       );
     }
     if (gate !== undefined) {
@@ -216,11 +216,7 @@ async function agentIn(scope, prompt, opts) {
     schema: schema,
   });
   if (result === undefined || result === null) return null;
-  if (schema === undefined) return result;
-  // Parsed with the realm's own JSON.parse so the script gets an object whose
-  // prototype is its own — \`x instanceof Object\` and \`x.list instanceof Array\`
-  // both hold, and it survives assertBoundary if the script returns it.
-  return realmParse(result);
+  return result;
 }
 
 `;

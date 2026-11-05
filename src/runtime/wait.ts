@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
 import { ToolError } from './errors.ts';
+import { WAIT_ID_PATTERN } from './tools.ts';
 
 /**
  * One wait over jobs and agents. Each module registers a Waitable for its ID prefix; wait
@@ -106,7 +107,7 @@ export class WaitRegistry {
 }
 
 const HEADLINE: Record<WaitReason, string> = {
-  condition: '', timeout: ' · timed out', other: ' · returned early: another job or agent settled',
+  condition: '', timeout: ' · timed out', other: ' · returned early: another job, agent or workflow settled',
   question: ' · returned early: an agent asked a question', event: ' · returned early: a monitor event fired',
   user: ' · returned early: the user sent a message',
 };
@@ -114,11 +115,11 @@ const HEADLINE: Record<WaitReason, string> = {
 export function registerWait(pi: ExtensionAPI, registry: WaitRegistry): void {
   pi.registerTool({
     name: 'wait', label: 'Wait',
-    description: 'Wait for jobs or agents (ids like job_… / agent_…) to settle. mode=all (default) or any. ' +
-      'Also returns early when any other job or agent of this session settles, a monitor event or hands-free update arrives (including on a waited job), a child agent asks a question, or the user sends a message; ' +
+    description: 'Wait for jobs, agents or workflows (job_… / agent_… / wf_…) to settle. mode=all (default) or any. ' +
+      'Also returns early when any other job, agent or workflow of this session settles, a monitor event or hands-free update arrives (including on a waited job), a child agent asks a question, or the user sends a message; ' +
       'check pending and call wait again if still needed. Timeout or cancel only ends the wait; nothing is stopped.',
     parameters: Type.Object({
-      ids: Type.Array(Type.String({ pattern: '^(job|agent)_[a-f0-9]{8}$' }), { minItems: 1, maxItems: WAIT_LIMITS.maxIds }),
+      ids: Type.Array(Type.String({ pattern: WAIT_ID_PATTERN }), { minItems: 1, maxItems: WAIT_LIMITS.maxIds }),
       mode: Type.Optional(Type.Union([Type.Literal('any'), Type.Literal('all')])),
       timeoutMs: Type.Optional(Type.Integer({ minimum: 1, maximum: WAIT_LIMITS.maxMs, description: `Default ${WAIT_LIMITS.defaultMs}` })),
     }, { additionalProperties: false }),

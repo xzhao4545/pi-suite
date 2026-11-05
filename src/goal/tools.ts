@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { WAIT_ID_PATTERN } from '../runtime/tools.ts';
 import type { GoalManager } from "./manager.ts";
 
 const goalId = Type.String({ minLength: 1, description: "The exact goalId in the current active goal contract" });
@@ -31,7 +32,7 @@ export function registerGoalTools(pi: ExtensionAPI, manager: GoalManager): void 
     description: "Wait for an arranged external job/agent/event, with an optional single wake deadline. waitFor lists job_/agent_ IDs: the goal resumes only when all of them settle (or one asks a question) or the deadline passes; other notices do not end the wait. " +
       "Without waitFor any external wake resumes it. Call alone; ordinary unfinished work should continue instead.",
     parameters: Type.Object({ goalId, reason: Type.String({ minLength: 1, maxLength: 1000 }),
-      waitFor: Type.Optional(Type.Array(Type.String({ pattern: "^(job|agent)_[a-f0-9]{8}$" }), { minItems: 1, maxItems: 50 })),
+      waitFor: Type.Optional(Type.Array(Type.String({ pattern: WAIT_ID_PATTERN }), { minItems: 1, maxItems: 50 })),
       resumeAfterMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 2147483647 })) }, { additionalProperties: false }),
     async execute(_id, params, _signal, _update, ctx) {
       if (!params.reason.trim()) throw new Error("Waiting requires an external wake reason");

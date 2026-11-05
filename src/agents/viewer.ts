@@ -12,7 +12,7 @@ import type { ScrollView } from '../ui/scroll.ts';
 import type { AgentScheduler } from './schedules/index.ts';
 import { showSchedules } from './schedules/menu.ts';
 
-async function showAgent(ctx: ExtensionContext, agents: AgentsModule, dock: Dock, id: string, runId: string, config: () => SuiteConfig): Promise<void> {
+export async function showAgent(ctx: ExtensionContext, agents: AgentsModule, dock: Dock, id: string, runId: string, config: () => SuiteConfig): Promise<void> {
   let content: Transcript | undefined, reader: ScrollView | undefined;
   for (;;) {
     dock.setDetail(true);
@@ -46,13 +46,15 @@ async function showAgent(ctx: ExtensionContext, agents: AgentsModule, dock: Dock
     await editAgentModel(ctx, agents.manager, id, config());
   }
 }
-export function registerAgentsCommand(pi: ExtensionAPI, agents: AgentsModule, dock: Dock, notices: Notifications, config: () => SuiteConfig, reload: (cwd: string) => void, scheduler?: AgentScheduler): void {
+export function registerAgentsCommand(pi: ExtensionAPI, agents: AgentsModule, dock: Dock, notices: Notifications, config: () => SuiteConfig, reload: (cwd: string) => void, scheduler?: AgentScheduler,
+  workflows?: {available(): boolean; show(ctx: ExtensionContext): Promise<void>}): void {
   pi.registerCommand('agents', { description: 'Read child sessions, configure models and stop execution trees', handler: async (args, ctx) => {
     if (ctx.mode !== 'tui') { ctx.ui.notify('Use agent_list and agent_read outside the terminal UI'); return; }
     const release = notices.hold();
     try {
-      const state = args.trim() || await ctx.ui.select('Agents', ['active', 'queued', 'finished', 'all', 'Types · model / thinking', ...scheduler?.isActive ? ['Scheduled agents'] : []]);
+      const state = args.trim() || await ctx.ui.select('Agents', ['active', 'queued', 'finished', 'all', 'Types · model / thinking', ...scheduler?.isActive ? ['Scheduled agents'] : [], ...workflows?.available() ? ['Workflows'] : []]);
       if (!state) return;
+      if (state === 'workflows' || state === 'Workflows') { await workflows?.show(ctx); return; }
       if (state === 'schedules' || state === 'Scheduled agents') { if (scheduler) await showSchedules(ctx, scheduler); return; }
       if (state === 'Types · model / thinking' || state === 'types') { await editTypeModel(ctx, config(), reload); return; }
       const scope = agents.scope(ctx);

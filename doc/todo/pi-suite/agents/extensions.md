@@ -2,7 +2,7 @@
 
 目标：保留上游 pi-subagents 的自定义 agent 类型、@handle 提及、定时调度、SubagentWorkflow 和跨扩展 RPC，接入本包统一工具、配置与界面。
 
-当前状态：完整保留 frontmatter、类型与包发现、扩展选择/动态工具范围、技能预加载、memory、父级上下文与会话目录已接入，4 项 Linux SDK 契约检查通过，见 [资源基础阶段](../../../finished/pi-suite/agents/resources-core.md)。@handle 输入、补全与会话克隆启动通过 3 项 Linux 检查，见 [提及基础阶段](../../../finished/pi-suite/agents/mentions-core.md)。定时调度与查看取消已接入，见 [调度基础阶段](../../../finished/pi-suite/agents/schedules-core.md)。RPC 五通道、会话归属与结果消费已接入，见 [RPC 基础阶段](../../../finished/pi-suite/agents/rpc-core.md)。workflow 编排核心已导入，见 [核心阶段](../../../finished/pi-suite/agents/workflow-core.md)；宿主、保存资源、工具与查看入口及类型开关待接入，Windows、真实 MCP 和资源组合继续验收。保留范围已由用户确认，不保留 git worktree 隔离。导入文件与改造边界见 [上游导入](../upstream-import.md)。
+当前状态：完整保留 frontmatter、类型与包发现、扩展选择/动态工具范围、技能预加载、memory、父级上下文与会话目录已接入，4 项 Linux SDK 契约检查通过，见 [资源基础阶段](../../../finished/pi-suite/agents/resources-core.md)。@handle 输入、补全与会话克隆启动通过 3 项 Linux 检查，见 [提及基础阶段](../../../finished/pi-suite/agents/mentions-core.md)。定时调度与查看取消已接入，见 [调度基础阶段](../../../finished/pi-suite/agents/schedules-core.md)。RPC 五通道、会话归属与结果消费已接入，见 [RPC 基础阶段](../../../finished/pi-suite/agents/rpc-core.md)。workflow 编排核心见 [核心阶段](../../../finished/pi-suite/agents/workflow-core.md)，宿主、保存资源、工具、通知/等待与原生控制入口见 [宿主接入阶段](../../../finished/pi-suite/agents/workflow-host.md)；类型开关、Windows、真实手机/MCP 和资源组合继续验收。保留范围已由用户确认，不保留 git worktree 隔离。导入文件与改造边界见 [上游导入](../upstream-import.md)。
 
 影响范围：agents 类型注册、输入拦截、调度存储、workflow worker、pi.events 通道、/agents 菜单、配置 agents 节。
 
@@ -16,13 +16,14 @@
 - [x] 实现 @handle 输入拦截与补全，按 agent_send 语义投递
 - [x] 实现 agent_start 的 schedule 参数、调度存储与 /agents 调度列表
 - [x] 导入 workflow Worker 编排核心、进度、控制与 journal，保留并发、嵌套、结构化结果、预算和上限
-- [ ] 实现 agent_workflow 及其查看界面，gate 在 cwd 执行
+- [x] 实现 agent_workflow 及其查看界面，gate 在 cwd 执行，见 [宿主接入阶段](../../../finished/pi-suite/agents/workflow-host.md)
 - [x] 注册 subagents:rpc:* 通道并保持协议版本 2
 - [ ] /agents 菜单汇总记录、类型开关、按类型的模型与 thinking 配置（见 [模型与 thinking 配置](models.md)）、调度与 workflow，同步操作说明
 - [ ] Windows 与实际外部扩展组合复核 RPC 注册、启动/停止/引导/消费、生命周期与目录/结构化结果
 - [ ] Windows 与实际 MCP 服务复核资源组合、晚注册与 MCP 桥接、包根/符号链接及类型/技能目录的信任边界
 - [ ] Windows 与真实手机 SSH 复核 @handle/文件补全、活动引导、结束恢复、克隆启动与会话切换
 - [ ] Windows、实际 CLI 与手机 SSH 复核本地时区的 cron/周期/单次、切换与退出、调度详情和取消
+- [ ] Windows 与真实手机 SSH 复核 workflow 的 shell/gate 清理、长名称选择、child/gate 查看、控制与 journal 重放
 
 ## 验收方式
 
@@ -58,7 +59,7 @@ agent_start 的 schedule 接受 cron 表达式、`+10m`/`5m` 间隔或 ISO 单�
 
 参数：script、scriptPath 或已保存的 name 三选一，args?、resumeFromRunId?。始终后台运行并返回 workflow 运行 ID；完成走统一通知。workflow 内的 child 带 workflowId，不出现在普通 agents 列表与状态计数，由 workflow 详情查看。gate 命令在 cwd 执行，默认期限 10 分钟。工具描述保留上游的使用前提：用户明确要求编排、调用要求编排的技能或指定已保存 workflow。由 agents.workflows 配置开关。
 
-编排核心的 Linux Worker 契约已通过，见 [核心阶段](../../../finished/pi-suite/agents/workflow-core.md)。宿主接入继续复用公共 AgentManager、资源加载、通知与等待：运行中切换/reload 不得使用失效的 ExtensionContext；恢复 child 保留原会话与模型/工具契约；最终通知等待实际 child 清理。保存脚本与 journal 的失败必须报告，truncated journal 必须告知；资源发现复用 packageResources 的 workflows 类型与项目信任。公开入口保留源码三选一、journal 恢复、完整原生控制与 child 详情，上述范围完成前保持该工具任务未完成。
+编排核心见 [核心阶段](../../../finished/pi-suite/agents/workflow-core.md)，宿主接入范围见 [宿主接入阶段](../../../finished/pi-suite/agents/workflow-host.md)。公开工具、源码三选一、共享通知/等待、保存资源与原生控制已接入，稳定事实维护在 [Workflow](../../../current/agents/workflow/index.md)。后续平台验收需核对运行中切换/reload 的父级事实、固定 child resume 契约、实际 child/gate 清理后的通知、保存失败与 truncated 提示、packageResources 门控，以及完整原生控制与 child/gate 查看。
 
 ## 跨扩展 RPC
 

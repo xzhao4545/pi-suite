@@ -4,6 +4,8 @@
 
 当前状态：共享原生 Transcript、独立详情、thinking/工具折叠、流式消息和部分结果、底部跟随及历史叶子已接入；组件缓存已扩展，完整流式/窄屏验收及上游快捷控制待完成。
 
+workflow 详情使用相同原生详情、阅读与值选择框架；child Transcript、gate 日志、暂停/恢复/停止、跳过/重试和 journal 重放的接入见 [宿主接入阶段](../../../finished/pi-suite/agents/workflow-host.md)，Windows 与真实手机 SSH 由 [扩展专项](extensions.md) 验收。
+
 影响范围：child session、消息组件、工具渲染、流式更新、运行/历史查看、手动停止与常驻摘要。
 
 约束：查看不实际切换主会话；工具使用 child 的渲染定义，历史阅读位置稳定。

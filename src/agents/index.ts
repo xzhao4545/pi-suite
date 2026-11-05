@@ -81,8 +81,8 @@ export class AgentsModule implements Waitable {
     const current = this.binding.current;
     if (!current) return [];
     const scope = this.scope(current.ctx);
-    return [...this.manager.runs.values()].filter(run => this.manager.visible(run.record, scope)
-      && (run.question && !run.question.seen || run.settled && !run.consumed && (run.record.background || run.notifyResult))).map(run => {
+    return [...this.manager.runs.values()].filter(run => run.question && !run.question.seen && this.manager.questionVisible(run.record, scope)
+      || this.manager.visible(run.record, scope) && run.settled && !run.consumed && (run.record.background || run.notifyResult)).map(run => {
         const record = this.manager.view(run);
         const item: Settlement = { id: record.id, runId: record.runId, state: record.state, settled: !active(record.state),
           question: Boolean(run.question && !run.question.seen), summary: run.question && !run.question.seen ? questionText(run) : summaryLine(record) };

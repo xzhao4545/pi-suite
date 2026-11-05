@@ -7,7 +7,8 @@
 | agent_read | id、runId?；活动默认 transcript，结束默认 result；offset/limitBytes/search/context 使用 [共享读取规则](../jobs/index.md) |
 | agent_send | id、message；返回 answered、steered、queued 或 resumed，只有直接父级可以发送 |
 | agent_stop | id、runId?；取消运行子树及其创建的活动 job，返回真实状态和 cleanup |
-| wait | 接受 job 与 agent ID 的 any/all 等待；结果、问题与其他事件使用统一返回结构，超时只结束调用 |
+| agent_workflow | script、scriptPath 或 name 三选一，args?、resumeFromRunId?；始终后台启动，返回 wf_ ID 与保存路径，见 [Workflow 操作](workflow/operations.md) |
+| wait | 接受 job、agent 与 workflow ID 的 any/all 等待；结果、问题与其他事件使用统一返回结构，超时只结束调用 |
 
 模型工具默认返回摘要，完整输入、thinking、工具调用和输出通过 agent_read 或原生 transcript 按需读取。workspace 列表覆盖当前进程已经加载的记录；session 列表与状态数量使用同一直接子级和分支归属过滤。
 
@@ -16,6 +17,8 @@
 `/agents` 选择 active、queued、finished 或 all；也可使用 `/agents all` 等直接指定筛选。选择一条 run 后可查看 Transcript、修改该 agent 的 Model / thinking，或选择“Stop child, nested agents and jobs”停止该运行范围。菜单的 Types · model / thinking 和 `/agents types` 配置类型，写回位置和作用范围见 [模型配置](models.md)。
 
 Scheduled agents 与 `/agents schedules` 查看当前会话的调度，选择一项后可确认取消；创建使用 agent_start 的 schedule，规则、开关、时间与已触发运行的控制见 [定时调度](schedules.md)。
+
+Workflows 与 `/agents workflows` 查看当前会话与分支的编排、保存资源、阶段、日志和结果，提供暂停/恢复/停止、child 会话和 gate 日志、跳过/重试与 journal 重放；控制条件、开关和按键见 [Workflow 操作](workflow/operations.md)。
 
 查看器复用共享 Transcript 与 DetailsView；Markdown、thinking、工具调用/结果由 Pi 原生组件渲染。工具优先使用对应 child 的渲染定义，持久历史缺少定义时使用 Pi 标准渲染。稳定消息缓存组件及宽度渲染，活动尾部与工具部分输出随事件更新；在底部时跟随，向上阅读保留位置。
 
@@ -37,7 +40,7 @@ TUI 输入 `@explore 消息` 或 `@agent-explore 消息` 可以发送给 Explore
 
 ## 父级回答
 
-child ask_user 使用共享 schema 与 response/details，工具挂起期间为 waiting(parent)。问题只交给直接父级，包含选项 ID、标题和 agent_send 提示；顶级通过统一 Notifications，嵌套通过父 child 的通知边界/共享等待返回。
+child ask_user 使用共享 schema 与 response/details，工具挂起期间为 waiting(parent)。问题只交给直接父级，包含选项 ID、标题和 agent_send 提示；顶级通过统一 Notifications，嵌套通过父 child 的通知边界/共享等待返回。顶层 workflow child 的问题也交给所属主会话，可用 agent_send 回答；普通引导与恢复由 workflow 控制。
 
 message 与选项 ID/标题精确匹配时返回 selection，否则在 allowFreeform=true 时返回 freeform。多选可发送 JSON 字符串数组；批量问题发送对应题数的 JSON 数组，每题元素为文本或选择数组。返回标记 source=parent，不能把父级回答声称为用户直接授权。期限默认使用 ask.timeout，timeoutMs=0 无期限；超时和取消保留非回答状态，并使 child 以 stopped 结算。
 

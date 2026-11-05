@@ -41,8 +41,12 @@ agents 的 8 项 Linux 离线检查使用真实 Pi SDK child 与 faux provider�
 
 RPC 的 4 项 Linux 检查使用真实 SDK/faux 与公共事件总线，覆盖五通道和版本 2、工厂后的注册、重复绑定、reload 撤销/恢复、生命周期与用量、同步消费不触发父级请求、待发通知撤销、已结束引导拒绝、启动错误与显式模型/参数校验；排队即时返回、信号取消、满池绕过、普通级联停止和会话/嵌套/workflow 归属拒绝通过。指定 cwd 保留父级配置/扩展并隔离目标信任，结构化工具验证、纠正提示、JSON 结果及父工作区列表通过。Windows 与实际外部扩展组合按扩展专项继续验收。
 
-Workflow 编排核心的 6 项 Linux 检查使用真实 Worker，覆盖流水线独立推进、parallel、嵌套阶段和共享并发/预算、结构化返回与 gate、排队期间暂停/跳过/重试及全部尝试用量。journal 成功且未改变的前缀、失败/变化后执行、schema 重检、含 child resume 的整段执行、文件损坏与明确 I/O 错误通过；JSON、metadata 纯字面量、确定性 globals、未支持选项、agent/item/nested 上限、未等待调用与无限循环 Worker 实际终止通过。当前 115 项完整 Linux 检查及类型检查通过，日常完整检查约 10 秒。公开工具、宿主、资源与原生界面接入及 Windows 验收由 [扩展专项](../todo/pi-suite/agents/extensions.md) 管理。
+Workflow 编排核心的 6 项 Linux 检查使用真实 Worker，覆盖流水线独立推进、parallel、嵌套阶段和共享并发/预算、结构化返回与 gate、排队期间暂停/跳过/重试及全部尝试用量。journal 成功且未改变的前缀、失败/变化后执行、schema 重检、含 child resume 的整段执行、文件损坏与明确 I/O 错误通过；JSON、metadata 纯字面量、确定性 globals、未支持选项、agent/item/nested 上限、未等待调用与无限循环 Worker 实际终止通过。
 
-以上 46 项离线检查及类型检查在 Windows（Node 24.22.2）和 Linux（已有 WSL/nvm 环境，Node 24.14.0）通过，日常检查在 5 分钟内。共享 wait 提前返回、goal_wait waitFor、终端视图与 monitor 的 11 项检查目前只在 Linux 通过，Windows 待复核。另在 Windows 执行 pi-starship 0.65.2 实际 extension_status 模块，验证 goal/runtime 槽位读取、数量上限与空状态。这些检查证明当前询问、目标、执行任务及共享组件的契约；终端缩放、/jobs 交互选择流程、真实手机 SSH 输入、完整第三方 footer 布局和后续业务模块综合生命周期由 [完整实施计划](../todo/pi-suite/implementation.md) 管理。
+Workflow 宿主的 5 项 Linux（Node 24.22.2）真实 SDK/faux 与进程检查覆盖后台工具、结构化 child、cwd gate/短退出/EOF、普通列表与数量隐藏、共享等待消费、journal 重放与 SDK 引用恢复；固定 schema/model/type/tools 续接、实际父模型 wait/agent_send 回答问题、workflow 与排队 agent 的 reload/new/resume owner、quit 等待真实 gate 清理通过。保存资源优先级/信任/包门控、源码互斥、高优先级无效资源、truncated/损坏 journal 与明确持久化错误、工具开关撤销/恢复和手动禁用保持、模型使用动态类型描述、原生 40/60/120 列、精确阶段/unphased 分组、暂停返回的阅读与搜索状态通过。6 项 Worker 核心检查和类型检查通过。Windows、真实手机 SSH 和 shell/资源/MCP 组合按 [扩展专项](../todo/pi-suite/agents/extensions.md) 继续验收。
+
+公共基础的 46 项离线检查及类型检查在 Windows（Node 24.22.2）和 Linux（已有 WSL/nvm 环境，Node 24.14.0）通过，日常检查在 5 分钟内。共享 wait 提前返回、goal_wait waitFor、终端视图与 monitor 的 11 项检查目前只在 Linux 通过，Windows 待复核。另在 Windows 执行 pi-starship 0.65.2 实际 extension_status 模块，验证 goal/runtime 槽位读取、数量上限与空状态。这些检查证明当前询问、目标、执行任务及共享组件的契约；终端缩放、/jobs 交互选择流程、真实手机 SSH 输入、完整第三方 footer 布局和后续业务模块综合生命周期由 [完整实施计划](../todo/pi-suite/implementation.md) 管理。
+
+当前 Linux（Node 24.22.2）检查集共 120 项，均已通过全量检查或变更影响范围复核，类型检查通过；覆盖询问、目标、任务、执行、子代理、workflow 和共享组件的当前契约。平台适用范围按上述各专项结论区分。
 
 [返回当前文档](./index.md)

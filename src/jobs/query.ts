@@ -3,7 +3,7 @@ import { ToolError } from '../runtime/errors.ts';
 import { fileSource, readBounded, type ReadPage, type ReadRequest } from '../runtime/read.ts';
 import { bucket } from './state.ts';
 import type { JobReader } from './control.ts';
-import type { InputRecord, JobSummary, Stream, Workspace } from './types.ts';
+import { isWorkflowGate, type InputRecord, type JobSummary, type Stream, type Workspace } from './types.ts';
 import { displayName } from './index.ts';
 import { normalizeVisibleText } from './terminal/visible-text.ts';
 import { sanitizeText } from '../runtime/text.ts';
@@ -45,7 +45,7 @@ export interface ListResult { rows: ListRow[]; nextCursor?: string; errors: stri
 export async function listJobs(manager: JobReader, workspace: Workspace, query: ListQuery): Promise<ListResult> {
   const { jobs, errors } = await manager.list(workspace);
   const rows = jobs.map(({ job, live }) => ({ job, live, unsettled: bucket(job, live) === 'unsettled' }))
-    .filter(row => (query.scope === 'workspace' || row.job.ownerSessionId === query.sessionId) &&
+    .filter(row => !isWorkflowGate(row.job) && (query.scope === 'workspace' || row.job.ownerSessionId === query.sessionId) &&
       (query.state === 'all' || bucket(row.job, row.live) === query.state));
   const { page, nextCursor } = paginate(rows, row => row.job, query.cursor, query.limit);
   return { rows: page, nextCursor, errors };
@@ -61,7 +61,7 @@ export function jobDetail(job: JobSummary): string[] {
     `cleanup: ${job.cleanup.state}${job.cleanup.error ? ` (${job.cleanup.error})` : ''}`,
     ...(job.error ? [`error: ${job.error}`] : []),
     ...(job.taskId ? [`task: ${job.taskId}`] : []),
-    ...(job.creator ? [`created by ${job.creator.agentId} ${job.creator.runId}`] : []),
+    ...(job.creator ? [`created by ${job.creator.agentId ?? job.creator.workflowId} ${job.creator.runId}`] : []),
   ];
 }
 

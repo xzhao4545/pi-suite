@@ -1,4 +1,5 @@
-import { Type } from 'typebox';
+import { Type, type TSchema } from 'typebox';
+import type { ExtensionAPI, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { READ_LIMITS } from './read.ts';
 import { ToolError } from './errors.ts';
 
@@ -7,9 +8,17 @@ import { ToolError } from './errors.ts';
  * filters, cursors, reads and stop results. jobs, agents and tasks build their parameters from
  * these pieces so equal meanings keep equal names, units, limits and exclusivity rules.
  */
-/** job_/agent_/run_ + 8 lowercase hex digits. */
-export const objectId = (prefix: 'job' | 'agent' | 'run', example: string) =>
-  Type.String({ pattern: `^${prefix}_[a-f0-9]{8}$`, description: `${prefix} ID, e.g. ${example}` });
+/** job_/agent_/run_ use 8 hex digits; workflow run IDs use 12. */
+export const objectId = (prefix: 'job' | 'agent' | 'run' | 'wf', example: string) =>
+  Type.String({ pattern: `^${prefix}_[a-f0-9]{${prefix === 'wf' ? 12 : 8}}$`, description: `${prefix} ID, e.g. ${example}` });
+export const WAIT_ID_PATTERN = '^(?:(?:job|agent)_[a-f0-9]{8}|wf_[a-f0-9]{12})$';
+
+/** Pi late registration refreshes all extension tools; preserve the user's active selection. */
+export function registerBoundTool<P extends TSchema>(pi: ExtensionAPI, tool: ToolDefinition<P>, activate = false): void {
+  const active = pi.getActiveTools();
+  pi.registerTool(tool);
+  pi.setActiveTools(activate ? [...new Set([...active, tool.name])] : active);
+}
 
 export const LIST_LIMITS = { defaultLimit: 20, maxLimit: 100 };
 /** id views one item; the rest filter and page a list, newest first. id and list fields are exclusive. */

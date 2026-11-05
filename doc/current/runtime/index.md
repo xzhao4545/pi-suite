@@ -1,6 +1,8 @@
 # 公共运行时与配置
 
-唯一扩展入口为 src/index.ts；工具、命令和宿主事件由入口与对应模块注册。当前工具为 ask_user、goal_complete、goal_blocked、goal_wait、task_list、task_edit、job_start、job_list、job_read、job_write、job_stop、agent_start、agent_list、agent_read、agent_send、agent_stop 和共享 wait，命令为 /goal、/tasks、/jobs、/agents、/suite。
+唯一扩展入口为 src/index.ts；工具、命令和宿主事件由入口与对应模块注册。当前工具为 ask_user、goal_complete、goal_blocked、goal_wait、task_list、task_edit、job_start、job_list、job_read、job_write、job_stop、agent_start、agent_list、agent_read、agent_send、agent_stop、agent_workflow 和共享 wait，命令为 /goal、/tasks、/jobs、/agents、/suite。
+
+runtime/tools.ts 的 registerBoundTool 共用 Pi 公开工具注册，刷新描述/schema 时保留当前 active-tool 选择；首次晚注册只按该入口的启用规则加入本工具。agent_start 调度 schema 与 workflow 动态类型描述复用此入口。
 
 ## 配置
 
@@ -13,7 +15,7 @@
   "ask": { "timeout": 120000, "historyKey": "ctrl+h" },
   "goal": { "display": "status" },
   "tasks": { "reminders": true },
-  "agents": { "display": "status", "maxConcurrent": 10, "maxConcurrentForeground": 0, "maxDepth": 3, "persistSessions": true, "types": {} },
+  "agents": { "display": "status", "maxConcurrent": 10, "maxConcurrentForeground": 0, "maxDepth": 3, "persistSessions": true, "workflows": true, "types": {} },
   "jobs": { "display": "status", "detachKey": "ctrl+b", "returnKey": "ctrl+g", "transferKey": "ctrl+t" }
 }
 ```
@@ -24,7 +26,7 @@ jobs.agents 配置 CLI 键对应的 command 与 args，按键和字段合并用�
 
 runtime/text.ts 提供安全字面量文本转换，供任务说明、pipe 日志与 monitor 事件共用；终端回车覆写等 PTY 语义由 jobs 的终端模块处理。
 
-runtime/json-store.ts 为 TaskStore 与 ScheduleStore 提供按目标串行入口、异步 pid:uuid 文件锁、锁内重读、复制后修改、原子保存和快照；领域 schema 与修改规则由具体 Store 定义。损坏数据保留已有有效缓存并禁止覆盖，锁超时与数据错误使用领域前缀报告。
+runtime/json-store.ts 为 TaskStore、ScheduleStore 与 WorkflowStore 提供按目标串行入口、异步 pid:uuid 文件锁、锁内重读、复制后修改、原子保存和快照；领域 schema 与修改规则由具体 Store 定义。损坏数据保留已有有效缓存并禁止覆盖，锁超时与数据错误使用领域前缀报告。
 
 agents.maxConcurrent 限制后台池，maxConcurrentForeground=0 表示前台不限；maxDepth 为包含顶级的会话层数。persistSessions 控制顶级默认持久化；defaultModel 和 types.<类型>.model/thinking 提供逐字段覆盖。`/agents types` 按字段定位写入用户或项目配置，保存后立即更新内存，只影响新执行；写入复用共享 schema 与最新文件内容，无效文件拒绝覆盖。模型来源、认证要求和单 agent 操作见 [模型配置](../agents/models.md)。
 
@@ -33,6 +35,8 @@ agents.packageAgents 接受 boolean 或包名/source 数组，默认加载 Pi �
 agents.mentions 默认 true，控制 TUI 的 @handle 输入投递与补全。类型首次提及由仅持有 agent_start 的内存会话克隆生成任务，结果接入共享通知；已有实例复用 Manager.send。关闭开关时保留 Pi 原生文件补全，操作见 [agents 操作](../agents/operations.md)。
 
 agents.scheduling 默认 true，控制顶级 agent_start 的 schedule 参数、主会话计时器与 Scheduled agents 菜单。绑定时按开关更新工具 schema；关闭后使用 /reload，原调度文件保留。时间和生命周期见 [定时调度](../agents/schedules.md)。
+
+agents.workflows 默认 true，控制主会话 agent_workflow 和 Workflows 菜单；配置或默认工具冲突可撤销本工具，显式启用时报告同名冲突。agents.packageWorkflows 使用 boolean 或包名/source 数组控制包 workflow 发现，项目资源受信任约束。工具、运行控制和恢复见 [Workflow 操作](../agents/workflow/operations.md)。共享 wait 与 goal_wait.waitFor 接受 job_、agent_ 和 wf_ ID，结果消费复用公共通知。
 
 ## 会话和通知
 

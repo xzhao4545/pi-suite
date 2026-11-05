@@ -156,6 +156,7 @@ export interface CompletedChild {
   label: string;
   agentType: string;
   model?: string;
+  schema?: CompiledSchema;
 }
 
 /**
@@ -193,8 +194,9 @@ export async function applyGate(
   command: string,
   agentId: string,
   runGate: NonNullable<WorkflowHost["runGate"]>,
+  onStarted?: (jobId: string) => void,
 ): Promise<WorkflowSpawnResult> {
-  const outcome = await runGate(command, { agentId });
+  const outcome = await runGate(command, { agentId, onStarted });
   if (outcome.ok) return result;
   const { text: _discarded, ...rest } = result;
   const output = outcome.output.trim();

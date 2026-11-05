@@ -1,5 +1,4 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { loadConfig } from '../runtime/config.ts';
 import { SessionBinding } from '../runtime/binding.ts';
 import { Notifications } from '../runtime/notifications.ts';
 import { WaitRegistry, registerWait } from '../runtime/wait.ts';
@@ -19,7 +18,7 @@ import type { Execution } from './types.ts';
 
 /** Child tools use the owner's task list and real run ancestry; the model cannot forge creators. */
 export function childSuite(pi: ExtensionAPI, run: Execution, manager: AgentManager): void {
-  const config = loadConfig(run.configCwd), binding = new SessionBinding(), dock = new Dock();
+  const config = run.config, binding = new SessionBinding(), dock = new Dock();
   const status = new StatusPublisher(dock), notices = new Notifications(pi, binding), waits = new WaitRegistry();
   const tasks = config.modules.tasks ? new TasksModule(binding, dock, run.parent.taskStore) : undefined;
   const agents = new AgentsModule(pi, binding, notices, status, tasks, run, manager);
@@ -36,7 +35,8 @@ export function childSuite(pi: ExtensionAPI, run: Execution, manager: AgentManag
   if (jobs) {
     const viewer = { jobs, dock, notifications: notices, keys: () => config.jobs };
     registerJobTools(pi, jobs, viewer, { ask, config: () => config, tasks, parentQuestions: true,
-      creator: { agentId: run.record.id, runId: run.record.runId, ancestors: run.record.ancestors } });
+      creator: { agentId: run.record.id, runId: run.record.runId,
+        ancestors: [...run.record.ancestors, ...run.record.workflowId ? [run.record.workflowId] : []] } });
     waits.register(jobs);
   }
   if (run.type.allowedSubagents && !run.isolated && run.record.ancestors.length + 1 < config.agents.maxDepth) registerAgentTools(pi, agents, waits, () => config);

@@ -4,11 +4,15 @@
 
 ## 并发与生命周期
 
-顶级 child 进入一个共享队列，分别按后台与前台池空位取最早可运行项，保持各池 FIFO。后台默认 10，前台默认不限。启动时保存 chargedPool，动态调整上限时既有槽位的收费归属保持稳定；结算释放槽位，停止排队项释放其等待者。嵌套 child 不占池，避免父级等待其 child 时互相占位。
+顶级 child 进入一个共享队列，分别按后台与前台池空位取最早可运行项，保持各池 FIFO。后台默认 10，前台默认不限。启动时保存 chargedPool，动态调整上限时既有槽位的收费归属保持稳定；结算释放槽位，停止排队项释放其等待者。嵌套与 workflow child 不占池，避免父级等待其 child 时互相占位；workflow 的并发由自身控制。
 
 状态包括 queued、starting、running、waiting、stopping、completed、failed、stopped 和 limited。排队项在 queued 列表单独查看；启动、运行、等待与清理中的 child 计入活动数量。等待父级回答仍计入活动数量；maxTurns 限制的执行为 limited。用量按 Pi SessionStats 计算本次执行的差值；耗时从实际开始到结束，包含工具与父级回答等待。
 
 后台启动立即返回 ID。前台启动等待最终结果，当前父级的任一直接 child 提问都会使其提前返回；提前返回后的最终结果进入统一通知。父级 Esc 取消尚未返回的前台调用与其 child，后台 child 继续运行。reload、会话切换和树导航更换监听绑定，执行 owner 保持稳定；quit 取消活动执行。
+
+准入时捕获父级 cwd、模型目录、thinking、信任、系统提示、owner 和 anchor，排队与 workflow 的后续调用不读取被 reload 撤销的 ExtensionContext。workflow child 的会话 resume 沿用原类型、模型、thinking、schema、工具与配置，普通 agent_send 恢复仍按模型配置规则解析。
+
+普通 child 的模块与操作配置在实际开始执行时从 configCwd 读取并写入 run.config；资源与注入工具使用同一配置快照。类型、模型和 thinking 在准入时解析，排队期间不重新解析。workflow child 保留其原配置快照，续接继续沿用。
 
 [RPC 分离启动](rpc.md) 使用同一队列与 run 生命周期：非后台的分离运行不占前台槽位，后台与绕过队列的运行保持实际收费归属。SDK 就绪与最终结算使用独立通知点；完成事件的同步消费在公共通知准入之前执行。
 
@@ -16,7 +20,7 @@
 
 停止先关闭对应运行子树的准入，再取消真实 child 会话与工具信号、等待结算，并调用 JobManager.stopCreatedBy 清理所属活动 job。child 的 job_start 自动携带 agentId、runId 和 ancestors；模型不维护归属名单。JobManager 在异步授权与启动期间仍识别已关闭的 creator，防止停止期间启动遗漏的进程。
 
-agent_stop 不指定 runId 时覆盖该 agent 各次运行及其后代创建的活动 job；指定时限定该次运行子树。已结束 child 留下的 job 也参与清理。同一范围的重复停止加入原操作，不影响同级或主会话创建的 job。父 child 结算会取消尚未结束的直接嵌套 child。
+agent_stop 不指定 runId 时覆盖该 agent 各次运行及其后代创建的活动 job；指定时限定该次运行子树。已结束 child 留下的 job 也参与清理。同一范围的重复停止加入原操作，不影响同级或主会话创建的 job。JobManager 的本次清理结果只匹配传入 run ID 及 ancestors，累计关闭的 creator 仅用于后续准入。父 child 结算会取消尚未结束的直接嵌套 child。
 
 ## 会话与历史
 

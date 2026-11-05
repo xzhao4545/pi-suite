@@ -73,6 +73,7 @@ export interface WorkflowAgentEntry {
    * before its session resolves still has a conversation worth reading.
    */
   recordId?: string;
+  gateJobId?: string;
   agentType?: string;
   /**
    * Short model label for tight rows, e.g. `haiku 4.5`.

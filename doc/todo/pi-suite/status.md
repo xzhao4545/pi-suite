@@ -2,7 +2,7 @@
 
 目标：统一发布 goal 状态、活动 subagent 数量和活动 job 数量，使手机终端能从简短状态栏了解执行情况。
 
-当前状态：共享发布器、goal 摘要、agents/jobs 数量、显示模式和去重已实现，原生 footer 与 pi-starship 接口已验证；所属 child job 的主级聚合计数、复杂清理状态与平台综合布局待完成。
+当前状态：共享发布器、goal 摘要、agents/jobs 数量、显示模式和去重已实现，原生 footer 与 pi-starship 接口已验证；workflow 的 Dock 进度和 child/gate 普通数量过滤已接入，见 [宿主接入阶段](../../finished/pi-suite/agents/workflow-host.md)。所属 child job 的主级聚合计数、复杂清理状态与平台综合布局待完成。
 
 影响范围：ui/status、goal、AgentManager、JobManager、会话绑定与 dock 显示去重。
 
@@ -16,6 +16,7 @@
 - [ ] 按当前会话可见集合派生数量，明确等待、排队、停止与终态的计数
 - [ ] 合并生命周期更新，避免 token 级刷新和重复计数
 - [x] 协调 status/dock/hidden 模式及零数量隐藏
+- [x] workflow 提交共享 Dock 进度，child 与 gate 不重复计入普通 agents/jobs 数量
 - [ ] 验证会话切换、reload、原生 footer 和 pi-starship 窄屏布局
 
 ## 验收方式
@@ -55,7 +56,7 @@ ctx.ui.setStatus("pi-suite:runtime", "agents 2 · jobs 3");
 
 - subagent 活动数包含已开始且尚未结算的执行：启动中、运行中、等待用户/父 agent/任务/宿主、停止中。等待回答仍是活动执行，不因暂时没有模型流而消失；child 向父 agent 提问时同样计入。workflow 内的 child 计入其 workflow 详情，不计入 agents 数量。
 - 排队未开始的 subagent、已结束执行，以及仅保留会话但没有未结算运行的 idle subagent 不计入活动数；排队数在详情中单独查看。
-- job 活动数包含 starting、running、stopping；当前 manager 中退出清理仍 pending/unconfirmed 的执行保留在活动集合，并在详情明确“清理待确认”，避免尚未确认停止就显示空闲。
+- job 活动数包含 starting、running、stopping；workflow gate 由 workflow 详情和进度承载，不计入普通 jobs 数量。当前 manager 中退出清理仍 pending/unconfirmed 的执行保留在活动集合，并在详情明确“清理待确认”，避免尚未确认停止就显示空闲。
 - 只剩持久历史、没有当前可控句柄的记录不当作已知活动 job；历史中的未确认状态保留诊断，不能把保存的 PID 当作当前运行证据。
 - completed、failed、stopped、timed_out 等已结算对象不计入活动数量；历史列表仍可查询。
 

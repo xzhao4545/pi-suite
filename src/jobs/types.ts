@@ -15,7 +15,8 @@ export type CleanupEvidence = {
   taskkillExitCode?: number | null; error?: string;
 };
 /** Creation ownership used for cascading subagent stops; separate from display references. */
-export type Creator = { agentId: string; runId: string; ancestors: string[] };
+export type Creator = { runId: string; ancestors: string[] } &
+  ({ agentId: string; workflowId?: never } | { workflowId: string; agentId?: never });
 /** Monitor attached at start: its input as given, and how many of its events the model has seen. */
 export type MonitorState = { config: MonitorInput; events: number; notifiedEvents: number };
 export type JobSummary = {
@@ -35,7 +36,11 @@ export type StartRequest = {
   command?: string; name?: string; cwd: string; mode?: JobMode; timeoutMs?: number; taskId?: string;
   ownerSessionId: string; anchorEntryId: string | null; creator?: Creator; cols?: number; rows?: number;
   monitor?: MonitorInput; handsFree?: HandsFreeInput;
+  /** Noninteractive pipe callers close stdin during launch, before a short command can exit. */
+  closeInput?: boolean;
 };
+/** Gate jobs are owned and reported by their workflow; ordinary job views omit them. */
+export const isWorkflowGate = (job: Pick<JobSummary, 'creator'>): boolean => job.creator?.workflowId !== undefined;
 export type InputRecord = { at: string; source: 'model' | 'user' | 'parent'; kind: 'text' | 'keys' | 'paste'; text?: string; bytes: number; sensitive?: boolean };
 export type StopResult = { job: JobSummary; requested: boolean };
 /** Node system error code, if the value carries one. */

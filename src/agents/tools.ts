@@ -4,7 +4,7 @@ import type { SuiteConfig } from '../runtime/config.ts';
 import { ToolError } from '../runtime/errors.ts';
 import { readBounded, textSource } from '../runtime/read.ts';
 import { sanitizeText } from '../runtime/text.ts';
-import { LIST_LIMITS, listFields, objectId, paginate, readFields, rejectContextWithoutSearch, rejectListWithId, textResult as text } from '../runtime/tools.ts';
+import { LIST_LIMITS, listFields, objectId, paginate, readFields, registerBoundTool, rejectContextWithoutSearch, rejectListWithId, textResult as text } from '../runtime/tools.ts';
 import type { WaitRegistry } from '../runtime/wait.ts';
 import { taskId } from '../tasks/types.ts';
 import { thinkingSchema } from './catalog.ts';
@@ -119,6 +119,6 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
     scheduling = next; startTool.parameters = buildStartSchema();
     startTool.description = description + (scheduling ? scheduleDescription : '');
     // Late registration updates Pi's single tool registry after a new project's config loads.
-    pi.registerTool(startTool);
+    registerBoundTool(pi, startTool);
   } });
 }

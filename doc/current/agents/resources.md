@@ -44,4 +44,6 @@ memory 接受 user、project、local：目录分别为 `<agentDir>/agent-memory/
 
 优先使用 `pi.subagents`，其次 `pi-subagents`；数组为 agents 简写，对象支持 agents 与 workflows 数组。声明接受目录的直接文件或单文件、`!` 精确路径排除；不支持 glob。每个实际文件必须留在包的真实安装根内，符号链接不能逃逸；文件上限为 1 MiB。类型保留 packageName/sourcePath；workflow 声明同样按指定路径解析，声明单文件时不会纳入同目录的其他脚本。
 
+仅提供类型/workflow 的资源包在标准 Pi manifest 中声明 `pi.extensions: []`；没有 extensions 声明时，Pi 的扩展发现按默认模块入口加载包目录。workflow 名称、512 KiB 脚本上限、项目与用户优先级及 packageWorkflows 门控见 [Workflow 宿主与资源](workflow/host.md)。
+
 [返回 agents](index.md)

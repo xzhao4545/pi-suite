@@ -15,7 +15,7 @@ import { ToolError } from '../runtime/errors.ts';
 import { compileMonitor, type CompiledMonitor } from './monitors/compile.ts';
 import { JobMonitor, type MonitorEvent } from './monitors/runtime.ts';
 import { compileHandsFree, HandsFreeSupervisor, type HandsFreeUpdate } from './monitors/hands-free.ts';
-import { errnoCode, LIMITS, type InputRecord, type JobSummary, type StartRequest, type StopReason, type StopResult, type Stream, type Workspace } from './types.ts';
+import { errnoCode, isWorkflowGate, LIMITS, type InputRecord, type JobSummary, type StartRequest, type StopReason, type StopResult, type Stream, type Workspace } from './types.ts';
 
 const JOB_ID = /^job_[a-f0-9]{8}$/;
 type Owned = {
@@ -142,6 +142,7 @@ export class JobManager {
         ? await launchPty({ command: job.command, cwd: job.cwd, shell, outputPath: this.store.logPath(job, 'output'), cols: request.cols ?? 120, rows: request.rows ?? 30 })
         : await launchPipe({ command: job.command, cwd: job.cwd, shell, stdoutPath: this.store.logPath(job, 'stdout'), stderrPath: this.store.logPath(job, 'stderr') });
       this.install(item, run, monitor && { monitor, shell });
+      if (request.closeInput) run.endInput?.();
       await this.persist(item);
     } catch (error) {
       if (!item.run) {
@@ -286,7 +287,11 @@ export class JobManager {
   /** Stop every job created by these agent runs or their descendants, including detached ones. */
   async stopCreatedBy(runIds: string[]): Promise<StopResult[]> {
     for (const runId of runIds) this.stoppingCreators.add(runId);
-    const targets = [...this.jobs.values()].filter(item => this.creatorStopping(item.job.creator));
+    // Closed creators stay closed for future launches; this operation reports only
+    // its own subtree so an unrelated earlier cleanup cannot poison its outcome.
+    const roots = new Set(runIds);
+    const targets = [...this.jobs.values()].filter(({job}) => job.creator &&
+      [job.creator.runId, ...job.creator.ancestors].some(runId => roots.has(runId)));
     return Promise.all(targets.map(item => this.stop(item.job.id, 'agent')));
   }
   private creatorStopping(creator: StartRequest['creator']): boolean {
@@ -332,6 +337,15 @@ export class JobManager {
   isLive(id: string): boolean { return this.jobs.has(id); }
   /** Current view of a job this process controls; throws for unknown or history-only IDs. */
   peek(id: string): JobSummary { return this.view(this.owned(id)); }
+  /** Await actual process exit, persistence and any requested cleanup using the owner's lifecycle. */
+  async wait(id: string): Promise<JobSummary> {
+    const item = this.owned(id);
+    await item.ready.promise;
+    await item.settlement;
+    await item.stopPromise;
+    await item.saveQueue;
+    return this.view(item);
+  }
   async get(id: string, workspace: Workspace): Promise<{ job: JobSummary; live: boolean }> {
     if (!JOB_ID.test(id)) throw new ToolError('INVALID_ARGS', 'id must look like job_1a2b3c4d');
     const item = this.jobs.get(id);
@@ -355,7 +369,7 @@ export class JobManager {
     item.job.notified = true; void this.persist(item);
   }
   activeIds(sessionId: string): string[] {
-    return [...this.jobs.values()].filter(item => item.job.ownerSessionId === sessionId && isActive(item.job)).map(item => item.job.id);
+    return [...this.jobs.values()].filter(item => !isWorkflowGate(item.job) && item.job.ownerSessionId === sessionId && isActive(item.job)).map(item => item.job.id);
   }
   /** Settled, unnotified jobs; JobsModule decides session and branch eligibility. */
   unnotified(): JobSummary[] {

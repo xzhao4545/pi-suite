@@ -2,7 +2,7 @@
 
 目标：ask、goal、tasks、jobs、agents 的模型工具使用同一套命名、参数、返回和错误约定，减少模型记忆多种风格的负担。
 
-当前状态：实施中；ask_user 的 timeoutMs 与 goal 工具的 goalId、repeatedTurns、resumeAfterMs 已按本规范改名并通过检查；job_start/list/read/write/stop、共享 wait（含其他对象结算、child 提问与用户插话的提前返回）与 goal_wait 的 waitFor 已实现，见 [执行任务](../../current/jobs/index.md) 与 [目标接口](../../current/goal/operations.md)。task_list/task_edit 的两级查询与原子批次已接入，见 [任务接口](../../current/tasks/index.md)。共享对象 ID、列表分页、读取、停止结果与错误码已抽取到 src/runtime/tools.ts 与 src/runtime/errors.ts，agents 工具尚未实现。
+当前状态：实施中；ask_user 的 timeoutMs 与 goal 工具的 goalId、repeatedTurns、resumeAfterMs 已按本规范改名并通过检查；job_start/list/read/write/stop、共享 wait（含其他对象结算、child 提问与用户插话的提前返回）与 goal_wait 的 waitFor 已实现，见 [执行任务](../../current/jobs/index.md) 与 [目标接口](../../current/goal/operations.md)。task_list/task_edit 的两级查询与原子批次已接入，见 [任务接口](../../current/tasks/index.md)。共享对象 ID、列表分页、读取、停止结果与错误码已抽取到 src/runtime/tools.ts 与 src/runtime/errors.ts；agent_start/list/read/send/stop 与 agent_workflow 已注册，共享 wait 和 goal_wait 支持 wf_ ID，见 [agents 操作](../../current/agents/operations.md) 与 [Workflow 操作](../../current/agents/workflow/operations.md)。
 
 影响范围：src 下各模块的工具注册、共享参数 schema、工具描述、doc/current 的接口文档及上游工具名映射。
 
@@ -13,9 +13,9 @@
 ## 任务列表
 
 - [x] 把 goal 工具参数改为 camelCase（goalId、repeatedTurns、resumeAfterMs），ask_user 的 timeout 改为 timeoutMs
-- [x] goal_wait 增加 waitFor，只在指定 job/agent 结算或期限到达时恢复目标
+- [x] goal_wait 增加 waitFor，支持指定 job/agent/workflow 结算或期限到达时恢复目标
 - [ ] 抽取共享 schema：对象 ID、列表筛选与分页、输出读取、等待和停止结果
-- [ ] 按本规范注册 tasks、jobs、agents 工具与共享 wait
+- [x] 按本规范注册 tasks、jobs、agents 工具与共享 wait
 - [ ] 统一结果首行、details 结构与错误码
 - [ ] 同步 doc/current 接口文档，删除旧名与旧参数描述
 
@@ -56,10 +56,11 @@
 | job | job_ + 8 位小写十六进制 | 同一 agentDir 内唯一 |
 | agent | agent_ + 8 位小写十六进制 | 稳定引用可恢复的 agent 会话 |
 | agent 执行 | run_ + 8 位小写十六进制 | 一次执行；按需指定，默认当前或最近执行 |
+| workflow | wf_ + 12 位小写十六进制 | 一次后台编排，归属主会话与启动分支 |
 | task | 清单内递增数字字符串 | 删除后不复用 |
 | goal | UUID | 来自当前目标契约，运行归属校验 |
 
-wait 通过前缀区分 job 与 agent，不需要额外类型字段。agent 的 name 是便于用户 @提及 的句柄；工具的 id 参数同时接受 agent ID 或唯一 name，name 不唯一时报错并列出候选 ID。
+wait 通过前缀区分 job、agent 与 workflow，不需要额外类型字段。agent 的 name 是便于用户 @提及 的句柄；工具的 id 参数同时接受 agent ID 或唯一 name，name 不唯一时报错并列出候选 ID。
 
 ## 共享参数
 
@@ -110,7 +111,7 @@ read 统一返回 `{ text, stream, offset, nextOffset, totalBytes, endOfStream, 
 | ask_user | question 或 questions、options、allowMultiple、allowFreeform、defaultAnswer、defaultOptionId(s)、allowComment、timeoutMs | 仅改名 timeout→timeoutMs；在 child 会话中转交父 agent，见 [主从交互](agents/interaction.md) |
 | goal_complete | goalId、summary | |
 | goal_blocked | goalId、reason、evidence、repeatedTurns | |
-| goal_wait | goalId、reason、waitFor?、resumeAfterMs? | waitFor 为 job/agent ID 数组；省略时等待任一已安排的外部事件 |
+| goal_wait | goalId、reason、waitFor?、resumeAfterMs? | waitFor 为 job/agent/workflow ID 数组；省略时等待任一已安排的外部事件 |
 | task_list | id?、parentId?、includeDone?、detail? | 见 [两级任务管理](tasks.md) |
 | task_edit | changes[] | 批量增删改 |
 | job_start | command 或 agent、mode?、name?、cwd?、timeoutMs?、taskId?、attach?、monitor?、handsFree? | 见 [执行任务管理](jobs/execution.md) 与 [监视与委派](jobs/monitors.md) |
@@ -132,18 +133,18 @@ attach/detach、详情查看、停止确认与清理历史属于用户操作，�
 
 | 参数 | 规则 |
 | --- | --- |
-| ids | 1–50 个 job/agent ID，去重 |
+| ids | 1–50 个 job/agent/workflow ID，去重 |
 | mode | any 或 all，默认 all |
 | timeoutMs | 默认 300000，最大 3600000；更长等待使用 goal_wait 或结束本轮等待通知 |
 
-返回每个 ID 的当前状态、已结算对象的结果摘要（退出码、耗时、结果首段）、pending 列表、timedOut 与返回原因 reason。超时、取消或 Esc 只结束等待，不停止执行对象。job 与 agent 共用这一个 wait，一次调用可混合两类 ID。
+返回每个 ID 的当前状态、已结算对象的结果摘要（退出码、耗时、结果首段）、pending 列表、timedOut 与返回原因 reason。超时、取消或 Esc 只结束等待，不停止执行对象。job、agent 与 workflow 共用这一个 wait，一次调用可混合三类 ID。
 
 wait 是一次阻塞的工具调用，结束条件如下（参照 omp：任一后台结果、消息或用户插话都结束等待；不同处是本包保留 ids 与 mode）：
 
 | 事件 | 处理 | reason |
 | --- | --- | --- |
 | ids 按 mode 满足（any 任一结算，all 全部结算） | 返回 | condition |
-| 当前会话可见的其他 job/agent 结算（不在 ids 中） | 提前返回，结果列在 also 下，pending 列出仍未结算的 ids | other |
+| 当前会话可见的其他 job/agent/workflow 结算（不在 ids 中） | 提前返回，结果列在 also 下，pending 列出仍未结算的 ids | other |
 | 当前会话任一直接 child 提问，无论是否在 ids 中 | 立即返回该问题，mode 为 all 时同样返回，避免主 agent 等待一个正在等它回答的 child | question |
 | 当前会话可见 job 的 monitor 事件或 hands-free 更新，包括 ids 中 job 自己的 | 提前返回，事件摘要列在 also 下并撤销其通知；event/update 分别记录对应编号，job 的结算仍按 ids 判断 | event |
 | 用户在等待期间发送插话（steer） | 提前返回，Pi 随后处理该消息；等待开始前已排队未处理的插话使 wait 立即返回 | user |

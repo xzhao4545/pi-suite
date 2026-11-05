@@ -15,7 +15,7 @@ export function extractText(content: readonly { type: string; text?: string }[])
  * Used when inherit_context is true to give the subagent visibility
  * into what has been discussed/done so far.
  */
-export function buildParentContext(ctx: ExtensionContext): string {
+export function buildParentContext(ctx: Pick<ExtensionContext, 'sessionManager'>): string {
   const entries = ctx.sessionManager.getBranch();
   if (entries.length === 0) return "";
 

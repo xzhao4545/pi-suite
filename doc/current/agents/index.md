@@ -8,10 +8,10 @@ agents 使用同进程 Pi child 会话。执行层、两池队列、类型发现
 - [类型与资源](resources.md) — 包声明、信任、扩展工具范围、技能、上下文和 memory。
 - [定时调度](schedules.md) — cron、单次与周期、按会话存储、普通 child 和查看取消。
 - [跨扩展 RPC](rpc.md) — 五通道、版本 2、会话与归属、同步消费、cwd 与结构化结果。
-- [Workflow 编排核心](workflow/index.md) — Worker、并发、结构化结果、控制、预算和 journal 边界。
+- [Workflow 编排](workflow/index.md) — Worker、宿主、保存资源、共享等待、原生控制和 journal 边界。
 
 内置 general-purpose、Explore 和 Plan；后二者使用上游的完整只读提示词及 read/bash/grep/find/ls 白名单。默认后台执行，后台并发上限 10，前台上限 0 表示不限。嵌套 child 不占两池槽位，最大会话层数默认 3（顶级与两层嵌套）。
 
-child 的工具由本包按归属注入，外部扩展和技能通过 Pi 公共包管理器与 DefaultResourceLoader 选择并加载，项目资源继承父级信任。自定义类型支持扩展选择、技能预加载、memory 与父级上下文等 frontmatter，未知字段报错。TUI 的 @handle 使用普通发送/恢复路径；类型首次启动通过父会话内存克隆生成任务。定时调度按主会话保存并生成普通后台 child。外部扩展通过 RPC 启动、停止、引导与消费顶级结果；workflow 计划维护在 [agents 待办](../../todo/pi-suite/agents/index.md)。
+child 的工具由本包按归属注入，外部扩展和技能通过 Pi 公共包管理器与 DefaultResourceLoader 选择并加载，项目资源继承父级信任。自定义类型支持扩展选择、技能预加载、memory 与父级上下文等 frontmatter，未知字段报错。TUI 的 @handle 使用普通发送/恢复路径；类型首次启动通过父会话内存克隆生成任务。定时调度按主会话保存并生成普通后台 child。外部扩展通过 RPC 启动、停止、引导与消费顶级结果；workflow 使用共享执行、资源、记录和通知，通过 /agents workflows 查看与控制。
 
 [返回当前文档](../index.md)

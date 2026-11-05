@@ -2,7 +2,7 @@
 
 目标：tasks、jobs、agents 以上游发布包源码为基础导入改造，保留已解决的平台与并发边界，按文件记录导入、改造和丢弃范围。
 
-当前状态：实施中；四个上游发布包已下载核对，jobs 的后端、长期管理、PTY、monitor、hands-free 与 CLI 预设，tasks 的两级存储、依赖、会话与提醒，以及 agents 的基础执行、队列、记录、交互与资源基础能力已按职责导入改造并登记来源；类型与单 agent 模型配置已实现，@handle 输入、补全与克隆启动已导入，定时调度与 RPC 五通道、生命周期、cwd 和结构化结果已接入，agents 的 workflow Worker 编排核心已导入，宿主/工具/查看入口继续接入，完整资源组合待验收。task 的 agent 执行恢复关联已接入，综合场景待验收。本文件记录完整按文件处置结论。ask 与 goal 已按上游契约重写并通过两平台检查，不再改为导入。
+当前状态：实施中；四个上游发布包已下载核对，jobs 的后端、长期管理、PTY、monitor、hands-free 与 CLI 预设，tasks 的两级存储、依赖、会话与提醒，以及 agents 的基础执行、队列、记录、交互与资源基础能力已按职责导入改造并登记来源；类型与单 agent 模型配置已实现，@handle 输入、补全与克隆启动已导入，定时调度与 RPC 五通道、生命周期、cwd 和结构化结果已接入，workflow Worker、宿主、保存资源、工具与原生控制已接入，类型菜单、回收与完整资源组合待验收。task 的 agent 执行恢复关联已接入，综合场景待验收。本文件记录完整按文件处置结论。ask 与 goal 已按上游契约重写并通过两平台检查，不再改为导入。
 
 影响范围：src/tasks、src/jobs、src/agents 与共享 runtime/ui，third-party 来源登记与许可证，package.json 运行依赖。
 
@@ -109,7 +109,7 @@ src/
 
 ## @tintinweb/pi-subagents 0.23.0
 
-基础执行、队列、run 记录、类型、父级交互与任务/job 关联已导入改造，见 [基础阶段](../../finished/pi-suite/agents/core.md) 与 [来源登记](../../../third-party/UPSTREAM.md)。类型与单 agent 模型配置见 [模型基础阶段](../../finished/pi-suite/agents/models-core.md)，资源选择、技能、memory 与上下文见 [资源基础阶段](../../finished/pi-suite/agents/resources-core.md)。@handle 输入与克隆启动见 [提及基础阶段](../../finished/pi-suite/agents/mentions-core.md)。定时调度见 [调度基础阶段](../../finished/pi-suite/agents/schedules-core.md)。RPC 见 [RPC 基础阶段](../../finished/pi-suite/agents/rpc-core.md)。workflow Worker、控制与 journal 见 [核心阶段](../../finished/pi-suite/agents/workflow-core.md)。下表保留完整处置范围；workflow 宿主/工具/查看入口和回收仍需继续执行。
+基础执行、队列、run 记录、类型、父级交互与任务/job 关联已导入改造，见 [基础阶段](../../finished/pi-suite/agents/core.md) 与 [来源登记](../../../third-party/UPSTREAM.md)。类型与单 agent 模型配置见 [模型基础阶段](../../finished/pi-suite/agents/models-core.md)，资源选择、技能、memory 与上下文见 [资源基础阶段](../../finished/pi-suite/agents/resources-core.md)。@handle 输入与克隆启动见 [提及基础阶段](../../finished/pi-suite/agents/mentions-core.md)。定时调度见 [调度基础阶段](../../finished/pi-suite/agents/schedules-core.md)。RPC 见 [RPC 基础阶段](../../finished/pi-suite/agents/rpc-core.md)。workflow Worker、控制与 journal 见 [核心阶段](../../finished/pi-suite/agents/workflow-core.md)，宿主、保存资源、工具与原生控制见 [宿主接入阶段](../../finished/pi-suite/agents/workflow-host.md)。下表保留完整处置范围；类型菜单、回收和平台资源组合继续执行。
 
 | 文件 | 行数 | 处置 |
 | --- | --- | --- |
@@ -121,8 +121,8 @@ src/
 | src/completion-outbox.ts、group-join.ts | 116、141 | 规则并入共享 Notifications：一个边界一条消息、已读取结果撤销通知；不保留 group 参数 |
 | src/mention.ts、mention-clone.ts、ui/agent-mention.ts | 141、195、216 | 已按职责导入 @handle 输入、原生补全与克隆启动；handle/alias 并入 run 记录、工具和通知复用公共模块，取消随主绑定生命周期 |
 | src/schedule.ts、schedule-store.ts、ui/schedule-menu.ts | 386、153、105 | 已按职责导入；存储改为本包按主会话目录，文件协议与 tasks 共用异步锁和原子提交；保留 cron/单次/周期、普通 run 与通知，长延时分段与原生值选择取消 |
-| src/workflow/* | 4567 | 编排核心已导入，runtime.ts 1219 行拆分，Worker 源码与 progress 按职责拆分，gate 交给宿主 cwd；host/saved/collisions 与 agent_workflow 注册待接入，见 [核心阶段](../../finished/pi-suite/agents/workflow-core.md) |
-| src/ui/workflow-card.ts、workflow-dialog.ts、workflow-menu.ts | 470、1115、193 | 导入，workflow-dialog 拆分；显示行接入 dock |
+| src/workflow/* | 4567 | 编排核心导入，runtime.ts 1219 行拆分，Worker 源码与 progress 按职责拆分；host/saved/collisions 已适配，gate 使用公共 JobManager 与 cwd，agent_workflow、保存脚本/journal/快照、通知和等待接入统一框架，见 [核心阶段](../../finished/pi-suite/agents/workflow-core.md) 与 [宿主接入阶段](../../finished/pi-suite/agents/workflow-host.md) |
+| src/ui/workflow-card.ts、workflow-dialog.ts、workflow-menu.ts | 470、1115、193 | 按展示字段与完整控制范围重构到 workflow/ui，非逐行导入；原生 Text、DetailsView/ScrollView/值选择、child Transcript 和 job 日志查看器共用，显示行接入 Dock |
 | src/cross-extension-rpc.ts | 221 | 按职责导入到 agents/rpc，保留五通道与版本 2；会话注册、模型、归属、启动等待和消费接入共享框架；未知与内部参数报错，生命周期从公共 Manager/SDK 发出 |
 | src/settings.ts | 650 | 设置项并入共享配置 agents 节；不导入独立设置界面，仅按类型的模型与 thinking 由 /agents 写回配置，见 [模型与 thinking 配置](agents/models.md) |
 | src/memory.ts、usage.ts、prompts.ts、skill-loader.ts、context.ts、env.ts、structured-output.ts、status-note.ts | 179、167、171、102、58、33、130、90 | 导入 |

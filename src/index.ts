@@ -22,6 +22,9 @@ import { registerAgentsCommand } from "./agents/viewer.ts";
 import { registerAgentMentions } from "./agents/mentions/index.ts";
 import { AgentScheduler } from "./agents/schedules/index.ts";
 import { AgentRpc } from "./agents/rpc/index.ts";
+import { WorkflowsModule } from './agents/workflow/index.ts';
+import { registerWorkflowTool } from './agents/workflow/tools.ts';
+import { showWorkflows } from './agents/workflow/ui/menu.ts';
 
 export default function piSuite(pi: ExtensionAPI): void {
   let config = loadConfig(process.cwd());
@@ -43,10 +46,15 @@ export default function piSuite(pi: ExtensionAPI): void {
   const agents = config.modules.agents ? new AgentsModule(pi, binding, notifications, status, tasks) : undefined;
   const schedules = agents ? new AgentScheduler(pi, binding, agents, notifications, () => config) : undefined;
   const agentRpc = agents ? new AgentRpc(pi, binding, agents, () => config) : undefined;
+  const workflows = agents ? new WorkflowsModule(pi, binding, notifications, dock, agents) : undefined;
+  const workflowTool = workflows && agents ? registerWorkflowTool(pi, workflows, agents, () => config) : undefined;
+  if (workflows) waits.register(workflows);
   let startTool: ReturnType<typeof registerAgentTools> | undefined;
   if (agents) {
     startTool = registerAgentTools(pi, agents, waits, () => config, schedules);
-    registerAgentsCommand(pi, agents, dock, notifications, () => config, cwd => { config = loadConfig(cwd); }, schedules); waits.register(agents);
+    registerAgentsCommand(pi, agents, dock, notifications, () => config, cwd => { config = loadConfig(cwd); }, schedules,
+      workflows && workflowTool ? {available: () => workflowTool.enabled,
+        show: ctx => showWorkflows(ctx, {workflows, agents, dock, config: () => config})} : undefined); waits.register(agents);
     registerAgentMentions(pi, agents, binding, () => config, startTool);
   }
   if (jobs || agents) {
@@ -62,7 +70,7 @@ export default function piSuite(pi: ExtensionAPI): void {
   const bindSession = async (ctx: Parameters<SessionBinding["bind"]>[0], reason: "startup" | "reload" | "new" | "resume" | "fork", previousSessionFile?: string) => {
     // Tree navigation has no shutdown event. Revoke the old readers and timers before
     // rebinding, without appending their state into the branch the host just selected.
-    schedules?.stop(); ask.cancel(); goal?.detach(); jobs?.detach(); agents?.detach(); notifications.detach();
+    schedules?.stop(); ask.cancel(); goal?.detach(); jobs?.detach(); workflows?.detach(); agents?.detach(); notifications.detach();
     config = loadConfig(ctx.cwd);
     binding.bind(ctx);
     dock.bind(ctx, config.ui.maxRows);
@@ -71,6 +79,7 @@ export default function piSuite(pi: ExtensionAPI): void {
     jobs?.bind();
     await tasks?.bind(ctx, { reason, previousSessionFile });
     agents?.manager.configure(config); agents?.bind();
+    workflows?.bind(); workflowTool?.bind(ctx);
     await schedules?.bind(); startTool?.refreshSchema();
     agentRpc?.bind();
     notifications.flush();
@@ -85,10 +94,11 @@ export default function piSuite(pi: ExtensionAPI): void {
     // Detach before revoking so pending job notices are cancelled under the old session ID.
     const quit = jobs?.shutdown(event.reason);
     const agentQuit = event.reason === 'quit' ? agents?.manager.shutdown() : undefined;
+    const workflowQuit = event.reason === 'quit' ? workflows?.manager.shutdown() : undefined;
     const scheduleQuit = agentQuit?.then(() => schedules?.drain());
-    agents?.detach();
+    workflows?.detach(); agents?.detach();
     notifications.detach(); status.detach(); dock.detach(binding.current?.ctx); binding.revoke();
-    return Promise.all([quit, agentQuit, scheduleQuit]).then(() => { if (agents) pi.events.emit('subagents:disposed', {}); });
+    return Promise.all([quit, agentQuit, workflowQuit, scheduleQuit]).then(() => { if (agents) pi.events.emit('subagents:disposed', {}); });
   });
   pi.on("agent_before_settle", event => { goal?.beforeSettle(event); return notifications.beforeSettle(event); });
   pi.on("agent_settled", event => {

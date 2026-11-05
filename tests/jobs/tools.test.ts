@@ -107,7 +107,7 @@ test("wait on one job returns when another of this session settles; that result 
       context => { slow = jobId(context); return fauxAssistantMessage(fauxToolCall("wait", { ids: [slow], timeoutMs: 20000 })); },
       context => {
         const text = lastToolText(context);
-        assert.match(text, /^wait 0\/1 settled · returned early: another job or agent settled/);
+        assert.match(text, /^wait 0\/1 settled · returned early: another job, agent or workflow settled/);
         assert.match(text, new RegExp(`also:\\n${fast} completed · exit 0`)); assert.match(text, new RegExp(`pending: ${slow}`));
         return fauxAssistantMessage(fauxToolCall("job_stop", { id: slow }));
       },

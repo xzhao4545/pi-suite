@@ -114,6 +114,11 @@ test("stopping an agent run stops jobs of its descendants, including ones starte
     assert.deepEqual(stopped.map(result => result.job.id), [child.id]);
     assert.equal(stopped[0].job.state, "stopped"); assert.equal(stopped[0].job.stopReason, "agent");
     assert.equal(jobs.peek(other.id).state, "running", "unrelated jobs keep running");
+    const workflow = await jobs.start({command: 'true', cwd: cwd(), ...owner,
+      creator: {workflowId: 'wf_00000000000b', runId: 'wf_00000000000b', ancestors: []}}, shell);
+    await jobs.wait(workflow.id);
+    assert.deepEqual((await jobs.stopCreatedBy(['wf_00000000000b'])).map(result => result.job.id), [workflow.id],
+      'a later scope does not report jobs of creators closed by earlier stops');
     await rejectsCode(jobs.start({ command: "sleep 30", cwd: cwd(), creator, ...owner }, shell), "START_NOT_COMMITTED");
   } finally { await jobs.shutdown(Date.now() + 10000); }
 });

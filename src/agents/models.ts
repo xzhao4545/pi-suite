@@ -3,9 +3,9 @@
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { SuiteConfig } from '../runtime/config.ts';
 import { ToolError } from '../runtime/errors.ts';
-import type { AgentType, ModelOverrides, ModelSource, StartAgent } from './types.ts';
+import type { AgentType, ModelOverrides, ModelSource, StartAgent, ParentContext } from './types.ts';
 
-export function resolveModel(ctx: ExtensionContext, name: string, source: string, fuzzy = false) {
+export function resolveModel(ctx: Pick<ExtensionContext, 'modelRegistry'>, name: string, source: string, fuzzy = false) {
   const available = ctx.modelRegistry.getAvailable();
   // A provider prefix is an exact identity; never substitute a same-named model elsewhere.
   const exact = available.filter(model => `${model.provider}/${model.id}` === name || (!name.includes('/') && model.id === name));
@@ -13,7 +13,7 @@ export function resolveModel(ctx: ExtensionContext, name: string, source: string
   if (matches.length !== 1) throw new ToolError('MODEL_UNAVAILABLE', `${source} specifies ${name}: model is unavailable or ambiguous in the authenticated catalogue`);
   return matches[0];
 }
-export function resolveSettings(ctx: ExtensionContext, type: AgentType, request: StartAgent, config: SuiteConfig, individual?: ModelOverrides) {
+export function resolveSettings(ctx: ParentContext, type: AgentType, request: StartAgent, config: SuiteConfig, individual?: ModelOverrides) {
   const override = config.agents.types[type.name];
   const modelOptions: [string | undefined, ModelSource, string, boolean][] = [
     [request.model, 'parameter', 'agent_start.model', true],

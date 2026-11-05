@@ -1,13 +1,12 @@
 // Same-process SDK lifecycle adapted from @tintinweb/pi-subagents 0.23.0 src/agent-runner.ts (MIT).
 import { createAgentSession, getAgentDir, SessionManager, type ExtensionFactory, type ModelRuntime } from '@earendil-works/pi-coding-agent';
-import type { SuiteConfig } from '../runtime/config.ts';
 import type { AgentEventKind, Execution } from './types.ts';
 import { AGENT_ENTRY, resultText } from './records.ts';
 import { childResources, resourcePath } from './resources/loader.ts';
 import { installExtensionToolScope } from './resources/scope.ts';
 import { createStructuredCapture, createStructuredOutputTool, structuredRetryPrompt } from './output/tool.ts';
 
-export async function executeAgent(run: Execution, config: SuiteConfig, factory: ExtensionFactory, changed: () => void,
+export async function executeAgent(run: Execution, factory: ExtensionFactory, changed: () => void,
   emitEvent: (kind: AgentEventKind, details?: Record<string, unknown>) => void): Promise<void> {
   const { record, parent } = run, agentDir = getAgentDir();
   const { settingsManager, loader, scope } = await childResources(run, factory);
