@@ -81,7 +81,9 @@ export async function readBounded(source: ReadSource, request: ReadRequest, rend
   if (request.offset !== undefined) {
     const offset = Math.min(request.offset, size);
     const buffer = await source.read(offset, limit + 3);
-    const start = utf8Start(buffer), end = offset + limit < size ? utf8End(buffer, Math.min(limit, buffer.length)) : Math.min(limit, buffer.length);
+    // The snapshot may end while a live writer is part-way through a UTF-8 character.
+    // Leave those bytes for the next page rather than emitting a replacement character.
+    const start = utf8Start(buffer), end = utf8End(buffer, Math.min(limit, buffer.length));
     const nextOffset = offset + Math.max(start, end);
     return { text: render(buffer.subarray(start, Math.max(start, end)).toString('utf8')), offset: offset + start, nextOffset, totalBytes: size, endOfStream: nextOffset >= size };
   }

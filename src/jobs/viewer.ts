@@ -7,7 +7,8 @@ import { ToolError } from '../runtime/errors.ts';
 import { isActive, isTerminal } from './state.ts';
 import { resolveWorkspace } from './workspace.ts';
 import { JobsModule, displayName, summaryLine } from './index.ts';
-import { jobDetail, listJobs, readJobLog, streamsOf, type ListScope, type ListState } from './query.ts';
+import { jobDetail, listJobs, streamsOf, type ListScope, type ListState } from './query.ts';
+import { showJobLog } from './log-viewer.ts';
 import type { JobSummary, Stream } from './types.ts';
 
 export interface ViewerDeps { jobs: JobsModule; dock: Dock; notifications: Notifications; keys: () => TerminalKeys }
@@ -94,11 +95,8 @@ async function jobActions(pi: ExtensionAPI, ctx: ExtensionCommandContext, deps: 
       continue;
     }
     const stream = choice.startsWith('Read ') ? choice.slice(5) as Stream : undefined;
-    const body = stream
-      ? await readJobLog(manager, job, stream, {}).then(page => `${stream} bytes ${page.offset}-${page.nextOffset} of ${page.totalBytes}` +
-        `${page.truncated ? ' · truncated; job_read pages the rest' : ''}\n\n\`\`\`\n${page.text}\n\`\`\``)
-      : [...jobDetail(job), ...live ? [] : ['history only: not controlled by this Pi process']].map(line => `- ${line}`).join('\n');
-    await showDetails(ctx, deps.dock, `${job.id}${stream ? ` · ${stream}` : ''}`, body);
+    if (stream) await showJobLog(ctx, deps.dock, manager, job, stream, live);
+    else await showDetails(ctx, deps.dock, job.id, [...jobDetail(job), ...live ? [] : ['history only: not controlled by this Pi process']].map(line => `- ${line}`).join('\n'));
   }
 }
 

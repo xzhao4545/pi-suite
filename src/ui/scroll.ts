@@ -9,6 +9,7 @@ export class ScrollView implements Component {
   readonly search = new Input();
   searching = false;
   query = "";
+  private followOnRender = false;
 
   constructor(private content: Component) {
     this.search.onSubmit = text => { this.query = text; this.searching = false; this.find(1); };
@@ -17,10 +18,15 @@ export class ScrollView implements Component {
   viewport(width: number, height: number): string[] {
     this.height = Math.max(1, height);
     this.lines = this.content.render(width);
-    this.offset = Math.min(this.offset, Math.max(0, this.lines.length - this.height));
+    this.offset = this.followOnRender ? Math.max(0, this.lines.length - this.height)
+      : Math.min(this.offset, Math.max(0, this.lines.length - this.height));
+    this.followOnRender = false;
     return this.lines.slice(this.offset, this.offset + this.height);
   }
   get position(): string { return `${this.offset + 1}/${this.lines.length}`; }
+  get atBottom(): boolean { return this.offset >= Math.max(0, this.lines.length - this.height); }
+  /** Replace content without discarding the reader's search or scroll position. */
+  setContent(content: Component, follow = false): void { this.content = content; this.followOnRender = follow; }
   invalidate(): void { this.content.invalidate(); }
   handleInput(data: string): void {
     if (this.searching) {
@@ -28,10 +34,10 @@ export class ScrollView implements Component {
       else this.search.handleInput(data);
       return;
     }
-    if (data === "/") { this.searching = true; return; }
+    if (data === "/") { this.followOnRender = false; this.searching = true; return; }
     if (data === "n") { this.find(1); return; }
     if (data === "N") { this.find(-1); return; }
-    if (matchesKey(data, Key.home)) this.offset = 0;
+    if (matchesKey(data, Key.home)) { this.followOnRender = false; this.offset = 0; }
     else if (matchesKey(data, Key.end)) this.offset = Math.max(0, this.lines.length - this.height);
     else if (matchesKey(data, Key.up)) this.scroll(-1);
     else if (matchesKey(data, Key.down)) this.scroll(1);
@@ -44,6 +50,7 @@ export class ScrollView implements Component {
     return { handled: true };
   }
   scroll(delta: number): void {
+    this.followOnRender = false;
     this.offset = Math.max(0, Math.min(this.offset + delta, Math.max(0, this.lines.length - this.height)));
   }
   private find(direction: number): void {
