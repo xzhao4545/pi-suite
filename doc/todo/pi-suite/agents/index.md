@@ -10,6 +10,8 @@
 
 相关当前文档：[项目当前状态](../../../current/index.md)。
 
+模型配置在调度、workflow 与 @handle 的 Linux 实际请求、来源与恢复组合通过 [入口组合阶段](../../../finished/pi-suite/agents/models-entrypoints.md)，Windows 组合仍由 [模型专项](models.md) 管理。
+
 ## 任务列表
 
 - [x] [原生会话查看与快捷控制](../../../finished/pi-suite/agents/viewer-controls.md)

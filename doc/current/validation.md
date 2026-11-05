@@ -53,6 +53,8 @@ tasks 的 8 项检查在 Linux 覆盖两级批量原子编辑、稳定短 ID、�
 
 agents 的 8 项 Linux 离线检查使用真实 Pi SDK child 与 faux provider，覆盖两池队列与排队停止、原生前台问题/回答、嵌套免占位、共享 TaskStore、run 恢复与结束叶子、配置模型来源、真实 abort 与问题超时；真实 pipe job 核对已结束 child 的遗留 job 清理且同级 job 保持运行。模型配置另有 5 项检查，覆盖 /agents 类型写回与即时 agent_start、旧执行独立、当前请求不中断与下一请求切换、持久 individual 恢复、认证丢失、取消不写入、40/120 列原生选择和 transcript 阅读保留，以及配置逐字段位置/删除后的用户值与无效文件拒绝。
 
+模型配置的 Linux 入口组合另通过临时受控 SDK 验收：实际 /agents types 原生选择保存后无需 reload，调度和 workflow 新 child 使用当前类型配置，显式参数优先；已准入请求与 workflow 固定 resume 保留原契约，认证丢失明确报错且不创建替代 run。实际 interactive @类型 输入使用父模型 clone 整理任务、child 使用类型模型，@handle 对结束记录和回收后的持久恢复保持 individual 优先级及历史实际模型。父模型未改写，40/120 列原生选择通过；该验收未增加永久测试条目，Windows 留在 [模型待办](../todo/pi-suite/agents/models.md)，完整范围见 [入口组合阶段](../finished/pi-suite/agents/models-entrypoints.md)。
+
 主从交互的 3 项 Linux 真实 SDK 聚合检查通过，覆盖多 run 的读取/通知消费隔离与边界合并、旧 run 的 wait others 返回和已取消 signal 入口；真实多 child any/all、ids 外问题优先、状态/活动数量/进度读取及提问消费通过。嵌套 FG/BG 问题只到直接父级，主会话 SDK Esc 或 wait 超时后 child 保留 waiting，回答可继续结算；进度字段与结果通知的验收见 [主从交互专项](../finished/pi-suite/agents/interaction.md)，平台与真实手机组合由 [扩展专项](../todo/pi-suite/agents/extensions.md) 管理。
 
 进度与通知的 3 项 Linux（Node 24.22.2）真实 SDK 聚合检查通过，覆盖并发工具参数摘要与有界正文、排队/等待父级状态、活动用量与流式进度、稳定 agent ID 的全部 run 根和回收后代所属 job；正文最近 20 个 run 不截断 details 或归属集合。创建归属查询不可用时保留明确原因；失败结果通知含实际 SDK 用量和错误，读取按 run 撤销待发结果。

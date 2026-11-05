@@ -23,6 +23,7 @@
 - [job 历史主动清理阶段](./pi-suite/jobs/history-clear.md) — 原生确认、终态磁盘复核、写入队列、通知撤销和只读边界；Linux SDK/进程验收。
 - [子代理执行与交互基础阶段](./pi-suite/agents/core.md) — 同进程会话、两池队列、父级提问、持久 run 记录、任务共享与 job 清理；Linux 离线验收。
 - [子代理模型配置基础阶段](./pi-suite/agents/models-core.md) — 类型逐字段写回、单 agent 下一请求切换与持久恢复、原生选择与阅读状态；Linux 离线验收。
+- [类型模型配置与启动入口组合阶段](./pi-suite/agents/models-entrypoints.md) — 调度、workflow 与 @handle 的实际模型请求、参数来源、固定续接及回收后恢复；Linux SDK 验收。
 - [子代理类型与资源基础阶段](./pi-suite/agents/resources-core.md) — 扩展动态工具范围、技能、包声明与信任、memory、父级上下文与会话目录；Linux 离线验收。
 - [真实 MCP 传输与资源组合阶段](./pi-suite/agents/mcp-transport.md) — 原生 stdio 发现、资源显式选择、桥接与晚注册、信任和进程清理；Linux 受控服务验收。
 - [子代理 @handle 基础阶段](./pi-suite/agents/mentions-core.md) — 持久 handle/alias、原生补全、会话克隆启动与普通发送/恢复、取消和前台通知；Linux 离线验收。

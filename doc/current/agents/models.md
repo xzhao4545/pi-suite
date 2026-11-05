@@ -24,6 +24,10 @@ No override 删除对应位置的字段；删除项目字段后，用户级对�
 
 保存后立即更新共享内存配置，之后的新执行和普通会话恢复直接读取，无需 /reload。已准入执行保留当时解析的类型、模型与 thinking，workflow 固定 child resume 沿用原契约。普通 child 的操作配置在实际开始执行时读取，见 [执行与记录](runtime.md)。会话重新绑定时读取外部修改的配置。
 
+调度登记保存显式启动参数，触发时的新执行读取当前类型配置；登记后的类型修改可以作用于未来触发，显式 model/thinking 仍优先。workflow 的新 child 同样读取当前类型配置，显式 model/effort 优先；已准入 child 的固定 resume 保持原模型、thinking、类型与结构化 schema。
+
+`@类型` 的会话克隆使用父模型整理任务，实际 child 经普通启动入口解析类型配置；`@handle` 对活动执行发送引导，对已结束记录恢复执行时读取新类型配置，记录的 individual 优先于类型配置。回收内存 Execution 后的持久恢复使用同一优先级，不改写历史实际模型。
+
 ## 类型启用状态
 
 类型列表包含当前信任与包门控范围内的内置、包、项目和用户定义的全部类型，包括 disabled 类型。选择类型后可使用 Enable、Disable、Use definition 或 Model / thinking。Enable/Disable 写入 enabled：项目已经设置该字段时写项目配置，否则写用户配置；Use definition 删除用户和项目两层的 enabled，回到 frontmatter 的 enabled 或默认 true，不修改 model/thinking。
