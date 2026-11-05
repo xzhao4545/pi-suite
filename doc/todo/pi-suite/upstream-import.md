@@ -2,7 +2,7 @@
 
 目标：tasks、jobs、agents 以上游发布包源码为基础导入改造，保留已解决的平台与并发边界，按文件记录导入、改造和丢弃范围。
 
-当前状态：实施中；四个上游发布包已下载核对，jobs 的后端、长期管理、PTY、monitor、hands-free 与 CLI 预设，tasks 的两级存储、依赖、会话与提醒，以及 agents 的基础执行、队列、记录、交互与资源基础能力已按职责导入改造并登记来源；类型与单 agent 模型配置已实现，@handle 输入、补全与克隆启动已导入，定时调度与 RPC 五通道、生命周期、cwd 和结构化结果已接入，workflow Worker、宿主、保存资源、工具与原生控制已接入。类型开关与 Execution 回收已按统一 catalog/config/history 适配，workspace 全量历史、平台与完整资源组合待验收。task 的 agent 执行恢复关联已接入，综合场景待验收。本文件记录完整按文件处置结论。ask 与 goal 已按上游契约重写并通过两平台检查，不再改为导入。
+当前状态：实施中；四个上游发布包已下载核对，jobs 的后端、长期管理、PTY、monitor、hands-free 与 CLI 预设，tasks 的两级存储、依赖、会话与提醒，以及 agents 的基础执行、队列、记录、交互与资源基础能力已按职责导入改造并登记来源；类型与单 agent 模型配置已实现，@handle 输入、补全与克隆启动已导入，定时调度与 RPC 五通道、生命周期、cwd 和结构化结果已接入，workflow Worker、宿主、保存资源、工具与原生控制已接入。类型开关与 Execution 回收已按统一 catalog/config/history 适配，workspace 持久历史发现与只读查询通过 Linux 离线验收，平台与完整资源组合待验收。task 的 agent 执行恢复关联已接入，综合场景待验收。本文件记录完整按文件处置结论。ask 与 goal 已按上游契约重写并通过两平台检查，不再改为导入。
 
 影响范围：src/tasks、src/jobs、src/agents 与共享 runtime/ui，third-party 来源登记与许可证，package.json 运行依赖。
 
@@ -109,7 +109,7 @@ src/
 
 ## @tintinweb/pi-subagents 0.23.0
 
-基础执行、队列、run 记录、类型、父级交互与任务/job 关联已导入改造，见 [基础阶段](../../finished/pi-suite/agents/core.md) 与 [来源登记](../../../third-party/UPSTREAM.md)。类型与单 agent 模型配置见 [模型基础阶段](../../finished/pi-suite/agents/models-core.md)，资源选择、技能、memory 与上下文见 [资源基础阶段](../../finished/pi-suite/agents/resources-core.md)。@handle 输入与克隆启动见 [提及基础阶段](../../finished/pi-suite/agents/mentions-core.md)。定时调度见 [调度基础阶段](../../finished/pi-suite/agents/schedules-core.md)。RPC 见 [RPC 基础阶段](../../finished/pi-suite/agents/rpc-core.md)。workflow Worker、控制与 journal 见 [核心阶段](../../finished/pi-suite/agents/workflow-core.md)，宿主、保存资源、工具与原生控制见 [宿主接入阶段](../../finished/pi-suite/agents/workflow-host.md)，类型开关和 Execution 回收见 [类型与回收阶段](../../finished/pi-suite/agents/types-retention.md)。下表保留完整处置范围；workspace 全量历史和平台资源组合继续执行。
+基础执行、队列、run 记录、类型、父级交互与任务/job 关联已导入改造，见 [基础阶段](../../finished/pi-suite/agents/core.md) 与 [来源登记](../../../third-party/UPSTREAM.md)。类型与单 agent 模型配置见 [模型基础阶段](../../finished/pi-suite/agents/models-core.md)，资源选择、技能、memory 与上下文见 [资源基础阶段](../../finished/pi-suite/agents/resources-core.md)。@handle 输入与克隆启动见 [提及基础阶段](../../finished/pi-suite/agents/mentions-core.md)。定时调度见 [调度基础阶段](../../finished/pi-suite/agents/schedules-core.md)。RPC 见 [RPC 基础阶段](../../finished/pi-suite/agents/rpc-core.md)。workflow Worker、控制与 journal 见 [核心阶段](../../finished/pi-suite/agents/workflow-core.md)，宿主、保存资源、工具与原生控制见 [宿主接入阶段](../../finished/pi-suite/agents/workflow-host.md)，类型开关和 Execution 回收见 [类型与回收阶段](../../finished/pi-suite/agents/types-retention.md)。下表保留完整处置范围；默认/配置目录与持久引用内的 workspace 历史发现见 [历史发现阶段](../../finished/pi-suite/agents/history-discovery.md)，平台资源组合继续执行。
 
 原生查看、流式工具配对与组件缓存、消息输入、两次停止和真实前台转后台通过 Linux 离线验收，见 [查看器阶段](../../finished/pi-suite/agents/viewer-controls.md)；查看器渲染复用公共 Pi 消息组件，操作语义按上游 conversation-viewer 适配。
 

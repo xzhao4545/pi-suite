@@ -28,9 +28,9 @@ agent_stop 不指定 runId 时覆盖该 agent 各次运行及其后代创建的�
 
 ## 会话与历史
 
-默认顶级 child 使用 SessionManager 保存完整 Pi 会话，嵌套默认内存会话，可由类型 persist_session 覆盖。父级和 child 保存 `pi-suite:agent-record` custom entry；记录包含输入、结果、错误、状态、时间、用量、模型来源、单独模型覆盖 individual 和 child sessionFile。父级离开后，历史读取仍可从 startup 引用解析 child 的最终记录。
+默认顶级 child 使用 SessionManager 保存完整 Pi 会话，嵌套默认内存会话，可由类型 persist_session 覆盖。父级和 child 保存 `pi-suite:agent-record` custom entry；记录包含输入、结果、错误、状态、时间、用量、模型来源、单独模型覆盖 individual 和 child sessionFile。父级离开后，历史读取仍可从 startup 引用解析 child 的最终记录；workspace 查询通过默认/配置会话目录和持久引用发现完整分支历史，读取不修复或重写原会话文件，范围与合并规则见 [持久历史](history.md)。
 
-每次结算保存 endLeafId。该次 transcript 从对应叶子读取，后续恢复新增消息属于新 run。非持久会话在其 Execution 回收前可于同一 Pi 进程读取和恢复；进程退出后仅持久引用可用。
+每次结算保存 endLeafId。该次 transcript 验证并从对应叶子读取，后续恢复新增消息属于新 run；缺失叶子明确报错。非持久会话在其 Execution 回收前可于同一 Pi 进程读取和恢复；进程退出后仅持久引用可用。保存的活动状态没有本进程执行 owner 时规范为 failed，持久 transcript 仍可读取，不计入活动数量或触发通知。
 
 Pi 1.5.0 的 ExtensionContext 提供 ModelRegistry，而 createAgentSession 只接受 ModelRuntime。执行层沿用上游在该边界读取 registry.runtime，保持父级认证、Provider 和虚拟模型路由；此访问集中在 runner，公共 context.modelRuntime 可用时替换。
 

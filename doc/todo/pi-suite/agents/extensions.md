@@ -25,6 +25,7 @@
 - [ ] Windows、实际 CLI 与手机 SSH 复核本地时区的 cron/周期/单次、切换与退出、调度详情和取消
 - [ ] Windows 与真实手机 SSH 复核 workflow 的 shell/gate 清理、长名称选择、child/gate 查看、控制与 journal 重放
 - [ ] Windows 与真实手机 SSH 复核原生 child 查看器的流式/工具部分结果、搜索与阅读位置、消息输入、两次停止和真实前台转后台
+- [ ] Windows 与真实手机 SSH 复核 workspace 持久历史的默认/自定义/符号链接目录、fork 与 workflow 引用、分页和原生只读边界
 
 ## 验收方式
 

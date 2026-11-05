@@ -38,6 +38,7 @@ No override 删除对应位置的字段；删除项目字段后，用户级对�
 
 覆盖保存在既有 `pi-suite:agent-record` 的 individual 字段。已结束记录保持该次运行的实际模型与 thinking，编辑只改变之后恢复使用的覆盖。取消单独覆盖时，活动执行恢复其启动参数与启动配置；查看器打开选择器前关闭当前 custom UI，返回后保留原生 transcript 的滚动、搜索和展开状态。所选 run 的 retain 引用覆盖整次详情、输入与模型选择往返，直到最终退出阅读后释放。
 
+workspace 发现的其他 owner 或当前分支之外的已结算记录只提供阅读；当前 owner/分支可见的结束记录仍可编辑 individual。历史合并保留本地编辑的新事实，不让较早保存记录覆盖，见 [持久历史](history.md)。
 ## 解析与来源
 
 模型与 thinking 各自按本次调用参数、该 agent 的 individual、类型配置、frontmatter、agents.defaultModel（仅模型）、父级当前值依次取第一个有值的来源。单独编辑发生在启动之后，可覆盖当时的调用参数；下一次恢复显式传入参数仍优先。

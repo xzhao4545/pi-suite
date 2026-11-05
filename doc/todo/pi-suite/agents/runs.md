@@ -2,7 +2,7 @@
 
 目标：查看活动和已结束的 subagent，保留结果及原生会话历史，并允许用户停止指定 subagent 的当前执行。
 
-当前状态：基础执行、结果/会话引用、独立 runId、恢复、历史结束叶子、列表、真实取消、嵌套与遗留 job 清理已接入，见 [基础阶段](../../../finished/pi-suite/agents/core.md)。Execution 定期回收、通知与 reader/workflow 保留引用、持久/非持久历史边界见 [类型与回收阶段](../../../finished/pi-suite/agents/types-retention.md)；workspace 全量持久记录发现及更广的启动/停止竞争验收待完成。
+当前状态：基础执行、结果/会话引用、独立 runId、恢复、历史结束叶子、列表、真实取消、嵌套与遗留 job 清理已接入，见 [基础阶段](../../../finished/pi-suite/agents/core.md)。Execution 定期回收、通知与 reader/workflow 保留引用、持久/非持久历史边界见 [类型与回收阶段](../../../finished/pi-suite/agents/types-retention.md)；workspace 持久历史发现、完整分支汇总、增量解析与原生只读查询通过 Linux 离线验收，范围见 [历史发现阶段](../../../finished/pi-suite/agents/history-discovery.md)，平台与更广的启动/停止竞争继续验收。
 
 影响范围：AgentManager、Pi child session、持久结果引用、agents 列表/查看器、停止信号及状态栏数量。
 
@@ -12,13 +12,14 @@
 
 ## 任务列表
 
-- [ ] 列出活动、排队、已结束及全部 subagent 记录
+- [x] 列出活动、排队、已结束及全部 subagent 记录
 - [x] 保留运行结果、起止时间、耗时、错误与 child session 引用
 - [x] 对已结束记录复用原生会话查看器，按需读取历史
 - [x] 将手动停止接入 child 的 abort 与工具取消、等待最终结算
 - [ ] 级联停止嵌套 child 及其启动的后台 job，处理启动竞争和多次执行边界
 - [x] 将活动数量提供给共享状态栏发布器
 - [x] 回收结束超过 10 分钟的 Execution，保留完整历史记录、结果、通知/reader/workflow 引用和遗留 job 归属
+- [x] 从默认/配置目录与可达持久引用发现 workspace 完整分支历史，按 runId 查询并保留原生只读边界，读取不修复会话文件
 
 ## 验收方式
 
@@ -36,6 +37,8 @@
 ## 运行记录与历史
 
 agents 详情提供“活动 / 排队 / 已结束 / 全部”筛选。默认集合与状态栏当前主会话可见集合一致；明确切到 workspace 范围时可查其他会话的记录，不转移归属或混用通知。已结束包括成功完成、失败、手动停止和被运行限制中止，不能把这些状态统一标为成功。
+
+Workspace records 与 `/agents workspace [active|queued|finished|all]` 默认 all，发现默认/当前配置会话目录及可达持久引用中的完整分支记录，按 configCwd 区分工作区。未知 ID 的 agent_list/read/send/stop 使用同一发现和 workspace 核对；其他 owner 或当前分支之外的已结算历史在原生菜单和查看器中只读。读取不修复、重写会话 JSONL，不启动模型；完整范围与合并/叶子验证见 [当前持久历史](../../../current/agents/history.md)。
 
 每项展示 agent ID、名称/类型、任务摘要、ownerSession/parentAgent、本次执行标识、状态、开始/结束时间、运行耗时、用量、结果摘要与错误；完整输入、assistant 回复和工具结果在 child transcript 中按需查看。
 

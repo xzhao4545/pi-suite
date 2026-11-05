@@ -10,11 +10,13 @@
 | agent_workflow | script、scriptPath 或 name 三选一，args?、resumeFromRunId?；始终后台启动，返回 wf_ ID 与保存路径，见 [Workflow 操作](workflow/operations.md) |
 | wait | 接受 job、agent 与 workflow ID 的 any/all 等待；结果、问题与其他事件使用统一返回结构，超时只结束调用 |
 
-模型工具默认返回摘要，完整输入、thinking、工具调用和输出通过 agent_read 或原生 transcript 按需读取。workspace 列表覆盖当前进程已经加载的记录；session 列表与状态数量使用同一直接子级和分支归属过滤。
+模型工具默认返回摘要，完整输入、thinking、工具调用和输出通过 agent_read 或原生 transcript 按需读取。workspace 列表发现当前配置工作区的持久历史并合并本进程记录；session 列表与状态数量使用同一直接子级和分支归属过滤。未知 ID 的 agent_list/read/send/stop 先发现并核对当前配置工作区，发送仍需直接父级与分支准入；分页 more 保留 scope。实际目录与引用范围、读取和合并规则见 [持久历史](history.md)。
 
 ## /agents
 
 `/agents` 选择 active、queued、finished 或 all；也可使用 `/agents all` 等直接指定筛选。选择一条 run 后可查看 Transcript、修改该 agent 的 Model / thinking，或选择“Stop child, nested agents and jobs”停止该运行范围。Types · enable / model / thinking 和 `/agents types` 显示全部类型，包括 disabled 类型；Enable、Disable、Use definition 与 Model / thinking 配置类型，写回位置和作用范围见 [类型配置](models.md)。
+
+Workspace records 或 `/agents workspace [active|queued|finished|all]` 查看当前配置工作区的完整记录，默认 all；列表发现保存于默认/当前配置目录及可达引用的其他主会话、分支和 child 历史，按 runId 保持原生选择身份。其他 owner 或当前分支之外的已结算记录只提供 Transcript，详情隐藏 Message、Model / thinking、Background 和 Stop subtree，仍可阅读及展开 Tools/Thinking。当前 owner/分支可见的结束记录保留模型覆盖与记录菜单的遗留 job 清理；真实运行句柄沿用既有控制。浏览不切换主会话、不转移归属或通知，发现到的中断运行显示 failed。
 
 Scheduled agents 与 `/agents schedules` 查看当前会话的调度，选择一项后可确认取消；创建使用 agent_start 的 schedule，规则、开关、时间与已触发运行的控制见 [定时调度](schedules.md)。
 

@@ -75,31 +75,33 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
     } };
   pi.registerTool(startTool);
   pi.registerTool({ name: 'agent_list', label: 'List agents',
-    description: 'List child summaries, or give id for progress, model sources and runs. state=active (default), queued, finished or all. session scope shows direct children; workspace scope includes all loaded owner records.',
+    description: 'List child summaries, or give id for progress, model sources and runs. state=active (default), queued, finished or all. session scope shows direct children; workspace scope discovers saved records across owners and branches.',
     parameters: Type.Object({ id: Type.Optional(id), ...listFields(['active', 'queued', 'finished', 'all'] as const) }, { additionalProperties: false }),
-    async execute(_id, params, _signal, _update, ctx) {
+    async execute(_id, params, signal, _update, ctx) {
       rejectListWithId(params);
+      const scope = agents.scope(ctx);
       if (params.id) {
-        const { record, run } = agents.manager.get(params.id);
+        const { record, run } = await agents.manager.lookup(params.id, scope, config(), undefined, signal);
         const runs = agents.manager.records().filter(item => item.id === record.id).map(agentSummary);
         return text([summaryLine(record), `model: ${record.model} (${record.modelSource}) · thinking: ${record.thinking} (${record.thinkingSource})`,
           record.error, run?.question ? agents.settlement(record.id).summary : undefined,
           `read: agent_read({"id":"${record.id}"})`], { agent: agentSummary(record), runs, question: run?.question?.params, waitingFor: run?.question ? 'parent' : undefined });
       }
-      const scope = agents.scope(ctx), state: string = params.state ?? 'active';
+      if (params.scope === 'workspace') await agents.manager.discover(scope, config(), signal);
+      const state: string = params.state ?? 'active';
       const rows = agents.manager.records().filter(record => recordWorkspace(record) === (scope.run?.configCwd ?? ctx.cwd)
         && (scope.run || record.workflowId === undefined) && (params.scope === 'workspace' || agents.manager.visible(record, scope)))
         .filter(record => state === 'all' || state === 'active' && executing(record.state) || state === 'queued' && record.state === 'queued' || state === 'finished' && !active(record.state));
       const { page, nextCursor } = paginate(rows, record => ({ createdAt: record.createdAt, id: record.runId }), params.cursor, params.limit ?? LIST_LIMITS.defaultLimit);
       return text([`${page.length} ${state} agents (${params.scope ?? 'session'})`, ...page.map(summaryLine),
-        nextCursor ? `more: agent_list({"state":"${state}","cursor":"${nextCursor}"})` : undefined], { agents: page.map(agentSummary), nextCursor });
+        nextCursor ? `more: agent_list({"state":"${state}","scope":"${params.scope ?? 'session'}","cursor":"${nextCursor}"})` : undefined], { agents: page.map(agentSummary), nextCursor });
     } });
   pi.registerTool({ name: 'agent_read', label: 'Read agent',
     description: 'Read result (default when settled) or transcript (default while active). runId selects a previous execution of the same agent. Byte paging and regex search follow job_read; reading never resumes a model.',
     parameters: Type.Object({ id, runId: Type.Optional(runId), stream: Type.Optional(Type.Union([Type.Literal('result'), Type.Literal('transcript')])), ...readFields }, { additionalProperties: false }),
-    async execute(_id, params) {
+    async execute(_id, params, signal, _update, ctx) {
       rejectContextWithoutSearch(params);
-      const { record, run } = agents.manager.get(params.id, params.runId), stream = params.stream ?? (active(record.state) ? 'transcript' : 'result');
+      const { record, run } = await agents.manager.lookup(params.id, agents.scope(ctx), config(), params.runId, signal), stream = params.stream ?? (active(record.state) ? 'transcript' : 'result');
       const output = stream === 'transcript' ? transcriptText(transcript(record, run)) : [record.error, record.result].filter(Boolean).join('\n');
       const page = await readBounded(textSource(output), params, sanitizeText);
       if (!active(record.state)) agents.consume({ id: record.id, runId: record.runId, state: record.state, summary: summaryLine(record), settled: true });
@@ -109,17 +111,18 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
   pi.registerTool({ name: 'agent_send', label: 'Send to agent',
     description: 'Answer a waiting child, steer an active child, queue during creation or resume a settled session as a new run. Answers match option IDs/titles or use freeform; batch answers are a JSON array of strings. Only the direct parent may send.',
     parameters: Type.Object({ id, message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
-    async execute(_id, params, _signal, _update, ctx) {
-      const result = await agents.manager.send(params.id, params.message, agents.scope(ctx), config());
+    async execute(_id, params, signal, _update, ctx) {
+      const scope = agents.scope(ctx);
+      await agents.manager.lookup(params.id, scope, config(), undefined, signal);
+      const result = await agents.manager.send(params.id, params.message, scope, config());
       return text([summaryLine(agents.manager.view(result.run)), `action: ${result.action}`], { agent: agentSummary(agents.manager.view(result.run)), action: result.action });
     } });
   pi.registerTool({ name: 'agent_stop', label: 'Stop agent',
     description: 'Stop the child, its nested sessions and every job they created. Without runId includes jobs left by earlier runs; runId limits the subtree. Join repeated stops, await real abort/cleanup and retain transcript.',
     parameters: Type.Object({ id, runId: Type.Optional(runId) }, { additionalProperties: false }),
-    async execute(_id, params, _signal, _update, ctx) {
-      const { record } = agents.manager.get(params.id, params.runId);
+    async execute(_id, params, signal, _update, ctx) {
       const scope = agents.scope(ctx);
-      if (recordWorkspace(record) !== (scope.run?.configCwd ?? ctx.cwd)) throw new ToolError('NOT_FOUND', `No workspace agent ${params.id}`);
+      const { record } = await agents.manager.lookup(params.id, scope, config(), params.runId, signal);
       if (scope.run && !agents.manager.visible(record, scope)) throw new ToolError('NOT_OWNER', `${params.id} is not a direct child of this run`);
       const outcome = await agents.manager.stop(params.id, params.runId);
       return text([`${params.id} ${outcome.state} · cleanup ${outcome.cleanup}`, ...outcome.affected.map(item => `${item.id} ${item.state}${item.cleanup ? ` · ${item.cleanup}` : ''}`)], outcome);

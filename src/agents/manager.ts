@@ -8,17 +8,19 @@ import { ToolError } from '../runtime/errors.ts';
 import { resolveType } from './catalog.ts';
 import { resolveSettings } from './models.ts';
 import { hydrate, transcript } from './records.ts';
+import { AgentHistory } from './history.ts';
 import { answerParent } from './questions.ts';
 import { closeAgent } from './runner.ts';
 import { buildParentContext } from './resources/context.ts';
 import { captureParent } from './parent.ts';
 import { assignHandle, handleBase } from './mentions/grammar.ts';
-import { active, isTopLevelAgent, type AgentEventKind, type AgentRecord, type Execution, type ParentScope, type Pool, type StartAgent, type StartOptions } from './types.ts';
+import { active, isTopLevelAgent, recordWorkspace, type AgentEventKind, type AgentRecord, type Execution, type ParentScope, type Pool, type StartAgent, type StartOptions } from './types.ts';
 
 const allocate = (prefix: string) => `${prefix}_${randomBytes(4).toString('hex')}`;
 export class AgentManager {
   readonly runs = new Map<string, Execution>();
-  private histories = new Map<string, AgentRecord>();
+  private histories = new Map<string, {record: AgentRecord; updatedAt: number}>();
+  private history = new AgentHistory();
   private queue: Execution[] = [];
   private counts = { background: 0, foreground: 0 };
   private limits = { background: 10, foreground: 0 };
@@ -50,7 +52,21 @@ export class AgentManager {
     if (error !== undefined) throw new Error(error);
   }
   restore(records: AgentRecord[]): void {
-    for (const record of records) if (!this.runs.has(record.runId)) this.histories.set(record.runId, hydrate(record));
+    for (const record of records) if (!this.runs.has(record.runId)) this.histories.set(record.runId, {record: hydrate(record), updatedAt: Date.now()});
+  }
+  async discover(scope: ParentScope, config: SuiteConfig, signal?: AbortSignal): Promise<void> {
+    const candidates = await this.history.scan(scope, config, signal);
+    for (const candidate of candidates) {
+      if (this.runs.has(candidate.record.runId)) continue;
+      const old = this.histories.get(candidate.record.runId);
+      if (!old || candidate.updatedAt > old.updatedAt) this.histories.set(candidate.record.runId, candidate);
+    }
+  }
+  async lookup(id: string, scope: ParentScope, config: SuiteConfig, runId?: string, signal?: AbortSignal) {
+    if (!this.records().some(record => record.id === id && (!runId || record.runId === runId))) await this.discover(scope, config, signal);
+    const found = this.get(id, runId);
+    if (recordWorkspace(found.record) !== (scope.run?.configCwd ?? scope.ctx.cwd)) throw new ToolError('NOT_FOUND', `No workspace agent ${id}`, id);
+    return found;
   }
   /** Readers and workflow continuations keep their in-memory SDK tree until they close. */
   retain(runId: string): () => void {
@@ -72,14 +88,14 @@ export class AgentManager {
       const unread = !run.consumed && (run.record.background || run.notifyResult)
         && (run.record.parentRunId ? parent && !parent.settled : !run.record.workflowId);
       if (unread) continue;
-      this.histories.set(runId, this.view(run));
+      this.histories.set(runId, {record: this.view(run), updatedAt: Date.now()});
       this.runs.delete(runId); this.closedRuns.delete(runId); changed = true;
     }
     if (!this.runs.size) { clearInterval(this.cleanupTimer); this.cleanupTimer = undefined; }
     if (changed) this.changed();
   }
   records(): AgentRecord[] {
-    return [...this.histories.values(), ...[...this.runs.values()].map(run => this.view(run))];
+    return [...this.histories.values()].map(history => history.record).concat([...this.runs.values()].map(run => this.view(run)));
   }
   view(run: Execution): AgentRecord {
     const state = !run.settled && !active(run.record.state) ? run.controller.signal.aborted ? 'stopping' : 'running' : run.record.state;

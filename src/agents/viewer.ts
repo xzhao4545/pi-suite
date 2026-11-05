@@ -3,7 +3,7 @@ import type { Dock } from '../ui/dock.ts';
 import type { Notifications } from '../runtime/notifications.ts';
 import { DetailsView } from '../ui/details.ts';
 import { Transcript } from '../ui/transcript.ts';
-import { active, executing } from './types.ts';
+import { active, executing, recordWorkspace } from './types.ts';
 import { transcript } from './records.ts';
 import { AgentsModule, summaryLine } from './index.ts';
 import { editAgentModel, showAgentTypes } from './model-editor.ts';
@@ -11,12 +11,13 @@ import type { SuiteConfig } from '../runtime/config.ts';
 import type { ScrollView } from '../ui/scroll.ts';
 import type { AgentScheduler } from './schedules/index.ts';
 import { showSchedules } from './schedules/menu.ts';
+import { selectValue } from '../ui/select.ts';
 
-export async function showAgent(ctx: ExtensionContext, agents: Pick<AgentsModule, 'manager' | 'scope'>, dock: Dock, id: string, runId: string, config: () => SuiteConfig): Promise<void> {
+export async function showAgent(ctx: ExtensionContext, agents: Pick<AgentsModule, 'manager' | 'scope'>, dock: Dock, id: string, runId: string, config: () => SuiteConfig, readonly = false): Promise<void> {
   const release = agents.manager.retain(runId);
   let content: Transcript | undefined, reader: ScrollView | undefined;
   const get = () => agents.manager.get(id, runId);
-  const canStop = () => { const run = get().run; return Boolean(run && !run.settled && active(run.record.state) && run.record.state !== 'stopping'); };
+  const canStop = () => { const run = get().run; return Boolean(!readonly && run && !run.settled && active(run.record.state) && run.record.state !== 'stopping'); };
   const canMessage = () => {
     const { record, run } = get(), scope = agents.scope(ctx);
     if (!canStop() || agents.manager.get(id).record.runId !== runId) return false;
@@ -33,8 +34,8 @@ export async function showAgent(ctx: ExtensionContext, agents: Pick<AgentsModule
           { label: 'Message', available: canMessage, run: () => { action = 'message'; done(); } },
           { label: 'Tools', run: () => { content!.toggleTools(); view.invalidate(); } },
           { label: 'Thinking', run: () => { content!.toggleThinking(); view.invalidate(); } },
-          { label: 'Model / thinking', run: () => { action = 'model'; done(); } },
-          { label: 'Background', key: 'b', available: () => agents.manager.canSendToBackground(id, runId), run: () => { agents.manager.sendToBackground(id, runId); } },
+          { label: 'Model / thinking', available: () => !readonly, run: () => { action = 'model'; done(); } },
+          { label: 'Background', key: 'b', available: () => !readonly && agents.manager.canSendToBackground(id, runId), run: () => { agents.manager.sendToBackground(id, runId); } },
           { label: 'Stop subtree', key: 'x', confirm: '再按 x 停止', available: canStop, run: () => { action = 'stop'; done(); } },
         ], reader, canMessage() ? 'Message' : undefined);
         view.reader.setContent(content, reader ? reader.atBottom : active(get().record.state));
@@ -77,25 +78,38 @@ export async function showAgent(ctx: ExtensionContext, agents: Pick<AgentsModule
 }
 export function registerAgentsCommand(pi: ExtensionAPI, agents: AgentsModule, dock: Dock, notices: Notifications, config: () => SuiteConfig, reload: (cwd: string) => void, scheduler?: AgentScheduler,
   workflows?: {available(): boolean; show(ctx: ExtensionContext): Promise<void>}): void {
-  pi.registerCommand('agents', { description: 'Read child sessions, configure models and stop execution trees', handler: async (args, ctx) => {
+  pi.registerCommand('agents', { description: 'Read child sessions and workspace history, configure models and stop execution trees', handler: async (args, ctx) => {
     if (ctx.mode !== 'tui') { ctx.ui.notify('Use agent_list and agent_read outside the terminal UI'); return; }
     const release = notices.hold();
     try {
-      const state = args.trim() || await ctx.ui.select('Agents', ['active', 'queued', 'finished', 'all', 'Types · enable / model / thinking', ...scheduler?.isActive ? ['Scheduled agents'] : [], ...workflows?.available() ? ['Workflows'] : []]);
-      if (!state) return;
-      if (state === 'workflows' || state === 'Workflows') { await workflows?.show(ctx); return; }
-      if (state === 'schedules' || state === 'Scheduled agents') { if (scheduler) await showSchedules(ctx, scheduler); return; }
-      if (state === 'Types · enable / model / thinking' || state === 'types') { await showAgentTypes(ctx, config(), reload); return; }
+      const selectedMenu = args.trim() || await ctx.ui.select('Agents', ['active', 'queued', 'finished', 'all', 'Workspace records', 'Types · enable / model / thinking', ...scheduler?.isActive ? ['Scheduled agents'] : [], ...workflows?.available() ? ['Workflows'] : []]);
+      if (!selectedMenu) return;
+      if (selectedMenu === 'workflows' || selectedMenu === 'Workflows') { await workflows?.show(ctx); return; }
+      if (selectedMenu === 'schedules' || selectedMenu === 'Scheduled agents') { if (scheduler) await showSchedules(ctx, scheduler); return; }
+      if (selectedMenu === 'Types · enable / model / thinking' || selectedMenu === 'types') { await showAgentTypes(ctx, config(), reload); return; }
+      const [command, filter] = selectedMenu.split(/\s+/), workspace = command === 'workspace' || selectedMenu === 'Workspace records';
+      const state = workspace ? command === 'workspace' ? filter ?? 'all' : 'all' : selectedMenu;
       const scope = agents.scope(ctx);
-      const records = agents.manager.records().filter(record => agents.manager.visible(record, scope))
+      if (workspace) await agents.manager.discover(scope, config());
+      const records = agents.manager.records().filter(record => workspace
+        ? recordWorkspace(record) === (scope.run?.configCwd ?? ctx.cwd) && (scope.run || record.workflowId === undefined)
+        : agents.manager.visible(record, scope))
         .filter(record => state === 'all' || state === 'active' && executing(record.state) || state === 'queued' && record.state === 'queued' || state === 'finished' && !active(record.state))
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       if (!records.length) { ctx.ui.notify(`No ${state} agents`); return; }
-      const labels = records.map(summaryLine), selected = await ctx.ui.select('Select agent run', labels);
+      const labels = records.map(summaryLine), selected = workspace
+        ? await selectValue(ctx, 'Workspace agent records', records.map(record => ({ value: record.runId, label: summaryLine(record) })))
+        : await ctx.ui.select('Select agent run', labels);
       if (!selected) return;
-      const record = records[labels.indexOf(selected)];
-      const action = await ctx.ui.select(`${summaryLine(record)}\nModel: ${record.model} (${record.modelSource})\nThinking: ${record.thinking} (${record.thinkingSource})`, ['Transcript', 'Model / thinking', 'Stop child, nested agents and jobs']);
-      if (action === 'Transcript') await showAgent(ctx, agents, dock, record.id, record.runId, config);
+      const record = workspace ? records.find(record => record.runId === selected)! : records[labels.indexOf(selected)];
+      const run = agents.manager.get(record.id, record.runId).run;
+      // Discovery preserves ownership. Archived foreign branches can be read, while
+      // live handles and the current branch keep their existing management contract.
+      const readonly = !agents.manager.visible(record, scope) && (!run || run.settled);
+      const title = `${summaryLine(record)}\nModel: ${record.model} (${record.modelSource})\nThinking: ${record.thinking} (${record.thinkingSource})`;
+      const actions = ['Transcript', ...readonly ? [] : ['Model / thinking', 'Stop child, nested agents and jobs']];
+      const action = workspace ? await selectValue(ctx, title.replace(/\n/g, ' · '), actions.map(label => ({ value: label, label }))) : await ctx.ui.select(title, actions);
+      if (action === 'Transcript') await showAgent(ctx, agents, dock, record.id, record.runId, config, readonly);
       else if (action === 'Model / thinking') await editAgentModel(ctx, agents.manager, record.id, config());
       else if (action) {
         const outcome = await agents.manager.stop(record.id, record.runId);

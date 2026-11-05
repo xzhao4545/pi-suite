@@ -12,6 +12,7 @@ import { updateWorkflowProgressBatch } from './task.ts';
 import type { SessionEntry } from '@earendil-works/pi-coding-agent';
 import { ToolError } from '../../runtime/errors.ts';
 import type { AgentRecord } from '../types.ts';
+import { decodeAgentRecord } from '../records.ts';
 
 export type WorkflowOwner = {ownerSessionId: string; anchorEntryId: string | null; cwd: string;
   recordPath: string; resultPath: string; notified: boolean; children: AgentRecord[]};
@@ -73,7 +74,7 @@ export function decodeWorkflowEntry(value: unknown): WorkflowEntryData {
     || typeof data.name !== 'string' || !Number.isFinite(data.startTime) || !Number.isInteger(data.agentCount)) {
     throw new ToolError('WORKFLOW_HISTORY', 'Invalid workflow record version or data');
   }
-  return data;
+  return { ...data, children: data.children.map(child => decodeAgentRecord(child, data.recordPath)) };
 }
 export function workflowEntries(entries: readonly SessionEntry[]): WorkflowEntryData[] {
   const records = new Map<string, WorkflowEntryData>();
