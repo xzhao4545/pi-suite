@@ -2,7 +2,7 @@
 
 目标：保留 pi-interactive-shell 的输出 monitor 与 hands-free/dispatch，使模型可以监视输出模式、委派 CLI agent 并在需要时被唤醒，用户随时接管。
 
-当前状态：实施中；stream、poll-diff、file-watch 三种 monitor（trigger、阈值、冷却、去重、detector）、events 通道与唤醒已实现并在 Linux 通过检查，见 [执行任务](../../../current/jobs/index.md)；hands-free 的增量更新与预算、dispatch 的静默终止与宽限期、用户接管时暂停监督，以及 wait/goal_wait 联动与 reload 保活已实现并通过 Linux 离线检查，见 [基础阶段记录](../../../finished/pi-suite/jobs/hands-free-core.md) 与 [当前监督契约](../../../current/jobs/hands-free.md)。Windows 监督验收与 CLI agent 预设待实施；保留范围由用户确认，不保留 Jev 语义监督与语义输出裁剪。导入文件见 [上游导入](../upstream-import.md)。
+当前状态：实施中；stream、poll-diff、file-watch 三种 monitor（trigger、阈值、冷却、去重、detector）、events 通道与唤醒已实现并在 Linux 通过检查，见 [执行任务](../../../current/jobs/index.md)；hands-free 的增量更新与预算、dispatch 的静默终止与宽限期、用户接管时暂停监督，以及 wait/goal_wait 联动与 reload 保活已实现并通过 Linux 离线检查，见 [基础阶段记录](../../../finished/pi-suite/jobs/hands-free-core.md) 与 [当前监督契约](../../../current/jobs/hands-free.md)。CLI 预设与用户级 launchPolicy 已实现并通过 Linux 离线检查，见 [预设阶段记录](../../../finished/pi-suite/jobs/cli-launch-core.md)。Windows 监督与预设验收待实施；保留范围由用户确认，不保留 Jev 语义监督与语义输出裁剪。导入文件见 [上游导入](../upstream-import.md)。
 
 影响范围：JobManager、PTY 会话、monitor 编译、hands-free 状态机、统一通知、PTY 终端视图与配置 jobs 节。
 
@@ -16,9 +16,10 @@
 - [x] 记录 monitor 事件历史，job_read 增加 events 通道
 - [x] 实现 hands-free 的静默或定时更新与总字符预算
 - [x] 实现 dispatch 的宽限期、静默结束与超时结算
-- [ ] 实现 CLI agent 预设与 launchPolicy
+- [x] 实现 CLI agent 预设与 launchPolicy
 - [x] 实现 PTY 视图中的用户接管与交还，同步操作说明
-- [ ] 在 Windows 验证 monitor、hands-free、dispatch 与终端用户接管
+- [ ] 在 Windows 验证 monitor、hands-free、dispatch、CLI 预设、launchPolicy 与终端用户接管
+- [ ] 核对各实际 CLI 版本的默认参数、选项结束标记、Pi fork 和 PTY 启动/接管，使用离线 provider 或受控流程避免付费模型依赖
 
 ## 验收方式
 
@@ -38,7 +39,7 @@ job_start 的 monitor 与 handsFree 只用于 PTY 或 pipe 中适用的模式，
 | --- | --- |
 | monitor | strategy?（stream 默认、poll-diff、file-watch）、triggers[]（id、literal 或 regex、threshold?、cooldownMs?）、poll?（intervalMs）、fileWatch?（path、recursive?、events?）、dedupeExactLine?、cooldownMs?、detector?（command、timeoutMs?） |
 | handsFree | mode?（hands-free 默认、dispatch）、updateMode?（onQuiet 默认、interval）、quietMs?（默认 8000）、updateIntervalMs?（默认 60000）、autoExitOnQuiet?（dispatch 默认 true）、graceMs?（默认 15000）、updateMaxChars?（默认 1500）、maxTotalChars?（默认 100000） |
-| agent | CLI 预设键（pi、codex、claude、cursor 或配置中的自定义键）与 prompt，代替 command |
+| agent | preset（pi、codex、claude、cursor 或配置中的自定义键）、prompt、fork?（pi 的持久会话），代替 command |
 
 file-watch 自行生成监视命令，不能同时提供 command 或 agent。trigger 的 regex 与 job_read search 同语法（`/re/flags`，裸模式不区分大小写）。threshold 对正则捕获组做数值比较（lt、lte、gt、gte、eq）。detector 外部命令从 stdin 接收候选事件 JSON，在 stdout 返回是否通知；detector 失败时候选事件附错误照常投递。
 
@@ -56,6 +57,8 @@ file-watch 自行生成监视命令，不能同时提供 command 或 agent。tri
 ## CLI agent 预设
 
 配置 jobs.agents 定义预设键对应的可执行文件与默认参数，内置 pi、codex、claude、cursor；pi 支持 fork 当前会话。jobs.launchPolicy 为精确命令匹配的 allow、deny、ask 列表，deny 优先，未匹配默认 ask，只能在用户级配置设置，项目级配置出现该字段时报错。不保留 worktree 启动。
+
+实现接口为 jobs.agents 的 `{command,args?}` 字段与 launchPolicy 的 `{command,decision}` 数组；即使省略策略也默认询问。匹配最终原始/CLI/monitor 命令，detector 命令单独授权；未确认不分配 ID、不启动进程。当前字段、默认参数、错误和操作见 [CLI 预设与启动授权](../../../current/jobs/launch.md)。
 
 ## 用户接管
 

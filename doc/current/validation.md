@@ -23,6 +23,8 @@ jobs 检查使用真实进程：pipe 的 stdout/stderr、退出码与耗时，st
 
 hands-free 的 4 项检查覆盖静默/定时增量更新、单次与总输出预算、暂停与释放、真实 PTY 的宽限期与用户接管、静默终止的进程组清理证据、总运行超时与自行退出，以及 wait 返回更新后去重和 reload 后 goal_wait 恢复。该范围在 Linux（Node 24.22.2）通过，Windows 监督验收由对应待办管理。
 
+CLI 启动的 6 项检查覆盖预设字段合并、用户级策略与精确命令优先级、真实 Bash 的字面量 prompt/Pi fork 参数、受控 CLI 启动读取、拒绝与取消不创建进程或历史、取消询问后的 goal 自动工作停止、最终 monitor/detector 命令授权，以及非交互模式和参数互斥。该范围通过 Linux 离线检查，Windows 与实际 CLI 版本的综合运行按完整实施计划验收。
+
 以上 46 项离线检查及类型检查在 Windows（Node 24.22.2）和 Linux（已有 WSL/nvm 环境，Node 24.14.0）通过，日常检查在 5 分钟内。共享 wait 提前返回、goal_wait waitFor、终端视图与 monitor 的 11 项检查目前只在 Linux 通过，Windows 待复核。另在 Windows 执行 pi-starship 0.65.2 实际 extension_status 模块，验证 goal/runtime 槽位读取、数量上限与空状态。这些检查证明当前询问、目标、执行任务及共享组件的契约；终端缩放、/jobs 交互选择流程、真实手机 SSH 输入、完整第三方 footer 布局和后续业务模块综合生命周期由 [完整实施计划](../todo/pi-suite/implementation.md) 管理。
 
 [返回当前文档](./index.md)

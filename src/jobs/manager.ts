@@ -94,7 +94,7 @@ export class JobManager {
     return item.saveQueue;
   }
 
-  async start(request: StartRequest, shell: ResolvedShellConfig, signal?: AbortSignal): Promise<JobSummary> {
+  async start(request: StartRequest, shell: ResolvedShellConfig, signal?: AbortSignal, authorize?: (command: string) => Promise<void>): Promise<JobSummary> {
     const mode = request.mode ?? 'pipe';
     const handsFree = request.handsFree ? compileHandsFree(request.handsFree, mode) : undefined;
     // A monitor decides the command the job runs: its poll loop, or a generated file watcher.
@@ -104,6 +104,11 @@ export class JobManager {
       (request.timeoutMs !== undefined && (!Number.isInteger(request.timeoutMs) || request.timeoutMs < 1 || request.timeoutMs > LIMITS.maxRunMs))) {
       throw new ToolError('INVALID_ARGS', 'command must be 1-32768 characters, name at most 80, timeoutMs 1-86400000');
     }
+    this.admit(signal);
+    // Authorize the actual generated monitor/CLI command, before allocating history or spawning.
+    // The callback belongs to this start only; the long-lived manager never retains Pi contexts.
+    await authorize?.(command);
+    if (monitor?.detector) await authorize?.(monitor.detector.command);
     this.admit(signal);
     const workspace = await resolveWorkspace(request.cwd);
     if (await this.store.workspaceBytes(workspace) >= LIMITS.workspaceBytes) {

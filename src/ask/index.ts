@@ -46,7 +46,9 @@ export class AskManager {
         this.active?.dispose(); this.active = undefined; this.dock.setAsk(false); release();
       }
     }, signal);
-    if (this.binding.isCurrent(captured)) this.onResult?.(result.status === "answered", ctx);
+    // A response from a revoked view cannot authorize work in the next session or reload.
+    if (!this.binding.isCurrent(captured)) return { result: cancelled(), questions };
+    this.onResult?.(result.status === "answered", ctx);
     return { result, questions };
   }
 }

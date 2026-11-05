@@ -27,7 +27,7 @@ export default function piSuite(pi: ExtensionAPI): void {
   const jobs = config.modules.jobs ? new JobsModule(pi, binding, notifications, status) : undefined;
   if (jobs) {
     const viewer = { jobs, dock, notifications, keys: () => config.jobs };
-    registerJobTools(pi, jobs, viewer); registerJobsCommand(pi, viewer); waits.register(jobs);
+    registerJobTools(pi, jobs, viewer, { ask, config: () => config }); registerJobsCommand(pi, viewer); waits.register(jobs);
   }
   if (jobs) {
     registerWait(pi, waits);

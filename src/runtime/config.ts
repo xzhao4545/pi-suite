@@ -4,6 +4,7 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "typebox";
 import { Value } from "typebox/value";
 import { Key, type KeyId } from "@earendil-works/pi-tui";
+import { compileLaunchPolicy, mergePresets, policySchema, presetsSchema, type LaunchDecision, type Preset } from "../jobs/launch/config.ts";
 
 const keyNames = Object.values(Key).flatMap(key => typeof key === "string"
   ? [key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")] : []);
@@ -28,6 +29,8 @@ const schema = Type.Object({
     detachKey: Type.Optional(Type.String({ pattern: keyPattern })),
     returnKey: Type.Optional(Type.String({ pattern: keyPattern })),
     transferKey: Type.Optional(Type.String({ pattern: keyPattern })),
+    agents: Type.Optional(presetsSchema),
+    launchPolicy: Type.Optional(policySchema),
   }, { additionalProperties: false })),
 }, { additionalProperties: false });
 
@@ -39,13 +42,15 @@ export interface SuiteConfig {
   goal: { display: DisplayMode };
   agents: { display: DisplayMode };
   /** Terminal view keys: leave the view, hand input back to the model, send the screen to the model. */
-  jobs: { display: DisplayMode; detachKey: KeyId; returnKey: KeyId; transferKey: KeyId };
+  jobs: { display: DisplayMode; detachKey: KeyId; returnKey: KeyId; transferKey: KeyId;
+    agents: Record<string, Preset>; launchPolicy: (command: string) => LaunchDecision };
 }
 export const defaults: SuiteConfig = {
   modules: { ask: true, tasks: true, jobs: true, goal: true, agents: true },
   ui: { maxRows: 6 }, ask: { timeout: 120000, historyKey: "ctrl+h" },
   goal: { display: "status" }, agents: { display: "status" },
-  jobs: { display: "status", detachKey: "ctrl+b", returnKey: "ctrl+g", transferKey: "ctrl+t" },
+  jobs: { display: "status", detachKey: "ctrl+b", returnKey: "ctrl+g", transferKey: "ctrl+t",
+    agents: mergePresets(), launchPolicy: compileLaunchPolicy([]) },
 };
 
 function readConfig(path: string): Static<typeof schema> {
@@ -64,8 +69,12 @@ function readConfig(path: string): Static<typeof schema> {
 export function loadConfig(cwd: string, agentDir = getAgentDir()): SuiteConfig {
   const user = readConfig(join(agentDir, "pi-suite.json"));
   const project = readConfig(join(cwd, ".pi", "pi-suite.json"));
+  if (project.jobs && Object.hasOwn(project.jobs, "launchPolicy")) throw new Error("Invalid pi-suite configuration: jobs.launchPolicy is user-only; project config cannot define it");
   // Merge individual sections so a project timeout does not reset user shortcuts.
-  return Object.fromEntries(Object.entries(defaults).map(([key, value]) => [
+  const config = Object.fromEntries(Object.entries(defaults).map(([key, value]) => [
     key, { ...value, ...user[key as keyof typeof user], ...project[key as keyof typeof project] },
   ])) as unknown as SuiteConfig;
+  config.jobs.agents = mergePresets(user.jobs?.agents, project.jobs?.agents);
+  config.jobs.launchPolicy = compileLaunchPolicy(user.jobs?.launchPolicy ?? []);
+  return config;
 }

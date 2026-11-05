@@ -2,7 +2,7 @@
 
 目标：融合交互 shell 和非交互后台任务，共用管理、日志与通知。
 
-当前状态：实施中；pipe 与 PTY 执行、记录、工具与通知已实现并在 Windows（Git Bash）和 Linux 通过检查，见 [执行任务](../../../current/jobs/index.md)。/jobs 列表与详情、job_start 的 attach、终端视图（用户接管、Ctrl+G 交还、Ctrl+T 发送屏幕、Ctrl+B 离开）已实现，终端视图契约在 Linux 通过检查，Windows 待复核。monitor、hands-free 与 dispatch 已实现并在 Linux 通过离线检查；终端缩放的两平台实际验证、Windows 监督验收与 CLI agent 预设待实施。
+当前状态：实施中；pipe 与 PTY 执行、记录、工具与通知已实现并在 Windows（Git Bash）和 Linux 通过检查，见 [执行任务](../../../current/jobs/index.md)。/jobs 列表与详情、job_start 的 attach、终端视图（用户接管、Ctrl+G 交还、Ctrl+T 发送屏幕、Ctrl+B 离开）已实现，终端视图契约在 Linux 通过检查，Windows 待复核。monitor、hands-free、dispatch、CLI agent 预设与 launchPolicy 已实现并在 Linux 通过离线检查；终端缩放的两平台实际验证、Windows 监督与 CLI 预设验收待实施。
 
 影响范围：JobManager、pipe/PTY 后端、工具入口、日志和任务元数据。
 

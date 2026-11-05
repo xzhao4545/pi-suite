@@ -13,19 +13,25 @@ import { jobDetail, listJobs, readJobLog } from './query.ts';
 import { attachJob, screenMessage, type ViewerDeps } from './viewer.ts';
 import { monitorSchema } from './monitors/compile.ts';
 import { handsFreeSchema } from './monitors/hands-free.ts';
-import type { InputRecord, Stream } from './types.ts';
+import type { InputRecord, JobSummary, Stream } from './types.ts';
+import type { AskManager } from '../ask/index.ts';
+import type { SuiteConfig } from '../runtime/config.ts';
+import { agentSchema, agentCommand } from './launch/presets.ts';
+import { authorizeLaunch } from './launch/authorize.ts';
 
 const id = objectId('job', 'job_3fa1c2d0');
 
-export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: ViewerDeps): void {
+export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: ViewerDeps, launch: { ask: AskManager; config: () => SuiteConfig }): void {
   pi.registerTool({
     name: 'job_start', label: 'Start Job',
     description: 'Start a command as a background job and return at once. mode=pipe (default) records stdout/stderr for builds, tests and batch work; mode=pty runs it in a terminal for REPLs and interactive programs. ' +
       'The job keeps running across turns, compaction and reload; when it settles one notice is sent to this session. Read output with job_read, send input with job_write, wait with wait. Do not background commands yourself with & or nohup. ' +
       'monitor wakes you when output matches a trigger (stream: each line; poll-diff: rerun command and compare; file-watch: watch a path, no command); events are read with job_read stream events. ' +
-      'handsFree (pty only) sends bounded progress updates; handsFree.mode=dispatch sends only a result and requests termination after startup grace and output silence. Quiet termination is stopped, never proof of success. User control pauses updates and quiet termination.',
+      'handsFree (pty only) sends bounded progress updates; handsFree.mode=dispatch sends only a result and requests termination after startup grace and output silence. Quiet termination is stopped, never proof of success. User control pauses updates and quiet termination. ' +
+      'Instead of command, agent supplies a CLI preset and literal prompt (pi/codex/claude/cursor or configured key); pi can fork a persisted session. User launchPolicy matches the final command exactly; unmatched commands ask for one-time confirmation before start.',
     parameters: Type.Object({
-      command: Type.Optional(Type.String({ minLength: 1, maxLength: 32768, description: 'Required unless monitor.strategy is file-watch' })),
+      command: Type.Optional(Type.String({ minLength: 1, maxLength: 32768, description: 'Give command or agent, except for file-watch which generates its own command' })),
+      agent: Type.Optional(agentSchema),
       mode: Type.Optional(Type.Union([Type.Literal('pipe'), Type.Literal('pty')])),
       name: Type.Optional(Type.String({ maxLength: 80 })),
       cwd: Type.Optional(Type.String({ description: 'Resolved against the session cwd' })),
@@ -37,13 +43,28 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: Vie
     }, { additionalProperties: false }),
     async execute(_callId, params, signal, _update, ctx) {
       const manager = jobs.manager();
-      const { attach, ...request } = params;
+      const { attach, agent, ...request } = params;
+      const config = launch.config();
+      if (agent && params.command !== undefined) throw new ToolError('INVALID_ARGS', 'Give command or agent, never both');
+      if (agent && params.monitor?.strategy === 'file-watch') throw new ToolError('INVALID_ARGS', 'file-watch generates its command; agent cannot be combined with it');
       // Reject before starting: a job the user cannot reach would run unattended.
       if (attach && params.mode !== 'pty') throw new ToolError('INVALID_ARGS', 'attach needs mode pty');
       if (attach && ctx.mode !== 'tui') throw new ToolError('INVALID_ARGS', 'attach needs the interactive terminal UI; start without attach and use job_write');
       const owner = JobsModule.owner(ctx);
       const shell = resolvePiShell(ctx.cwd, ctx.isProjectTrusted());
-      const job = await manager.start({ ...request, cwd: resolve(ctx.cwd, params.cwd ?? '.'), ...owner }, shell, signal);
+      const cwd = resolve(ctx.cwd, params.cwd ?? '.');
+      const command = agent ? agentCommand(agent, config.jobs.agents, ctx.sessionManager.getSessionFile()) : params.command;
+      let job: JobSummary;
+      try {
+        job = await manager.start({ ...request, command, cwd, ...owner }, shell, signal,
+          finalCommand => authorizeLaunch(finalCommand, cwd, ctx, config, launch.ask, signal));
+      } catch (error) {
+        // Timeout/cancellation is an unanswered question, so end this model run as ask_user does.
+        if (error instanceof ToolError && error.code === 'LAUNCH_NOT_CONFIRMED') return {
+          ...text([error.message], { started: false, reason: error.code }), terminate: true,
+        };
+        throw error;
+      }
       const next = `read: job_read({"id":"${job.id}"})${job.mode === 'pty' ? ` · input: job_write({"id":"${job.id}","input":"…","submit":true})` : ''}`;
       if (!attach) return text([summaryLine(job), `name: ${displayName(job)}`, next], { job });
       const exit = await attachJob(ctx, viewer, job.id, signal);

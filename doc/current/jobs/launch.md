@@ -1,0 +1,45 @@
+# CLI 预设与启动授权
+
+job_start 的 agent 用结构化配置代替 command。预设解析与参数构造位于 src/jobs/launch，启动仍进入同一 JobManager，输入、日志、退出、停止与通知使用现有 job 接口。
+
+## 预设与请求
+
+| agent 字段 | 行为 |
+| --- | --- |
+| preset | jobs.agents 的键；小写字母开头，支持小写字母、数字和短横线，最长 64 字符 |
+| prompt | 1–16000 字符的非空任务；作为一个位置参数传入，保留原文中的空格、换行、中文、引号、美元符号和反引号 |
+| fork | 默认 false；true 仅用于 pi，以 `--fork <当前会话文件>` 启动；当前会话没有持久文件时报 INVALID_ARGS |
+
+默认预设：pi→pi、codex→codex、claude→claude、cursor→agent；前三者默认参数为空，cursor 默认参数为 `--model composer-2-fast`。工具不安装 CLI，执行文件和默认参数可按已安装版本配置。缺失命令按实际进程退出结果记录，不换用其他程序。
+
+jobs.agents 按内置、用户、项目顺序，逐键、逐字段合并。每项 command 为一个可执行文件路径或名称，args 为默认参数数组；新键必须在合并后具有 command，args 默认空数组。command 不能包含整段 shell 命令，需要直接执行 shell 代码时使用 job_start.command。参数数组整体覆盖；不会把项目 args 与用户 args 拼接。
+
+所有参数按 Pi 使用的 Bash 规则转义；prompt 前添加 `--` 结束选项解析，prompt 以 `--` 开头时仍作为数据。自定义 CLI 应支持这一位置参数约定。command 与 agent 互斥；file-watch 自行生成命令，不能提供 command 或 agent。mode 仍默认 pipe；需要交互终端的 CLI 用 mode=pty，监督参数见 [hands-free 与 dispatch](hands-free.md)。
+
+```json
+{"agent":{"preset":"pi","prompt":"阅读项目计划并继续实现","fork":true},"mode":"pty","handsFree":{"mode":"dispatch"}}
+```
+
+## 启动策略
+
+jobs.launchPolicy 只允许写入用户文件 `<getAgentDir()>/pi-suite.json`；项目 `.pi/pi-suite.json` 出现该字段即报错，包括空数组。配置在会话绑定时读取，修改后使用 /reload 或重新绑定会话生效。
+
+```json
+{
+  "jobs": {
+    "agents": { "local": { "command": "local-cli", "args": ["--verbose"] } },
+    "launchPolicy": [
+      { "command": "echo allowed", "decision": "allow" },
+      { "command": "echo denied", "decision": "deny" }
+    ]
+  }
+}
+```
+
+每条规则含 command 与 decision（allow/ask/deny），按最终完整命令字符串精确匹配。没有规则或未命中时默认 ask；不裁剪空白，不解析 shell，不支持通配符或仅按可执行文件匹配。同一命令多条规则按 deny > ask > allow 决定。规则最多 1000 条，command 最长 32768 字符。
+
+策略用于全部 job_start：原始 command、拼装后的 CLI 命令、poll-diff 循环和生成的 file-watch 命令。detector.command 作为另一个待执行命令，在 job 启动前单独授权；两者都允许后才分配 job ID、创建日志并启动进程。调用的临时授权回调不留在长期 manager 中。
+
+allow 直接启动；deny 返回 LAUNCH_DENIED；ask 复用共享 ask 队列，显示精确命令与 cwd，明确确认后只启动本次。超时、取消或绑定撤销返回未确认并结束本轮，不创建进程或历史；非交互模式的 ask 返回 LAUNCH_CONFIRMATION_REQUIRED，需配置精确 allow 规则。完整按键见 [执行任务操作](index.md#用户操作)。
+
+[返回执行任务](index.md)

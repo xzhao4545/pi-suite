@@ -50,7 +50,12 @@ export async function host(options: {
     setWidget() {}, notify() {}, confirm: async () => true,
     custom: async (factory: Parameters<ExtensionUIContext["custom"]>[0]) => new Promise(resolve => {
       Promise.resolve(factory(terminal(), theme, {} as never, resolve)).then(view => {
-        view.render(40); view.handleInput?.(options.answer === "cancel" ? "\x1b" : "\r");
+        view.render(40);
+        if (options.answer === "cancel") view.handleInput?.("\x1b");
+        else {
+          // A selection needs both choosing the focused option and confirming it in actions.
+          view.handleInput?.("\r"); view.handleInput?.("\t"); view.handleInput?.("\r");
+        }
       });
     }),
   } as unknown as ExtensionUIContext;

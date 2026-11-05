@@ -10,7 +10,7 @@ import { LIMITS } from './types.ts';
  * running jobs. A different protocol cannot drive the old manager's internals, so an occupied
  * incompatible manager keeps running and this extension instance reports jobs unavailable.
  */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 export type RuntimeHandle =
   | { mode: 'active'; manager: JobManager }
   | { mode: 'unavailable'; reason: string };
