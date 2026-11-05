@@ -52,7 +52,11 @@ export function installExtensionToolScope(
     // opt-in left out — and so do the bridges that reach them.
     if (mcpToolPatterns) {
       for (const name of keep) {
-        if (isMcpToolName(name) && !matchesToolPattern(name, mcpToolPatterns)) keep.delete(name);
+        if (!isMcpToolName(name)) continue;
+        // Resource helpers serve multiple namespaces through a server argument;
+        // an explicit helper selection must not be erased by a server-tool filter.
+        const selected = name.startsWith('mcp__') ? matchesToolPattern(name, mcpToolPatterns) : matchesToolPattern(name, toolNames);
+        if (!selected) keep.delete(name);
       }
       for (const extension of loader.getExtensions().extensions) {
         for (const name of extension.tools.keys()) {

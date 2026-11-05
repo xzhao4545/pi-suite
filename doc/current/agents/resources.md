@@ -20,6 +20,7 @@ tools 支持 Pi 工具名、内置名称的大小写别名、Glob→find、Multi
 
 - `ext:foo` 允许已加载 foo 的工具；`ext:foo/bar` 只允许其 bar 工具，工具名称区分大小写。出现 ext: 选择器后，外部扩展工具按显式名单选择；扩展加载仍由 extensions 决定。
 - `mcp__server` 展开为 `mcp__server__*`，也支持精确名称与通配模式；codemode/tool_search 桥接调用采用同一范围。
+- `list_mcp_resources`、`list_mcp_resource_templates`、`read_mcp_resource` 是带 server 参数的通用资源工具，显式 tools 选择独立于 `mcp__` 服务器工具名单；仅选择服务器工具不会自动开放资源工具，disallowed_tools 仍优先。
 - disallowed_tools 在所有范围之后应用，支持通配；父级 ask_user、获准嵌套和 memory 需要的注入工具也不能绕过禁用名单。
 
 动态范围从扩展实际工具表派生，包含 session_start 和 before_agent_start 中的晚注册工具。turn_end 在 Pi 快照下一请求之前收窄活动集合；agent.beforeToolCall 检查直接调用，tool_call 检查 ctx.executeTool 的嵌套调用。第一请求中扩展可能扩大声明集合，调用检查仍禁止越界执行。扩展路径与包别名在安装该会话范围时解析一次，工具表随注册更新。

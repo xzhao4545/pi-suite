@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { host } from '../support/host.ts';
@@ -50,6 +51,44 @@ test('declared package resources follow Pi configured roots, exclusions, gates, 
     file(join(pkg, 'package.json'), JSON.stringify({ pi: { subagents: ['./agents'] } }));
     file(join(h.root, 'outside.md'), 'outside'); symlinkSync(join(h.root, 'outside.md'), join(pkg, 'agents', 'escape.md'));
     assert.throws(() => packageResources(h.root, 'agents', false), /escapes install root/);
+  } finally { await h.cleanup(); }
+});
+
+test('real MCP stdio discovery keeps explicit resources beside a namespace filter and closes child transports', { timeout: 15000 }, async () => {
+  const h = await setup(), trace = join(h.root, 'mcp.jsonl');
+  try {
+    const server = fileURLToPath(new URL('../support/mcp-server.ts', import.meta.url));
+    const endpoint = (name: string) => ({command: process.execPath, args: ['--experimental-transform-types', server, name, trace], exposure: 'direct', timeout: 3});
+    file(join(h.root, 'mcp.json'), JSON.stringify({mcpServers: {docs: endpoint('docs'), other: endpoint('other')}}));
+    const lastText = (context: {messages: {role: string; content?: unknown}[]}) => JSON.stringify(context.messages.findLast(message => message.role === 'toolResult')?.content);
+    const allowed = () => fauxAssistantMessage(fauxToolCall('mcp__docs__allowed', {}));
+    const resource = () => fauxAssistantMessage(fauxToolCall('read_mcp_resource', {server: 'docs', uri: 'fixture://docs/one'}));
+    type(h.root, 'wire', {extensions: ['mcp'], skills: false, tools: ['mcp__docs', 'list_mcp_resources', 'read_mcp_resource'], disallowed_tools: ['mcp__docs__denied']});
+    h.faux.setResponses([
+      allowed,
+      context => { assert.match(lastText(context), /docs:allowed/); return fauxAssistantMessage(fauxToolCall('list_mcp_resources', {server: 'docs'})); },
+      context => { assert.match(lastText(context), /fixture:\/\/docs\/one/); return resource(); },
+      context => { assert.match(lastText(context), /docs:resource/); return fauxAssistantMessage(fauxToolCall('mcp__other__allowed', {})); },
+      context => { assert.match(lastText(context), /not available|not found/); return fauxAssistantMessage(fauxToolCall('mcp__docs__denied', {})); },
+      context => { assert.match(lastText(context), /not available|not found/); return fauxAssistantMessage('resources checked'); },
+    ]);
+    const mixed = await h.manager.start({type: 'wire', prompt: 'read selected resources', background: false}, {ctx: h.ctx}, h.config);
+    assert.equal((await mixed.done.promise).state, 'completed', mixed.record.error);
+    for (const [name, tools, disallowed] of [
+      ['denied-resource', ['mcp__docs', 'read_mcp_resource'], ['read_mcp_resource']],
+      ['namespace-only', ['mcp__docs'], []],
+    ] as const) {
+      type(h.root, name, {extensions: ['mcp'], skills: false, tools, disallowed_tools: disallowed});
+      h.faux.setResponses([resource, context => { assert.match(lastText(context), /not available|not found/); return allowed(); }, fauxAssistantMessage('scope checked')]);
+      const run = await h.manager.start({type: name, prompt: 'check resource scope', background: false}, {ctx: h.ctx}, h.config);
+      assert.equal((await run.done.promise).state, 'completed', run.record.error);
+    }
+    const events = readFileSync(trace, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+    assert.equal(events.filter(event => event.method === 'resources/read').length, 1);
+    assert.ok(!events.some(event => event.method === 'tools/call' && (event.server === 'other' || event.params.name === 'denied')));
+    const pids = events.filter(event => event.pid).map(event => event.pid);
+    assert.equal(pids.length, 6);
+    for (const pid of pids) assert.throws(() => process.kill(pid, 0), {code: 'ESRCH'}, 'completed children close their actual MCP peers');
   } finally { await h.cleanup(); }
 });
 

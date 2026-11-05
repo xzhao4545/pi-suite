@@ -22,7 +22,8 @@
 - [ ] 核对各实际 CLI 版本的默认参数、选项结束标记、Pi fork 和 PTY 启动/接管，使用离线 provider 或受控流程避免付费模型依赖
 - [x] Linux 实际 Pi 1.5.0 发布 CLI 使用离线 provider 验证 fork、复杂字面 prompt 与共享 PTY 接管/交还/离开，见 [实际 CLI 阶段](../../../finished/pi-suite/jobs/pi-cli.md)
 - [ ] Pi 位置 prompt 以 @ 开头受上游附件解析限制，原样 @ 支持尚未实现（当前启动前报告 INVALID_ARGS）
-- [ ] codex/claude 实际离线或受控 PTY 组合验收（目前只核对 help 参数）；cursor 对应的 agent 命令尚缺环境
+- [x] Linux 实际 Codex 0.166.0/Claude Code 2.1.153 使用本地服务验证复杂字面 prompt、用户接管/交还、主对话输入与回复及确认停止，见 [文本 PTY 阶段](../../../finished/pi-suite/jobs/cli-pty.md)
+- [ ] Codex/Claude 的 CLI 工具执行与 Windows/手机综合验收；Cursor 对应的 agent 命令尚缺环境
 
 ## 验收方式
 
@@ -63,7 +64,7 @@ file-watch 自行生成监视命令，不能同时提供 command 或 agent。tri
 
 实现接口为 jobs.agents 的 `{command,args?}` 字段与 launchPolicy 的 `{command,decision}` 数组；即使省略策略也默认询问。匹配最终原始/CLI/monitor 命令，detector 命令单独授权；未确认不分配 ID、不启动进程。当前字段、默认参数、错误和操作见 [CLI 预设与启动授权](../../../current/jobs/launch.md)。
 
-Pi 1.5.0 的真实发布 CLI 已在 Linux 使用隔离资源和 faux provider 验证：fork 保持源会话原文，复杂中文、引号、美元符号、反引号、换行与以 `--` 开头的 prompt 保持字面数据；新的真实 PTY 复用 attachJob 操作。以 `@` 开头的位置 prompt 会被上游解析为附件，当前明确报错，原样支持继续保留待办。codex/claude 只完成 help 参数核对，cursor 的 agent 命令缺失，不能以 Pi 的验收代替这些预设或 Windows/手机组合。
+Pi 1.5.0 的真实发布 CLI 已在 Linux 使用隔离资源和 faux provider 验证：fork 保持源会话原文，复杂中文、引号、美元符号、反引号、换行与以 `--` 开头的 prompt 保持字面数据；新的真实 PTY 复用 attachJob 操作。以 `@` 开头的位置 prompt 会被上游解析为附件，当前明确报错，原样支持继续保留待办。Codex 0.166.0 与 Claude Code 2.1.153 已通过 Linux 隔离文本 PTY 验收：现有预设/JobManager 启动后，复杂初始 prompt、用户输入和交还后的模型输入逐字进入真实 CLI 主对话请求，SSE 回复在 CLI 显示，USER_CONTROL 与 managed_scope_confirmed 停止证据通过；任务标题和会话辅助请求与主对话区分，见 [文本 PTY 阶段](../../../finished/pi-suite/jobs/cli-pty.md)。CLI 工具执行、Windows/手机组合尚未验收，Cursor 的 agent 命令缺失，各实际 CLI 的完整大项保持待办。
 
 ## 用户接管
 

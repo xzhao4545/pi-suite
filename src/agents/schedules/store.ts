@@ -60,10 +60,7 @@ export class ScheduleStore extends JsonStore<ScheduleData> {
       const job = data.jobs.find(item => item.id === id);
       if (!job?.enabled || job.nextRun !== expected || Date.parse(expected) > now) return;
       const occurrence = structuredClone(job);
-      // Preserve interval cadence despite file/dispatch latency; missed ticks are skipped.
-      const base = job.scheduleType === 'interval'
-        ? Date.parse(expected) + Math.floor((now - Date.parse(expected)) / job.intervalMs!) * job.intervalMs! : now;
-      job.nextRun = nextOccurrence(job, base); job.enabled = Boolean(job.nextRun);
+      job.nextRun = nextOccurrence(job, now, Date.parse(expected)); job.enabled = Boolean(job.nextRun);
       job.lastRun = new Date(now).toISOString(); job.lastStatus = 'running'; job.lastError = undefined;
       return occurrence;
     }, signal);

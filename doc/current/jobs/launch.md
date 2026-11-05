@@ -22,6 +22,12 @@ Pi 1.5.0 的位置 prompt 以 `@` 开头时会按附件文件处理，即使位�
 {"agent":{"preset":"pi","prompt":"阅读项目计划并继续实现","fork":true},"mode":"pty","handsFree":{"mode":"dispatch"}}
 ```
 
+## 实际 CLI 支持范围
+
+Linux 上的 Pi 1.5.0、Codex 0.166.0 与 Claude Code 2.1.153 已通过实际 CLI 的 PTY 文本交互检查。三者均使用现有预设合并、命令构造与 JobManager；初始位置 prompt 保留以 `--` 开头的中文、引号、美元表达式、反引号和换行。用户接管期间模型写入返回 USER_CONTROL，交还后可继续模型输入，停止取得 managed_scope_confirmed 清理证据。
+
+Codex 使用隔离配置、本地 Responses SSE 服务和 `--no-daemon`；Claude 使用 `--bare`、空 settings/MCP/tools、本地服务和测试密钥，并在 PTY 完成首次密钥确认。上述参数是隔离验收配置，不改变内置预设默认值。初始文本、用户输入与交还后的模型输入均逐字进入 CLI 主对话 HTTP 请求，CLI 显示对应 SSE 回复；任务标题与会话辅助请求不作为主对话正文的证据。该范围仅覆盖文本交互，不包含 CLI 工具执行、付费模型、Windows 或手机 SSH；Cursor 对应的 `agent` 命令尚缺环境。验收结论见 [实际文本 PTY 阶段](../../finished/pi-suite/jobs/cli-pty.md)，未完成范围见 [监督与 CLI 待办](../../todo/pi-suite/jobs/monitors.md)。
+
 ## 启动策略
 
 jobs.launchPolicy 只允许写入用户文件 `<getAgentDir()>/pi-suite.json`；项目 `.pi/pi-suite.json` 出现该字段即报错，包括空数组。配置在会话绑定时读取，修改后使用 /reload 或重新绑定会话生效。

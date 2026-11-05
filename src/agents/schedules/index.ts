@@ -1,7 +1,6 @@
 // Timer dispatch and lifecycle adapted from @tintinweb/pi-subagents 0.23.0
 // src/schedule.ts/index.ts (MIT). Runs keep the shared Manager/notification path.
 import { randomBytes } from 'node:crypto';
-import { Cron } from 'croner';
 import { getAgentDir, type ExtensionAPI, type ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { Binding, SessionBinding } from '../../runtime/binding.ts';
 import type { Notifications } from '../../runtime/notifications.ts';
@@ -15,7 +14,6 @@ import { ScheduleStore, schedulePath, type ScheduledAgent } from './store.ts';
 
 type Activation = { binding: Binding; store: ScheduleStore; controller: AbortController };
 export class AgentScheduler {
-  private crons = new Map<string, Cron>();
   private timers = new Map<string, NodeJS.Timeout>();
   private pending = new Set<Promise<void>>();
   private activation?: Activation;
@@ -37,7 +35,7 @@ export class AgentScheduler {
         if (Date.parse(job.nextRun!) <= Date.now()) {
           // Downtime has no dispatch context: skip missed recurring occurrences and report
           // expired one-shots instead of replaying model work when a session is reopened.
-          const nextRun = nextOccurrence(job, Date.now());
+          const nextRun = nextOccurrence(job, Date.now(), Date.parse(job.nextRun!));
           await activation.store.update(job.id, { nextRun, enabled: Boolean(nextRun),
             ...nextRun ? {} : { lastStatus: 'error', lastError: 'Scheduled time passed while the session was inactive' } }, activation.controller.signal);
           if (!nextRun) this.error(activation, job.id, job.nextRun!, 'Scheduled time passed while the session was inactive');
@@ -49,7 +47,6 @@ export class AgentScheduler {
   }
   stop(): void {
     this.activation?.controller.abort(); this.activation = undefined;
-    for (const cron of this.crons.values()) cron.stop(); this.crons.clear();
     for (const timer of this.timers.values()) clearTimeout(timer); this.timers.clear();
   }
   /** Quit stops admitted children first, then joins their captured schedule-file updates. */
@@ -81,19 +78,14 @@ export class AgentScheduler {
     this.pi.events.emit('subagents:scheduled', { type: 'removed', jobId: id });
   }
   private unschedule(id: string): void {
-    this.crons.get(id)?.stop(); this.crons.delete(id);
     clearTimeout(this.timers.get(id)); this.timers.delete(id);
   }
   private arm(activation: Activation, job: ScheduledAgent): void {
     if (!this.current(activation) || !job.enabled) return;
-    if (job.scheduleType === 'cron') {
-      if (!this.crons.has(job.id)) this.crons.set(job.id, new Cron(job.schedule, { unref: true }, () => {
-        const next = activation.store.current.jobs.find(item => item.id === job.id)?.nextRun;
-        if (next) this.dispatch(activation, job.id, next);
-      }));
-      return;
-    }
     this.unschedule(job.id);
+    // Persisted UTC deadlines drive every schedule. A second local-time cron timer
+    // can fire before a restored deadline after a timezone change, fail its claim,
+    // and silently disarm the still-enabled schedule. Croner computes deadlines only.
     // Node converts delays above 2^31-1 to 1ms. Re-arm toward the same absolute deadline
     // so long one-shots/intervals retain their requested time without a hot loop.
     const delay = Math.max(1, Math.min(2_147_483_647, Date.parse(job.nextRun!) - Date.now()));

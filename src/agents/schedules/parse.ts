@@ -33,7 +33,10 @@ export function parseSchedule(input: string, now = Date.now(), allowPast = false
   }
   throw new ToolError('INVALID_ARGS', `Invalid schedule "${input}"; use six-field cron, an interval (5m/1h), or a one-shot (+10m/ISO timestamp)`);
 }
-export function nextOccurrence(spec: ScheduleSpec, after: number): string | undefined {
+export function nextOccurrence(spec: ScheduleSpec, after: number, deadline = after): string | undefined {
   if (spec.scheduleType === 'once') return;
-  return spec.scheduleType === 'cron' ? nextCron(spec.schedule, after) : new Date(after + spec.intervalMs!).toISOString();
+  // Claim and inactive-session recovery share the same cadence; skip missed
+  // intervals from the committed deadline rather than restarting their phase.
+  const base = spec.scheduleType === 'interval' ? deadline + Math.floor((after - deadline) / spec.intervalMs!) * spec.intervalMs! : after;
+  return spec.scheduleType === 'cron' ? nextCron(spec.schedule, after) : new Date(base + spec.intervalMs!).toISOString();
 }

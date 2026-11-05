@@ -1,7 +1,8 @@
-import { test } from 'node:test';
+import { mock, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { setImmediate as turn } from 'node:timers/promises';
 import { fauxAssistantMessage, fauxToolCall, getCurrentSystemPrompt, type FauxResponseFactory, type JsonObject } from '@earendil-works/pi-ai';
 import { AgentSessionRuntime, type ExtensionContext, type ExtensionCommandContext } from '@earendil-works/pi-coding-agent';
 import { visibleWidth } from '@earendil-works/pi-tui';
@@ -10,7 +11,7 @@ import { agentDir } from '../support/jobs.ts';
 import { terminal } from '../support/terminal.ts';
 import { agentRuntime } from '../../src/agents/runtime.ts';
 import { loadConfig } from '../../src/runtime/config.ts';
-import { parseSchedule } from '../../src/agents/schedules/parse.ts';
+import { nextOccurrence, parseSchedule } from '../../src/agents/schedules/parse.ts';
 import { ScheduleStore, schedulePath, type ScheduledAgent } from '../../src/agents/schedules/store.ts';
 
 async function setup(settings = {}) {
@@ -60,6 +61,53 @@ test('schedule parsing and the shared store reject invalid data, preserve files 
     assert.equal(readFileSync(path, 'utf8'), '{broken'); assert.equal(store.current.jobs.length, 1);
     writeFileSync(path, valid); await store.remove(job.id); assert.equal((await other.snapshot()).jobs.length, 0);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('cron keeps its persisted UTC deadline after timezone reload and uses local calendar time for following occurrences', { timeout: 15000 }, async () => {
+  const previousZone = process.env.TZ;
+  process.env.TZ = 'America/New_York';
+  mock.timers.enable({apis: ['Date', 'setTimeout'], now: Date.parse('2027-01-07T08:00:00Z')});
+  const h = await setup();
+  try {
+    const cron = parseSchedule('0 0 9 * * *');
+    assert.equal(nextOccurrence(cron, Date.parse('2027-03-13T14:00:00Z')), '2027-03-14T13:00:00.000Z');
+    assert.equal(nextOccurrence(cron, Date.parse('2027-11-06T13:00:00Z')), '2027-11-07T14:00:00.000Z');
+    assert.equal(nextOccurrence(parseSchedule('1d'), Date.parse('2027-03-13T14:00:00Z')), '2027-03-14T14:00:00.000Z');
+    assert.equal(parseSchedule('2027-03-14T09:00:00-04:00').schedule, '2027-03-14T13:00:00.000Z');
+    agentType(h.root);
+    const job = (await call(h, {type: 'tick', prompt: 'UTC_DEADLINE', schedule: cron.schedule})).details.schedule!;
+    assert.equal(job.nextRun, '2027-01-07T14:00:00.000Z');
+    const store = new ScheduleStore(schedulePath(h.root, h.ctx.sessionManager.getSessionId()));
+    process.env.TZ = 'UTC';
+    await h.session.reload();
+    h.faux.setResponses(Array(4).fill(fauxAssistantMessage('timer completed')));
+    mock.timers.tick(3600000); await turn();
+    assert.equal(h.manager.runs.size, 0, 'the new local 09:00 must not replace the committed 14:00 deadline');
+    assert.equal((await store.snapshot()).jobs[0].nextRun, job.nextRun);
+    mock.timers.tick(5 * 3600000);
+    // Real SDK dispatch and file writes finish asynchronously; advance no more
+    // virtual time so this check cannot accidentally admit the next day's run.
+    const deadline = performance.now() + 5000;
+    while ((await store.snapshot()).jobs[0].runCount !== 1) { assert.ok(performance.now() < deadline, 'persisted cron deadline never dispatched'); await turn(); }
+    const ended = (await store.snapshot()).jobs[0];
+    assert.equal(h.manager.runs.size, 1); assert.equal(ended.lastStatus, 'success');
+    assert.equal(ended.lastRun, job.nextRun); assert.equal(ended.nextRun, '2027-01-08T09:00:00.000Z');
+    mock.timers.tick(1800000);
+    await store.add({id: 'schedule_1234abcd', name: 'missed cadence', ...parseSchedule('1h'), request: {type: 'tick', prompt: 'INTERVAL_PHASE'},
+      enabled: true, createdAt: '2027-01-07T12:00:00.000Z', nextRun: '2027-01-07T12:00:00.000Z', runCount: 0});
+    await h.session.reload();
+    const interval = () => store.snapshot().then(data => data.jobs.find(item => item.id === 'schedule_1234abcd')!);
+    assert.equal((await interval()).nextRun, '2027-01-07T15:00:00.000Z', 'recovery skips missed ticks without shifting the hourly phase');
+    assert.equal(h.manager.runs.size, 1, 'recovery never replays the missed model work');
+    mock.timers.tick(1800000);
+    const intervalDeadline = performance.now() + 5000;
+    while ((await interval()).runCount !== 1) { assert.ok(performance.now() < intervalDeadline); await turn(); }
+    assert.equal((await interval()).nextRun, '2027-01-07T16:00:00.000Z');
+    assert.equal(h.manager.runs.size, 2);
+  } finally {
+    await h.cleanup(); mock.timers.reset();
+    if (previousZone === undefined) delete process.env.TZ; else process.env.TZ = previousZone;
+  }
 });
 
 test('native schedule registration validates combinations, offers value-based cancellation and removes the parameter when disabled', { timeout: 15000 }, async () => {

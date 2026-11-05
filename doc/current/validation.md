@@ -29,7 +29,7 @@ jobs 检查使用真实进程：pipe 的 stdout/stderr、退出码与耗时，st
 
 hands-free 的 4 项检查覆盖静默/定时增量更新、单次与总输出预算、暂停与释放、真实 PTY 的宽限期与用户接管、静默终止的进程组清理证据、总运行超时与自行退出，以及 wait 返回更新后去重和 reload 后 goal_wait 恢复。该范围在 Linux（Node 24.22.2）通过，Windows 监督验收由对应待办管理。
 
-CLI 启动的 7 项检查覆盖预设字段合并、用户级策略与精确命令优先级、真实 Bash 的字面量 prompt/Pi fork 参数、受控 CLI 启动读取、拒绝与取消不创建进程或历史、取消询问后的 goal 自动工作停止、最终 monitor/detector 命令授权，以及非交互模式和参数互斥。实际 Pi 1.5.0 发布 CLI 用隔离资源与 faux provider 验证 fork 源会话保持原文、复杂 prompt、真实 PTY 接管/交还/离开及确认清理；以 @ 开头的 Pi 位置 prompt 在启动前报告上游附件解析限制。该范围通过 Linux 离线检查，codex/claude 仅核对 help，cursor 的 agent 命令缺失，其他 CLI、Windows 与手机组合继续按 [监督待办](../todo/pi-suite/jobs/monitors.md) 验收。
+CLI 启动的 7 项检查覆盖预设字段合并、用户级策略与精确命令优先级、真实 Bash 的字面量 prompt/Pi fork 参数、受控 CLI 启动读取、拒绝与取消不创建进程或历史、取消询问后的 goal 自动工作停止、最终 monitor/detector 命令授权，以及非交互模式和参数互斥。实际 Pi 1.5.0 发布 CLI 用隔离资源与 faux provider 验证 fork 源会话保持原文、复杂 prompt、真实 PTY 接管/交还/离开及确认清理；以 @ 开头的 Pi 位置 prompt 在启动前报告上游附件解析限制。Codex 0.166.0 与 Claude Code 2.1.153 通过实际预设/JobManager PTY 与本地受控服务验收，复杂初始正文、用户输入与交还后的模型输入逐字进入主对话 HTTP 请求，CLI 显示对应 SSE 回复，USER_CONTROL 与 managed_scope_confirmed 停止通过。Codex 隔离配置并用 --no-daemon，Claude 使用 --bare、空配置/工具和本地测试密钥；该结论仅覆盖上述版本的 Linux 文本交互，范围见 [CLI 文本阶段](../finished/pi-suite/jobs/cli-pty.md)。cursor 的 agent 命令缺失，CLI 工具执行、Windows 与手机组合继续按 [监督待办](../todo/pi-suite/jobs/monitors.md) 验收。
 
 输出组合的 1 项 Linux（Node 24.22.2）真实 PTY 检查通过，核对密码提示至 LF 回显隐藏、从提示之后的原始 offset/search 读取、CSI/BS/中文宽字素、重复两行折叠与 fullScreen 提示；原始日志保留真实字节，sensitive 输入不保存正文，终态 outputPreview 在 2 KiB 内。既有真实 SDK 通知聚合核对预览与完成结果同条投递；14 项读取/agent/job 定向聚合同时核对上下文、keys 原始范围、预算与实际 more 提示续读。多行 100 MiB 与 UTF-8 验收通过，平台组合由 [输出待办](../todo/pi-suite/jobs/output.md) 管理。
 
@@ -65,7 +65,7 @@ agents 的 8 项 Linux 离线检查使用真实 Pi SDK child 与 faux provider�
 
 @handle 的 3 项 Linux 检查使用真实 SDK 输入事件、faux provider 与 Pi 原生补全，覆盖 handle/alias 唯一及恢复、会话过滤、排队消息、文件与命令补全并存、CJK 前缀及重复绑定；克隆核对当前父级上下文、只持有一个注册启动工具、重复调用只有一次启动、普通 owner/run 与前台结果通知、活动引导和结束恢复。切换事件取消实际流式克隆并拒绝后续启动，克隆未调用工具时明确报错；配置关闭、裸名称/文件/普通文本/图片、非用户与 print 输入边界通过。Windows 与真实手机 SSH 的提及组合按扩展专项继续验收。
 
-定时调度的 4 项 Linux 检查使用真实 SDK/faux、计时器与原生选择器，覆盖六字段 cron、周期与相对/ISO 单次、无效时间、远期延时、文件竞争只准入一次与损坏文件保留；原生 agent_start 核对参数互斥、长名称取消和 40/120 列、关闭后的 schema。实际 once/interval/cron 在普通池满时立即启动并保持计数，触发时使用更新的类型选项，普通 run 的结果通过统一通知；实际 new/resume/reload 按 owner 恢复期限，模型不可用时保存和通知错误且不替换。公共 JSON 存储沿用 tasks 的真实多进程锁、取消/无效文件与宿主会话验收。Windows、实际 CLI/手机 SSH 和本地时区的综合调度场景按扩展专项继续验收。
+定时调度的 4 项 Linux 检查使用真实 SDK/faux、计时器与原生选择器，覆盖六字段 cron、周期与相对/ISO 单次、无效时间、远期延时、文件竞争只准入一次与损坏文件保留；原生 agent_start 核对参数互斥、长名称取消和 40/120 列、关闭后的 schema。实际 once/interval/cron 在普通池满时立即启动并保持计数，触发时使用更新的类型选项，普通 run 的结果通过统一通知；实际 new/resume/reload 按 owner 恢复期限，模型不可用时保存和通知错误且不替换。公共 JSON 存储沿用 tasks 的真实多进程锁、取消/无效文件与宿主会话验收。另 1 项真实 SDK/虚拟时钟聚合核对纽约→UTC reload 保留已提交期限并恰好触发一次，后续 cron 使用当前本地时区，日历夏令时 23/25 小时、固定周期 24 小时，以及错过周期恢复与 claim 共用原相位。范围见 [时区阶段](../finished/pi-suite/agents/schedule-timezone.md)，Windows 与实际 CLI/手机 SSH 调度组合按扩展专项继续验收。
 
 RPC 的 4 项 Linux 检查使用真实 SDK/faux 与公共事件总线，覆盖五通道和版本 2、工厂后的注册、重复绑定、reload 撤销/恢复、生命周期与用量、同步消费不触发父级请求、待发通知撤销、已结束引导拒绝、启动错误与显式模型/参数校验；排队即时返回、信号取消、满池绕过、普通级联停止和会话/嵌套/workflow 归属拒绝通过。指定 cwd 保留父级配置/扩展并隔离目标信任，结构化工具验证、纠正提示、JSON 结果及父工作区列表通过。Windows 与实际外部扩展组合按扩展专项继续验收。
 
@@ -81,7 +81,9 @@ Workflow 宿主的 5 项 Linux（Node 24.22.2）真实 SDK/faux 与进程检查�
 
 公共基础的 46 项离线检查及类型检查在 Windows（Node 24.22.2）和 Linux（已有 WSL/nvm 环境，Node 24.14.0）通过，日常检查在 5 分钟内。共享 wait 提前返回、goal_wait waitFor、终端视图与 monitor 的 11 项检查目前只在 Linux 通过，Windows 待复核。另在 Windows 执行 pi-starship 0.65.2 实际 extension_status 模块，验证 goal/runtime 槽位读取、数量上限与空状态。这些检查证明当前询问、目标、执行任务及共享组件的契约；Windows 的 /jobs 综合交互、真实手机 SSH 输入与终端缩放、用户实际第三方 footer 配置和业务模块平台综合生命周期由 [完整实施计划](../todo/pi-suite/implementation.md) 管理。
 
-当前 Linux（Node 24.22.2）检查集共 155 项，全量检查通过，无跳过或取消项，耗时 19.80 秒，类型检查通过；日常检查耗时在 5 分钟内。检查覆盖询问、目标、任务、执行、子代理、workflow 和共享组件的当前契约。平台适用范围按上述各专项结论区分。
+真实 MCP 的 1 项 Linux stdio 聚合验证原生传输与 discovery、mcp__ 服务器名单和显式资源 helper 并存、禁用与非选择服务器不执行，以及 child 结束后全部服务进程退出。受控真实服务另核对原生 codemode/tool_search、晚注册工具在下一请求执行、隔离与不可信项目不连接；跨 cwd RPC 只加载用户 MCP，不加载父项目或目标项目 MCP。服务为本机协议夹具，业务服务、OAuth 与 Windows 范围见 [MCP 传输阶段](../finished/pi-suite/agents/mcp-transport.md) 和扩展待办。
+
+当前 Linux（Node 24.22.2）检查集共 157 项，全量检查通过，无跳过或取消项，耗时 19.96 秒，类型检查通过；日常检查耗时在 5 分钟内。检查覆盖询问、目标、任务、执行、子代理、workflow 和共享组件的当前契约。平台适用范围按上述各专项结论区分。
 
 完整 Starship 的 1 项 Linux SDK 聚合从开发依赖加载 0.65.2 实际发布入口，核对 goal_wait、tasks、运行 child、两个 job 与主询问在 40×24、60×30、120×40 并存，实际 emoji/24 位样式、max_statuses 插入顺序、disabled/缺失 extension_status、整体换行和显式 Dock 显示。询问期间实际 job 结算不增加模型调用。终端尺寸由受控 fixture 驱动；当前布局满足本包预算，任意用户 footer format 无可靠公共高度反馈，Windows 与真实手机组合按 [footer 联动范围](../finished/pi-suite/footer-integration.md) 的边界继续验收。
 
