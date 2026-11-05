@@ -10,6 +10,7 @@ import { resolveSettings } from './models.ts';
 import { hydrate, transcript } from './records.ts';
 import { answerParent } from './questions.ts';
 import { closeAgent } from './runner.ts';
+import { buildParentContext } from './resources/context.ts';
 import { active, type AgentRecord, type Execution, type ParentScope, type Pool, type StartAgent } from './types.ts';
 
 const allocate = (prefix: string) => `${prefix}_${randomBytes(4).toString('hex')}`;
@@ -58,8 +59,9 @@ export class AgentManager {
     if (this.closing || scope.run && (!active(scope.run.record.state) || this.closedRuns.has(scope.run.record.runId))) {
       throw new ToolError('NOT_RUNNING', 'Parent run no longer admits children');
     }
-    const type = resolveType(scope.ctx.cwd, previous?.type ?? request.type ?? 'general-purpose');
+    const type = resolveType(scope.ctx.cwd, previous?.type ?? request.type ?? 'general-purpose', { trusted: scope.ctx.isProjectTrusted(), packageGate: config.agents.packageAgents });
     if (scope.run) {
+      if (scope.run.isolated) throw new ToolError('AGENT_TYPE', 'An isolated child cannot start nested agents');
       const allowed = scope.run.type.allowedSubagents;
       if (!allowed || allowed !== 'all' && !allowed.includes(type.name)) throw new ToolError('AGENT_TYPE', `${scope.run.record.type} cannot start ${type.name}`);
       if (scope.run.record.ancestors.length + 1 >= config.agents.maxDepth) throw new ToolError('AGENT_DEPTH', 'agents.maxDepth reached');
@@ -79,13 +81,14 @@ export class AgentManager {
       anchorEntryId: scope.run?.record.anchorEntryId ?? scope.ctx.sessionManager.getLeafId(),
       parentAgentId: scope.run?.record.id, parentRunId: scope.run?.record.runId,
       ancestors: scope.run ? [...scope.run.record.ancestors, scope.run.record.runId] : [],
-      background: request.background ?? true, state: 'queued', createdAt: new Date(Math.max(Date.now(), previous ? Date.parse(previous.createdAt) + 1 : 0)).toISOString(),
+      background: type.runInBackground ?? request.background ?? true, state: 'queued', createdAt: new Date(Math.max(Date.now(), previous ? Date.parse(previous.createdAt) + 1 : 0)).toISOString(),
       model: `${settings.model.provider}/${settings.model.id}`, modelSource: settings.modelSource,
       thinking: settings.thinking, thinkingSource: settings.thinkingSource,
       persisted: previous?.persisted ?? type.persistSession ?? (!scope.run && config.agents.persistSessions), sessionFile: previous?.sessionFile,
       taskId: request.taskId ?? previous?.taskId, individual: previous?.individual };
     const run: Execution = { record, type, model: settings.model, parent: scope, controller: new AbortController(),
-      done: Promise.withResolvers(), pendingMessages: [], consumed: false, maxTurns: type.maxTurns ?? request.maxTurns, request, config };
+      done: Promise.withResolvers(), pendingMessages: [], consumed: false, maxTurns: type.maxTurns ?? request.maxTurns, request, config,
+      isolated: type.isolated ?? request.isolated, inheritedContext: (type.inheritContext ?? request.inheritContext) ? buildParentContext(scope.ctx) : undefined };
     // Preserve a non-persisted transcript for same-process resume using the SDK's session tree.
     if (previous && !previous.sessionFile) {
       run.entries = transcript(previous, this.runs.get(previous.runId));

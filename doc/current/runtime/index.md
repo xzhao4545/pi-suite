@@ -26,6 +26,8 @@ runtime/text.ts 提供安全字面量文本转换，供任务说明、pipe 日�
 
 agents.maxConcurrent 限制后台池，maxConcurrentForeground=0 表示前台不限；maxDepth 为包含顶级的会话层数。persistSessions 控制顶级默认持久化；defaultModel 和 types.<类型>.model/thinking 提供逐字段覆盖。`/agents types` 按字段定位写入用户或项目配置，保存后立即更新内存，只影响新执行；写入复用共享 schema 与最新文件内容，无效文件拒绝覆盖。模型来源、认证要求和单 agent 操作见 [模型配置](../agents/models.md)。
 
+agents.packageAgents 接受 boolean 或包名/source 数组，默认加载 Pi 已安装包显式声明的类型；false 和空数组关闭。包根由 Pi 的公共包管理器解析，项目包受父级信任约束，声明与资源范围见 [类型与资源](../agents/resources.md)。
+
 ## 会话和通知
 
 SessionBinding 为当前主会话保存上下文、会话 ID 和绑定代次。session_start 建立绑定；session_shutdown 保存目标、取消询问、清除本包 UI 并撤销绑定。session_tree 在所选分支恢复目标并更换绑定，不向所选分支写入离开分支的目标。旧绑定的排队询问不得在新会话展示。

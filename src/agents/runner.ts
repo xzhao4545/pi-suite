@@ -1,31 +1,25 @@
 // Same-process SDK lifecycle adapted from @tintinweb/pi-subagents 0.23.0 src/agent-runner.ts (MIT).
-import { createAgentSession, DefaultResourceLoader, getAgentDir, SessionManager, SettingsManager, type ExtensionFactory, type ModelRuntime } from '@earendil-works/pi-coding-agent';
+import { createAgentSession, getAgentDir, SessionManager, type ExtensionFactory, type ModelRuntime } from '@earendil-works/pi-coding-agent';
 import type { SuiteConfig } from '../runtime/config.ts';
 import type { Execution } from './types.ts';
 import { AGENT_ENTRY, resultText } from './records.ts';
+import { childResources, resourcePath } from './resources/loader.ts';
+import { installExtensionToolScope } from './resources/scope.ts';
 
 export async function executeAgent(run: Execution, config: SuiteConfig, factory: ExtensionFactory, changed: () => void): Promise<void> {
   const { record, parent } = run, agentDir = getAgentDir();
-  const settingsManager = SettingsManager.create(record.cwd, agentDir);
-  const loader = new DefaultResourceLoader({ cwd: record.cwd, agentDir, settingsManager,
-    // The suite is injected once with explicit parent/run scope. General resource selection is
-    // added through this loader; discovery must never instantiate a second top-level suite.
-    noExtensions: true, extensionFactories: [factory],
-    ...(run.type.promptMode === 'replace' ? { systemPrompt: run.type.systemPrompt } : { appendSystemPrompt: [run.type.systemPrompt] }),
-  });
-  await loader.reload();
+  const { settingsManager, loader, scope } = await childResources(run, factory);
   if (run.controller.signal.aborted) return;
+  const sessionDir = run.type.sessionDir ?? process.env.PI_CODING_AGENT_SESSION_DIR ?? settingsManager.getSessionDir();
   const manager = run.sessionManager ?? (record.sessionFile ? SessionManager.open(record.sessionFile)
-    : record.persisted ? SessionManager.create(record.cwd, undefined, { parentSession: parent.ctx.sessionManager.getSessionFile() }) : SessionManager.inMemory(record.cwd));
+    : record.persisted ? SessionManager.create(record.cwd, sessionDir ? resourcePath(sessionDir, record.cwd) : undefined,
+      { parentSession: parent.ctx.sessionManager.getSessionFile() }) : SessionManager.inMemory(record.cwd));
   // Pi 1.5.0 exposes ModelRegistry to extensions but accepts only ModelRuntime in the SDK.
   // Like upstream, bridge this single SDK boundary to retain the parent's providers, auth and
   // virtual routers. Remove the field access when Pi exposes a public context.modelRuntime.
   const modelRuntime = (parent.ctx.modelRegistry as unknown as { runtime: ModelRuntime }).runtime;
   const { session, extensionsResult } = await createAgentSession({ cwd: record.cwd, agentDir, sessionManager: manager,
     settingsManager, resourceLoader: loader, modelRuntime, model: run.model, thinkingLevel: record.thinking,
-    tools: [...run.type.tools ?? ['read', 'write', 'edit', 'bash', 'grep', 'find', 'ls', 'task_list', 'task_edit', 'job_start', 'job_list', 'job_read', 'job_write', 'job_stop', 'wait'],
-      ...run.type.tools?.length === 0 ? [] : ['ask_user'],
-      ...(run.type.allowedSubagents ? ['agent_start', 'agent_list', 'agent_read', 'agent_send', 'agent_stop', 'wait'] : [])],
     excludeTools: run.type.excludeTools });
   run.session = session; run.sessionManager = manager; record.sessionFile = manager.getSessionFile();
   // Creation awaits SDK/resource startup. An individual edit accepted during that await must
@@ -37,6 +31,7 @@ export async function executeAgent(run: Execution, config: SuiteConfig, factory:
   const errors: string[] = extensionsResult.errors.map(error => `${error.path}: ${error.error}`);
   await session.bindExtensions({ mode: 'print', onError: error => { errors.push(error.error); } });
   if (errors.length) throw new Error(errors.join('; '));
+  installExtensionToolScope(session, scope);
   run.renderers = new Map();
   for (const tool of session.getAllTools()) {
     const renderer = session.extensionRunner.resolveToolRenderers(tool.name, () => session.getToolDefinition(tool.name));
@@ -69,7 +64,7 @@ export async function executeAgent(run: Execution, config: SuiteConfig, factory:
   try {
     if (!run.controller.signal.aborted) {
       record.state = 'running'; changed();
-      await session.prompt(record.prompt, { source: 'extension' });
+      await session.prompt(`${run.inheritedContext ?? ''}${record.prompt}`, { source: 'extension' });
       for (const message of run.pendingMessages.splice(0)) {
         if (!run.controller.signal.aborted) await session.prompt(message, { source: 'extension' });
       }

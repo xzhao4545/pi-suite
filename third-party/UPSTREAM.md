@@ -52,7 +52,10 @@ agents 按职责导入改造 @tintinweb/pi-subagents 0.23.0，保留 [完整 MIT
 | src/agents/manager.ts、runtime.ts | src/agent-manager.ts | 拆分同进程生命周期、两池共享 FIFO 与 chargedPool；增加 run ID、父级准入关闭与 job 级联，reload 保持执行 owner |
 | src/agents/runner.ts、records.ts | src/agent-runner.ts、agent-record-entry.ts | Pi SDK 会话创建、绑定、prompt/abort/dispose 与 custom entry；删除 worktree，记录按 run 的结束叶子，使用父级 ModelRuntime |
 | src/agents/child.ts、questions.ts | src/nested-tools.ts 的嵌套范围 | 工具改为 agent_*；共享 TaskStore、wait、Notifications 与 ask schema，新增只交直接父级的挂起提问 |
+| src/agents/resources/selectors.ts、scope.ts、loader.ts | src/agent-runner.ts 的扩展分类、工具范围与资源加载 | 保留名称/包别名、晚注册、exposure/defaultActive、MCP 模式与直接/嵌套检查；公共包管理器先筛选路径，再用 Pi loader 加载，避免排除工厂和重复 suite；作用域统一接入本包工具与禁用通配 |
+| src/agents/resources/packages.ts | src/package-resources.ts 的 manifest、目录/单文件、精确排除、真实根与包门控 | 使用 Pi 已安装根；去掉旧 API 探测、全局 trust/cache 与静默异常，信任/门控通过上下文传递；保留声明优先、文件上限与来源 |
+| src/agents/resources/context.ts、memory.ts、prompts.ts | src/context.ts、memory.ts 的提示正文与目录、prompts.ts 的 inheritableParentPrompt | 保留父文本/压缩摘要、200 行记忆索引和完整读写提示、稳定父级前缀；名字在 frontmatter 边界验证，去掉 legacy memory 与独立符号链接读取政策，I/O 错误可见 |
 
-工具与通知不导入上游实现，按本包规范重写。agents 查看复用共享原生 Transcript，扩展 child renderers、部分工具输出与稳定消息缓存。src/agents/model-editor.ts、src/runtime/config-edit.ts 和 src/ui/select.ts 为本项目类型/单 agent 模型配置需求编写，直接复用 Pi 的认证目录、模型能力、原生 SelectList、会话修改接口和共享配置；这些文件不计作上游源码导入。其余资源选择、@handle、调度/workflow/RPC 与回收按 [上游导入](../doc/todo/pi-suite/upstream-import.md) 和 [agents 待办](../doc/todo/pi-suite/agents/index.md) 继续导入。pi-starship 0.65.2 用于外部 footer 契约参考及实际 extension_status 模块验证，不是本包依赖。导入其他模块时同步记录路径、许可证及具体重构边界。
+工具与通知不导入上游实现，按本包规范重写。agents 查看复用共享原生 Transcript，扩展 child renderers、部分工具输出与稳定消息缓存。src/agents/model-editor.ts、src/runtime/config-edit.ts 和 src/ui/select.ts 为本项目类型/单 agent 模型配置需求编写，直接复用 Pi 的认证目录、模型能力、原生 SelectList、会话修改接口和共享配置；这些文件不计作上游源码导入。技能发现复用 Pi getSkills，不导入上游的重复目录扫描；命名技能在同一启用目录预加载。其余 @handle、调度/workflow/RPC 与回收按 [上游导入](../doc/todo/pi-suite/upstream-import.md) 和 [agents 待办](../doc/todo/pi-suite/agents/index.md) 继续导入。pi-starship 0.65.2 用于外部 footer 契约参考及实际 extension_status 模块验证，不是本包依赖。导入其他模块时同步记录路径、许可证及具体重构边界。
 
 更新时先取得指定版本的 npm 发布包，与登记的 tarball integrity 对照来源；检查工具契约及公共宿主 API 差异，局部吸收所需改动，更新 sources.json、许可证及本登记，再运行对应契约与宿主检查。来源校验用于确保版权和基线可追踪，不以构建产物哈希代替功能验证。

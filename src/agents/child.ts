@@ -39,7 +39,7 @@ export function childSuite(pi: ExtensionAPI, run: Execution, manager: AgentManag
       creator: { agentId: run.record.id, runId: run.record.runId, ancestors: run.record.ancestors } });
     waits.register(jobs);
   }
-  if (run.type.allowedSubagents) registerAgentTools(pi, agents, waits, () => config);
+  if (run.type.allowedSubagents && !run.isolated && run.record.ancestors.length + 1 < config.agents.maxDepth) registerAgentTools(pi, agents, waits, () => config);
   waits.register(agents); registerWait(pi, waits);
   pi.on('session_start', async (_event, ctx) => {
     binding.bind(ctx);

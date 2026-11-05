@@ -3,6 +3,8 @@ import type { Model } from '@earendil-works/pi-ai';
 import type { AskParams, AskResult, Question } from '../ask/schema.ts';
 import type { TaskStore } from '../tasks/store.ts';
 import type { SuiteConfig } from '../runtime/config.ts';
+export type ResourceChoice = boolean | string[];
+export type MemoryScope = 'user' | 'project' | 'local';
 
 export type Thinking = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 export type AgentState = 'queued' | 'starting' | 'running' | 'waiting' | 'stopping' | 'completed' | 'failed' | 'stopped' | 'limited';
@@ -13,7 +15,9 @@ export interface AgentType {
   name: string; displayName?: string; description: string; systemPrompt: string; promptMode: 'append' | 'replace';
   tools?: string[]; excludeTools?: string[]; model?: string; thinking?: Thinking;
   maxTurns?: number; persistSession?: boolean; allowedSubagents?: 'all' | string[];
-  enabled?: boolean; sourcePath?: string;
+  enabled?: boolean; sourcePath?: string; packageName?: string; color?: string;
+  extensions?: ResourceChoice; excludeExtensions?: string[]; skills?: ResourceChoice;
+  sessionDir?: string; inheritContext?: boolean; runInBackground?: boolean; isolated?: boolean; memory?: MemoryScope;
 }
 export type ModelSource = 'parameter' | 'type' | 'frontmatter' | 'default' | 'inherited' | 'individual';
 export type ModelOverrides = { model?: string; thinking?: Thinking };
@@ -31,7 +35,7 @@ export interface AgentRecord {
 }
 export type StartAgent = {
   type?: string; prompt: string; name?: string; background?: boolean; model?: string; thinking?: Thinking;
-  maxTurns?: number; taskId?: string;
+  maxTurns?: number; taskId?: string; inheritContext?: boolean; isolated?: boolean;
 };
 export interface ParentScope {
   ctx: ExtensionContext; run?: Execution; taskStore?: TaskStore;
@@ -47,5 +51,5 @@ export interface Execution {
   settled?: boolean; terminated?: boolean; streamingEntry?: SessionEntry;
   liveResults?: Map<string, SessionEntry>; renderers?: Map<string, ToolRenderers>;
   pendingMessages: string[]; consumed: boolean; notifyResult?: boolean; maxTurns?: number;
-  request: StartAgent; config: SuiteConfig;
+  request: StartAgent; config: SuiteConfig; isolated?: boolean; inheritedContext?: string;
 }

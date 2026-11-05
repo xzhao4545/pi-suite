@@ -8,6 +8,7 @@ import { agentTypes, resolveType } from './catalog.ts';
 import { active, type ModelOverrides } from './types.ts';
 import type { AgentManager } from './manager.ts';
 import { selectValue } from '../ui/select.ts';
+import { getAgentDir } from '@earendil-works/pi-coding-agent';
 
 export async function chooseModelSettings(ctx: ExtensionContext, title: string, initial: ModelOverrides, inherited: () => Model<any> | undefined): Promise<ModelOverrides | undefined> {
   const available = ctx.modelRegistry.getAvailable().sort((a, b) => `${a.provider}/${a.id}`.localeCompare(`${b.provider}/${b.id}`));
@@ -25,9 +26,10 @@ export async function chooseModelSettings(ctx: ExtensionContext, title: string, 
 }
 
 export async function editTypeModel(ctx: ExtensionContext, config: SuiteConfig, reload: (cwd: string) => void): Promise<void> {
-  const types = agentTypes(ctx.cwd), selected = await ctx.ui.select('Select agent type', types.map(type => type.name));
+  const options = { trusted: ctx.isProjectTrusted(), packageGate: config.agents.packageAgents };
+  const types = agentTypes(ctx.cwd, getAgentDir(), options), selected = await ctx.ui.select('Select agent type', types.map(type => type.name));
   if (selected === undefined) return;
-  const type = resolveType(ctx.cwd, selected), initial = config.agents.types[type.name] ?? {};
+  const type = resolveType(ctx.cwd, selected, options), initial = config.agents.types[type.name] ?? {};
   const locations = agentTypeLocations(ctx.cwd, type.name);
   ctx.ui.notify(`${type.name} · model: ${locations.model}\nthinking: ${locations.thinking}`);
   const fallback = () => resolveSettings(ctx, type, { prompt: '' }, { ...config, agents: { ...config.agents,
@@ -68,7 +70,7 @@ export async function updateAgentModel(manager: AgentManager, ctx: ExtensionCont
 
 export async function editAgentModel(ctx: ExtensionContext, manager: AgentManager, id: string, config: SuiteConfig): Promise<void> {
   const { record, run } = manager.get(id);
-  const inherited = () => resolveSettings(run?.parent.ctx ?? ctx, run?.type ?? resolveType(ctx.cwd, record.type),
+  const inherited = () => resolveSettings(run?.parent.ctx ?? ctx, run?.type ?? resolveType(ctx.cwd, record.type, { trusted: ctx.isProjectTrusted(), packageGate: config.agents.packageAgents }),
     run?.request ?? { prompt: '' }, run?.config ?? config).model;
   const changes = await chooseModelSettings(ctx, `${id} · next request`, record.individual ?? {}, inherited);
   if (!changes) return;

@@ -2,7 +2,7 @@
 
 目标：保留上游 pi-subagents 的自定义 agent 类型、@handle 提及、定时调度、SubagentWorkflow 和跨扩展 RPC，接入本包统一工具、配置与界面。
 
-当前状态：核心 frontmatter 类型发现、精确/唯一大小写匹配、禁用类型与 allowed_subagents 已导入改造；扩展/包资源选择、其余 frontmatter、@handle、调度、workflow 与 RPC 待实施。保留范围已由用户确认，不保留 git worktree 隔离。导入文件与改造边界见 [上游导入](../upstream-import.md)。
+当前状态：完整保留 frontmatter、类型与包发现、扩展选择/动态工具范围、技能预加载、memory、父级上下文与会话目录已接入，4 项 Linux SDK 契约检查通过，见 [资源基础阶段](../../../finished/pi-suite/agents/resources-core.md)。@handle、调度、workflow、RPC 与类型开关待导入，Windows、真实 MCP 和资源组合继续验收。保留范围已由用户确认，不保留 git worktree 隔离。导入文件与改造边界见 [上游导入](../upstream-import.md)。
 
 影响范围：agents 类型注册、输入拦截、调度存储、workflow worker、pi.events 通道、/agents 菜单、配置 agents 节。
 
@@ -12,12 +12,13 @@
 
 ## 任务列表
 
-- [ ] 加载自定义 agent 类型，删除 isolation 与 output_transcript 字段
+- [x] 加载自定义 agent 类型，删除 isolation 与 output_transcript 字段
 - [ ] 实现 @handle 输入拦截与补全，按 agent_send 语义投递
 - [ ] 实现 agent_start 的 schedule 参数、调度存储与 /agents 调度列表
 - [ ] 实现 agent_workflow 及其查看界面，gate 在 cwd 执行
 - [ ] 注册 subagents:rpc:* 通道并保持协议版本 2
 - [ ] /agents 菜单汇总记录、类型开关、按类型的模型与 thinking 配置（见 [模型与 thinking 配置](models.md)）、调度与 workflow，同步操作说明
+- [ ] Windows 与实际 MCP 服务复核资源组合、晚注册与 MCP 桥接、包根/符号链接及类型/技能目录的信任边界
 
 ## 验收方式
 
@@ -36,6 +37,8 @@
 保留的 frontmatter：name、display_name、color、description、tools、disallowed_tools、extensions/exclude_extensions、skills、model、thinking、max_turns、persist_session、session_dir、allowed_subagents、prompt_mode、inherit_context、run_in_background、isolated、memory、enabled。正文为系统提示。frontmatter 优先于工具参数，model 与 thinking 除外：二者按 agent_start 参数、TUI 类型配置、frontmatter 的顺序取值，见 [模型与 thinking 配置](models.md)。allowed_subagents 为空时不注入嵌套工具，嵌套深度默认 2。
 
 删除 isolation（worktree 隔离不保留）与 output_transcript（不另写 JSONL 副本）。文件中出现这两个字段时报告未支持字段，不静默忽略。
+
+当前加载规则与字段事实见 [类型与资源](../../../current/agents/resources.md)。extensions/skills 使用 Pi 公共加载器，项目资源继承父级信任；包类型仅来自已安装且显式声明的资源，packageAgents 提供包门控。直接与嵌套工具调用使用同一动态范围，前台与 isolated 按 frontmatter 优先规则决定，达到深度上限时不注入不可用的嵌套工具。
 
 ## @handle 提及
 

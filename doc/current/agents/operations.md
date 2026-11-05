@@ -2,7 +2,7 @@
 
 | 入口 | 当前行为 |
 | --- | --- |
-| agent_start | prompt、type?、name?、background?、model?、thinking?、maxTurns?、taskId?；background 默认 true |
+| agent_start | prompt、type?、name?、background?、model?、thinking?、maxTurns?、taskId?、inheritContext?、isolated?；background 默认 true，类型 run_in_background 优先 |
 | agent_list | id 查进度详情和历史 run；列表 state 为 active/queued/finished/all，默认 active；scope 为 session/workspace，默认 session；cursor/limit 分页，默认 20、最多 100 |
 | agent_read | id、runId?；活动默认 transcript，结束默认 result；offset/limitBytes/search/context 使用 [共享读取规则](../jobs/index.md) |
 | agent_send | id、message；返回 answered、steered、queued 或 resumed，只有直接父级可以发送 |
@@ -31,7 +31,7 @@ message 与选项 ID/标题精确匹配时返回 selection，否则在 allowFree
 
 ## 类型与模型
 
-核心类型文件依次加载用户 `<agentDir>/agents`、项目 `.agents/agents`、项目 `.pi/agents`；后加载的同名类型覆盖前者，精确名称优先，大小写匹配必须唯一，enabled=false 禁止启动。支持 name、display_name、description、tools、disallowedTools/disallowed_tools、model、thinking、max_turns、persist_session、allowed_subagents、prompt_mode 和 enabled。正文为系统提示词；allowed_subagents 默认不开放嵌套，可为 all 或类型名单。
+类型依次加载 Pi 包声明、用户 `<agentDir>/agents`、项目 `.agents/agents`、项目 `.pi/agents`；后加载的同名类型覆盖前者，项目目录与项目包只在父级已信任时参与。精确名称优先，大小写匹配必须唯一，enabled=false 禁止启动。支持 name、display_name、description、color、tools、disallowedTools/disallowed_tools、model、thinking、max_turns、persist_session、session_dir、allowed_subagents、prompt_mode、extensions/exclude_extensions、skills、inherit_context、run_in_background、isolated、memory 和 enabled。正文为系统提示词；allowed_subagents 默认不开放嵌套，可为 all 或类型名单。字段、包与资源操作见 [类型与资源](resources.md)。
 
 模型与 thinking 分别按调用参数、该 agent 的 individual、agents.types 的对应字段、frontmatter、agents.defaultModel（仅模型）、父级当前值解析。配置逐类型逐字段合并；显式 provider/modelId 在认证目录中不可用时报错指出来源，不跨 Provider 替换；调用参数和 frontmatter 的模糊名仅在匹配唯一时接受。实际 thinking 由 Pi 按模型能力收紧。单独修改从下一次请求生效，结束后的修改用于恢复，详细规则见 [模型配置](models.md)。
 

@@ -33,6 +33,7 @@ export const configSchema = Type.Object({
     defaultModel: Type.Optional(Type.String({ minLength: 1 })),
     types: Type.Optional(Type.Record(Type.String(), Type.Object({ model: Type.Optional(Type.String({ minLength: 1 })),
       thinking: Type.Optional(thinkingSchema) }, { additionalProperties: false }))),
+    packageAgents: Type.Optional(Type.Union([Type.Boolean(), Type.Array(Type.String({ minLength: 1 }))])),
   }, { additionalProperties: false })),
   jobs: Type.Optional(Type.Object({
     display: Type.Optional(display),
@@ -53,7 +54,7 @@ export interface SuiteConfig {
   tasks: { reminders: boolean };
   agents: { display: DisplayMode; maxConcurrent: number; maxConcurrentForeground: number;
     maxDepth: number; persistSessions: boolean; defaultModel?: string;
-    types: Record<string, { model?: string; thinking?: Thinking }> };
+    types: Record<string, { model?: string; thinking?: Thinking }>; packageAgents?: boolean | string[] };
   /** Terminal view keys: leave the view, hand input back to the model, send the screen to the model. */
   jobs: { display: DisplayMode; detachKey: KeyId; returnKey: KeyId; transferKey: KeyId;
     agents: Record<string, Preset>; launchPolicy: (command: string) => LaunchDecision };

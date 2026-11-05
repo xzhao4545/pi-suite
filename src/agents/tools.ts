@@ -20,11 +20,12 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
     parameters: Type.Object({ prompt: Type.String({ minLength: 1 }), type: Type.Optional(Type.String({ minLength: 1 })),
       name: Type.Optional(Type.String({ maxLength: 80 })), background: Type.Optional(Type.Boolean()),
       model: Type.Optional(Type.String({ minLength: 1 })), thinking: Type.Optional(thinkingSchema),
-      maxTurns: Type.Optional(Type.Integer({ minimum: 0 })), taskId: Type.Optional(taskId) }, { additionalProperties: false }),
+      maxTurns: Type.Optional(Type.Integer({ minimum: 0 })), taskId: Type.Optional(taskId),
+      inheritContext: Type.Optional(Type.Boolean()), isolated: Type.Optional(Type.Boolean()) }, { additionalProperties: false }),
     async execute(_id, params, signal, _update, ctx) {
       if (signal?.aborted) throw signal.reason;
       const run = await agents.manager.start(params, agents.scope(ctx), config());
-      if (params.background !== false) return text([summaryLine(agents.manager.view(run)), `read: agent_read({"id":"${run.record.id}"})`], { agent: agentSummary(agents.manager.view(run)) });
+      if (run.record.background) return text([summaryLine(agents.manager.view(run)), `read: agent_read({"id":"${run.record.id}"})`], { agent: agentSummary(agents.manager.view(run)) });
       // Esc cancels only the active foreground call. Returning for a question removes this
       // listener, so answering the parent later can continue the same child in the background.
       const abort = () => { void agents.manager.stop(run.record.id, run.record.runId); };
