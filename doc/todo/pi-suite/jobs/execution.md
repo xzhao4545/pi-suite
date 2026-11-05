@@ -16,7 +16,8 @@
 - [x] 实现 pipe 与 PTY 两种执行模式
 - [x] 实现输入、查看、attach/detach 和停止
 - [x] 保留已结束 job 历史及起止时间、耗时，向共享状态栏提供活动数量
-- [ ] 分别验证 Windows 与 Linux 平台后端
+- [x] 验证 Windows 与 Linux 的基础 pipe/PTY 后端、记录、工具与通知
+- [ ] 完成两平台终端缩放实际验证，以及 Windows 终端视图、监督与 CLI 预设组合复核
 
 ## 验收方式
 

@@ -13,7 +13,7 @@ import type { ControlBridge } from './control.ts';
  * incompatible manager keeps running; its versioned control bridge remains usable without
  * allowing the new execution implementation to drive the old manager's internals.
  */
-export const PROTOCOL_VERSION = 9;
+export const PROTOCOL_VERSION = 10;
 export type RuntimeHandle =
   | { mode: 'active'; manager: JobManager }
   | { mode: 'restricted'; reason: string; control: ControlBridge }

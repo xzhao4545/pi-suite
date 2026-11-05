@@ -26,7 +26,9 @@ Pi 1.5.0 的位置 prompt 以 `@` 开头时会按附件文件处理，即使位�
 
 Linux 上的 Pi 1.5.0、Codex 0.166.0 与 Claude Code 2.1.153 已通过实际 CLI 的 PTY 文本交互检查。三者均使用现有预设合并、命令构造与 JobManager；初始位置 prompt 保留以 `--` 开头的中文、引号、美元表达式、反引号和换行。用户接管期间模型写入返回 USER_CONTROL，交还后可继续模型输入，停止取得 managed_scope_confirmed 清理证据。
 
-Codex 使用隔离配置、本地 Responses SSE 服务和 `--no-daemon`；Claude 使用 `--bare`、空 settings/MCP/tools、本地服务和测试密钥，并在 PTY 完成首次密钥确认。上述参数是隔离验收配置，不改变内置预设默认值。初始文本、用户输入与交还后的模型输入均逐字进入 CLI 主对话 HTTP 请求，CLI 显示对应 SSE 回复；任务标题与会话辅助请求不作为主对话正文的证据。该范围仅覆盖文本交互，不包含 CLI 工具执行、付费模型、Windows 或手机 SSH；Cursor 对应的 `agent` 命令尚缺环境。验收结论见 [实际文本 PTY 阶段](../../finished/pi-suite/jobs/cli-pty.md)，未完成范围见 [监督与 CLI 待办](../../todo/pi-suite/jobs/monitors.md)。
+Codex 使用隔离配置、本地 Responses SSE 服务和 `--no-daemon`；Claude 使用 `--bare`、空 settings/MCP/tools、本地服务和测试密钥，并在 PTY 完成首次密钥确认。上述参数是隔离验收配置，不改变内置预设默认值。初始文本、用户输入与交还后的模型输入均逐字进入 CLI 主对话 HTTP 请求，CLI 显示对应 SSE 回复；任务标题与会话辅助请求不作为主对话正文的证据。该范围仅覆盖文本交互，不包含 CLI 工具执行、付费模型、Windows 或手机 SSH；Cursor 对应的 `agent` 命令尚缺环境。文本验收结论见 [实际文本 PTY 阶段](../../finished/pi-suite/jobs/cli-pty.md)，未完成范围见 [监督与 CLI 待办](../../todo/pi-suite/jobs/monitors.md)。
+
+Linux 工具执行另通过本地受控服务验收：Codex 实际 exec_command 创建文件并回传输出/退出码，Ctrl+D 后自然退出；长工具另起进程组时，由现有 Linux 后端捕获身份并确认停止，另一独立 job 保持运行。该环境的 workspace-write 被 bwrap 权限限制阻断，成功执行使用隔离临时 danger-full-access 配置。Claude bare 模式显式开放 Bash/Read，默认权限界面只确认本次临时命令，真实文件与 tool_result 一致，`/exit` 自然退出，再次 stop 不改写结果。当前屏幕与线性日志各按 [屏幕范围](../../finished/pi-suite/jobs/screen-range.md) 读取；本结论仅覆盖上述工具和 Linux，完整范围见 [工具执行阶段](../../finished/pi-suite/jobs/cli-tools.md)。
 
 ## 启动策略
 

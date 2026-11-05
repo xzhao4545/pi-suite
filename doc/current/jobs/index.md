@@ -6,7 +6,7 @@ jobs 模块在同一 Pi 进程内管理 pipe 与 PTY 两种后台执行。实现
 
 ## 结构
 
-- JobManager（manager.ts）持有进程、PTY、日志和记录，不持有 Pi context。它注册在进程全局槽位 `pi-suite.jobs.runtime`，执行协议版本 9；reload 重新导入模块时复用同一 manager。
+- JobManager（manager.ts）持有进程、PTY、日志和记录，不持有 Pi context。它注册在进程全局槽位 `pi-suite.jobs.runtime`，执行协议版本 10；reload 重新导入模块时复用同一 manager。
 - JobsModule（index.ts）是每个扩展实例的会话绑定：只在会话绑定期间订阅 manager，发布当前会话的活动数量和结算通知；reload、new、resume、fork、树切换只撤销并重建订阅，不转移所有权。
 - 执行协议不兼容且占用中的 manager 仍有活动或未保存的 job 时，保留其注册和退出清理。相同 agentDir 且控制桥版本兼容时，进入受限模式：查询、日志、停止、指定 ID 的 wait/goal_wait 与 quit 通过原实现的闭包调用，活动数量继续更新；新启动、写入与终端 attach 返回 RUNTIME_UNAVAILABLE，自动结果与监督通知暂停。job 全部结束并保存后，/reload 替换空闲 manager，同时释放其退出监听。
 - 控制桥版本 3 暴露查询、日志路径、订阅、活动数量、停止、通知已读标记、创建归属查询 createdBy、全 cwd 的直属 sessionJobs 与 quit。版本 2 支持 createdBy，版本 1 的创建归属查询明确返回 RUNTIME_UNAVAILABLE；版本 1/2 不提供完整 session 列表，明确返回 RUNTIME_UNAVAILABLE，workspace 查询、日志、停止与 quit 保留。绑定时提示一次状态仅包含当前分支直属活动 job，完整 child 聚合需要 v3。保存记录和控制返回数据的契约变化需要同步提升控制桥版本。没有兼容控制桥或 agentDir 不同的占用注册保留退出清理，绑定时提示原因，工具返回 RUNTIME_UNAVAILABLE。
@@ -25,8 +25,10 @@ jobs 模块在同一 Pi 进程内管理 pipe 与 PTY 两种后台执行。实现
 
 只有观测到真实退出才结算：退出码 0 且无信号为 completed，否则 failed；有停止原因时为 stopped，超时为 timed_out，日志超限为 failed。停止请求先进入 stopping，清理为 pending，直至平台后端给出证据：
 
-- Linux 每个 job 根进程是进程组组长，先 SIGTERM，250 ms 后 SIGKILL，确认整个组消失。
+- Linux 每个 job 根进程是进程组组长；停止前从 `/proc` 捕获根组成员与可追溯后代，包括另建 session/进程组的 CLI 工具。发信号前核对 PID 与精确 start ticks，先 SIGTERM，250 ms 后 SIGKILL，确认捕获范围均已终止；同步进程退出使用同一捕获范围。混有未捕获成员的组只对已核对身份的 PID 发信号，避免扩大清理目标。
 - Windows 先以 CIM 记录根进程身份，按创建时间选取子树，taskkill /T /F 后确认整个范围消失；查询与 taskkill 之间仍有 TOCTOU 风险。
+
+Linux 的 CleanupEvidence.scope 身份字段 createdAt 使用 `linux:<boot-relative start ticks>`；Windows 使用 CIM 创建时间。捕获范围保留到实际确认，不因父进程先退出而丢失后代；Z/X 进程已终止，不等待 PID 1 回收 zombie。首次捕获前已脱离祖先链且不在根组的进程不属于可证明范围，不能用历史 PID 恢复其控制权；`/proc` 身份复核与 kill 之间仍有系统调用竞态。
 
 期限内无法确认时清理为 unconfirmed，job 继续计入活动数量。重复 stop 合并到进行中的请求；已结算 job 返回既有结果，不再发送终止。进程已观测到退出、最终 monitor 仍在处理时，stop 等待已有结算并返回 requested:false，保留自然退出码与状态。只有历史、无当前控制句柄的 job 返回 HISTORY_READ_ONLY，不按历史 PID 操作。
 

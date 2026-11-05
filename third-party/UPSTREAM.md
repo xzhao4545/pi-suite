@@ -24,6 +24,7 @@ jobs 导入 pi-background-jobs 0.1.3 与 pi-interactive-shell 0.18.0 的部分�
 | --- | --- | --- |
 | src/jobs/backends/windows-tree.ts | pi-background-jobs src/windows-process.ts | 改为作用于与后端无关的进程句柄，供 pipe 与 PTY 共用 |
 | src/jobs/backends/pipe.ts | pi-background-jobs src/process.ts | stdin 保持打开供输入；POSIX 子进程为进程组组长 |
+| src/jobs/backends/process.ts、linux-tree.ts | 本项目实现，复用既有 Tracked 与平台停止后端 | Linux 停止前捕获根组及可追溯后代的 `/proc` start ticks，复核身份后发送 TERM/KILL，保留父退出后的范围并确认终止；pipe、PTY 和同步退出共用，不计作上游直接导入 |
 | src/jobs/manager.ts | pi-background-jobs src/jobs.ts | 增加 PTY、单一 job.json、单调耗时、输入记录、创建归属查询与级联停止共用完整 owned 集合，sessionJobs 提供不分页的跨 cwd 直属副本；workflow gate 共用关闭 stdin 和结算等待，本次停止只匹配传入 creator 范围，累计关闭集合用于未来准入；主动历史清理复用 JobStore.remove，等待结算/输入/保存队列并撤销未送达通知；去掉工作区独占锁 |
 | src/jobs/store.ts、runtime.ts、state.ts、types.ts、workspace.ts | pi-background-jobs 同名文件 | 目录与 ID 改为本包格式；runtime 注册键与协议改为本包，增加独立版本的查询/停止控制桥；v3 提供 createdBy 和全 cwd 直属 sessionJobs；v2 保留 createdBy，v1/v2 完整 session 查询明确拒绝，当前分支直属计数与基础控制保留 |
 | src/jobs/backends/pty.ts、terminal/protocol.ts、terminal/keys.ts、terminal/shell.ts | pi-interactive-shell pty-process.ts、pty-protocol.ts、key-encoding.ts、shell-resolution.ts | 删除语义动作编码；Windows 停止接入 windows-tree |

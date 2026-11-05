@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -58,6 +58,51 @@ test("stop confirms the managed tree; repeated stop joins; a settled job is not 
     const again = await jobs.stop(done.id);
     assert.equal(again.requested, false); assert.equal(again.job.state, "completed");
   } finally { await jobs.shutdown(Date.now() + 5000); }
+});
+
+test('Linux stop and exit cleanup include tool descendants in another session without stopping another job', {timeout: 20000}, async () => {
+  if (process.platform !== 'linux') return;
+  for (const [mode, sync] of [['pipe', false], ['pty', false], ['pipe', true]] as const) {
+    const jobs = manager(), work = cwd(), marker = join(work, 'tool-pids.json'), orphanMarker = join(work, 'orphan-pid');
+    let pids: number[] = [];
+    // A CLI tool owns another session and ignores TERM, while its parent exits on TERM.
+    // The stopper must retain the tool's identity before that ancestry disappears.
+    const tool = `const {spawn}=require('node:child_process'); const {writeFileSync}=require('node:fs');
+const leaf=spawn('sleep',['30'],{stdio:'ignore'});
+writeFileSync(${JSON.stringify(marker)},JSON.stringify([process.pid,leaf.pid]));
+process.on('SIGTERM',()=>{}); setInterval(()=>{},1000);`;
+    // A reparented member of the original group must remain managed as well.
+    const orphan = `sleep 30 </dev/null >/dev/null 2>&1 & echo $! > ${shellArgument(orphanMarker)}`;
+    const cli = `const {spawn}=require('node:child_process');
+spawn(process.execPath,['-e',${JSON.stringify(tool)}],{detached:true,stdio:'ignore'});
+spawn('/bin/sh',['-c',${JSON.stringify(orphan)}],{stdio:'ignore'}); setInterval(()=>{},1000);`;
+    const running = (pid: number) => {
+      try { const stat = readFileSync(`/proc/${pid}/stat`, 'utf8'); return !/^[ZX] /.test(stat.slice(stat.lastIndexOf(')') + 2)); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false; throw error; }
+    };
+    try {
+      const other = sync ? undefined : await jobs.start({...owner, cwd: work, command: 'sleep 30'}, shell);
+      const job = await jobs.start({...owner, cwd: work, mode, command: `${shellArgument(process.execPath)} -e ${shellArgument(cli)}`}, shell);
+      const deadline = Date.now() + 5000;
+      while (!existsSync(marker) || !existsSync(orphanMarker)) { assert.ok(Date.now() < deadline, 'tool did not start'); await sleep(10); }
+      pids = [...JSON.parse(readFileSync(marker, 'utf8')), Number(readFileSync(orphanMarker, 'utf8').trim())];
+      while (readFileSync(`/proc/${pids.at(-1)}/stat`, 'utf8').split(') ')[1].split(' ')[1] !== '1') {
+        assert.ok(Date.now() < deadline, 'same-group child did not reparent'); await sleep(10);
+      }
+      assert.ok(pids.every(running));
+      if (sync) jobs.exitSync(Date.now() + 3000);
+      else await jobs.stop(job.id);
+      while (pids.some(running)) { assert.ok(Date.now() < deadline, 'tool descendants survived cleanup'); await sleep(10); }
+      const stopped = await settled(jobs, job.id);
+      assert.equal(stopped.cleanup.state, 'managed_scope_confirmed', stopped.cleanup.error);
+      for (const pid of pids) assert.ok(stopped.cleanup.scope.some(identity => identity.pid === pid), 'cleanup evidence retains detached descendants');
+      if (other) assert.equal(jobs.peek(other.id).state, 'running');
+    } finally {
+      await jobs.shutdown(Date.now() + 5000);
+      for (const pid of pids) if (running(pid)) process.kill(pid, 'SIGKILL');
+      rmSync(work, {recursive: true, force: true});
+    }
+  }
 });
 
 test("timeoutMs settles as timed_out after confirmed cleanup", { timeout: 30000 }, async () => {

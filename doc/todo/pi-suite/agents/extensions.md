@@ -23,7 +23,8 @@
 - [ ] Windows 与实际 MCP 服务复核资源组合、晚注册与 MCP 桥接、包根/符号链接及类型/技能目录的信任边界
 - [x] Linux 原生 stdio MCP 受控服务验证 discovery、直接/桥接/晚注册、显式资源与禁用名单、隔离/项目/RPC 信任及 child 服务进程清理，见 [真实传输阶段](../../../finished/pi-suite/agents/mcp-transport.md)
 - [ ] Windows 与真实手机 SSH 复核 @handle/文件补全、活动引导、结束恢复、克隆启动与会话切换
-- [ ] Windows、实际 CLI 与手机 SSH 复核本地时区的 cron/周期/单次、切换与退出、调度详情和取消
+- [x] Linux 实际 Pi CLI 验证 cron/周期/单次真实触发、原生详情与取消、reload/new/resume 及 quit 的 child/job 清理，见 [CLI 调度阶段](../../../finished/pi-suite/agents/schedules-cli.md)
+- [ ] Windows 与真实手机 SSH 复核本地时区的 cron/周期/单次、切换与退出、调度详情和取消
 - [x] Linux 真实 SDK 与虚拟时钟验证 UTC 持久期限、跨时区 reload、日历夏令时 23/25 小时、固定周期 24 小时和错过周期保持原相位，见 [时区阶段](../../../finished/pi-suite/agents/schedule-timezone.md)
 - [ ] Windows 与真实手机 SSH 复核 workflow 的 shell/gate 清理、长名称选择、child/gate 查看、控制与 journal 重放
 - [ ] Windows 与真实手机 SSH 复核原生 child 查看器的流式/工具部分结果、搜索与阅读位置、消息输入、两次停止、真实前台转后台与 Jobs 日志/单独停止/只读入口
