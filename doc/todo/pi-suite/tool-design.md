@@ -118,7 +118,7 @@ read 统一返回 `{ text, stream, offset, nextOffset, totalBytes, endOfStream, 
 | job_read | id、stream?、offset?、limitBytes?、search?、context? | stream：stdout、stderr、output、input、events |
 | job_write | id、input?、keys?、paste?、submit?、sensitive? | input/keys/paste 三选一 |
 | job_stop | id | |
-| agent_start | prompt、description、type?、name?、model?、thinking?、maxTurns?、background?、inheritContext?、taskId?、schedule? | background 默认 true；false 时等待结果，child 提问时提前返回 |
+| agent_start | prompt、description、type?、name?、model?、thinking?、maxTurns?、background?、inheritContext?、taskId?、schedule? | background 默认 true；false 时等待结果，child 提问时提前返回。model/thinking 优先于 TUI 类型配置与 frontmatter，见 [模型与 thinking 配置](agents/models.md) |
 | agent_list | id? 或 state?、scope?、cursor?、limit? | id 时返回进度详情 |
 | agent_read | id、runId?、stream?、offset?、limitBytes?、search?、context? | stream 为 result 或 transcript |
 | agent_send | id、message | 按 agent 状态回答提问、引导运行或恢复会话，返回实际 action |

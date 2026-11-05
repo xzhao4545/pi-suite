@@ -16,6 +16,7 @@
 - [ ] [运行记录与手动控制](runs.md)
 - [ ] [主从交互](interaction.md)
 - [ ] [扩展能力](extensions.md)
+- [ ] [模型与 thinking 配置](models.md)
 
 ## 验收方式
 
@@ -27,6 +28,6 @@
 
 默认后台运行：agent_start 立即返回 ID，结算后统一通知；background:false 时等待结算，期间父执行被 Esc 中断会停止该前台 child，后台 child 不受父执行 Esc 影响。结算超过 10 分钟的内存记录可以释放，保存的会话与记录仍可读取和恢复。
 
-配置并入共享配置 agents 节：display、maxConcurrent、maxConcurrentForeground、maxDepth、persistSessions、scheduling、workflows、defaultModel 等，按用户级默认与项目级覆盖合并。
+配置并入共享配置 agents 节：display、maxConcurrent、maxConcurrentForeground、maxDepth、persistSessions、scheduling、workflows、defaultModel、types（按类型的模型与 thinking，由 TUI 写入，见 [模型与 thinking 配置](models.md)）等，按用户级默认与项目级覆盖合并。
 
 [返回扩展包待办索引](../index.md)

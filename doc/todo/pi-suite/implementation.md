@@ -64,5 +64,6 @@
 - child 向父 agent 提问、agent_send 回答/引导/恢复、等待中提前返回问题、提问超时与嵌套不越级。
 - monitor 三种策略的触发、冷却与生命周期通知；hands-free 更新预算、dispatch 静默结束、用户接管与交还。
 - 自定义 agent 类型、@handle、定时调度、agent_workflow 与跨扩展 RPC 的开关和基本流程。
+- TUI 按类型与按单个 subagent 配置模型和 thinking：列表只含已认证模型，类型配置不需 /reload 即作用于新启动的执行且不影响已运行的，单个修改从下一次模型请求生效；优先级为参数、类型配置、frontmatter。
 
 设计阶段的静态源码核对不替代以上运行验收。

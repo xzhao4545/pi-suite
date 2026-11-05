@@ -114,7 +114,7 @@ src/
 | src/agent-manager.ts | 1735 | 导入并拆分为记录与生命周期、两个并发池与队列、停止与回收。保留 isTopLevelAgent、启动时记录 chargedPool、dequeue 释放等待者、排队项的父级 abort；增加执行 ID 与 job 级联停止 |
 | src/agent-runner.ts | 1468 | 导入并拆分为会话构建、工具范围、恢复与引导。删除 worktree；child 会话注入转交父 agent 的 ask_user |
 | src/nested-tools.ts | 426 | 导入，工具改为 agent_* 规范名；嵌套深度默认 2 |
-| src/agent-types.ts、custom-agents.ts、default-agents.ts、invocation-config.ts | 346、452、125、155 | 导入，删除 isolation 参数 |
+| src/agent-types.ts、custom-agents.ts、default-agents.ts、invocation-config.ts | 346、452、125、155 | 导入，删除 isolation 参数；invocation-config 的 model 与 thinking 改为参数优先于 TUI 类型配置、再优先于 frontmatter，见 [模型与 thinking 配置](agents/models.md) |
 | src/agent-record-entry.ts | 138 | 导入，条目类型改为 pi-suite:agent-record，保留 reopenTarget 拒绝规则 |
 | src/completion-outbox.ts、group-join.ts | 116、141 | 规则并入共享 Notifications：一个边界一条消息、已读取结果撤销通知；不保留 group 参数 |
 | src/mention.ts、mention-clone.ts、ui/agent-mention.ts | 141、195、216 | 导入 @handle 输入与补全 |
@@ -122,9 +122,9 @@ src/
 | src/workflow/* | 4307 | 导入；runtime.ts 1219 行拆分；gate 在 cwd 执行，不再依赖 worktree；工具名 agent_workflow |
 | src/ui/workflow-card.ts、workflow-dialog.ts、workflow-menu.ts | 470、1115、193 | 导入，workflow-dialog 拆分；显示行接入 dock |
 | src/cross-extension-rpc.ts | 221 | 导入，保留 subagents:rpc:* 通道名与协议版本 2，供外部扩展调用 |
-| src/settings.ts | 650 | 设置项并入共享配置 agents 节；不导入独立设置界面 |
+| src/settings.ts | 650 | 设置项并入共享配置 agents 节；不导入独立设置界面，仅按类型的模型与 thinking 由 /agents 写回配置，见 [模型与 thinking 配置](agents/models.md) |
 | src/memory.ts、usage.ts、prompts.ts、skill-loader.ts、context.ts、env.ts、structured-output.ts、status-note.ts | 179、167、171、102、58、33、130、90 | 导入 |
-| src/model-resolver.ts、model-scope.ts、enabled-models.ts | 118、70、180 | 导入 |
+| src/model-resolver.ts、model-scope.ts、enabled-models.ts | 118、70、180 | 导入；model-resolver 对配置与参数中不可用的模型报错并指出来源，不换成其他 provider 的同名模型 |
 | src/package-resources.ts | 652 | 导入，保留项目信任判断 |
 | src/agent-color.ts、agent-source-badge.ts、agent-file-toggle.ts | 161、75、297 | 导入，用于 /agents 列表与类型开关 |
 | src/child-context.ts、abortable.ts、xml.ts、types.ts | 15、43、13、404 | 导入，types 删除 worktree 字段 |

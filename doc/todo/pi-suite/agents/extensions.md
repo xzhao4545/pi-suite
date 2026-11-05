@@ -17,7 +17,7 @@
 - [ ] 实现 agent_start 的 schedule 参数、调度存储与 /agents 调度列表
 - [ ] 实现 agent_workflow 及其查看界面，gate 在 cwd 执行
 - [ ] 注册 subagents:rpc:* 通道并保持协议版本 2
-- [ ] /agents 菜单汇总记录、类型开关、调度与 workflow，同步操作说明
+- [ ] /agents 菜单汇总记录、类型开关、按类型的模型与 thinking 配置（见 [模型与 thinking 配置](models.md)）、调度与 workflow，同步操作说明
 
 ## 验收方式
 
@@ -33,7 +33,7 @@
 
 类型来自内置默认、已安装 pi 包声明的 agent、用户目录与项目 `.pi/agents/*.md`、工作区 `.agents/agents/`，后者覆盖前者；包提供的类型优先级最低，项目资源受 Pi 的项目信任判断约束。文件名或 frontmatter 的 name 为类型名。
 
-保留的 frontmatter：name、display_name、color、description、tools、disallowed_tools、extensions/exclude_extensions、skills、model、thinking、max_turns、persist_session、session_dir、allowed_subagents、prompt_mode、inherit_context、run_in_background、isolated、memory、enabled。正文为系统提示。frontmatter 优先于工具参数；allowed_subagents 为空时不注入嵌套工具，嵌套深度默认 2。
+保留的 frontmatter：name、display_name、color、description、tools、disallowed_tools、extensions/exclude_extensions、skills、model、thinking、max_turns、persist_session、session_dir、allowed_subagents、prompt_mode、inherit_context、run_in_background、isolated、memory、enabled。正文为系统提示。frontmatter 优先于工具参数，model 与 thinking 除外：二者按 agent_start 参数、TUI 类型配置、frontmatter 的顺序取值，见 [模型与 thinking 配置](models.md)。allowed_subagents 为空时不注入嵌套工具，嵌套深度默认 2。
 
 删除 isolation（worktree 隔离不保留）与 output_transcript（不另写 JSONL 副本）。文件中出现这两个字段时报告未支持字段，不静默忽略。
 
