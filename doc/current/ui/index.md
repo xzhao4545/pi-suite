@@ -28,9 +28,9 @@ ScrollView 为历史与每个选项详情分别保存滚动位置及搜索内容
 
 Windows Pi 1.5.0 实际 CLI 组合验收覆盖三种标准尺寸、27/28 行预算阈值及 ui.maxRows=1 的最低回答行例外；原生键盘焦点、历史与说明的鼠标滚动、阅读位置往返和缩放后草稿/筛选外勾选保持均通过。范围与离线模型控制边界见 [Windows 询问组合](../../finished/pi-suite/ask/windows-combination.md)。
 
-DetailsView 提供统一标题、滚动正文、搜索与可配置操作栏；操作可声明快捷键、动态可用条件、默认选择与二次确认提示。←→ 选择可用动作，Enter 执行；二次确认的动作先显示提示，再按其快捷键执行，其他按键取消确认。搜索期间所有文字键交给搜索框，不触发控制动作。静态 Markdown、tasks 快照、jobs 动态日志与 agents transcript 使用同一框架。ScrollView 支持替换正文并保留阅读状态，调用方可要求下次渲染跟随底部；用户在渲染前滚动或开始搜索会取消该次跟随。日志只缓存当前字节窗口，具体操作见 [执行任务](../jobs/index.md#用户操作) 与 [任务操作](../tasks/operations.md)。
+DetailsView 提供统一标题、滚动正文、搜索与可配置操作栏；操作可声明快捷键、动态可用条件、默认选择与二次确认提示。ActionBar 由详情与浏览框架共享，←→ 选择可用动作，Enter 执行；二次确认的动作先显示提示，再按其快捷键或 Enter 执行，其他按键取消确认。搜索期间所有文字键交给搜索框，不触发控制动作。操作栏在窄屏保留当前选中动作，并提示左右隐藏的动作。静态 Markdown、tasks 快照、jobs 动态日志与 agents transcript 使用同一框架。ScrollView 支持替换正文并保留阅读状态，调用方可要求下次渲染跟随底部；用户在渲染前滚动或开始搜索会取消该次跟随。日志只缓存当前字节窗口，具体操作见 [执行任务](../jobs/index.md#用户操作) 与 [任务操作](../tasks/operations.md)。
 
-BrowserView 是 agents/jobs 的公共列表框架，组合 Pi Input、fuzzyFilter、SelectList、Text 与 ScrollView；领域模块提供稳定身份、可搜索元数据和详情，筛选不创建独立业务数据源。80 列起使用左右布局，窄屏上下布局；重名、状态变动与显示截断不改变选中身份，每个条目保存独立阅读/搜索位置。事件刷新合并为短期渲染请求，仅可见活动条目使用每秒时钟；dispose 释放订阅及计时器。按键与范围见 [子代理操作](../agents/operations.md) 和 [job 操作](../jobs/index.md#用户操作)。
+BrowserView 是 agents/jobs 的公共列表框架，组合 Pi Input、fuzzyFilter、SelectList、Text 与 ScrollView；领域模块提供稳定身份、可搜索元数据和详情，筛选不创建独立业务数据源。可独立提供顶部控件和记录动作，导航不占用记录行；状态/范围/页面选择与文本筛选分离。动作沿用共享 ActionBar，切换记录清除待确认动作；文字输入与详情搜索不触发控制。SelectList 原生 layout/truncatePrimary 能力用于保留记录状态/时长，以及类型启用状态、模型名称和 thinking，完整身份与数据不被截断。80 列起使用左右布局，窄屏上下布局；重名、状态变动与显示截断不改变选中身份，每个条目保存独立阅读/搜索位置，往返时保留焦点。空结果明确显示且顶部控件保持可达。事件刷新合并为短期渲染请求，仅可见活动条目使用每秒时钟；dispose 释放订阅及计时器。按键与范围见 [子代理操作](../agents/operations.md) 和 [job 操作](../jobs/index.md#用户操作)。
 
 Pi 全屏文本拖选使用宿主共享剪贴板通道；tmux/SSH 的能力与操作条件见 [终端复制](terminal.md)。
 

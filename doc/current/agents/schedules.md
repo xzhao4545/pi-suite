@@ -24,7 +24,7 @@ ScheduleStore 与 TaskStore 共用 [公共 JSON 存储](../runtime/index.md) 的
 
 new/fork 使用独立会话文件，resume/reload 恢复当前会话的期限与统计；树导航按同一主会话恢复。绑定撤销会清除计时器并取消未准入的异步触发，已启动的 child 保持原归属；结算继续更新捕获的原文件。quit 停止 child 后等待调度落盘。
 
-`/subagents` 的 Scheduled agents 和 `/subagents schedules` 列出当前会话调度。选择一项可查看时间、启动类型、完整 prompt、状态、次数与最近 agent，确认后删除调度；取消已触发的调度只撤销后续触发，已启动的 child 使用 agent_stop 操作。共享原生选择器把 schedule ID 与显示文本分离，长名称和窄终端不会影响取消对象。
+`/subagents` 的 Schedules 页面和 `/subagents schedules` 列出当前会话调度。共享浏览器支持按名称、ID、类型、时间规则和 prompt 筛选，右侧显示时间、启动类型、完整 prompt、状态、次数与最近 agent；Enter 打开详情，底部 Cancel schedule 经确认后删除调度。空列表保留页面导航，返回详情保留所选 schedule ID、筛选与阅读位置；长名称和窄终端不会影响取消对象。取消已触发的调度只撤销后续触发，已启动的 child 使用 agent_stop 操作。
 
 关闭 agents.scheduling 后使用 /reload；绑定时撤销计时器，agent_start 的 schedule 参数和菜单入口隐藏，原文件保留。嵌套 child 的 agent_start 不注册 schedule 参数。外部消费者可以监听 subagents:scheduler_ready 与 subagents:scheduled 的 added/removed/fired/error 事件。
 

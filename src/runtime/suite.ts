@@ -10,6 +10,7 @@ import { recordsIn } from '../agents/records.ts';
 import { visibleAgent, type AgentType } from '../agents/types.ts';
 import { registerSuiteCommand } from './settings/index.ts';
 import { prepareClipboard } from './clipboard.ts';
+import type { SubagentsDeps } from '../agents/commands.ts';
 
 export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
   let config = loadConfig(initial.cwd);
@@ -61,17 +62,19 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
   if (workflows) waits.register(workflows);
   let startTool: ReturnType<typeof import("../agents/tools.ts").registerAgentTools> | undefined;
   let mentions: ReturnType<typeof import("../agents/mentions/index.ts").registerAgentMentions> | undefined;
+  let subagentsDeps: SubagentsDeps | undefined;
   if (agents) {
     startTool = agentApi![1].registerAgentTools(pi, agents, waits, () => config, schedules, agentJobViewer!.viewer.jobs);
     const reload = (cwd: string) => {
       config = loadConfig(cwd); cachedTypes = undefined; mentions?.refreshTypes();
       if (binding.current) workflowTool?.refreshTypes(binding.current.ctx);
     };
-    agentApi![2].registerSubagentsCommand(pi, { agents, dock, notices: notifications, config: () => config, reload, scheduler: schedules,
+    subagentsDeps = { agents, dock, notices: notifications, config: () => config, reload, scheduler: schedules,
       workflows: workflows && workflowTool ? { available: () => workflowTool.enabled,
-        show: async ctx => { const { showWorkflows } = await import('../agents/workflow/ui/menu.ts');
-          await showWorkflows(ctx, { workflows, agents, dock, config: () => config, jobs: agentJobViewer }); } } : undefined,
-      jobs: agentJobViewer }); waits.register(agents);
+        show: async (ctx, page) => { const { showWorkflows } = await import('../agents/workflow/ui/menu.ts');
+          await showWorkflows(ctx, { workflows, agents, dock, config: () => config, jobs: agentJobViewer }, page); } } : undefined,
+      jobs: agentJobViewer };
+    agentApi![2].registerSubagentsCommand(pi, subagentsDeps); waits.register(agents);
     mentions = agentApi![3].registerAgentMentions(pi, agents, binding, () => config, startTool, catalog);
   }
   if (jobs || agents) {
@@ -131,9 +134,9 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
     if (event.aborted) jobs?.pauseWakes();
     notifications.flush();
   });
-  registerSuiteCommand(pi, dock, notifications, () => config, agents ? async ctx => {
-    const { showAgentTypes } = await import('../agents/model-editor.ts');
-    await showAgentTypes(ctx, config, cwd => { config = loadConfig(cwd); cachedTypes = undefined; mentions?.refreshTypes(); workflowTool?.refreshTypes(ctx); });
+  registerSuiteCommand(pi, dock, notifications, () => config, subagentsDeps ? async ctx => {
+    const { showSubagents } = await import('../agents/ui/index.ts');
+    await showSubagents('types', ctx, subagentsDeps!);
   } : undefined);
   return bindSession;
 }

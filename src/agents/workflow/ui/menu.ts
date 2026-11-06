@@ -15,8 +15,25 @@ import { workflowActive } from '../manager.ts';
 import { collapse, displayState } from '../progress/index.ts';
 import { listSavedWorkflows, readSavedWorkflow } from '../saved.ts';
 import { WorkflowProgress } from './progress.ts';
+import { browse, browseState, type BrowsePage, type BrowseState } from '../../../ui/browser.ts';
 
 type Deps = {workflows: WorkflowsModule; agents: AgentsModule; dock: Dock; config: () => SuiteConfig; jobs?: AgentJobViewer};
+const workflowControls = (task: OwnedWorkflowTask) => [
+  {label: 'Pause', available: () => workflowActive(task) && task.status !== 'paused'},
+  {label: 'Resume', available: () => task.status === 'paused'},
+  {label: 'Stop', available: () => workflowActive(task)},
+  {label: 'Replay journal', available: () => !workflowActive(task) && Boolean(task.journalPath)},
+];
+async function controlWorkflow(action: string, ctx: ExtensionContext, deps: Deps, task: OwnedWorkflowTask): Promise<void> {
+  const manager = deps.workflows.manager;
+  if (action === 'Pause') { if (await manager.pause(task.id)) ctx.ui.notify('Paused: running agents finish; new agents wait.'); }
+  else if (action === 'Resume') await manager.resume(task.id);
+  else if (action === 'Stop') await manager.stop(task.id);
+  else if (action === 'Replay journal') {
+    const replay = await manager.start({scriptPath: task.scriptPath, args: task.args, resumeFromRunId: task.id}, deps.agents.scope(ctx), deps.config());
+    await showWorkflow(ctx, deps, replay);
+  }
+}
 export async function showWorkflow(ctx: ExtensionContext, deps: Deps, task: OwnedWorkflowTask): Promise<void> {
   let reader: ScrollView | undefined, selectedAgent: string | undefined;
   const content = new WorkflowProgress(task);
@@ -29,13 +46,11 @@ export async function showWorkflow(ctx: ExtensionContext, deps: Deps, task: Owne
         // so completion exposes replay and removes controls without a close/reopen cycle.
         const actions = [
           {label: 'Children / gates'},
-          {label: 'Pause', available: () => workflowActive(task) && task.status !== 'paused'},
-          {label: 'Resume', available: () => task.status === 'paused'},
-          {label: 'Stop', available: () => workflowActive(task)},
-          {label: 'Replay journal', available: () => !workflowActive(task) && Boolean(task.journalPath)},
+          ...workflowControls(task),
         ];
         const view = new DetailsView(tui, () => workflowSummary(task), content, done,
-          actions.map(item => ({...item, run: () => { action = item.label; done(); }})), reader);
+          actions.map(item => ({...item, ...item.label === 'Stop' ? {key: 'x' as const, confirm: '再按 x 停止 workflow'} : {},
+            run: () => { action = item.label; done(); }})), reader);
         view.reader.setContent(content, false); reader = view.reader;
         const off = deps.workflows.manager.subscribe(() => { content.invalidate(); tui.requestRender(); });
         const timer = setInterval(() => { if (workflowActive(task)) tui.requestRender(); }, 1000); timer.unref();
@@ -46,13 +61,8 @@ export async function showWorkflow(ctx: ExtensionContext, deps: Deps, task: Owne
     // from a child transcript or control keeps the same search and scroll position.
     if (!action) return;
     const manager = deps.workflows.manager;
-    if (action === 'Pause') { if (await manager.pause(task.id)) ctx.ui.notify('Paused: running agents finish; new agents wait.'); }
-    else if (action === 'Resume') await manager.resume(task.id);
-    else if (action === 'Stop') await manager.stop(task.id);
-    else if (action === 'Replay journal') {
-      const replay = await manager.start({scriptPath: task.scriptPath, args: task.args, resumeFromRunId: task.id}, deps.agents.scope(ctx), deps.config());
-      await showWorkflow(ctx, deps, replay);
-    } else {
+    if (workflowControls(task).some(control => control.label === action)) await controlWorkflow(action, ctx, deps, task);
+    else {
       const rows = collapse(task.workflowProgress).agents;
       selectedAgent = await selectValue(ctx, 'Workflow children', rows.map(row => ({value: String(row.index),
         label: `#${row.index} ${row.label} · ${displayState(row, workflowActive(task))}`})), selectedAgent);
@@ -77,28 +87,55 @@ export async function showWorkflow(ctx: ExtensionContext, deps: Deps, task: Owne
     }
   }
 }
-export async function showWorkflows(ctx: ExtensionContext, deps: Deps): Promise<void> {
-  let selected: string | undefined;
+interface WorkflowPage extends BrowsePage { saved?: boolean; savedState?: BrowseState }
+export async function showWorkflows(ctx: ExtensionContext, deps: Deps, page: WorkflowPage): Promise<void> {
+  let saved = page.saved ?? false;
+  const states = [page.state, page.savedState ??= browseState()];
+  states[Number(saved)].focus = page.state.focus;
   for (;;) {
     const runs = deps.workflows.list().sort((a, b) => b.startTime - a.startTime);
-    selected = await selectValue(ctx, 'Workflows', [...runs.map(task => ({value: task.id, label: workflowSummary(task)})),
-      {value: 'saved', label: 'Saved workflows'}], selected);
-    if (selected === undefined) return;
-    if (selected !== 'saved') { await showWorkflow(ctx, deps, deps.workflows.manager.get(selected)); continue; }
     const resources = {trusted: ctx.isProjectTrusted(), packageGate: deps.config().agents.packageWorkflows, agentDir: getAgentDir()};
-    const names = listSavedWorkflows(ctx.cwd, resources);
-    if (!names.length) { ctx.ui.notify('No saved workflows.'); continue; }
-    const name = await selectValue(ctx, 'Saved workflows', names.map(name => ({value: name, label: name})));
-    if (name === undefined) continue;
-    const source = readSavedWorkflow(name, ctx.cwd, resources);
+    const names = saved ? listSavedWorkflows(ctx.cwd, resources) : [];
+    const sources = new Map(names.map(name => [name, readSavedWorkflow(name, ctx.cwd, resources)]));
+    const progress = new Map(runs.map(task => [task.id, new WorkflowProgress(task)]));
+    let action = saved ? 'View script' : 'Open workflow', changed = false;
+    const selected = await browse(ctx, deps.dock, { title: 'Subagents', state: states[Number(saved)],
+      controls: [page.navigation, { label: 'Workflows', selected: () => saved ? 'saved' : 'runs',
+        items: () => [{value: 'runs', label: 'Runs'}, {value: 'saved', label: 'Saved'}],
+        select: (value, done) => { const previous = states[Number(saved)]; saved = value === 'saved'; page.saved = saved;
+          states[Number(saved)].focus = previous.focus; changed = true; done(); } }],
+      subscribe: refresh => deps.workflows.subscribe(refresh), ticking: () => !saved && deps.workflows.list().some(workflowActive),
+      items: () => saved ? names.map(name => ({value: name, label: name, details: () => {
+        const source = sources.get(name)!; if (!source.ok) return source.message;
+        return source.script;
+      }})) : deps.workflows.list().sort((a, b) => b.startTime - a.startTime).map(task => ({value: task.id, label: workflowSummary(task), details: () => {
+        if (!progress.has(task.id)) progress.set(task.id, new WorkflowProgress(task));
+        return progress.get(task.id)!;
+      }})),
+      actions: (item, done) => {
+        const run = (label: string) => () => { action = label; done(item.value); };
+        if (saved) return [{label: 'View script', run: run('View script')}, {label: 'Start', run: run('Start')}];
+        const task = deps.workflows.manager.get(item.value);
+        return [{label: 'Open workflow', run: run('Open workflow')}, ...workflowControls(task).map(control => ({...control,
+          ...control.label === 'Stop' ? {key: 'x' as const, confirm: '再按 x 停止 workflow'} : {}, run: run(control.label)}))];
+      },
+    });
+    if (changed) continue;
+    if (selected === undefined) return;
+    if (!saved) {
+      const task = deps.workflows.manager.get(selected);
+      if (action === 'Open workflow') await showWorkflow(ctx, deps, task);
+      else await controlWorkflow(action, ctx, deps, task);
+      continue;
+    }
+    const source = readSavedWorkflow(selected, ctx.cwd, resources);
     if (!source.ok) throw new Error(source.message);
-    const action = await selectValue(ctx, name, ['View script', 'Start'].map(label => ({value: label, label})));
-    if (action === 'View script') await showDetails(ctx, deps.dock, name, `\`\`\`javascript\n${source.script}\n\`\`\``);
+    if (action === 'View script') await showDetails(ctx, deps.dock, selected, `\`\`\`javascript\n${source.script}\n\`\`\``);
     else if (action === 'Start') {
       const input = await ctx.ui.input('Workflow args (JSON; empty uses no args)');
       if (input === undefined) continue;
       const args: unknown = input.trim() ? JSON.parse(input) : undefined;
-      const task = await deps.workflows.manager.start({name, args}, deps.agents.scope(ctx), deps.config());
+      const task = await deps.workflows.manager.start({name: selected, args}, deps.agents.scope(ctx), deps.config());
       await showWorkflow(ctx, deps, task);
     }
   }

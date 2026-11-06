@@ -1,0 +1,93 @@
+import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { browse, browseState, type BrowsePage, type BrowseState } from '../../ui/browser.ts';
+import { showDetails } from '../../ui/details.ts';
+import { isActive as jobActive } from '../../jobs/state.ts';
+import type { SubagentsDeps } from '../commands.ts';
+import { active, executing, recordWorkspace, type AgentRecord } from '../types.ts';
+import { agentDetails } from '../viewer-info.ts';
+import { agentControls, performAgentAction, showAgent } from '../viewer.ts';
+import { truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
+
+export const RUN_FILTERS = ['active', 'queued', 'finished', 'all'] as const;
+export type RunFilter = typeof RUN_FILTERS[number];
+export interface RunsState { browser: BrowseState; filter: RunFilter; workspace: boolean; selections: Map<string, string | undefined> }
+export const runsState = (filter: RunFilter, workspace: boolean): RunsState => ({ browser: browseState(), filter, workspace, selections: new Map() });
+const matches = (record: AgentRecord, filter: RunFilter) => filter === 'all' || filter === 'active' && executing(record.state)
+  || filter === 'queued' && record.state === 'queued' || filter === 'finished' && !active(record.state);
+const duration = (record: AgentRecord) => record.state === 'queued' ? `${Math.max(0, (Date.now() - Date.parse(record.createdAt)) / 1000).toFixed(1)}s wait`
+  : record.elapsedMs === undefined ? 'not started' : `${(record.elapsedMs / 1000).toFixed(1)}s`;
+
+export async function showRuns(ctx: ExtensionContext, deps: SubagentsDeps, state: RunsState, navigation: BrowsePage['navigation']): Promise<void> {
+  const { agents, dock, config, jobs } = deps;
+  let discovered = false;
+  const change = (filter: RunFilter, workspace: boolean, done: () => void) => {
+    state.selections.set(`${state.workspace}:${state.filter}`, state.browser.selected);
+    // Re-entering the workspace refreshes external history; text filtering only reads snapshots.
+    if (workspace && !state.workspace) discovered = false;
+    state.filter = filter; state.workspace = workspace;
+    state.browser.selected = state.selections.get(`${workspace}:${filter}`);
+    done();
+  };
+  for (;;) {
+    const scope = agents.scope(ctx);
+    if (state.workspace && !discovered) { await agents.manager.discover(scope, config()); discovered = true; }
+    const records = () => agents.manager.records().filter(record => state.workspace
+      ? recordWorkspace(record) === (scope.run?.configCwd ?? ctx.cwd) && (scope.run || record.workflowId === undefined)
+      : agents.manager.visible(record, scope));
+    const readonly = (record: AgentRecord) => {
+      const run = agents.manager.get(record.id, record.runId).run;
+      return !agents.manager.visible(record, scope) && (!run || run.settled === true);
+    };
+    let action = 'transcript', changed = false, displayed = new Map<string, AgentRecord>();
+    const selected = await browse(ctx, dock, { title: 'Subagents', state: state.browser,
+      controls: [navigation,
+        { label: 'Scope', items: () => [{ value: 'session', label: 'This session' }, { value: 'workspace', label: 'Workspace' }],
+          selected: () => state.workspace ? 'workspace' : 'session', select: (value, done) => { changed = true; change(state.filter, value === 'workspace', done); } },
+        { label: 'State', items: () => { const visible = records(); return RUN_FILTERS.map(filter => ({ value: filter,
+          label: `${filter[0].toUpperCase()}${filter.slice(1)} ${visible.filter(record => matches(record, filter)).length}` })); },
+          selected: () => state.filter, select: (value, done) => { changed = true; change(value as RunFilter, state.workspace, done); } }],
+      subscribe: refresh => agents.manager.subscribe(refresh), ticking: () => records().some(record => active(record.state)),
+      layout: { truncatePrimary: ({item, text, maxWidth}) => {
+        const record = displayed.get(item.value)!, tail = `${record.state} · ${duration(record)}`;
+        const name = text.slice(0, text.lastIndexOf(` · ${record.state} · `));
+        return `${truncateToWidth(name, Math.max(0, maxWidth - visibleWidth(tail) - 3))} · ${tail}`;
+      } },
+      items: () => {
+        const rows = records().filter(record => matches(record, state.filter)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        displayed = new Map(rows.map(record => [record.runId, record]));
+        return rows.map(record => {
+        return { value: record.runId, label: `${record.name} · ${record.state} · ${duration(record)}`,
+          search: `${record.id} ${record.runId} ${record.name} ${record.type} ${record.state} ${record.model} ${record.prompt}`,
+          details: () => `${readonly(record) ? 'Read only\n' : ''}${agentDetails(record)}` };
+        });
+      },
+      actions: (item, done) => {
+        const record = displayed.get(item.value)!;
+        const readOnly = readonly(record), controls = agentControls(ctx, agents, record.id, record.runId, readOnly);
+        const run = (value: string) => () => { action = value; done(item.value); };
+        const pending = record.state === 'queued';
+        return [
+          { label: pending ? 'Task details' : 'Transcript', run: run(pending ? 'details' : 'transcript') },
+          { label: 'Message', available: controls.canMessage, run: run('message') },
+          ...jobs ? [{ label: 'Jobs', run: run('jobs') }] : [],
+          { label: 'Model / thinking', available: () => !readOnly, run: run('model') },
+          { label: 'Background', available: () => !readOnly && agents.manager.canSendToBackground(record.id, record.runId), run: run('background') },
+          { label: pending ? 'Cancel queued' : 'Stop subtree', key: 'x' as const, confirm: pending ? '再按 x 取消排队' : '再按 x 停止', available: controls.canStop, run: run('stop') },
+          { label: 'Cleanup jobs', key: 'x' as const, confirm: '再按 x 清理所属 jobs',
+            available: () => !readOnly && !active(record.state) && Boolean(jobs?.viewer.jobs.createdBy([record.runId]).some(jobActive)), run: run('stop') },
+        ];
+      },
+    });
+    if (changed) continue;
+    if (selected === undefined) return;
+    const record = records().find(record => record.runId === selected);
+    if (!record) continue;
+    agents.selectRun(record.runId);
+    try {
+      if (action === 'transcript' && record.state === 'queued') action = 'details';
+      if (action === 'transcript') await showAgent(ctx, agents, dock, record.id, record.runId, config, readonly(record), jobs);
+      else if (action === 'details') await showDetails(ctx, dock, record.name, agentDetails(record));
+      else await performAgentAction(action, ctx, agents, record.id, record.runId, readonly(record), config, jobs);
+    } catch (error) { ctx.ui.notify(error instanceof Error ? error.message : String(error), 'error'); }
+  }
+}

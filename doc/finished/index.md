@@ -14,6 +14,7 @@
 - [统一 Dock 与任务显示协调阶段](./pi-suite/ui-coordination.md) — 必要 agent/job 详情、父子预算、选中/阻塞任务和询问压缩摘要；Linux SDK/组件验收。
 - [完整 Starship footer 联动阶段](./pi-suite/footer-integration.md) — 实际发布入口、真实模块并存、三尺寸、数量槽位、缺失模块与显式 Dock 显示；Linux SDK 验收。
 - [状态栏图标与 simple 布局](./pi-suite/ui/icons/index.md) — goal 动态图标、子代理/job 数量、Git 方向箭头与命名配置独立应用；Linux SDK 与 pi-starship 0.66.0 渲染验收。
+- [Subagents 统一浏览布局](./pi-suite/ui/subagents/index.md) — 顶部导航、状态/范围筛选、纯记录列表、Types 详情与共享操作栏；Linux SDK 三尺寸及运行控制验收。
 - [目标生命周期与状态摘要基础阶段](./pi-suite/goal-core.md) — 宿主恢复、用户控制、预算、分支归属与状态发布。
 - [PTY hands-free 与 dispatch 基础阶段](./pi-suite/jobs/hands-free-core.md) — 增量预算、静默终止、用户接管、共享等待与 reload 后目标唤醒；Linux 离线验收。
 - [CLI 预设与启动授权基础阶段](./pi-suite/jobs/cli-launch-core.md) — 内置/自定义预设、Pi fork 参数、字面量 prompt、用户级 launchPolicy 与共享 ask；Linux 离线验收。

@@ -15,6 +15,8 @@ import { acquireRuntime } from '../../src/jobs/runtime.ts';
 import { loadConfig } from '../../src/runtime/config.ts';
 import { DetailsView } from '../../src/ui/details.ts';
 import { JobLogView } from '../../src/jobs/log-viewer.ts';
+import { BrowserView } from '../../src/ui/browser.ts';
+import { chooseBrowserAction } from '../support/browser.ts';
 
 type View = Component & {handleInput?: (data: string) => void; dispose?: () => void};
 function choose(view: View, value: string) {
@@ -142,8 +144,10 @@ test('new-session workspace history exposes owned PTY logs through the same menu
     assert.equal(agents.get(run.record.id).record.ownerSessionId, owner);
     current.faux.setResponses([fauxAssistantMessage('notification received after the reader closes')]);
     let actions = 0;
-    const steps = [(view: View) => choose(view, run.record.runId), (view: View) => {
-      const menu = view.render(120).join('\n'); assert.ok(!menu.includes('Stop child') && !menu.includes('Model / thinking')); choose(view, 'Jobs');
+    const steps = [(view: View) => {
+      assert.ok(view instanceof BrowserView); assert.equal(view.getSelectedItem()?.value, run.record.runId);
+      const menu = view.render(400).join('\n'); assert.ok(!menu.includes('Stop subtree') && !menu.includes('Model / thinking'));
+      chooseBrowserAction(view, 'Jobs');
     }, (view: View) => choose(view, job.id), async (view: View) => {
       assert.ok(view instanceof JobLogView); assert.match(view.reader.render(120).join('\n'), /FOREIGN_JOB/);
       const notice = await jobs.start({cwd: root, command: 'echo queued_notice', ownerSessionId: ctx.sessionManager.getSessionId(), anchorEntryId: null}, testShell());

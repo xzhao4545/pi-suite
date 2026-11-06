@@ -3,7 +3,7 @@ import { getSupportedThinkingLevels } from '@earendil-works/pi-ai';
 import { clampThinkingLevel } from '@earendil-works/pi-ai/compat';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { SuiteConfig } from '../runtime/config.ts';
-import { agentTypeLocations, agentTypeModelAfterClear, writeAgentType, writeAgentTypeEnabled } from '../runtime/config-edit.ts';
+import { agentTypeLocations, agentTypeModelAfterClear, writeAgentType } from '../runtime/config-edit.ts';
 import { resolveModel, resolveSettings } from './models.ts';
 import { agentTypes } from './catalog.ts';
 import { active, type AgentType, type ModelOverrides } from './types.ts';
@@ -25,33 +25,6 @@ export async function chooseModelSettings(ctx: ExtensionContext, title: string, 
   const thinking = await selectValue(ctx, `${title} · Thinking`, levels.map(value => ({ value, label: value || 'No override' })), initial.thinking ?? '');
   if (thinking === undefined) return;
   return { model, thinking: thinking ? thinking as ModelOverrides['thinking'] : undefined };
-}
-
-export async function showAgentTypes(ctx: ExtensionContext, config: SuiteConfig, reload: (cwd: string) => void): Promise<void> {
-  const types = agentTypes(ctx.cwd, getAgentDir(), { trusted: ctx.isProjectTrusted(), packageGate: config.agents.packageAgents, typeSettings: config.agents.types });
-  const selected = await selectValue(ctx, 'Agent types', types.map(type => {
-    let settings: string;
-    try {
-      const resolved = resolveSettings(ctx, type, { prompt: '' }, config);
-      settings = `${resolved.model.provider}/${resolved.model.id} (${resolved.modelSource}) · ${clampThinkingLevel(resolved.model, resolved.thinking)} (${resolved.thinkingSource})`;
-    } catch (error) {
-      // A bad type pin must remain selectable so the user can repair it.
-      settings = error instanceof Error ? error.message : String(error);
-    }
-    return { value: type.name, label: `${type.name} · ${type.enabled === false ? 'disabled' : 'enabled'} · ${settings}` };
-  }));
-  if (selected === undefined) return;
-  const type = types.find(type => type.name === selected)!;
-  const override = config.agents.types[type.name]?.enabled;
-  const action = await selectValue(ctx, `${type.name} · ${override === undefined ? 'definition' : 'configuration'} · ${type.enabled === false ? 'disabled' : 'enabled'}`, [
-    { value: 'enable', label: 'Enable' }, { value: 'disable', label: 'Disable' },
-    { value: 'definition', label: 'Use definition' }, { value: 'model', label: 'Model / thinking' },
-  ], type.enabled === false ? 'enable' : 'disable');
-  if (action === undefined) return;
-  if (action === 'model') { await editTypeModel(ctx, config, reload, type); return; }
-  try { await writeAgentTypeEnabled(ctx.cwd, type.name, action === 'definition' ? undefined : action === 'enable'); }
-  finally { reload(ctx.cwd); }
-  ctx.ui.notify(`${type.name}: ${action === 'definition' ? 'using definition' : action === 'enable' ? 'enabled' : 'disabled'} for new executions`);
 }
 
 export async function editTypeModel(ctx: ExtensionContext, config: SuiteConfig, reload: (cwd: string) => void, selectedType?: AgentType): Promise<void> {

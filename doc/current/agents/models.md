@@ -1,8 +1,8 @@
 # 类型、模型与 thinking 配置
 
-`/subagents types` 或 `/subagents` 的类型入口配置启用状态、模型与 thinking；记录菜单和 Transcript 的 Model / thinking 操作配置单个 agent。模型修改依次选择模型与 thinking，任一步 Esc 取消整次修改。
+`/subagents types` 或 `/subagents` 的 Types 页面配置启用状态、模型与 thinking；运行记录操作栏和 Transcript 的 Model / thinking 操作配置单个 agent。模型修改依次选择模型与 thinking，任一步 Esc 取消整次修改。
 
-Types 按无调用参数、无 individual 覆盖的默认启动设置解析当前有效模型/思考强度，实际级别使用 Pi 的模型能力约束。来源随值展示；不可用模型在对应行显示错误并允许进入修正，预览不创建 child 会话。
+Types 按无调用参数、无 individual 覆盖的默认启动设置解析当前有效模型/思考强度，实际级别使用 Pi 的模型能力约束。列表显示类型、●/○ 启用状态、模型名称和实际 thinking，右侧显示完整 provider/modelId 及各字段来源；不可用模型在详情显示具体错误并允许进入修正，预览不创建 child 会话。Enter 直接打开模型选择，返回保留筛选、所选类型和阅读位置。
 
 模型列表来自 Pi 的 `modelRegistry.getAvailable()`，包含全部已认证模型，不受父会话 scoped models 限制。共享选择器复用 Pi 原生 SelectList，显示 provider/modelId，长行按可见宽度截断，完整值保持独立；↑↓ 和 PageUp/PageDown 移动，Enter 提交。thinking 使用 pi-ai 的模型能力列表，非推理模型仅提供 No override 与 off。
 
@@ -32,7 +32,7 @@ No override 删除对应位置的字段；删除项目字段后，用户级对�
 
 ## 类型启用状态
 
-类型列表包含当前信任与包门控范围内的内置、包、项目和用户定义的全部类型，包括 disabled 类型。选择类型后可使用 Enable、Disable、Use definition 或 Model / thinking。Enable/Disable 写入 enabled：项目已经设置该字段时写项目配置，否则写用户配置；Use definition 删除用户和项目两层的 enabled，回到 frontmatter 的 enabled 或默认 true，不修改 model/thinking。
+类型列表包含当前信任与包门控范围内的内置、包、项目和用户定义的全部类型，包括 disabled 类型。底部操作栏按启用状态显示 Enable 或 Disable，存在 enabled 配置覆盖时显示 Use definition，并提供 Model / thinking。Enable/Disable 写入 enabled：项目已经设置该字段时写项目配置，否则写用户配置；Use definition 删除用户和项目两层的 enabled，回到 frontmatter 的 enabled 或默认 true，不修改 model/thinking。
 
 启用状态按项目配置、用户配置、frontmatter、默认 true 解析，配置键使用 catalog 的规范类型名。普通新执行、普通会话恢复、嵌套、调度、workflow 新 child 和 RPC 共用 catalog 准入；已准入执行继续运行，workflow 的固定 child resume 沿用其原契约。
 

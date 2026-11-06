@@ -16,6 +16,8 @@ import { mentionRoster } from '../../src/agents/mentions/provider.ts';
 import { handleBase } from '../../src/agents/mentions/grammar.ts';
 import { loadConfig } from '../../src/runtime/config.ts';
 import { writeAgentType, writeAgentTypeEnabled } from '../../src/runtime/config-edit.ts';
+import { BrowserView } from '../../src/ui/browser.ts';
+import { chooseBrowserAction } from '../support/browser.ts';
 
 function definition(root: string, name: string, enabled: boolean) {
   mkdirSync(join(root, 'agents'), { recursive: true });
@@ -31,7 +33,12 @@ function picker(ctx: ExtensionContext, choices: (string | undefined)[]): Extensi
       if (choice === undefined) { view.handleInput?.('\x1b'); return; }
       for (let i = 0; i < 200; i++) {
         if (view.render(120).some(line => (view as typeof view & {getSelectedItem?: () => {label: string} | null}).getSelectedItem?.()?.label.startsWith(choice) || stripVTControlCharacters(line).trim().startsWith(`→ ${choice}`))) {
-          view.handleInput?.('\r'); return;
+          if (view instanceof BrowserView) {
+            const action = choices.shift();
+            if (action === undefined) view.handleInput('\x1b');
+            else chooseBrowserAction(view, action);
+          } else view.handleInput?.('\r');
+          return;
         }
         view.handleInput?.('\x1b[B');
       }

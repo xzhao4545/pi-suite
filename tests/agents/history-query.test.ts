@@ -10,9 +10,10 @@ import { host } from '../support/host.ts';
 import { agentDir } from '../support/jobs.ts';
 import { terminal } from '../support/terminal.ts';
 import { agentRuntime } from '../../src/agents/runtime.ts';
-import { agentSummary, summaryLine } from '../../src/agents/index.ts';
+import { agentSummary } from '../../src/agents/index.ts';
 import { loadConfig } from '../../src/runtime/config.ts';
 import { DetailsView } from '../../src/ui/details.ts';
+import { BrowserView } from '../../src/ui/browser.ts';
 
 type Summary = ReturnType<typeof agentSummary>;
 async function setup() {
@@ -48,13 +49,12 @@ function nativePicker(ctx: ExtensionContext, choices: (string | undefined)[], in
   const custom: ExtensionUIContext['custom'] = async factory => new Promise((resolve, reject) => {
     Promise.resolve(factory(terminal(), ctx.ui.theme, {} as never, resolve)).then(view => {
       for (const width of [40, 120]) assert.ok(view.render(width).every(line => visibleWidth(line) <= width));
-      inspect?.(view);
-      if (view instanceof DetailsView) { view.actions.at(-1)!.run(); return; }
+      if (view instanceof DetailsView) { inspect?.(view); view.actions.at(-1)!.run(); return; }
       const choice = choices.shift();
-      if (choice === undefined) { view.handleInput?.('\x1b'); return; }
+      if (choice === undefined) { inspect?.(view); view.handleInput?.('\x1b'); return; }
       for (let i = 0; i < 200; i++) {
-        if (view.render(400).some(line => (view as typeof view & {getSelectedItem?: () => {label: string} | null}).getSelectedItem?.()?.label === choice || stripVTControlCharacters(line).trim() === `→ ${choice}`)) {
-          view.handleInput?.('\r'); return;
+        if (view instanceof BrowserView && view.getSelectedItem()?.value === choice) {
+          inspect?.(view); view.handleInput('\r'); return;
         }
         view.handleInput?.('\x1b[B');
       }
@@ -100,9 +100,9 @@ test('unknown saved IDs retain send ownership and workspace cleanup while foreig
     assert.equal((stopped.details as { cleanup: string }).cleanup, 'confirmed');
     await assert.rejects(h.invoke('agent_send', { id: h.foreign.id, message: 'foreign resume' }), /not a direct child/);
     let frames = 0;
-    const ctx = nativePicker(h.ctx, [summaryLine(h.previous), 'Transcript', undefined], view => {
+    const ctx = nativePicker(h.ctx, [h.previous.runId, undefined], view => {
       frames++;
-      if (frames === 2) {
+      if (frames === 1) {
         const rows = view.render(400).map(stripVTControlCharacters).slice(1).join('\n');
         assert.match(rows, /Transcript/); assert.doesNotMatch(rows, /Model \/ thinking|Stop child/);
       }
@@ -112,7 +112,7 @@ test('unknown saved IDs retain send ownership and workspace cleanup while foreig
       }
     });
     await h.session.extensionRunner.getCommand('subagents')!.handler('workspace finished', ctx as ExtensionCommandContext);
-    assert.equal(frames, 4);
+    assert.equal(frames, 3);
     await h.session.extensionRunner.getCommand('subagents')!.handler('all', nativePicker(h.ctx, [undefined]) as ExtensionCommandContext);
     await h.session.extensionRunner.getCommand('subagents')!.handler('workspace', nativePicker(h.ctx, [undefined]) as ExtensionCommandContext);
     assert.equal(h.manager.get(h.foreign.id).record.ownerSessionId, h.foreign.ownerSessionId);
@@ -137,10 +137,10 @@ test('workspace branch history stays readonly while visible saved records retain
     assert.equal(h.manager.visible(hidden, { ctx: h.ctx }), false);
     const checkMenu = async (record: typeof hidden, editable: boolean) => {
       let frames = 0;
-      const ctx = nativePicker(h.ctx, [summaryLine(record), undefined, undefined], view => {
-        if (++frames !== 2) return;
+      const ctx = nativePicker(h.ctx, [record.runId, undefined], view => {
+        if (++frames !== 1) return;
         const rows = view.render(400).map(stripVTControlCharacters).slice(1).join('\n');
-        assert.equal(rows.includes('Model / thinking'), editable); assert.equal(rows.includes('Stop child, nested agents and jobs'), editable);
+        assert.equal(rows.includes('Model / thinking'), editable); assert.ok(!rows.includes('Stop subtree'), 'settled runs without jobs have no stop action');
       });
       await h.session.extensionRunner.getCommand('subagents')!.handler('workspace finished', ctx as ExtensionCommandContext);
       assert.equal(frames, 3);

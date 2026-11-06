@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { AgentSessionRuntime, type ExtensionAPI, type ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { AgentSessionRuntime, type ExtensionAPI, type ExtensionContext, type ExtensionCommandContext, type ExtensionUIContext } from '@earendil-works/pi-coding-agent';
 import { fauxAssistantMessage, fauxToolCall, type JsonObject, type TranscriptContext } from '@earendil-works/pi-ai';
 import { visibleWidth } from '@earendil-works/pi-tui';
 import { host } from '../support/host.ts';
@@ -19,6 +19,9 @@ import { WorkflowProgress } from '../../src/agents/workflow/ui/progress.ts';
 import { showWorkflow } from '../../src/agents/workflow/ui/menu.ts';
 import { loadConfig } from '../../src/runtime/config.ts';
 import { Dock } from '../../src/ui/dock.ts';
+import { BrowserView } from '../../src/ui/browser.ts';
+import { DetailsView } from '../../src/ui/details.ts';
+import { focusBrowser } from '../support/browser.ts';
 
 const script = (body: string) => `export const meta = {name: 'Host workflow', description: '宿主验证', phases: [{title: 'Review'}]};\n${body}`;
 function file(path: string, text: string) { mkdirSync(dirname(path), {recursive: true}); writeFileSync(path, text); }
@@ -242,5 +245,33 @@ test('native workflow UI wraps phones, keeps exact phases and retains reader/sea
     await showWorkflow(context, {workflows: {manager: h.manager} as never, agents: {} as never, dock: new Dock(), config: () => loadConfig(h.root)}, task);
     assert.equal(frames, 2); assert.equal(task.status, 'paused');
     task.status = 'completed'; task.control = undefined;
+    file(join(h.root, 'workflows', 'browser.js'), script('return "SAVED_SOURCE_MARKER";'));
+    let browserPhase = 0;
+    const custom: ExtensionUIContext['custom'] = async factory => new Promise((resolve, reject) => {
+      let dispose: (() => void) | undefined;
+      const done = (value: unknown) => { dispose?.(); resolve(value as never); };
+      Promise.resolve(factory(terminal(), h.ctx.ui.theme, {} as never, done)).then(frame => {
+        dispose = frame.dispose?.bind(frame);
+        for (const width of [40, 60, 120]) assert.ok(frame.render(width).every(line => visibleWidth(line) <= width));
+        if (browserPhase++ === 1) { assert.ok(frame instanceof DetailsView); frame.handleInput('\x1b'); return; }
+        assert.ok(frame instanceof BrowserView);
+        if (browserPhase === 1) { frame.handleInput('Host'); frame.handleInput('\r'); }
+        else if (browserPhase === 3) { focusBrowser(frame, 'Workflows'); frame.handleInput('\x1b[C'); frame.handleInput('\r'); }
+        else if (browserPhase === 4) {
+          focusBrowser(frame, 'Filter'); frame.handleInput('browser'); assert.match(frame.render(120).join('\n'), /SAVED_SOURCE_MARKER/);
+          focusBrowser(frame, 'Pages'); frame.handleInput('\x1b[D'); frame.handleInput('\x1b[D'); frame.handleInput('\r');
+        } else if (browserPhase === 5) {
+          assert.match(frame.render(120).join('\n'), /\[Types\]/);
+          focusBrowser(frame, 'Pages'); frame.handleInput('\x1b[C'); frame.handleInput('\x1b[C'); frame.handleInput('\r');
+        } else {
+          assert.equal(browserPhase, 6); assert.match(frame.render(120).join('\n'), /\[Saved\]/);
+          assert.equal(frame.getSelectedItem()?.value, 'browser'); assert.match(frame.render(120).join('\n'), /SAVED_SOURCE_MARKER/);
+          focusBrowser(frame, 'Filter'); frame.handleInput('\x1b'); frame.handleInput('\x1b');
+        }
+      }).catch(reject);
+    });
+    const calls = h.faux.state.callCount;
+    await h.session.extensionRunner.getCommand('subagents')!.handler('workflows', {...h.ctx, ui: {...h.ctx.ui, custom}} as ExtensionCommandContext);
+    assert.equal(browserPhase, 6); assert.equal(h.faux.state.callCount, calls);
   } finally { await h.cleanup(); }
 });

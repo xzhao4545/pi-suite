@@ -6,19 +6,19 @@ agent_workflow 仅由主会话使用，参数为 script、scriptPath 或 name �
 
 ## /subagents workflows
 
-Workflows 菜单显示当前会话与分支的运行，按开始时间倒序排列；Saved workflows 选择保存资源，可查看源码或输入 JSON args 启动。运行详情展示名称、说明、状态、agent 进度、阶段、实际模型/thinking、尝试原因、用量、提示/结果预览、错误、日志与最终结果。metadata 阶段标题精确匹配；未声明阶段的 agent 保留独立 Agents 分组。
+Workflows 页面通过顶部 Runs/Saved 切换当前会话与分支的运行及保存资源。运行按开始时间倒序排列，右侧预览进度；Enter 直接打开完整运行详情，底部按状态显示 Pause、Resume、Stop、Replay journal。Saved 支持名称筛选、源码预览、Enter 查看源码及 Start 输入 JSON args 后启动；运行和保存资源分别保留筛选、选择与阅读位置，往返其他页面保持当前范围。运行详情展示名称、说明、状态、agent 进度、阶段、实际模型/thinking、尝试原因、用量、提示/结果预览、错误、日志与最终结果。metadata 阶段标题精确匹配；未声明阶段的 agent 保留独立 Agents 分组。
 
 | 动作 | 行为 |
 | --- | --- |
 | Pause / Resume | 暂停或释放新启动；暂停期间已有 child 继续结算 |
-| Stop | 取消 Worker、child 及所属 job，等待真实清理 |
+| Stop | 操作栏 Enter 或 x 首次进入确认，再按 x 或 Enter 取消 Worker、child 及所属 job，等待真实清理 |
 | Children / gates → Transcript | 使用公共 child Transcript 查看会话 |
 | Children / gates → Gate stdout / Gate stderr | 使用公共 job 查询与日志查看器读取当前或持久 gate 输出 |
 | Children / gates → Skip | 跳过尚未结算的排队或运行调用，脚本收到 null |
 | Children / gates → Retry | 停止当前运行尝试并重跑，脚本继续等待原调用 |
 | Replay journal | 对结束运行使用保存脚本和原 args 创建新运行，复用成功且未改变的前缀 |
 
-Child Transcript 中的 Message 仅用于回答当前主会话可见的挂起问题，回答后普通引导与恢复由 workflow 控制；x 两次停止所选 child run 及其所属运行子树，搜索与输入中的文字按键不触发停止。workflow child 不提供 b 转后台；完整阅读键位及输入/模型选择的状态保留见 [agents 操作](../operations.md#agents)。
+Child Transcript 中的 Message 仅用于回答当前主会话可见的挂起问题，回答后普通引导与恢复由 workflow 控制；x 两次停止所选 child run 及其所属运行子树，搜索与输入中的文字按键不触发停止。workflow child 不提供 b 转后台；完整阅读键位及输入/模型选择的状态保留见 [agents 操作](../operations.md#subagents)。
 
 resumeFromRunId 限定当前主会话和分支，目标必须结束并具有 journal。恢复先检查文件，未完成末行的 truncated 前缀在运行日志中明确提示；中间损坏和读取错误拒绝启动。含 child 会话 resume 的 journal 按完整执行规则处理，见 [编排与 journal](index.md)。
 

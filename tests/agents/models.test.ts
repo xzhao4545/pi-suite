@@ -17,6 +17,7 @@ import { chooseModelSettings, editTypeModel, updateAgentModel } from '../../src/
 import { recordsIn } from '../../src/agents/records.ts';
 import { DetailsView } from '../../src/ui/details.ts';
 import { BrowserView } from '../../src/ui/browser.ts';
+import { chooseBrowserAction } from '../support/browser.ts';
 
 async function setup() {
   const root = agentDir(), other = fauxProvider({ provider: 'suite-model-test', models: [{ id: 'reasoning', reasoning: true }, { id: 'plain', reasoning: false }] });
@@ -47,7 +48,12 @@ function picker(ctx: ExtensionContext, choices: (string | undefined)[], seen: st
         if (view.render(120).some(line => (view as typeof view & {getSelectedItem?: () => {label: string} | null}).getSelectedItem?.()?.label.startsWith(choice) || stripVTControlCharacters(line).trim().startsWith(`→ ${choice}`))) { found = true; break; }
         view.handleInput?.('\x1b[B');
       }
-      assert.ok(found, `Missing choice ${choice}`); view.handleInput?.('\r');
+      assert.ok(found, `Missing choice ${choice}`);
+      if (view instanceof BrowserView) {
+        const action = choices.shift();
+        if (action === undefined) view.handleInput('\x1b');
+        else chooseBrowserAction(view, action);
+      } else view.handleInput?.('\r');
     }).catch(reject);
   });
   return { ...ctx, ui: { ...ctx.ui, custom } };

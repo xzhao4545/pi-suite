@@ -9,6 +9,8 @@ import { visibleWidth } from '@earendil-works/pi-tui';
 import { host } from '../support/host.ts';
 import { agentDir } from '../support/jobs.ts';
 import { terminal } from '../support/terminal.ts';
+import { BrowserView } from '../../src/ui/browser.ts';
+import { chooseBrowserAction } from '../support/browser.ts';
 import { agentRuntime } from '../../src/agents/runtime.ts';
 import { loadConfig } from '../../src/runtime/config.ts';
 import { nextOccurrence, parseSchedule } from '../../src/agents/schedules/parse.ts';
@@ -123,11 +125,13 @@ test('native schedule registration validates combinations, offers value-based ca
     const second = (await call(h, { prompt: 'second', name: names[1], schedule: '5m' })).details.schedule!;
     assert.ok(first.nextRun); assert.equal(h.manager.runs.size, 0);
     const command = h.session.extensionRunner.getCommand('subagents')!;
-    let confirmed = '';
+    let confirmed = '', frames = 0;
     const custom: ExtensionContext['ui']['custom'] = async factory => new Promise(resolve => {
         Promise.resolve(factory(terminal(), h.ctx.ui.theme, {} as never, resolve)).then(view => {
           for (const width of [40, 120]) assert.ok(view.render(width).every(line => visibleWidth(line) <= width));
-          view.handleInput?.('\x1b[B'); view.handleInput?.('\r');
+          if (frames++ === 0) {
+            assert.ok(view instanceof BrowserView); view.handleInput('\x1b[B'); chooseBrowserAction(view, 'Cancel schedule');
+          } else view.handleInput?.('\x1b');
         });
       });
     const ctx = { ...h.ctx, ui: { ...h.ctx.ui, custom, confirm: async (_title: string, details: string) => { confirmed = details; return true; } } } as ExtensionCommandContext;
