@@ -25,7 +25,7 @@
 ## 关联计划
 
 - [执行模式](execution.md)
-- [跨进程保活](persistent-runtime.md)
+- [退出清理范围](../../../finished/pi-suite/jobs/exit-scope.md)
 - [目标调度](../goal.md)
 
 ### 6.1 第一版的保活承诺

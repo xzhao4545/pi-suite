@@ -27,7 +27,7 @@
 ## 关联计划
 
 - [同进程保活](session-lifecycle.md)
-- [跨进程保活](persistent-runtime.md)
+- [退出清理范围](../../../finished/pi-suite/jobs/exit-scope.md)
 - [架构与发布](../../../finished/pi-suite/architecture.md)
 - [运行记录与手动控制](history-control.md)
 

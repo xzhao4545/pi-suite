@@ -38,7 +38,7 @@ createdBy(runIds) 与 stopCreatedBy 共用创建归属选择，从当前运行�
 
 modules.jobs=false 关闭 job 工具注册和会话订阅；agents 保留未绑定的 JobsModule 查询与查看同一进程 owner 的既有 job，reload 不停止或抹去这些 job。主会话 quit 查询当前 agentDir 的既有运行时注册并清理 owner；jobs 与 agents 同时关闭或此前没有查询也适用，清理不创建新 manager。
 
-session_shutdown 只有 quit 停止全部 job，共享 10 秒期限并关闭新 job 准入；进程 exit 时用同步停止与保存兜底未结算对象。
+保活仅覆盖同一 Pi 进程内的 reload、会话及分支操作。session_shutdown 的 quit 停止全部受管 job 与 PTY，共享 10 秒期限并关闭新 job 准入；进程 exit 时用同步停止与保存兜底未结算对象。Pi 重启后保留历史与日志读取，不提供原任务或 PTY 的跨进程重新接管。
 
 ## 会话可见集合
 
@@ -132,6 +132,6 @@ pipe 与 PTY 都使用 Pi 自身的 Bash 选择（settings 的 shellPath，否�
 
 ## 未实现
 
-监督与 CLI 预设的平台验收、终端缩放的平台验证，以及跨 Pi 进程重新 attach，均由 [执行任务待办](../../todo/pi-suite/jobs/index.md) 管理。
+监督与 CLI 预设的平台验收、终端缩放的平台验证，由 [执行任务待办](../../todo/pi-suite/jobs/index.md) 管理。
 
 [返回当前文档](../index.md)

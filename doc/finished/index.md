@@ -22,6 +22,7 @@
 - [超长逻辑行读取与正则资源边界](./pi-suite/jobs/long-line.md) — 一次合并、完整匹配、有限上下文、100 MiB 单行与明确的 V8 资源失败；Linux 验证。
 - [日志实时查看与历史分页基础阶段](./pi-suite/jobs/log-viewer-core.md) — 有界字节窗口、底部跟随、搜索位置保留、最终输出与列表游标；Linux 离线验收。
 - [同进程升级控制基础阶段](./pi-suite/jobs/runtime-control-core.md) — 独立版本控制桥、受限查询与停止、quit、空闲替换与自然退出竞争；Linux 离线验收。
+- [Pi 退出清理与保活范围决策](./pi-suite/jobs/exit-scope.md) — Pi 退出终止原任务与 PTY，仅保留同进程内保活，不实施跨进程 supervisor。
 - [job 历史主动清理阶段](./pi-suite/jobs/history-clear.md) — 原生确认、终态磁盘复核、写入队列、通知撤销和只读边界；Linux SDK/进程验收。
 - [子代理执行与交互基础阶段](./pi-suite/agents/core.md) — 同进程会话、两池队列、父级提问、持久 run 记录、任务共享与 job 清理；Linux 离线验收。
 - [子代理模型配置基础阶段](./pi-suite/agents/models-core.md) — 类型逐字段写回、单 agent 下一请求切换与持久恢复、原生选择与阅读状态；Linux 离线验收。

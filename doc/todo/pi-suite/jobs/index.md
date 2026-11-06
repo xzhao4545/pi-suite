@@ -8,7 +8,7 @@
 
 影响范围：jobs、Windows/Linux 后端、日志、会话绑定和通知协调。
 
-约束：pipe 与 PTY 分别处理；第一阶段只承诺同一 Pi 进程内保活，独立 supervisor 属于后续可选专项；工具按 [统一工具设计](../../../finished/pi-suite/tool-design.md)。
+约束：pipe 与 PTY 分别处理；保活只覆盖同一 Pi 进程，Pi 退出终止全部受管任务与 PTY；工具按 [统一工具设计](../../../finished/pi-suite/tool-design.md)。
 
 相关当前文档：[项目当前状态](../../../current/index.md)。
 
@@ -19,10 +19,10 @@
 - [ ] [输出读取、搜索与截断](output.md)
 - [ ] [监视、hands-free 与 dispatch](monitors.md)
 - [ ] [同一 Pi 进程内保活](session-lifecycle.md)
-- [ ] [可选跨 Pi 进程保活](persistent-runtime.md)
+- [x] [Pi 退出清理与保活范围决策](../../../finished/pi-suite/jobs/exit-scope.md)
 
 ## 验收方式
 
-Windows 和 Linux 分别核对执行、输入、日志、耗时、已结束历史、手动停止和同进程会话操作；跨进程恢复只在确认实施后按其支持范围验收。
+Windows 和 Linux 分别核对执行、输入、日志、耗时、已结束历史、手动停止、同进程会话操作，以及 Pi 退出后原任务与 PTY 的终止清理。
 
 [返回扩展包待办索引](../index.md)

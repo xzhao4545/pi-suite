@@ -23,7 +23,7 @@
 - [x] 注册 agent/job 活动数量，接入活动与已结束记录查看及手动停止（实现与 Linux 验收完成，平台组合见状态栏/模块待办）
 - [ ] 完成已导入 jobs 的实际 CLI 剩余能力、终端及平台组合验收，见 jobs 对应专项
 - [ ] 完成已导入两级 tasks、agents 的主从交互、扩展资源与原生查看平台组合验收，见对应专项
-- [ ] 按需确认并实施跨进程保活
+- [x] 确认 Pi 退出终止原任务与 PTY，不实施跨进程保活，见 [范围决策](../../finished/pi-suite/jobs/exit-scope.md)
 
 ## 验收方式
 
@@ -46,7 +46,7 @@
 4. **统一工具规范。** 按 [统一工具设计](../../finished/pi-suite/tool-design.md) 改名已注册的 ask/goal 参数，抽取共享 ID、列表、读取、等待和停止 schema，实现共享 wait 的接口与通知撤销规则。
 5. **融合 jobs。** 按 [上游导入](upstream-import.md) 导入 pi-background-jobs 与 pi-interactive-shell 的保留文件；先完成同进程 reload/resume 保活和 Windows/Linux 两种后端，再统一通知、运行/历史查询、输入输出、读取搜索与截断、监视与委派、耗时与手动停止，并提供活动数量。
 6. **两级 tasks + agents。** 任务提供查询与批量增删改、父级完成比例和自动折叠；agents 导入上游执行与扩展能力，增加提问转交与进度读取，保留已结束记录和手动停止，改用原生消息渲染并提供活动数量。
-7. **可选持久 supervisor。** 仅在需要跨 Pi 进程重新 attach 时实施。
+7. **退出清理。** Pi 退出时终止原任务与 PTY，保留持久历史和日志供后续读取；不实施独立 supervisor 或跨 Pi 进程重新 attach，见 [范围决策](../../finished/pi-suite/jobs/exit-scope.md)。
 
 必要验收场景：
 
