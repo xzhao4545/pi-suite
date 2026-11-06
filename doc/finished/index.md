@@ -37,6 +37,7 @@
 - [类型模型配置与启动入口组合阶段](./pi-suite/agents/models-entrypoints.md) — 调度、workflow 与 @handle 的实际模型请求、参数来源、固定续接及回收后恢复；Linux SDK 验收。
 - [子代理类型与资源基础阶段](./pi-suite/agents/resources-core.md) — 扩展动态工具范围、技能、包声明与信任、memory、父级上下文与会话目录；Linux 离线验收。
 - [真实 MCP 传输与资源组合阶段](./pi-suite/agents/mcp-transport.md) — 原生 stdio 发现、资源显式选择、桥接与晚注册、信任和进程清理；Linux 受控服务验收。
+- [Windows Context7 MCP 与资源边界](./pi-suite/agents/windows-context7.md) — 官方外部服务真实查询、直接/桥接/晚注册、禁用与隔离、服务进程退出；通用资源边界由组件检查覆盖。
 - [子代理 @handle 基础阶段](./pi-suite/agents/mentions-core.md) — 持久 handle/alias、原生补全、会话克隆启动与普通发送/恢复、取消和前台通知；Linux 离线验收。
 - [子代理定时调度基础阶段](./pi-suite/agents/schedules-core.md) — cron/周期/单次、会话存储、普通运行与通知、工具开关和查看取消；Linux 离线验收。
 - [调度期限与本地时区组合阶段](./pi-suite/agents/schedule-timezone.md) — 同一 UTC 期限、跨时区恢复、日历夏令时、固定周期与错过周期相位；Linux SDK 验收。
@@ -50,8 +51,10 @@
 - [子代理原生会话查看与快捷控制](./pi-suite/agents/viewer-controls.md) — toolCallId 流式配对与组件缓存、消息输入、两次停止、真实前台转后台和阅读状态；Linux 离线验收。
 - [Windows workflow 与 child 原生查看](./pi-suite/agents/windows-workflow-viewer.md) — 动态详情动作、暂停/重试/跳过/重放、流式阅读、前台转后台、停止清理与所属 Jobs 只读入口。
 - [工作区持久历史发现与只读查询阶段](./pi-suite/agents/history-discovery.md) — Pi 默认/配置目录与持久引用、完整分支、文件缓存、记录合并和原生只读边界；Linux 离线验收。
+- [Windows 持久历史与主从交互](./pi-suite/agents/windows-history.md) — 默认/自定义 junction、fork/workflow 引用、分页与只读、嵌套提问、同步停止、级联 job 清理与 run 通知消费。
 - [子代理停止竞争与主从交互生命周期阶段](./pi-suite/agents/lifecycle.md) — 同范围重入、排队取消、清理期间恢复准入、直接 child 最终结算和 run 级通知；Linux SDK/进程验收。
 - [子代理运行记录与手动控制](./pi-suite/agents/runs.md) — 完整 run 历史、真实级联停止、所属活动 jobs、日志与单独控制；Linux SDK/进程和原生界面验收。
 - [主 agent 与 subagent 交互](./pi-suite/agents/interaction.md) — 父级提问、共享等待、完整进度、并发工具参数摘要、用量/错误通知与 run 级消费；Linux SDK 验收。
 - [两级任务基础阶段](./pi-suite/tasks/core.md) — 原子批量编辑、派生进度、统一存储、会话与提醒、共享详情和 job 引用；Linux 离线验收。
 - [子代理共享任务清单与执行恢复集成](./pi-suite/tasks/agents-integration.md) — 多 child 并发、reload/fork 清单边界、回收后稳定执行引用与实际任务状态；Linux SDK 验收。
+- [Windows 原生两级任务与并发 child](./pi-suite/tasks/windows-combination.md) — 三尺寸详情、折叠/筛选/blocked、并发更新、owner reload/fork 与回收后恢复。

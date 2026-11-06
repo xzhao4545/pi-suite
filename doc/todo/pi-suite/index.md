@@ -8,10 +8,6 @@
 
 [Windows 阶段](../../finished/pi-suite/jobs/windows-runtime.md) 已记录类型检查、158 项完整检查，以及实际 Pi CLI 的缩放/接管/退出、类型模型写回、RPC 五通道、单次调度、workflow shell gate、日志查看/停止/历史删除；[后续 CLI/footer 阶段](../../finished/pi-suite/jobs/windows-cli-ui.md) 补充实际 Codex/Claude 文本 PTY、Pi reload/new 与 footer 三尺寸验收。实际 Codex/Claude pipe 工具执行、文件字节与长工具清理也通过。重复覆盖部分不再另设平台待办；这些证据不替代尚缺的预设参数、原生操作或外部服务组合。
 
-## 界面、目标与任务
-
-- [ ] Windows 两级任务原生界面及真实 agents 并发更新组合：进度、选中/blocked 子项、折叠与筛选；多 child 更新、原 owner reload/fork、回收后恢复的界面与执行引用保持。现有存储/SDK 检查已通过，不重复登记为未实现。见 [任务设计](../../finished/pi-suite/design/tasks.md)。
-
 ## 执行、输出与实际 CLI
 
 - [ ] Windows 上游原问题复现记录：按 [基线](../../finished/pi-suite/design/upstream-baseline.md) 区分静态源码结论与真实运行结论；与下列场景共用证据，不另跑重复验收。
@@ -22,9 +18,7 @@
 ## 子代理、资源与扩展
 
 - [ ] Windows 模型与 @handle 原生入口组合：运行中单 agent 下一请求修改、结束/回收后恢复、@类型 克隆启动、@handle/文件补全、活动引导和会话切换；核对显式参数/类型/individual/frontmatter 优先级与认证错误。类型写回后 RPC/单次调度/workflow 传播已有证据。见 [模型设计](../../finished/pi-suite/design/agents/models.md) 与 [扩展设计](../../finished/pi-suite/design/agents/extensions.md)。
-- [ ] Windows 持久历史与主从交互组合：默认/自定义/junction 或符号链接目录、fork/workflow 引用、分页与只读控制；多 child/嵌套提问、进度/工具参数/所属 jobs、run 级用量与错误通知消费、同步停止竞争及级联 job 清理。受控 SDK/组件检查已通过，剩余原生入口组合见 [扩展设计](../../finished/pi-suite/design/agents/extensions.md)。
 - [ ] Windows 外部业务扩展 RPC：实际 consumer 注册/加载次序/reload、启动/停止/引导/消费、生命周期、cwd/trust 与结构化结果；现有受控 consumer 五通道通过不代表任意业务扩展已验收。见 [RPC 契约](../../current/agents/rpc.md)。
-- [ ] Windows 实际 MCP 服务与资源组合：discovery、直接/桥接/晚注册、包根/junction 或符号链接、类型/技能目录信任边界、隔离与禁用名单，以及 child 结束后的服务进程清理。需要明确实际服务与认证环境，不能以返回文本假装执行成功。见 [资源契约](../../current/agents/resources.md)。
 
 ## 维护规则
 

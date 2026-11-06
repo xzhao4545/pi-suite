@@ -27,6 +27,8 @@ tools 支持 Pi 工具名、内置名称的大小写别名、Glob→find、Multi
 
 动态范围从扩展实际工具表派生，包含 session_start 和 before_agent_start 中的晚注册工具。turn_end 在 Pi 快照下一请求之前收窄活动集合；agent.beforeToolCall 检查直接调用，tool_call 检查 ctx.executeTool 的嵌套调用。第一请求中扩展可能扩大声明集合，调用检查仍禁止越界执行。扩展路径与包别名在安装该会话范围时解析一次，工具表随注册更新。
 
+MCP 服务原始工具名按 Pi 规则规范为 `mcp__<server>__<tool>`，不属于字母、数字或下划线的字符转换为下划线；超过 64 字符或规范化后重名时加入哈希后缀。例如 Context7 的 `query-docs` 对应 `mcp__context7__query_docs`，类型选择与禁用名单使用规范名称。Windows Pi 1.5.0 与 Context7 MCP 4.5.0 通过真实 stdio discovery、直接调用、codemode 桥接及 before_agent_start 晚注册，child 结束后服务进程关闭；适用范围见 [Windows Context7 与资源边界](../../finished/pi-suite/agents/windows-context7.md)。
+
 ## 技能、提示与隔离
 
 skills 默认 true，使用 Pi 的技能发现、配置与启用规则；false 关闭技能。名字数组从同一目录解析，完整 SKILL.md 按名字预加载一次，缺失名字报告错误，其他技能不进入提示。无需额外扫描技能目录。
