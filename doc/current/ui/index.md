@@ -14,6 +14,10 @@ StatusPublisher 是本包 goal 与 pi-suite:runtime 摘要的共享写入方，�
 
 goal 摘要从目标与调度状态派生；完成反馈显示 5 秒后清除，回调同时校验绑定与目标 ID。暂停、阻塞、请求失败与预算耗尽持续可见。Pi 原生 footer 读取 goal 键；pi-starship 0.65.2 使用 extension_status 模块读取同一键，其格式和数量上限由外部 footer 配置控制。完整发布入口的 Linux SDK 与 Windows 实际 Pi CLI 检查覆盖 40×24、60×30、120×40 的 goal、tasks、运行 child/job 与实际询问并存。Windows 验收确认数量摘要去重、窄屏换行与询问同时显示；用户实际 format 缺少 `$extension_status` 时摘要不可见，goal.display=dock 仍通过 Pi 原生 Dock 显示，hidden 隐藏常驻摘要。max_statuses 按扩展状态插入顺序截取，较早的第三方状态可能排挤 goal/runtime；disabled 或根 format 缺少 extension_status 会隐藏摘要。外部模块设置可能报告字段校验警告。窄屏对整体 format 自动换行，公共接口没有可靠的外部 footer 总高度反馈；用户可调整其布局或明确选择 goal.display=dock。目标详情通过 /goal 打开，复用 Markdown 与 ScrollView，并提供搜索和显式翻页操作。
 
+pi-starship 的 `git_status` 使用 Git 上游跟踪分支的缓存差异：默认 `⇡N` 表示本地领先 N 个提交，`⇣N` 表示落后 N 个提交，同时领先和落后表示分叉。`$all_status` 汇总文件改动，`$ahead_behind` 显示提交差异；只移除后者即可隐藏提交数量并保留文件状态。显示依赖已有上游引用，不代表实时查询远端。
+
+提交差异可通过 `[git_status]` 的 `ahead = "未推送$count"`、`behind = "落后$count"` 和 `diverged = "未推送$ahead_count / 落后$behind_count"` 改为文字。配置位于 `<getAgentDir()>/pi-starship.toml`，外部修改后执行 `/reload`，通过 `/starship status` 检查运行时配置告警；配置语法校验不代表当前 footer 已更新。
+
 ## 原生会话查看
 
 Transcript 复用 Pi 的 UserMessageComponent、AssistantMessageComponent、ToolExecutionComponent、CustomMessageComponent 和压缩/分支摘要组件。已知内置工具采用 Pi 提供的 renderers；child 提供其实际渲染定义，使用其实际 cwd，缺少定义的扩展工具使用原生通用工具呈现。稳定消息保留组件与宽度缓存，调用方按每条 entry 的身份检测变化，并只更新变化的流式消息或工具结果。工具调用与部分/最终结果按 toolCallId 配对，不执行工具。thinking 与工具详情可切换展开，输出默认不传输终端图片。
