@@ -4,7 +4,7 @@
 
 ## 任务索引
 
-- [Pi Suite 待办](pi-suite/index.md) — 命令命名、列表筛选与详情、Types 展示、设置入口、退出别名及 tmux 复制。
+- [Pi Suite 待办](pi-suite/index.md) — 命令命名、列表筛选与详情、Types 展示、设置入口、退出别名、tmux 复制及启动性能。
 
 Pi Suite Windows 验收见 [收尾记录](../finished/pi-suite/windows-completion.md)；Cursor CLI 验收按用户要求移除。
 
