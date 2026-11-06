@@ -4,7 +4,7 @@
 
 归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
 
-当前状态：Windows 实际 Pi 1.5.0 与 Linux 同版本 SDK 已核对；七个参考发布包的来源元数据已登记，ask 契约与许可证已落地。tasks、jobs、agents 的保留能力与按文件处置已核对并记录在 [上游导入](upstream-import.md)，工具契约统一见 [统一工具设计](../tool-design.md)。Linux 真实 SDK/进程复现结论按各模块验收范围记录，完整 Starship 发布入口的组合见 [footer 联动阶段](../footer-integration.md)；Windows 原问题复现与综合组合继续实施。
+当前状态：Windows 实际 Pi 1.5.0 与 Linux 同版本 SDK 已核对；七个参考发布包的来源元数据已登记，ask 契约与许可证已落地。tasks、jobs、agents 的保留能力与按文件处置已核对并记录在 [上游导入](upstream-import.md)，工具契约统一见 [统一工具设计](../tool-design.md)。Linux 真实 SDK/进程复现结论按各模块验收范围记录，完整 Starship 发布入口的组合见 [footer 联动阶段](../footer-integration.md)；Windows 的上游静态结论与当前运行证据对应见 [Windows 问题追踪](../windows-baseline.md)。
 
 影响范围：六个扩展来源、Pi 宿主版本和平台复现。
 
@@ -16,7 +16,7 @@
 
 - [x] 核对实际宿主版本和依赖作用域
 - [x] 记录导入提交或 tarball integrity 与许可证（七个来源元数据、六个实际导入来源的完整 MIT 许可证；缺失 gitHead/repository 保持空值）
-- 验收跟踪：在 Windows 复现相关问题；Linux 后续由用户在其他设备完成。
+- [x] Windows 上游静态问题与当前 SDK/进程/CLI 运行证据逐项区分并归档；Linux 后续由用户在其他设备完成。
 - [x] 确认各模块需要保留的工具契约和现有能力
 
 ## 验收方式

@@ -4,7 +4,7 @@
 
 ## 任务索引
 
-- [ ] [Pi Suite Windows 剩余验收](./pi-suite/index.md) — 界面与通知、任务、执行与实际 CLI、子代理及外部资源；所有活跃验收集中维护，不再按完整设计拆成多份待办。
+- [ ] [Pi Suite Windows 剩余验收](./pi-suite/index.md) — 本机可执行组合已归档，保留 Cursor agent CLI 环境验收；所有活跃验收集中维护，不再按完整设计拆成多份待办。
 
 当前实现与开发方式见 [doc/current](../current/index.md)。完整设计、上游按文件处置与既有验收证据保存在 [设计与实施记录](../finished/pi-suite/design/index.md)，原设计细节保留。当前仅处理 Windows；手机 SSH 专项取消，Linux 由用户后续在其他设备验收，不阻塞本轮。
 

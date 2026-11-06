@@ -65,6 +65,8 @@ job_list 的 session 范围、/jobs 默认列表与状态数量共用 JobsModule
 
 src/jobs/output.ts 为模型工具、日志查看器和结算预览提供同一 reader，调用共享 runtime/read.ts；agent_read 的结果与 transcript 也复用共享读取。默认按头部、关键行和尾部组合，关键行带前后各一行，truncated 的 head/keys/tail 保留原始字节范围。搜索把正文、上下文及前缀一起计入 limitBytes，超长返回行按 UTF-8 裁剪并标注；job_read/agent_read 的续读提示保留 search/context/limitBytes。
 
+显式 offset 页的 nextOffset 位于完整 UTF-8 字符边界，可能小于 offset+limitBytes；续读使用返回的 nextOffset。默认智能截断的 endOfStream=true 表示已扫描至文件结尾，省略的中间区域通过 truncated 范围另行 offset 或 search 读取。
+
 PTY 输出先以等字节空白隐藏密码回显，再处理 CR、BS、横向 CSI 定位/移动/行清理与字素宽度，折叠连续重复行；提示识别忽略紧邻提示的 CSI 控制序列，并跟踪 ConPTY 的换行、光标回移与重绘回显。无回显时的下一行普通文字保留。原始日志与分页偏移保持原值，提示之后的 offset 页仍恢复隐藏上下文。可见文本转换的范围是当前读取片段内的单条物理行；垂直移动、跨行定位、清屏与备用屏幕切换保留为按日志顺序出现的文本片段，不保证得到最终二维画面。搜索与结算预览沿用这一范围。
 
 fullScreen 表示已有 xterm 曾进入 alternate buffer，即使程序返回主屏，该标志仍保留；读取附全屏提示。同一 owner 运行时可通过 /jobs attach 查看现有 xterm 当前屏幕，结束或停止后查看释放时保留的最后一屏及退出提示。最后一屏取当时的当前 viewport；程序结束前返回主屏时显示主屏，不保存被覆盖的备用屏幕历史帧。Pi 重启后仅能读取磁盘历史日志，无法查看该内存屏幕或恢复 attach；完整二维历史还原不在 reader 支持范围内。
@@ -132,8 +134,8 @@ agents 记录与 Transcript 的 Jobs 入口复用同一 job 操作界面，按 j
 
 pipe 与 PTY 都使用 Pi 自身的 Bash 选择（settings 的 shellPath，否则 Pi 的默认查找）。Windows 上若选中 WSL 的 `C:\Windows\System32\bash.exe`，命令经 stdin 传入：pipe job 无法再接收 job_write 输入，PTY job 直接报错，需要在 settings.json 设置 Git Bash 的 shellPath。
 
-## 未实现
+## 验证范围
 
-监督与 CLI 预设的平台验收、终端缩放的平台验证，由 [执行任务待办](../../todo/pi-suite/index.md) 管理。
+Windows 实际 Pi CLI 的监督、启动询问、输出分页/搜索、密码隐藏、当前/最后屏幕与只读入口见 [监督与输出阶段](../../finished/pi-suite/jobs/windows-supervision-output.md)；预设参数见 [Pi 预设阶段](../../finished/pi-suite/jobs/windows-pi-presets.md)，实际 Codex/Claude 接管见 [CLI 阶段](../../finished/pi-suite/jobs/windows-cli-ui.md)。Cursor 实际 agent CLI 环境验收由 [执行任务待办](../../todo/pi-suite/index.md) 管理。
 
 [返回当前文档](../index.md)
