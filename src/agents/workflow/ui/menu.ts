@@ -25,10 +25,17 @@ export async function showWorkflow(ctx: ExtensionContext, deps: Deps, task: Owne
     deps.dock.setDetail(true);
     try {
       await ctx.ui.custom<void>((tui, _theme, _keys, done) => {
-        const actions = ['Children / gates', ...workflowActive(task) ? [task.status === 'paused' ? 'Resume' : 'Pause', 'Stop']
-          : task.journalPath ? ['Replay journal'] : []];
+        // A workflow may settle while this detail remains open. Keep availability live,
+        // so completion exposes replay and removes controls without a close/reopen cycle.
+        const actions = [
+          {label: 'Children / gates'},
+          {label: 'Pause', available: () => workflowActive(task) && task.status !== 'paused'},
+          {label: 'Resume', available: () => task.status === 'paused'},
+          {label: 'Stop', available: () => workflowActive(task)},
+          {label: 'Replay journal', available: () => !workflowActive(task) && Boolean(task.journalPath)},
+        ];
         const view = new DetailsView(tui, () => workflowSummary(task), content, done,
-          actions.map(label => ({label, run: () => { action = label; done(); }})), reader);
+          actions.map(item => ({...item, run: () => { action = item.label; done(); }})), reader);
         view.reader.setContent(content, false); reader = view.reader;
         const off = deps.workflows.manager.subscribe(() => { content.invalidate(); tui.requestRender(); });
         const timer = setInterval(() => { if (workflowActive(task)) tui.requestRender(); }, 1000); timer.unref();

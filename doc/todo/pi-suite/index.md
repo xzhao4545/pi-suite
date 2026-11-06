@@ -25,7 +25,6 @@
 
 - [ ] Windows 模型与 @handle 原生入口组合：运行中单 agent 下一请求修改、结束/回收后恢复、@类型 克隆启动、@handle/文件补全、活动引导和会话切换；核对显式参数/类型/individual/frontmatter 优先级与认证错误。类型写回后 RPC/单次调度/workflow 传播已有证据。见 [模型设计](../../finished/pi-suite/design/agents/models.md) 与 [扩展设计](../../finished/pi-suite/design/agents/extensions.md)。
 - [ ] Windows 调度原生组合：本地时区 cron/周期/单次、reload/new/resume、过期/错过周期、详情确认取消和退出清理；单次真实触发与详情 Esc 已通过，剩余场景按 [调度操作](../../current/agents/schedules.md) 核对。
-- [ ] Windows workflow 与 child 原生查看：长名称选择、shell/gate 清理、child/gate 查看、暂停/恢复/停止/跳过/重试、journal 重放；流式消息/工具部分结果、搜索/阅读位置、输入往返、两次停止、真实前台转后台及所属 Jobs 日志/单独停止/只读入口。见 [workflow 当前契约](../../current/agents/workflow/index.md) 与 [查看器阶段](../../finished/pi-suite/agents/viewer-controls.md)。
 - [ ] Windows 持久历史与主从交互组合：默认/自定义/junction 或符号链接目录、fork/workflow 引用、分页与只读控制；多 child/嵌套提问、进度/工具参数/所属 jobs、run 级用量与错误通知消费、同步停止竞争及级联 job 清理。受控 SDK/组件检查已通过，剩余原生入口组合见 [扩展设计](../../finished/pi-suite/design/agents/extensions.md)。
 - [ ] Windows 外部业务扩展 RPC：实际 consumer 注册/加载次序/reload、启动/停止/引导/消费、生命周期、cwd/trust 与结构化结果；现有受控 consumer 五通道通过不代表任意业务扩展已验收。见 [RPC 契约](../../current/agents/rpc.md)。
 - [ ] Windows 实际 MCP 服务与资源组合：discovery、直接/桥接/晚注册、包根/junction 或符号链接、类型/技能目录信任边界、隔离与禁用名单，以及 child 结束后的服务进程清理。需要明确实际服务与认证环境，不能以返回文本假装执行成功。见 [资源契约](../../current/agents/resources.md)。

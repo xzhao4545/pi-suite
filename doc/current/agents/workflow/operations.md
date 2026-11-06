@@ -24,6 +24,8 @@ resumeFromRunId 限定当前主会话和分支，目标必须结束并具有 jou
 
 查看器复用原生 Text、DetailsView、ScrollView 和值选择。↑↓、PageUp/PageDown、Home/End 阅读；`/` 搜索，n/N 查下一/上一项；←→ 选择动作，Enter 执行，Esc 返回。返回 child 会话、gate 日志或控制操作后保留详情阅读与搜索位置。菜单值使用运行 ID 与 agent index，长名称的显示截断不改变选择身份。浏览期间由公共通知阻塞令牌保持阅读。
 
+详情动作随当前运行状态更新：运行结束时移除 Pause、Resume、Stop 并开放 Replay journal，不需要退出详情再打开。
+
 ## 开关与冲突
 
 agents.workflows 默认 true，控制 agent_workflow 启动和菜单入口；初始关闭时不注册该工具，绑定时可按配置启用。绑定通过公共工具注册刷新描述，使模型使用当前启用的类型列表。关闭开关后使用 /reload，运行 owner 与保存文件按生命周期保留。agents.packageWorkflows 为 boolean 或包名/source 数组；false 与空数组关闭包 workflow 发现。

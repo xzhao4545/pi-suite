@@ -229,6 +229,12 @@ test('native workflow UI wraps phones, keeps exact phases and retains reader/sea
       const frame = factory(terminal(), h.ctx.ui.theme, {}, resolve);
       frame.render(40); frames++;
       if (frames === 1) {
+        const available = () => frame.actions.filter((action: {available?: () => boolean}) => action.available?.() !== false).map((action: {label: string}) => action.label);
+        assert.deepEqual(available(), ['Children / gates', 'Pause', 'Stop', 'Back']);
+        // Settlement can occur with the same detail frame open; its action set follows it.
+        task.status = 'completed';
+        assert.deepEqual(available(), ['Children / gates', 'Replay journal', 'Back']);
+        task.status = 'running';
         reader = frame.reader; frame.reader.scroll(3); frame.reader.query = 'literal';
         frame.handleInput('\x1b[D'); frame.handleInput('\x1b[D'); frame.handleInput('\r');
       } else { assert.strictEqual(frame.reader, reader); assert.equal(frame.reader.query, 'literal'); frame.handleInput('\x1b'); }
