@@ -1,5 +1,6 @@
 import { getAgentDir, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { loadConfig } from "./runtime/config.ts";
+import { registerCliPrompt } from './runtime/cli-prompt.ts';
 import { SessionBinding } from "./runtime/binding.ts";
 import { Notifications } from "./runtime/notifications.ts";
 import { Dock } from "./ui/dock.ts";
@@ -32,6 +33,7 @@ import { registerWorkflowTool } from './agents/workflow/tools.ts';
 import { showWorkflows } from './agents/workflow/ui/menu.ts';
 
 export default function piSuite(pi: ExtensionAPI): void {
+  registerCliPrompt(pi);
   let bindSession: ReturnType<typeof createSuite> | undefined;
   pi.on("session_start", (event, ctx) => {
     // Factories have no session cwd. Admit modules once from the real context;

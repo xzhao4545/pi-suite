@@ -8,4 +8,6 @@ Linux 使用实际 Codex 0.166.0 与 Claude Code 2.1.153，经现有 mergePreset
 
 当前预设与授权见 [CLI 预设](../../../current/jobs/launch.md)，输入接管与交还见 [终端操作](../../../current/jobs/index.md#用户操作)。
 
+Pi 前导 `@` 的当前支持与生命周期验收见 [后续原文初始任务阶段](literal-prompt.md)。
+
 [返回完成索引](../../index.md)

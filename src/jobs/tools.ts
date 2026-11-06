@@ -59,7 +59,9 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: Vie
       const taskStore = params.taskId && launch.tasks ? await launch.tasks.executionTask(ctx, params.taskId) : undefined;
       let job: JobSummary;
       try {
-        job = await manager.start({ ...request, command, cwd, ...owner, creator: launch.creator }, shell, signal,
+        // Pi waits for piped stdin EOF before its initial prompt; PTY keeps interactive input.
+        job = await manager.start({ ...request, command, cwd, ...owner, creator: launch.creator,
+          closeInput: agent?.preset === 'pi' && params.mode !== 'pty' }, shell, signal,
           finalCommand => authorizeLaunch(finalCommand, cwd, ctx, config, launch.ask, signal, launch.parentQuestions));
       } catch (error) {
         // Timeout/cancellation is an unanswered question, so end this model run as ask_user does.

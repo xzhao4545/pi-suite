@@ -13,6 +13,7 @@
 - [PTY hands-free 与 dispatch 基础阶段](./pi-suite/jobs/hands-free-core.md) — 增量预算、静默终止、用户接管、共享等待与 reload 后目标唤醒；Linux 离线验收。
 - [CLI 预设与启动授权基础阶段](./pi-suite/jobs/cli-launch-core.md) — 内置/自定义预设、Pi fork 参数、字面量 prompt、用户级 launchPolicy 与共享 ask；Linux 离线验收。
 - [实际 Pi CLI 与终端接管阶段](./pi-suite/jobs/pi-cli.md) — 真实离线 Pi fork、复杂 prompt、公共 PTY 接管/交还/离开及上游 @ 边界。
+- [Pi 原文初始任务与生命周期阶段](./pi-suite/jobs/literal-prompt.md) — 原生 flag/input 桥保留前导 @ 和附件、默认 pipe EOF、fork 新身份、reload/new 不重放与自然 quit；Linux CLI 验收。
 - [实际 Pi CLI 终端缩放与重新接管阶段](./pi-suite/jobs/terminal-resize.md) — 实际 /jobs attach、内核尺寸和 SIGWINCH、接管/交还、关闭后继续及重新 attach；Linux CLI 验收。
 - [实际 Codex/Claude 文本 PTY 阶段](./pi-suite/jobs/cli-pty.md) — Linux 真实 CLI、本地主对话 SSE、复杂 prompt、用户接管/交还和确认停止；工具执行见后续阶段，平台组合保留待办。
 - [实际 CLI 工具执行与 Linux 后代清理阶段](./pi-suite/jobs/cli-tools.md) — Codex exec_command、Claude Bash/Read，独立工具进程组的身份捕获与真实停止；Linux 受控验收。

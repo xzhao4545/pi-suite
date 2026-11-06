@@ -33,7 +33,7 @@ Linux Pi 1.5.0 实际发布 CLI 另通过临时终端缩放验收：真实 job_s
 
 hands-free 的 4 项检查覆盖静默/定时增量更新、单次与总输出预算、暂停与释放、真实 PTY 的宽限期与用户接管、静默终止的进程组清理证据、总运行超时与自行退出，以及 wait 返回更新后去重和 reload 后 goal_wait 恢复。该范围在 Linux（Node 24.22.2）通过，Windows 监督验收由对应待办管理。
 
-CLI 启动的 7 项检查覆盖预设字段合并、用户级策略与精确命令优先级、真实 Bash 的字面量 prompt/Pi fork 参数、受控 CLI 启动读取、拒绝与取消不创建进程或历史、取消询问后的 goal 自动工作停止、最终 monitor/detector 命令授权，以及非交互模式和参数互斥。实际 Pi 1.5.0 发布 CLI 用隔离资源与 faux provider 验证 fork 源会话保持原文、复杂 prompt、真实 PTY 接管/交还/离开及确认清理；以 @ 开头的 Pi 位置 prompt 在启动前报告上游附件解析限制。Codex 0.166.0 与 Claude Code 2.1.153 通过实际预设/JobManager PTY 与本地受控服务验收，复杂初始正文、用户输入与交还后的模型输入逐字进入主对话 HTTP 请求，CLI 显示对应 SSE 回复，USER_CONTROL 与 managed_scope_confirmed 停止通过。Codex 隔离配置并用 --no-daemon，Claude 使用 --bare、空配置/工具和本地测试密钥；该结论仅覆盖上述版本的 Linux 文本交互，范围见 [CLI 文本阶段](../finished/pi-suite/jobs/cli-pty.md)。cursor 的 agent 命令缺失，Windows 与真实手机组合继续按 [监督待办](../todo/pi-suite/jobs/monitors.md) 验收。
+CLI 启动的 7 项检查覆盖预设字段合并、用户级策略与精确命令优先级、真实 Bash 的字面量 prompt/Pi fork 参数、受控 CLI 启动读取、拒绝与取消不创建进程或历史、取消询问后的 goal 自动工作停止、最终 monitor/detector 命令授权，以及非交互模式和参数互斥。实际 Pi 1.5.0 发布 CLI 用隔离资源与 faux provider 验证 fork 源会话保持原文、复杂 prompt、真实 PTY 接管/交还/离开及确认清理；前导 `@` 经原生 flag/input 桥恢复，保留附件和 JSON 事件，默认 pipe 通过 EOF 启动并按完整命令精确授权，RPC 初始 prompt 明确拒绝。print/JSON 中 `--system-prompt '-e'` 与 `--append-system-prompt '--'` 保持值边界。独立 Linux 实际 CLI 的 7 种组合、10 次模型请求核对同名文件不读取、原生附件、fork 新身份/源字节不变、自动发现与显式入口去重、PTY 后续输入、reload/new 不重放与自然 quit，全部通过，范围见 [原文初始任务阶段](../finished/pi-suite/jobs/literal-prompt.md)；正文恢复后保留普通 input/提及分派语义。Codex 0.166.0 与 Claude Code 2.1.153 通过实际预设/JobManager PTY 与本地受控服务验收，复杂初始正文、用户输入与交还后的模型输入逐字进入主对话 HTTP 请求，CLI 显示对应 SSE 回复，USER_CONTROL 与 managed_scope_confirmed 停止通过。Codex 隔离配置并用 --no-daemon，Claude 使用 --bare、空配置/工具和本地测试密钥；该结论仅覆盖上述版本的 Linux 文本交互，范围见 [CLI 文本阶段](../finished/pi-suite/jobs/cli-pty.md)。cursor 的 agent 命令缺失，Windows 与真实手机组合继续按 [监督待办](../todo/pi-suite/jobs/monitors.md) 验收。
 
 输出组合的 1 项 Linux（Node 24.22.2）真实 PTY 检查通过，核对密码提示至 LF 回显隐藏、从提示之后的原始 offset/search 读取、CSI/BS/中文宽字素、重复两行折叠与 fullScreen 提示；原始日志保留真实字节，sensitive 输入不保存正文，终态 outputPreview 在 2 KiB 内。既有真实 SDK 通知聚合核对预览与完成结果同条投递；14 项读取/agent/job 定向聚合同时核对上下文、keys 原始范围、预算与实际 more 提示续读。多行 100 MiB 与 UTF-8 验收通过，平台组合由 [输出待办](../todo/pi-suite/jobs/output.md) 管理。
 
@@ -93,7 +93,7 @@ Workflow 宿主的 5 项 Linux（Node 24.22.2）真实 SDK/faux 与进程检查�
 
 真实 MCP 的 1 项 Linux stdio 聚合验证原生传输与 discovery、mcp__ 服务器名单和显式资源 helper 并存、禁用与非选择服务器不执行，以及 child 结束后全部服务进程退出。受控真实服务另核对原生 codemode/tool_search、晚注册工具在下一请求执行、隔离与不可信项目不连接；跨 cwd RPC 只加载用户 MCP，不加载父项目或目标项目 MCP。服务为本机协议夹具，业务服务、OAuth 与 Windows 范围见 [MCP 传输阶段](../finished/pi-suite/agents/mcp-transport.md) 和扩展待办。
 
-当前 Linux（Node 24.22.2）检查集共 158 项，全量检查通过，无跳过或取消项，耗时 19.12 秒，类型检查通过；日常检查耗时在 5 分钟内。检查覆盖询问、目标、任务、执行、子代理、workflow 和共享组件的当前契约。平台适用范围按上述各专项结论区分。
+当前 Linux（Node 24.22.2）检查集共 158 项，全量检查通过，无跳过或取消项，耗时 20.76 秒，类型检查通过；日常检查耗时在 5 分钟内。检查覆盖询问、目标、任务、执行、子代理、workflow 和共享组件的当前契约。平台适用范围按上述各专项结论区分。
 
 完整 Starship 的 1 项 Linux SDK 聚合从开发依赖加载 0.65.2 实际发布入口，核对 goal_wait、tasks、运行 child、两个 job 与主询问在 40×24、60×30、120×40 并存，实际 emoji/24 位样式、max_statuses 插入顺序、disabled/缺失 extension_status、整体换行和显式 Dock 显示。询问期间实际 job 结算不增加模型调用。终端尺寸由受控 fixture 驱动；当前布局满足本包预算，任意用户 footer format 无可靠公共高度反馈，Windows 与真实手机组合按 [footer 联动范围](../finished/pi-suite/footer-integration.md) 的边界继续验收。
 

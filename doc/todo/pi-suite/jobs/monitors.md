@@ -21,7 +21,7 @@
 - [ ] 在 Windows 验证 monitor、hands-free、dispatch、CLI 预设、launchPolicy 与终端用户接管
 - [ ] 核对各实际 CLI 版本的默认参数、选项结束标记、Pi fork 和 PTY 启动/接管，使用离线 provider 或受控流程避免付费模型依赖
 - [x] Linux 实际 Pi 1.5.0 发布 CLI 使用离线 provider 验证 fork、复杂字面 prompt 与共享 PTY 接管/交还/离开，见 [实际 CLI 阶段](../../../finished/pi-suite/jobs/pi-cli.md)
-- [ ] Pi 位置 prompt 以 @ 开头受上游附件解析限制，原样 @ 支持尚未实现（当前启动前报告 INVALID_ARGS）
+- [x] Pi 原样前导 `@` 经原生 flag/input 桥接，Linux 验证默认 pipe、print/JSON、附件、fork 与 PTY reload/new 不重放及自然 quit，见 [原文初始任务阶段](../../../finished/pi-suite/jobs/literal-prompt.md)
 - [x] Linux 实际 Codex 0.166.0/Claude Code 2.1.153 使用本地服务验证复杂字面 prompt、用户接管/交还、主对话输入与回复及确认停止，见 [文本 PTY 阶段](../../../finished/pi-suite/jobs/cli-pty.md)
 - [x] Linux Codex exec_command 与 Claude Bash/Read 的实际工具结果、文件字节、自然退出及 Codex 独立工具进程组停止，见 [工具执行阶段](../../../finished/pi-suite/jobs/cli-tools.md)
 - [ ] Windows/真实手机 CLI 工具执行与综合验收；Cursor 对应的 agent 命令尚缺环境
@@ -65,9 +65,7 @@ file-watch 自行生成监视命令，不能同时提供 command 或 agent。tri
 
 实现接口为 jobs.agents 的 `{command,args?}` 字段与 launchPolicy 的 `{command,decision}` 数组；即使省略策略也默认询问。匹配最终原始/CLI/monitor 命令，detector 命令单独授权；未确认不分配 ID、不启动进程。当前字段、默认参数、错误和操作见 [CLI 预设与启动授权](../../../current/jobs/launch.md)。
 
-Pi 1.5.0 的真实发布 CLI 已在 Linux 使用隔离资源和 faux provider 验证：fork 保持源会话原文，复杂中文、引号、美元符号、反引号、换行与以 `--` 开头的 prompt 保持字面数据；新的真实 PTY 复用 attachJob 操作。以 `@` 开头的位置 prompt 会被上游解析为附件，当前明确报错，原样支持继续保留待办。Codex 0.166.0 与 Claude Code 2.1.153 已通过 Linux 隔离文本 PTY 验收：现有预设/JobManager 启动后，复杂初始 prompt、用户输入和交还后的模型输入逐字进入真实 CLI 主对话请求，SSE 回复在 CLI 显示，USER_CONTROL 与 managed_scope_confirmed 停止证据通过；任务标题和会话辅助请求与主对话区分，见 [文本 PTY 阶段](../../../finished/pi-suite/jobs/cli-pty.md)。Linux Codex exec_command 与 Claude Bash/Read 的受控真实工具执行和停止通过 [工具执行阶段](../../../finished/pi-suite/jobs/cli-tools.md)；Windows/真实手机组合尚未验收，Cursor 的 agent 命令缺失，各实际 CLI 的完整大项保持待办。
-
-Pi 前导 `@` 的最小接口候选已通过 Linux 真实 TUI 临时验证：Pi 原生 registerFlag 的 string 等号值可保留全文，startup 的 session_start 读取后用 sendUserMessage 原样发送；用空格分隔 flag 与 `@` 值仍会进入附件解析。采用本包显式参数需要修改当前位置参数契约，并将完整新命令交给现有 launchPolicy 后再执行；该接口尚待用户选择，未接入产品，也不表示现有 pi 预设已支持。
+Pi 1.5.0 的真实发布 CLI 已在 Linux 使用隔离资源和 faux provider 验证：fork 保持源会话原文，复杂中文、引号、美元符号、反引号、换行与以 `--` 开头的 prompt 保持字面数据；新的真实 PTY 复用 attachJob 操作。前导 `@` 由原生 flag/input transform 桥接为初始正文，默认 pipe 通过 EOF 执行任务，附件、JSON 事件、fork 新身份、PTY 后续输入与 reload/new 不重放及自然 quit 通过 [原文初始任务阶段](../../../finished/pi-suite/jobs/literal-prompt.md)。Codex 0.166.0 与 Claude Code 2.1.153 已通过 Linux 隔离文本 PTY 验收：现有预设/JobManager 启动后，复杂初始 prompt、用户输入和交还后的模型输入逐字进入真实 CLI 主对话请求，SSE 回复在 CLI 显示，USER_CONTROL 与 managed_scope_confirmed 停止证据通过；任务标题和会话辅助请求与主对话区分，见 [文本 PTY 阶段](../../../finished/pi-suite/jobs/cli-pty.md)。Linux Codex exec_command 与 Claude Bash/Read 的受控真实工具执行和停止通过 [工具执行阶段](../../../finished/pi-suite/jobs/cli-tools.md)；Windows/真实手机组合尚未验收，Cursor 的 agent 命令缺失，各实际 CLI 的完整大项保持待办。
 
 ## 用户接管
 

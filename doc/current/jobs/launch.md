@@ -7,7 +7,7 @@ job_start 的 agent 用结构化配置代替 command。预设解析与参数构�
 | agent 字段 | 行为 |
 | --- | --- |
 | preset | jobs.agents 的键；小写字母开头，支持小写字母、数字和短横线，最长 64 字符 |
-| prompt | 1–16000 字符的非空任务；作为一个位置参数传入，保留原文中的空格、换行、中文、引号、美元符号和反引号 |
+| prompt | 1–16000 字符的非空任务；保留原文中的空格、换行、中文、引号、美元符号和反引号；通常作为一个位置参数传入，pi 前导 `@` 使用下述原生输入桥 |
 | fork | 默认 false；true 仅用于 pi，以 `--fork <当前会话文件>` 启动；当前会话没有持久文件时报 INVALID_ARGS |
 
 默认预设：pi→pi、codex→codex、claude→claude、cursor→agent；前三者默认参数为空，cursor 默认参数为 `--model composer-2-fast`。工具不安装 CLI，执行文件和默认参数可按已安装版本配置。缺失命令按实际进程退出结果记录，不换用其他程序。
@@ -16,13 +16,19 @@ jobs.agents 按内置、用户、项目顺序，逐键、逐字段合并。每�
 
 所有参数按 Pi 使用的 Bash 规则转义；prompt 前添加 `--` 结束选项解析，prompt 以 `--` 开头时仍作为数据。自定义 CLI 应支持这一位置参数约定。command 与 agent 互斥；file-watch 自行生成命令，不能提供 command 或 agent。mode 仍默认 pipe；需要交互终端的 CLI 用 mode=pty，监督参数见 [hands-free 与 dispatch](hands-free.md)。
 
-Pi 1.5.0 的位置 prompt 以 `@` 开头时会按附件文件处理，即使位于 `--` 之后；pi 预设在启动前返回 INVALID_ARGS 并说明该上游边界，保持正文原值。正常文本中的 `@` 与以 `--` 开头的文本沿用位置参数约定。
+Pi 预设支持以 `@` 开头的原文任务，调用方仍直接填写 agent.prompt，无需添加前缀或转义。Pi 1.5.0 会把前导 `@` 位置参数解析为附件，即使位于 `--` 之后；本包通过原生输入桥传递正文，预设中已有的 `@file` 附件及图片保持 Pi 原生语义。正常文本中的 `@` 与以 `--` 开头的文本沿用位置参数约定。
+
+前导 `@` 命令显式加载本包规范入口，并用单个 `--suite-prompt=<原文>` 参数承载正文，位置参数只传启动触发文本。src/runtime/cli-prompt.ts 在入口最先注册原生 string flag 和 input transform；仅 startup 保存待消费正文，在原生初始输入中替换触发后缀，保留之前的附件文本与图片。正文消费一次，reload/new/UI fork 不重放；CLI --fork 的新启动正常消费。恢复后的正文继续走普通 input 处理：启用 @handle 时，TUI 已知类型/handle 沿用提及分派，路径与未知 handle 透传；print/JSON 的提及处理继续放行，不强制绕过共享输入链。预设复用 Pi 公共 parseArgs 判断实际选项边界，区分 `-e`/`--` 选项与其他选项的字面值，并保留 `node cli.js` 包装前缀；显式入口与自动发现由 Pi 规范化去重。生成后的完整命令仍交给现有 launchPolicy 授权。
+
+Pi agent 请求使用默认 pipe 时，在启动后通过现有 closeInput 关闭 stdin，让 Pi 收到 EOF 后执行初始任务并自然退出；需要后续输入时指定 mode=pty，PTY 保持交互输入。Pi RPC 模式不执行初始 CLI prompt，pi 预设配置为 RPC 时在启动前返回 INVALID_ARGS；RPC 客户端应使用相应消息协议。
 
 ```json
 {"agent":{"preset":"pi","prompt":"阅读项目计划并继续实现","fork":true},"mode":"pty","handsFree":{"mode":"dispatch"}}
 ```
 
 ## 实际 CLI 支持范围
+
+Pi 原文桥在 Linux 实际 Pi 1.5.0 通过 print、JSON、默认 pipe、fork 与 PTY 组合验收：前导 `@` 复杂正文逐字进入模型，同名文件存在也不读取；原生附件与 JSON 事件保留；fork 创建新会话且源上下文/文件字节不变。实际 job_start 默认 pipe 与精确 allow、PTY 后续用户/模型输入、reload/new 不重放与自然 quit 均通过，范围见 [原文初始任务阶段](../../finished/pi-suite/jobs/literal-prompt.md)。
 
 Linux 上的 Pi 1.5.0、Codex 0.166.0 与 Claude Code 2.1.153 已通过实际 CLI 的 PTY 文本交互检查。三者均使用现有预设合并、命令构造与 JobManager；初始位置 prompt 保留以 `--` 开头的中文、引号、美元表达式、反引号和换行。用户接管期间模型写入返回 USER_CONTROL，交还后可继续模型输入，停止取得 managed_scope_confirmed 清理证据。
 

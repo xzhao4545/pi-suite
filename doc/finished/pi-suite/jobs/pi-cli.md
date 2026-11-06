@@ -8,4 +8,6 @@ Pi 1.5.0 将以 `@` 开头的位置 prompt 解析为附件，当前 pi 预设在
 
 当前参数与操作见 [CLI 预设](../../../current/jobs/launch.md) 和 [终端操作](../../../current/jobs/index.md#用户操作)。
 
+前导 `@` 原文桥、默认 pipe 与 reload/new 不重放的当前实现和后续验收见 [原文初始任务阶段](literal-prompt.md)。
+
 [返回完成索引](../../index.md)
