@@ -136,6 +136,6 @@ pipe 与 PTY 都使用 Pi 自身的 Bash 选择（settings 的 shellPath，否�
 
 ## 验证范围
 
-Windows 实际 Pi CLI 的监督、启动询问、输出分页/搜索、密码隐藏、当前/最后屏幕与只读入口见 [监督与输出阶段](../../finished/pi-suite/jobs/windows-supervision-output.md)；预设参数见 [Pi 预设阶段](../../finished/pi-suite/jobs/windows-pi-presets.md)，实际 Codex/Claude 接管见 [CLI 阶段](../../finished/pi-suite/jobs/windows-cli-ui.md)。Cursor 实际 agent CLI 环境验收由 [执行任务待办](../../todo/pi-suite/index.md) 管理。
+Windows 实际 Pi CLI 的监督、启动询问、输出分页/搜索、密码隐藏、当前/最后屏幕与只读入口见 [监督与输出阶段](../../finished/pi-suite/jobs/windows-supervision-output.md)；预设参数见 [Pi 预设阶段](../../finished/pi-suite/jobs/windows-pi-presets.md)，实际 Codex/Claude 接管见 [CLI 阶段](../../finished/pi-suite/jobs/windows-cli-ui.md)。Cursor 预设有参数构造契约，实际 agent CLI 未在本轮验收；本轮范围见 [Windows 收尾记录](../../finished/pi-suite/windows-completion.md)。
 
 [返回当前文档](../index.md)

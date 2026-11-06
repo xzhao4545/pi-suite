@@ -28,6 +28,6 @@ monitor 最终命令与用户级规则优先级、detector 授权、quiet/interv
 
 原生 `/jobs all workspace` 另读取受控导入的 stopped/cleanup=unconfirmed 历史：详情和日志可读，Clear history、Stop job、Attach terminal 和 View last screen 均不可用，退出后保存记录字节不变。该场景证明未确认历史的原生入口约束，不伪造一次实际清理失败；真实停止与级联范围消失见 [Windows 历史与交互](../agents/windows-history.md)。foreign agents 的只读所属 Jobs 与单独停止见 [Workflow 与 child 查看](../agents/windows-workflow-viewer.md)，正常历史删除确认见 [Windows 运行时阶段](windows-runtime.md)。
 
-各实际 CLI 均自然退出码 0。稳定规则见 [执行任务](../../../current/jobs/index.md)、[PTY 监督](../../../current/jobs/hands-free.md) 和 [启动策略](../../../current/jobs/launch.md)。Cursor 环境范围继续保留待办。
+各实际 CLI 均自然退出码 0。稳定规则见 [执行任务](../../../current/jobs/index.md)、[PTY 监督](../../../current/jobs/hands-free.md) 和 [启动策略](../../../current/jobs/launch.md)。Cursor 实际 CLI 验收按用户要求移出本轮范围，收尾见 [Windows 记录](../windows-completion.md)。
 
 [返回完成索引](../../index.md)

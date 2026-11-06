@@ -2,7 +2,7 @@
 
 本目录保存已完成专项记录。形成的稳定实现与规则维护在 [当前文档](../current/index.md)，未完成需求维护在 [待办索引](../todo/index.md)。
 
-已实施模块的完整设计与原验收契约见 [设计与实施记录](./pi-suite/design/index.md)；这些记录归档不表示剩余平台验收已通过，活跃 Windows 项统一见 [Windows 待办](../todo/pi-suite/index.md)。
+已实施模块的完整设计与原验收契约见 [设计与实施记录](./pi-suite/design/index.md)；平台证据按各专项的实际范围读取，Windows 本轮状态见 [Windows 验收收尾](./pi-suite/windows-completion.md)。
 
 - [扩展包架构与发布](./pi-suite/architecture.md) — 单包入口、真实会话目录模块准入、共享绑定/通知/配置、来源登记与既有 owner 退出清理。
 - [统一工具设计规范](./pi-suite/tool-design.md) — 命名、公共参数/schema、返回类型、读取/等待/停止与稳定模型工具错误。
@@ -23,6 +23,7 @@
 - [Windows Pi CLI 预设契约](./pi-suite/jobs/windows-pi-presets.md) — 默认 pipe、print/JSON、参数边界、普通正文和附件、CLI fork 新身份与源文件保持。
 - [Windows 终端监督、输出与启动策略](./pi-suite/jobs/windows-supervision-output.md) — 三种 monitor、hands-free/dispatch、原生允许/拒绝/取消、大日志/UTF-8/搜索、密码隐藏与当前/最后屏幕及历史边界。
 - [Windows 上游问题与当前实现证据](./pi-suite/windows-baseline.md) — 固定版本上游静态结论与当前真实 SDK/进程/CLI 的逐项证据和适用范围。
+- [Windows 验收收尾](./pi-suite/windows-completion.md) — 本轮验收证据索引与范围，Cursor CLI 验收按用户要求移除。
 - [实际 Codex/Claude 文本 PTY 阶段](./pi-suite/jobs/cli-pty.md) — Linux 真实 CLI、本地主对话 SSE、复杂 prompt、用户接管/交还和确认停止；工具执行见后续阶段，平台组合保留待办。
 - [实际 CLI 工具执行与 Linux 后代清理阶段](./pi-suite/jobs/cli-tools.md) — Codex exec_command、Claude Bash/Read，独立工具进程组的身份捕获与真实停止；Linux 受控验收。
 - [jobs 技能发布阶段](./pi-suite/jobs/skill.md) — 包声明、实际 Pi 资源发现/加载、原生调用与模块关闭行为。
