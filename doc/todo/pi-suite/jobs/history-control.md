@@ -29,7 +29,7 @@
 ## 关联计划
 
 - [执行模式与后端](execution.md)
-- [同进程保活](session-lifecycle.md)
+- [同进程保活](../../../finished/pi-suite/jobs/session-lifecycle.md)
 - [活动数量状态](../status.md)
 - [子代理停止边界](../../../finished/pi-suite/agents/runs.md)
 - [输出读取](output.md)

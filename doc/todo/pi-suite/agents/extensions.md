@@ -31,6 +31,7 @@
 - [ ] Windows 与真实手机 SSH 复核原生 child 查看器的流式/工具部分结果、搜索与阅读位置、消息输入、两次停止、真实前台转后台与 Jobs 日志/单独停止/只读入口
 - [ ] Windows 与真实手机 SSH 复核 workspace 持久历史的默认/自定义/符号链接目录、fork 与 workflow 引用、分页和原生只读边界
 - [ ] Windows 与真实手机 SSH 复核多 child/嵌套提问、进度参数与所属活动 jobs、run 级用量/错误通知及消费、同步停止竞争及级联 job 清理
+- [x] Windows 158 项受控 SDK/组件/进程检查及实际 CLI 的公开 RPC 五通道、原生单次调度详情/Esc、类型配置传播和 shell gate/workflow 结果通过，见 [Windows 阶段](../../../finished/pi-suite/jobs/windows-runtime.md)；真实业务、手机和其余 CLI 组合不据此勾选
 
 ## 验收方式
 

@@ -18,6 +18,7 @@
 - [x] 实现 dispatch 的宽限期、静默结束与超时结算
 - [x] 实现 CLI agent 预设与 launchPolicy
 - [x] 实现 PTY 视图中的用户接管与交还，同步操作说明
+- [x] poll-diff 改用每轮 OSC 完成边界，Windows pipe/ConPTY 慢命令稳定输出与一次真实变化烟测通过，见 [Windows 阶段](../../../finished/pi-suite/jobs/windows-runtime.md)；ConPTY 任意重绘仍不保证精确分轮，严格比较使用 pipe
 - [ ] 在 Windows 验证 monitor、hands-free、dispatch、CLI 预设、launchPolicy 与终端用户接管
 - [ ] 核对各实际 CLI 版本的默认参数、选项结束标记、Pi fork 和 PTY 启动/接管，使用离线 provider 或受控流程避免付费模型依赖
 - [x] Linux 实际 Pi 1.5.0 发布 CLI 使用离线 provider 验证 fork、复杂字面 prompt 与共享 PTY 接管/交还/离开，见 [实际 CLI 阶段](../../../finished/pi-suite/jobs/pi-cli.md)
@@ -25,6 +26,7 @@
 - [x] Linux 实际 Codex 0.166.0/Claude Code 2.1.153 使用本地服务验证复杂字面 prompt、用户接管/交还、主对话输入与回复及确认停止，见 [文本 PTY 阶段](../../../finished/pi-suite/jobs/cli-pty.md)
 - [x] Linux Codex exec_command 与 Claude Bash/Read 的实际工具结果、文件字节、自然退出及 Codex 独立工具进程组停止，见 [工具执行阶段](../../../finished/pi-suite/jobs/cli-tools.md)
 - [ ] Windows/真实手机 CLI 工具执行与综合验收；Cursor 对应的 agent 命令尚缺环境
+- [x] Windows 实际 Codex 0.162.1 exec_command 与 Claude Code 2.1.301 Bash/Read 的 pipe 字面正文、真实文件字节、自然退出及长工具进程树停止通过，见 [Windows 阶段](../../../finished/pi-suite/jobs/windows-runtime.md)；文本 PTY/手机/Cursor 保留验收
 
 ## 验收方式
 

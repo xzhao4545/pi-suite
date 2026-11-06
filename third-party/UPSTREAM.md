@@ -22,7 +22,7 @@ jobs 导入 pi-background-jobs 0.1.3 与 pi-interactive-shell 0.18.0 的部分�
 
 | 本包文件 | 来源 | 改动 |
 | --- | --- | --- |
-| src/jobs/backends/windows-tree.ts | pi-background-jobs src/windows-process.ts | 改为作用于与后端无关的进程句柄，供 pipe 与 PTY 共用 |
+| src/jobs/backends/windows-tree.ts | pi-background-jobs src/windows-process.ts | 改为作用于与后端无关的进程句柄，供 pipe 与 PTY 共用；异步 CIM 查询复用常驻 PowerShell JSON 行协议，保留 PID/创建时间复核、清理范围确认与独立同步 exit 路径 |
 | src/jobs/backends/pipe.ts | pi-background-jobs src/process.ts | stdin 保持打开供输入；POSIX 子进程为进程组组长 |
 | src/jobs/backends/process.ts、linux-tree.ts | 本项目实现，复用既有 Tracked 与平台停止后端 | Linux 停止前捕获根组及可追溯后代的 `/proc` start ticks，复核身份后发送 TERM/KILL，保留父退出后的范围并确认终止；pipe、PTY 和同步退出共用，不计作上游直接导入 |
 | src/jobs/manager.ts | pi-background-jobs src/jobs.ts | 增加 PTY、单一 job.json、单调耗时、输入记录、创建归属查询与级联停止共用完整 owned 集合，sessionJobs 提供不分页的跨 cwd 直属副本；workflow gate 共用关闭 stdin 和结算等待，本次停止只匹配传入 creator 范围，累计关闭集合用于未来准入；主动历史清理复用 JobStore.remove，等待结算/输入/保存队列并撤销未送达通知；去掉工作区独占锁 |
@@ -30,9 +30,9 @@ jobs 导入 pi-background-jobs 0.1.3 与 pi-interactive-shell 0.18.0 的部分�
 | src/jobs/backends/pty.ts、terminal/protocol.ts、terminal/keys.ts、terminal/shell.ts | pi-interactive-shell pty-process.ts、pty-protocol.ts、key-encoding.ts、shell-resolution.ts | 删除语义动作编码；Windows 停止接入 windows-tree |
 | src/jobs/terminal/session.ts、render.ts | pi-interactive-shell pty-session.ts | 输出写入 job 日志而非内存缓冲；渲染纯函数拆出 |
 | src/jobs/terminal/visible-text.ts | pi-interactive-shell output-selection-runtime.ts 的 normalizeSelectorVisibleText | 单独摘出并扩展横向 CSI/BS、终端列与字素宽度、连续重复行折叠 |
-| src/jobs/output.ts、terminal/read.ts | 本项目实现，复用共享 runtime/read 与已有终端 | 工具、日志查看和完成预览共用 reader；密码提示后至 LF 的回显以等字节空白隐藏，保持分页/搜索原始偏移；2 KiB 预览在终态发布前捕获并沿既有通知投递，不计作上游直接导入 |
-| src/jobs/monitors/compile.ts | pi-interactive-shell index.ts 的 trigger 编译、poll-diff 循环与 file-watch 命令生成 | 触发模式与 job_read search 共用语法；阈值增加 eq；删除 semantic 策略 |
-| src/jobs/monitors/runtime.ts | pi-interactive-shell headless-monitor.ts 的匹配、冷却、去重与 poll-diff 摘要，index.ts 的 detector 协议 | 改为读取 job 自身日志，pipe 与 PTY 共用；detector 失败时附错误投递候选事件；删除语义挂钩与 dispatch 状态机 |
+| src/jobs/output.ts、terminal/read.ts | 本项目实现，复用共享 runtime/read 与已有终端 | 工具、日志查看和完成预览共用 reader；密码回显以等字节空白隐藏，识别 ConPTY 提示前 CSI 与光标回移重绘，保持分页/搜索原始偏移；2 KiB 预览在终态发布前捕获并沿既有通知投递，不计作上游直接导入 |
+| src/jobs/monitors/compile.ts | pi-interactive-shell index.ts 的 trigger 编译、poll-diff 循环与 file-watch 命令生成 | 触发模式与 job_read search 共用语法；阈值增加 eq；poll-diff 子 shell 合流输出并写入每轮私有 OSC 完成标记；删除 semantic 策略 |
+| src/jobs/monitors/runtime.ts | pi-interactive-shell headless-monitor.ts 的匹配、冷却、去重与 poll-diff 摘要，index.ts 的 detector 协议 | 改为读取 job 自身日志，pipe 与 PTY 共用；poll-diff 按完整轮次而非时间窗口比较，停止丢弃不完整末轮；detector 失败时附错误投递候选事件；删除语义挂钩与 dispatch 状态机 |
 | src/jobs/monitors/hands-free.ts | pi-interactive-shell headless-monitor.ts 的静默/宽限期生命周期与 overlay-component.ts 的增量更新/预算状态机 | 由长期 JobManager 持有；实际退出才结算；接管暂停更新与静默终止；预算生成时扣除，更新走共享通知；删除语义监督 |
 | src/jobs/launch/config.ts | pi-interactive-shell config.ts 的默认预设与 launch-policy.ts 的精确匹配/优先级 | schema 与加载并入共享配置，逐键和字段合并；用户级规则，未设置也默认 ask |
 | src/jobs/launch/presets.ts | pi-interactive-shell spawn.ts 的 CLI 参数拼装与 Bash 转义 | 结构化 job_start.agent；删除 worktree 与 /spawn；prompt 前结束选项解析；Pi fork 复用宿主会话文件；公共 parseArgs 判断真实选项边界并保留 node 包装，前导 @ 显式加载规范 suite 入口与原文 flag，完整命令走既有授权；Pi RPC 初始 prompt 明确拒绝 |
@@ -43,7 +43,7 @@ tasks 导入改造 @tintinweb/pi-tasks 0.9.1 的存储、依赖、会话与提�
 
 | 本包文件 | 来源 | 改动 |
 | --- | --- | --- |
-| src/tasks/store.ts、src/runtime/json-store.ts | src/task-store.ts | 保留 pid:uuid 锁、锁内重读、原子保存、快照与播种；锁等待改为异步，增加版本校验、同目标串行入口与复制后整批提交；文件协议供 TaskStore 和 ScheduleStore 共用 |
+| src/tasks/store.ts、src/runtime/json-store.ts | src/task-store.ts | 保留 pid:uuid 锁、锁内重读、原子保存、快照与播种；锁等待改为异步，增加版本校验、同目标串行入口与复制后整批提交；Windows 已有快照共用跨进程锁以避免读取句柄阻止原子替换，删除中的锁文件按既有有界等待处理；文件协议供 TaskStore、ScheduleStore 与 WorkflowStore 共用 |
 | src/tasks/model.ts | src/task-store.ts 的 CRUD 与依赖规则 | 两级 parentId，父级进度与反向边派生，保留自引用/不存在/二元环及未完成阻塞项警告，删除清理依赖 |
 | src/tasks/types.ts | src/types.ts | 状态统一为 todo/doing/done，增加两级结构、版本化 schema 与批量 changes |
 | src/tasks/index.ts | src/index.ts、task-paths.ts、reminder-cadence.ts | 按 cwd/会话定位存储，保留 fork 清单与计数器继承、内存模式、临时提醒；显示和反馈接入统一 Dock，执行引用通过 TaskStore.link |

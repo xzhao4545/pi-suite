@@ -2,7 +2,7 @@
 
 目标：融合交互 shell 和非交互后台任务，共用管理、日志与通知。
 
-当前状态：实施中；pipe 与 PTY 执行、记录、工具与通知已实现并在 Windows（Git Bash）和 Linux 通过检查，见 [执行任务](../../../current/jobs/index.md)。/jobs 列表与详情、job_start 的 attach、终端视图（用户接管、Ctrl+G 交还、Ctrl+T 发送屏幕、Ctrl+B 离开）已实现，终端视图契约在 Linux 通过检查，Windows 待复核。monitor、hands-free、dispatch、CLI agent 预设与 launchPolicy 已实现并在 Linux 通过离线检查；Linux 实际 Pi CLI 的 /jobs attach 缩放、接管与重新 attach 通过 [终端缩放阶段](../../../finished/pi-suite/jobs/terminal-resize.md)；Windows 终端缩放、监督与 CLI 预设组合待验收。
+当前状态：实施中；pipe 与 PTY 执行、记录、工具与通知已实现并在 Windows（Git Bash）和 Linux 通过检查，见 [执行任务](../../../current/jobs/index.md)。/jobs 列表与详情、job_start 的 attach、终端视图（用户接管、Ctrl+G 交还、Ctrl+T 发送屏幕、Ctrl+B 离开）已实现。Linux 实际 Pi CLI 的 /jobs attach 缩放、接管与重新 attach 通过 [终端缩放阶段](../../../finished/pi-suite/jobs/terminal-resize.md)；Windows 实际 Pi 1.5.0 CLI 的四次缩放、内层 TTY 尺寸、输入、交还、离开后继续、重新 attach 与 quit 确认清理通过 [Windows 阶段](../../../finished/pi-suite/jobs/windows-runtime.md)。监督、CLI 预设与真实手机组合按关联专项继续验收。
 
 影响范围：JobManager、pipe/PTY 后端、工具入口、日志和任务元数据。
 
@@ -18,7 +18,8 @@
 - [x] 保留已结束 job 历史及起止时间、耗时，向共享状态栏提供活动数量
 - [x] 验证 Windows 与 Linux 的基础 pipe/PTY 后端、记录、工具与通知
 - [x] Linux 实际 Pi CLI 的 /jobs attach 缩放、内层 TTY ioctl/stty/SIGWINCH、接管交还、关闭后继续与重新 attach 验收，见 [终端缩放阶段](../../../finished/pi-suite/jobs/terminal-resize.md)
-- [ ] 完成 Windows 终端缩放实际验证，以及终端视图、监督与 CLI 预设组合复核
+- [x] Windows 实际 Pi CLI 的终端缩放、内层尺寸与输入、交还、离开与重新 attach、quit 清理验收，见 [Windows 阶段](../../../finished/pi-suite/jobs/windows-runtime.md)
+- [ ] 完成 Windows 终端视图、监督与其他实际 CLI 预设的综合复核，以及真实手机 SSH 验收
 
 ## 验收方式
 
@@ -26,7 +27,7 @@
 
 ## 关联计划
 
-- [同进程保活](session-lifecycle.md)
+- [同进程保活](../../../finished/pi-suite/jobs/session-lifecycle.md)
 - [退出清理范围](../../../finished/pi-suite/jobs/exit-scope.md)
 - [架构与发布](../../../finished/pi-suite/architecture.md)
 - [运行记录与手动控制](history-control.md)

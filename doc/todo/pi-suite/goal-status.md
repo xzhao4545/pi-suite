@@ -18,6 +18,7 @@
 - [x] 验证会话切换、reload 和完成反馈不会串用旧 goal 状态
 - [x] 在原生 footer、完整 pi-starship 发布入口及 40×24、60×30、120×40 尺寸下核对可见性、占用、数量限制与显式 Dock 显示（Linux SDK）
 - [ ] 在 Windows 和真实手机 SSH 核对用户实际 footer 配置、终端缩放与输入布局
+- [x] 静态核对用户实际 Starship 根 format：缺少 `$extension_status`，本包默认 status 槽位不可见；未改写用户配置，加入模块或显式使用 Dock 后仍需实际布局复核
 
 ## 验收方式
 

@@ -8,6 +8,8 @@
 
 输出预算/原始范围/续读提示、密码回显隐藏与横向 PTY 重绘、有限完成预览、实际 Pi CLI 的原样前导 `@`/附件/默认 pipe 与 fork/PTY 生命周期、Codex exec_command/Claude Bash/Read 的受控执行与停止、包技能通过 Linux 阶段验收；超长逻辑行的线性组装/正则资源错误与垂直/全屏支持范围已验证，其他 CLI 与未验收工具范围、Cursor 环境及 Windows/真实手机组合保留在 jobs 专项。
 
+Windows 常驻 CIM、ConPTY 密码隐藏、OSC 轮次、共享 JSON 存储竞争、完整 158 项检查、实际 Pi CLI 的缩放/接管/模型/RPC/单次调度/workflow/日志历史入口，以及实际 Codex/Claude pipe 工具执行与清理通过，见 [Windows 阶段](../../finished/pi-suite/jobs/windows-runtime.md)；[同进程保活](../../finished/pi-suite/jobs/session-lifecycle.md) 已归档。其他原生组合、文本 PTY、真实手机、业务服务和用户 footer 仍按对应专项验收。
+
 影响范围：扩展入口、公共界面与运行时、ask、tasks、jobs、goal、agents，以及两个目标平台的验证与发布。
 
 约束：复用 Pi 统一框架，保留设计细节；保活只覆盖同一 Pi 进程，Pi 退出终止全部受管任务与 PTY；不添加多语言支持。

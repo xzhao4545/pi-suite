@@ -26,7 +26,7 @@ jobs 模块在同一 Pi 进程内管理 pipe 与 PTY 两种后台执行。实现
 只有观测到真实退出才结算：退出码 0 且无信号为 completed，否则 failed；有停止原因时为 stopped，超时为 timed_out，日志超限为 failed。停止请求先进入 stopping，清理为 pending，直至平台后端给出证据：
 
 - Linux 每个 job 根进程是进程组组长；停止前从 `/proc` 捕获根组成员与可追溯后代，包括另建 session/进程组的 CLI 工具。发信号前核对 PID 与精确 start ticks，先 SIGTERM，250 ms 后 SIGKILL，确认捕获范围均已终止；同步进程退出使用同一捕获范围。混有未捕获成员的组只对已核对身份的 PID 发信号，避免扩大清理目标。
-- Windows 先以 CIM 记录根进程身份，按创建时间选取子树，taskkill /T /F 后确认整个范围消失；查询与 taskkill 之间仍有 TOCTOU 风险。
+- Windows 先以 CIM 记录根进程身份，按创建时间选取子树，终止前再次复核根身份，taskkill /T /F 后确认整个范围消失；查询与 taskkill 之间仍有 TOCTOU 风险。异步身份与清理查询共用按需启动的常驻 PowerShell，以请求 ID 对应 JSON 行响应，查询仍受各自期限与取消信号约束；空闲一分钟关闭，进程及其管道不阻止 Pi 退出。同步 exit 兜底独立启动 PowerShell，不依赖异步工作进程。
 
 Linux 的 CleanupEvidence.scope 身份字段 createdAt 使用 `linux:<boot-relative start ticks>`；Windows 使用 CIM 创建时间。捕获范围保留到实际确认，不因父进程先退出而丢失后代；Z/X 进程已终止，不等待 PID 1 回收 zombie。首次捕获前已脱离祖先链且不在根组的进程不属于可证明范围，不能用历史 PID 恢复其控制权；`/proc` 身份复核与 kill 之间仍有系统调用竞态。
 
@@ -65,7 +65,7 @@ job_list 的 session 范围、/jobs 默认列表与状态数量共用 JobsModule
 
 src/jobs/output.ts 为模型工具、日志查看器和结算预览提供同一 reader，调用共享 runtime/read.ts；agent_read 的结果与 transcript 也复用共享读取。默认按头部、关键行和尾部组合，关键行带前后各一行，truncated 的 head/keys/tail 保留原始字节范围。搜索把正文、上下文及前缀一起计入 limitBytes，超长返回行按 UTF-8 裁剪并标注；job_read/agent_read 的续读提示保留 search/context/limitBytes。
 
-PTY 输出先以等字节空白隐藏密码提示至下一个 LF 的回显，再处理 CR、BS、横向 CSI 定位/移动/行清理与字素宽度，折叠连续重复行；原始日志与分页偏移保持原值，提示之后的 offset 页仍恢复该行隐藏上下文。可见文本转换的范围是当前读取片段内的单条物理行；垂直移动、跨行定位、清屏与备用屏幕切换保留为按日志顺序出现的文本片段，不保证得到最终二维画面。搜索与结算预览沿用这一范围。
+PTY 输出先以等字节空白隐藏密码回显，再处理 CR、BS、横向 CSI 定位/移动/行清理与字素宽度，折叠连续重复行；提示识别忽略紧邻提示的 CSI 控制序列，并跟踪 ConPTY 的换行、光标回移与重绘回显。无回显时的下一行普通文字保留。原始日志与分页偏移保持原值，提示之后的 offset 页仍恢复隐藏上下文。可见文本转换的范围是当前读取片段内的单条物理行；垂直移动、跨行定位、清屏与备用屏幕切换保留为按日志顺序出现的文本片段，不保证得到最终二维画面。搜索与结算预览沿用这一范围。
 
 fullScreen 表示已有 xterm 曾进入 alternate buffer，即使程序返回主屏，该标志仍保留；读取附全屏提示。同一 owner 运行时可通过 /jobs attach 查看现有 xterm 当前屏幕，结束或停止后查看释放时保留的最后一屏及退出提示。最后一屏取当时的当前 viewport；程序结束前返回主屏时显示主屏，不保存被覆盖的备用屏幕历史帧。Pi 重启后仅能读取磁盘历史日志，无法查看该内存屏幕或恢复 attach；完整二维历史还原不在 reader 支持范围内。
 
@@ -88,6 +88,8 @@ job_start 的 monitor 让模型在输出匹配时被唤醒，pipe 与 PTY 都可
 | dedupeExactLine | 默认 true，同一 trigger 的同一行（或差异摘要）只触发一次 |
 | cooldownMs | 同一 trigger 两次触发的最小间隔；trigger 自己的 cooldownMs 优先 |
 | detector | command 从 stdin 接收候选事件 JSON，stdout 返回 true/false 或 `{"emit":bool,"triggerId"?,"matchedText"?,"lineOrDiff"?}`，空输出视为通过；timeoutMs 默认 3000。detector 失败时候选事件附 detectorError 照常投递，不静默丢弃。需要以参数接收命令的 Bash |
+
+poll-diff 每轮在子 shell 中执行 command，将该轮 stderr 合入 stdout，完成后写入不可见的私有 OSC 边界，再等待 poll.intervalMs；间隔不包含命令执行时间。追读器按完整边界比较样本，不按时间窗口取样；跨读取块保留未完成片段，停止时丢弃没有完成标记的末轮，不把中断产生的空样本当作变化。command 的 exit 或局部 shell 状态只作用于该轮。pipe 的轮次顺序由同一输出流保持；Windows ConPTY 可能重排 OSC 与画面重绘，PTY 轮次边界不保证任意程序下精确，需可靠比较时选择 pipe。终端与可见文本读取不显示私有标记，原始日志和字节偏移包含标记。
 
 PTY 行先按回车覆写转为可见文本，pipe 行去除控制字符。事件按 eventId 递增写入 events.jsonl（时间、strategy、triggerId、匹配文本、行或差异、stream），job.json 记录 monitor 配置、事件数与已送达数。job 退出时先读完剩余日志并等待 detector，再结算，结算结果的首行附 `events N`。
 

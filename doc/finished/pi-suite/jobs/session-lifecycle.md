@@ -2,7 +2,7 @@
 
 目标：让后台任务跨 reload、resume 等界面与会话操作继续执行。
 
-当前状态：实施中；长期 manager 与可撤销会话绑定、reload/new/resume/fork 后重新订阅、分支引用通知与去重已实现并通过两平台宿主检查，见 [执行任务](../../../current/jobs/index.md)。quit 策略与独立版本控制桥已实现；不兼容升级保留查询、停止与退出清理的宿主边界通过 Linux 检查，见 [升级控制基础阶段](../../../finished/pi-suite/jobs/runtime-control-core.md)。Windows 升级边界待复核。
+当前状态：已完成；长期 manager 与可撤销会话绑定、reload/new/resume/fork 后重新订阅、分支引用通知与去重通过两平台宿主检查，见 [执行任务](../../../current/jobs/index.md)。quit 策略、独立版本控制桥、协议不兼容时的受限查询/停止、空闲替换与升级期间退出清理通过 Linux 和 Windows 真实 SDK/进程检查；Windows 完整检查和实际 CLI 退出范围见 [Windows 阶段](windows-runtime.md)。
 
 影响范围：运行进程、PTY、日志、会话绑定及通知归属。
 
@@ -16,7 +16,7 @@
 - [x] 实现 reload/new/resume/fork 后重新订阅
 - [x] 处理分支引用、旧回调和通知去重
 - [x] 实现 quit 策略与协议不兼容升级的控制边界
-- [ ] 在 Windows 核对控制桥受限模式、空闲替换与升级期间 quit 清理
+- [x] 在 Windows 核对控制桥受限模式、空闲替换与升级期间 quit 清理（真实 SDK reload 与受控进程，含旧桥和不同 agentDir 拒绝）
 
 ## 验收方式
 
@@ -24,9 +24,9 @@
 
 ## 关联计划
 
-- [执行模式](execution.md)
-- [退出清理范围](../../../finished/pi-suite/jobs/exit-scope.md)
-- [目标调度](../goal.md)
+- [执行模式](../../../todo/pi-suite/jobs/execution.md)
+- [退出清理范围](exit-scope.md)
+- [目标调度](../../../todo/pi-suite/goal.md)
 
 ### 6.1 第一版的保活承诺
 

@@ -13,7 +13,9 @@ test('real concurrent processes reread under file locks; lock retries yield the 
   const store = new TaskStore(path), storeUrl = new URL('../../src/tasks/store.ts', import.meta.url).href;
   const script = `import { TaskStore } from ${JSON.stringify(storeUrl)}; const store = new TaskStore(process.argv[1]); for(let i=0;i<10;i++)await store.edit([{op:'add',title:process.pid+'-'+i,children:['child']}]);`;
   try {
-    await Promise.all(Array.from({ length: 2 }, () => promisify(execFile)(process.execPath, ['--experimental-transform-types', '--input-type=module', '-e', script, path])));
+    // The reader races both writers; Windows read handles must not break atomic replacement.
+    const reader = `import assert from 'node:assert/strict'; import { TaskStore } from ${JSON.stringify(storeUrl)}; const store = new TaskStore(process.argv[1]); let count=0; for(let i=0;i<60;i++){const data=await store.snapshot(); assert.ok(data.tasks.length>=count); assert.equal(data.nextId,data.tasks.length+1); count=data.tasks.length;}`;
+    await Promise.all([reader, script, script].map(source => promisify(execFile)(process.execPath, ['--experimental-transform-types', '--input-type=module', '-e', source, path])));
     const data = await store.snapshot(); validateHierarchy(data);
     assert.equal(data.nextId, 41); assert.equal(new Set(data.tasks.map(task => task.id)).size, 40);
     const lock = `${path}.lock`; writeFileSync(lock, `${process.pid}:holder`);
@@ -28,8 +30,10 @@ test('real concurrent processes reread under file locks; lock retries yield the 
 });
 
 test('invalid files and aborted edits never overwrite valid cached data or partially commit a batch', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'pi-suite-tasks-data-')), path = join(root, 'tasks.json'), store = new TaskStore(path);
+  const root = mkdtempSync(join(tmpdir(), 'pi-suite-tasks-data-')), path = join(root, 'nested', 'tasks.json'), store = new TaskStore(path);
   try {
+    assert.deepEqual(await store.snapshot(), {version: 1, nextId: 1, tasks: []});
+    assert.equal(existsSync(join(root, 'nested')), false, 'reading an unused store creates no directory or lock');
     await store.edit([{ op: 'add', title: 'keep', children: ['child'] }]);
     const good = readFileSync(path, 'utf8'), data = await store.snapshot();
     const abort = new AbortController(); abort.abort(new Error('cancelled'));

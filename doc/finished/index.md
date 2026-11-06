@@ -15,6 +15,7 @@
 - [实际 Pi CLI 与终端接管阶段](./pi-suite/jobs/pi-cli.md) — 真实离线 Pi fork、复杂 prompt、公共 PTY 接管/交还/离开及上游 @ 边界。
 - [Pi 原文初始任务与生命周期阶段](./pi-suite/jobs/literal-prompt.md) — 原生 flag/input 桥保留前导 @ 和附件、默认 pipe EOF、fork 新身份、reload/new 不重放与自然 quit；Linux CLI 验收。
 - [实际 Pi CLI 终端缩放与重新接管阶段](./pi-suite/jobs/terminal-resize.md) — 实际 /jobs attach、内核尺寸和 SIGWINCH、接管/交还、关闭后继续及重新 attach；Linux CLI 验收。
+- [Windows 运行时与实际 CLI 阶段](./pi-suite/jobs/windows-runtime.md) — 常驻 CIM、ConPTY 密码隐藏、OSC 轮次、共享存储竞争、Pi 缩放/模型/调度/RPC/workflow，以及实际 Codex/Claude 工具执行与清理；平台剩余范围保留待办。
 - [实际 Codex/Claude 文本 PTY 阶段](./pi-suite/jobs/cli-pty.md) — Linux 真实 CLI、本地主对话 SSE、复杂 prompt、用户接管/交还和确认停止；工具执行见后续阶段，平台组合保留待办。
 - [实际 CLI 工具执行与 Linux 后代清理阶段](./pi-suite/jobs/cli-tools.md) — Codex exec_command、Claude Bash/Read，独立工具进程组的身份捕获与真实停止；Linux 受控验收。
 - [jobs 技能发布阶段](./pi-suite/jobs/skill.md) — 包声明、实际 Pi 资源发现/加载、原生调用与模块关闭行为。
@@ -23,6 +24,7 @@
 - [超长逻辑行读取与正则资源边界](./pi-suite/jobs/long-line.md) — 一次合并、完整匹配、有限上下文、100 MiB 单行与明确的 V8 资源失败；Linux 验证。
 - [日志实时查看与历史分页基础阶段](./pi-suite/jobs/log-viewer-core.md) — 有界字节窗口、底部跟随、搜索位置保留、最终输出与列表游标；Linux 离线验收。
 - [同进程升级控制基础阶段](./pi-suite/jobs/runtime-control-core.md) — 独立版本控制桥、受限查询与停止、quit、空闲替换与自然退出竞争；Linux 离线验收。
+- [同一 Pi 进程内保活](./pi-suite/jobs/session-lifecycle.md) — 两平台真实 SDK/进程验证会话重绑、受限控制桥、空闲替换与升级期间 quit 清理。
 - [Pi 退出清理与保活范围决策](./pi-suite/jobs/exit-scope.md) — Pi 退出终止原任务与 PTY，仅保留同进程内保活，不实施跨进程 supervisor。
 - [job 历史主动清理阶段](./pi-suite/jobs/history-clear.md) — 原生确认、终态磁盘复核、写入队列、通知撤销和只读边界；Linux SDK/进程验收。
 - [子代理执行与交互基础阶段](./pi-suite/agents/core.md) — 同进程会话、两池队列、父级提问、持久 run 记录、任务共享与 job 清理；Linux 离线验收。

@@ -18,7 +18,7 @@
 - [ ] [运行与历史记录、输入输出及手动停止](history-control.md)
 - [ ] [输出读取、搜索与截断](output.md)
 - [ ] [监视、hands-free 与 dispatch](monitors.md)
-- [ ] [同一 Pi 进程内保活](session-lifecycle.md)
+- [x] [同一 Pi 进程内保活](../../../finished/pi-suite/jobs/session-lifecycle.md)
 - [x] [Pi 退出清理与保活范围决策](../../../finished/pi-suite/jobs/exit-scope.md)
 
 ## 验收方式

@@ -21,6 +21,7 @@
 - [x] agents.types 增加 enabled，类型菜单保留 disabled 项并提供 Enable/Disable/Use definition，独立于 model/thinking 写回
 - [x] Linux 核对原生类型修改后调度/workflow/@handle 的实际 SDK 模型、thinking、来源与优先级，以及已准入/固定 resume 和回收后的持久恢复，见 [入口组合阶段](../../../finished/pi-suite/agents/models-entrypoints.md)
 - [ ] Windows 核对 40/120 列的原生选择与类型写回、运行中修改、恢复，以及调度/workflow/@handle 入口组合
+- [x] Windows 完整 SDK 检查及实际 Pi CLI 的 40/120 列类型模型写回、无需 reload 的 RPC/单次调度/workflow 模型与 thinking 传播通过，见 [Windows 阶段](../../../finished/pi-suite/jobs/windows-runtime.md)；其他原生入口组合仍保留上一项验收范围
 
 ## 验收方式
 

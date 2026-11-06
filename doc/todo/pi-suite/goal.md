@@ -27,7 +27,7 @@
 
 ## 关联计划
 
-- [执行任务生命周期](jobs/session-lifecycle.md)
+- [执行任务生命周期](../../finished/pi-suite/jobs/session-lifecycle.md)
 - [等待用户](ask/interaction.md)
 - [子代理](agents/index.md)
 - [统一工具设计](../../finished/pi-suite/tool-design.md)

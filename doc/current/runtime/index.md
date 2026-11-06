@@ -26,7 +26,7 @@ jobs.agents 配置 CLI 键对应的 command 与 args，按键和字段合并用�
 
 runtime/text.ts 提供安全字面量文本转换，供任务说明、pipe 日志与 monitor 事件共用；终端回车覆写等 PTY 语义由 jobs 的终端模块处理。
 
-runtime/json-store.ts 为 TaskStore、ScheduleStore 与 WorkflowStore 提供按目标串行入口、异步 pid:uuid 文件锁、锁内重读、复制后修改、原子保存和快照；领域 schema 与修改规则由具体 Store 定义。损坏数据保留已有有效缓存并禁止覆盖，锁超时与数据错误使用领域前缀报告。
+runtime/json-store.ts 为 TaskStore、ScheduleStore 与 WorkflowStore 提供按目标串行入口、异步 pid:uuid 文件锁、锁内重读、复制后修改、原子保存和快照；领域 schema 与修改规则由具体 Store 定义。Windows 对已有文件的快照也取得同一跨进程锁，避免读取句柄阻止原子替换；缺失文件的快照不创建目录、锁或数据。Windows 删除中的锁文件可能暂时返回 EPERM，仅锁的创建/竞争读取按既有有界等待处理；数据读取、解析和保存错误仍上报。损坏数据保留已有有效缓存并禁止覆盖，锁超时与数据错误使用领域前缀报告。
 
 agents.maxConcurrent 限制后台池，maxConcurrentForeground=0 表示前台不限；maxDepth 为包含顶级的会话层数。persistSessions 控制顶级默认持久化；defaultModel 和 types.<规范类型名>.enabled/model/thinking 提供逐字段覆盖。enabled 覆盖 frontmatter 与默认 true，所有新调用共用 catalog 准入。`/agents types` 按字段定位写入用户或项目配置，保存后立即更新内存与 @类型/workflow 说明；已准入执行及 workflow 固定 child resume 保留契约。写入复用共享 schema 与最新文件内容，无效文件拒绝覆盖。启用状态、模型来源、认证要求和单 agent 操作见 [类型配置](../agents/models.md)。
 

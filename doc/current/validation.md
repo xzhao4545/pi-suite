@@ -89,12 +89,16 @@ Workflow 宿主的 5 项 Linux（Node 24.22.2）真实 SDK/faux 与进程检查�
 
 持久历史的 5 项 Linux（Node 24.22.2）检查覆盖默认/类型配置目录的冷启动发现、目标 cwd 与 configCwd 归属、普通/workflow 保存引用、多次 run 的结束叶子、稳定分页及原生只读菜单；真实 SDK 核对直接父级发送准入、当前可见结束记录的模型与清理入口、跨工作区文件缓存及外部 child 引用、磁盘更新和本地编辑/真实 Execution 优先。只读存储核对缺失/未来 header、损坏 JSONL、无效记录、错误叶子与缺失文件、中断 owner 的 failed 规范化，以及读取前后原文件内容和 mtime 保持。该范围通过，发现边界见 [持久历史](agents/history.md)，平台与真实手机组合由 [扩展专项](../todo/pi-suite/agents/extensions.md) 管理。
 
-公共基础的 46 项离线检查及类型检查在 Windows（Node 24.22.2）和 Linux（已有 WSL/nvm 环境，Node 24.14.0）通过，日常检查在 5 分钟内。共享 wait 提前返回、goal_wait waitFor、终端视图与 monitor 的 11 项检查目前只在 Linux 通过，Windows 待复核。另在 Windows 执行 pi-starship 0.65.2 实际 extension_status 模块，验证 goal/runtime 槽位读取、数量上限与空状态。这些检查证明当前询问、目标、执行任务及共享组件的契约；Windows 的 /jobs 综合交互、真实手机 SSH 输入与终端缩放、用户实际第三方 footer 配置和业务模块平台综合生命周期由 [完整实施计划](../todo/pi-suite/implementation.md) 管理。
+公共基础的 46 项离线检查及类型检查在 Windows（Node 24.22.2）和 Linux（已有 WSL/nvm 环境，Node 24.14.0）通过，日常检查在 5 分钟内。共享 wait 提前返回、goal_wait waitFor、终端视图与 monitor 的检查也通过 Windows 完整检查。另在 Windows 执行 pi-starship 0.65.2 实际 extension_status 模块，验证 goal/runtime 槽位读取、数量上限与空状态。这些检查证明当前询问、目标、执行任务及共享组件的契约；真实手机 SSH 输入与终端缩放、用户实际第三方 footer 配置和业务模块平台综合生命周期由 [完整实施计划](../todo/pi-suite/implementation.md) 管理。
 
 真实 MCP 的 1 项 Linux stdio 聚合验证原生传输与 discovery、mcp__ 服务器名单和显式资源 helper 并存、禁用与非选择服务器不执行，以及 child 结束后全部服务进程退出。受控真实服务另核对原生 codemode/tool_search、晚注册工具在下一请求执行、隔离与不可信项目不连接；跨 cwd RPC 只加载用户 MCP，不加载父项目或目标项目 MCP。服务为本机协议夹具，业务服务、OAuth 与 Windows 范围见 [MCP 传输阶段](../finished/pi-suite/agents/mcp-transport.md) 和扩展待办。
 
 当前 Linux（Node 24.22.2）检查集共 158 项，全量检查通过，无跳过或取消项，耗时 20.76 秒，类型检查通过；日常检查耗时在 5 分钟内。检查覆盖询问、目标、任务、执行、子代理、workflow 和共享组件的当前契约。平台适用范围按上述各专项结论区分。
 
 完整 Starship 的 1 项 Linux SDK 聚合从开发依赖加载 0.65.2 实际发布入口，核对 goal_wait、tasks、运行 child、两个 job 与主询问在 40×24、60×30、120×40 并存，实际 emoji/24 位样式、max_statuses 插入顺序、disabled/缺失 extension_status、整体换行和显式 Dock 显示。询问期间实际 job 结算不增加模型调用。终端尺寸由受控 fixture 驱动；当前布局满足本包预算，任意用户 footer format 无可靠公共高度反馈，Windows 与真实手机组合按 [footer 联动范围](../finished/pi-suite/footer-integration.md) 的边界继续验收。
+
+Windows（Node 24.22.2）完整检查 158 项通过，无失败、跳过或取消，耗时 64.6 秒；类型检查通过。覆盖上述受控 SDK、组件、Worker、真实进程与 ConPTY 路径；共享 JSON 快照与写入竞争另经实际并发读写及 tasks/schedules 检查验证。实际 Pi CLI 验证 40/60/120 列 PTY 缩放与输入、接管/交还、退出清理，以及原生类型模型写回后 RPC/单次调度/workflow 的模型与 thinking、公开 RPC 五通道、调度详情与 Esc、shell gate、共享 wait、job 日志查看/停止/历史删除和自然退出。实际 Codex 0.162.1 exec_command、Claude Code 2.1.301 Bash/Read 的 pipe 工具文件字节、回复、自然退出与长工具停止通过；使用本地受控 SSE 和隔离配置，不等同真实外部服务或 Windows 文本 PTY 接管。详见 [Windows 阶段](../finished/pi-suite/jobs/windows-runtime.md)。
+
+平台边界：真实手机与 SSH 主机未配置，Cursor 的 agent 命令缺失；用户实际 Starship 根 format 缺少 `$extension_status`，未改写用户配置，也未把静态配置检查当作布局验收。现有 WSL 的另一 Node 24.14.0 环境在独立导入 TypeBox 时阻塞，不能据此报告本轮 Linux 全量通过；Linux 158 项结论对应上文 Node 24.22.2 环境。
 
 [返回当前文档](./index.md)

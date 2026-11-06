@@ -1,7 +1,7 @@
 // Shared file locks, reload-before-write and atomic snapshots extracted from TaskStore.
 // Adapted from @tintinweb/pi-tasks 0.9.1 src/task-store.ts (MIT).
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { ToolError } from './errors.ts';
@@ -17,9 +17,18 @@ async function lock(path: string, prefix: string, signal?: AbortSignal): Promise
   for (let poll = 0; poll < 100; poll++) {
     signal?.throwIfAborted();
     try { await writeFile(path, token, { flag: 'wx', mode: 0o600 }); return token; }
-    catch (error) { if (code(error) !== 'EEXIST') throw error; }
+    catch (error) {
+      // Windows exposes a delete-pending lock name as EPERM until the last reader closes.
+      if (process.platform === 'win32' && code(error) === 'EPERM') { await sleep(50, undefined, { signal }); continue; }
+      if (code(error) !== 'EEXIST') throw error;
+    }
     let owner: string;
-    try { owner = await readFile(path, 'utf8'); } catch (error) { if (code(error) === 'ENOENT') continue; throw error; }
+    try { owner = await readFile(path, 'utf8'); }
+    catch (error) {
+      if (code(error) === 'ENOENT') continue;
+      if (process.platform === 'win32' && code(error) === 'EPERM') { await sleep(50, undefined, { signal }); continue; }
+      throw error;
+    }
     const pid = Number.parseInt(owner, 10);
     // Creation precedes token writing; tolerate the brief empty-file window before reclaiming.
     if (pid > 0 ? !live(pid) : poll >= 2) {
@@ -57,7 +66,20 @@ export class JsonStore<Data> {
     this.queue = work.then(() => {}, () => {}); return work;
   }
   snapshot(): Promise<Data> {
-    return this.serial(async () => { this.data = await this.load(); return structuredClone(this.data); });
+    return this.serial(async () => {
+      // Windows cannot atomically replace a file while another process still holds its read handle.
+      // Snapshot shares the cross-process lock so the old target closes before rename.
+      const lockPath = process.platform === 'win32' && this.path ? `${this.path}.lock` : undefined;
+      // A missing snapshot linearizes before the first commit; do not create its directory/lock
+      // or open a target that could appear concurrently without participating in the lock.
+      if (lockPath) {
+        try { await access(this.path!); }
+        catch (error) { if (code(error) === 'ENOENT') return structuredClone(this.data); throw error; }
+      }
+      const token = lockPath ? await lock(lockPath, this.prefix) : undefined;
+      try { this.data = await this.load(); return structuredClone(this.data); }
+      finally { if (lockPath && token) await unlock(lockPath, token); }
+    });
   }
   protected mutate<T>(apply: (data: Data) => T, signal?: AbortSignal): Promise<T> {
     return this.serial(async () => {

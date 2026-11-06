@@ -39,18 +39,27 @@ test("poll-diff fires on changed output; file-watch fires on file events without
   const jobs = manager(), dir = cwd();
   try {
     writeFileSync(join(dir, "state"), "status: idle\n");
-    const poll = await jobs.start({ cwd: dir, ...owner, command: "cat state", monitor: {
-      strategy: "poll-diff", poll: { intervalMs: 300 }, triggers: [{ id: "ready", literal: "ready" }],
+    // Each command is slower than intervalMs: wall-clock windows would alternate empty/full
+    // samples even though state is unchanged. Iteration framing must emit exactly one change.
+    const poll = await jobs.start({ cwd: dir, ...owner, command: "sleep 0.4; cat state", monitor: {
+      strategy: "poll-diff", poll: { intervalMs: 300 }, triggers: [{ id: "changed", regex: "." }], dedupeExactLine: false,
     } }, shell);
     const watch = await jobs.start({ cwd: dir, ...owner, monitor: { strategy: "file-watch", fileWatch: { path: dir }, triggers: [{ id: "touched", literal: "flag" }] } }, shell);
     assert.equal(jobs.peek(watch.id).name, `watch ${dir}`);
-    await sleep(1200);
+    const baselineDeadline = Date.now() + 10000;
+    while (readFileSync(jobs.logPath(poll, "stdout"), "utf8").split('status: idle').length < 4) {
+      assert.ok(Date.now() < baselineDeadline, 'Poll command did not complete three stable iterations');
+      await sleep(100);
+    }
+    assert.equal(jobs.peek(poll.id).monitor?.events, 0);
     writeFileSync(join(dir, "state"), "status: ready\n");
     writeFileSync(join(dir, "flag"), "x");
     const deadline = Date.now() + 10000;
     while ((!jobs.peek(poll.id).monitor?.events || !jobs.peek(watch.id).monitor?.events) && Date.now() < deadline) await sleep(100);
     await jobs.stop(poll.id); await jobs.stop(watch.id);
-    const [pollEvent] = events(jobs, await settled(jobs, poll.id));
+    const pollEvents = events(jobs, await settled(jobs, poll.id));
+    assert.equal(pollEvents.length, 1);
+    const [pollEvent] = pollEvents;
     assert.match(pollEvent.lineOrDiff, /idle" -> "status: ready/);
     const [watchEvent] = events(jobs, await settled(jobs, watch.id));
     assert.match(watchEvent.lineOrDiff, /^(RENAME|CHANGE) flag$/);

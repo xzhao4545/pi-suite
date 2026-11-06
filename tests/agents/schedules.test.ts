@@ -88,9 +88,9 @@ test('cron keeps its persisted UTC deadline after timezone reload and uses local
     // Real SDK dispatch and file writes finish asynchronously; advance no more
     // virtual time so this check cannot accidentally admit the next day's run.
     const deadline = performance.now() + 5000;
-    while ((await store.snapshot()).jobs[0].runCount !== 1) { assert.ok(performance.now() < deadline, 'persisted cron deadline never dispatched'); await turn(); }
+    while ((await store.snapshot()).jobs[0].runCount !== 1) { assert.ok(performance.now() < deadline, `persisted cron deadline never dispatched: ${JSON.stringify({jobs: store.current.jobs, runs: [...h.manager.runs.values()].map(run => run.record), notices: h.notices})}`); await turn(); }
     const ended = (await store.snapshot()).jobs[0];
-    assert.equal(h.manager.runs.size, 1); assert.equal(ended.lastStatus, 'success');
+    assert.equal(h.manager.runs.size, 1); assert.equal(ended.lastStatus, 'success', ended.lastError);
     assert.equal(ended.lastRun, job.nextRun); assert.equal(ended.nextRun, '2027-01-08T09:00:00.000Z');
     mock.timers.tick(1800000);
     await store.add({id: 'schedule_1234abcd', name: 'missed cadence', ...parseSchedule('1h'), request: {type: 'tick', prompt: 'INTERVAL_PHASE'},

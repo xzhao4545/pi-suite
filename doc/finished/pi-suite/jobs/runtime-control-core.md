@@ -10,7 +10,7 @@
 - [x] 自然退出后最终 monitor 尚在处理时，stop 等待已有结算，保留事件、自然退出码与状态，重复调用不发送终止。
 - [x] Linux 真实宿主 reload 核对受限工具、计数、quit 与空闲升级；真实进程核对最终 detector 期间的停止竞争。
 
-适用范围：Pi 1.5.0、Linux Node.js 24。Windows 升级边界继续由 [同进程保活专项](../../../todo/pi-suite/jobs/session-lifecycle.md) 管理；跨进程恢复与 agents 级联属于对应待办。
+适用范围：Pi 1.5.0、Linux Node.js 24；同类控制桥/真实进程检查也通过 Windows，见 [同进程保活专项](session-lifecycle.md) 和 [Windows 阶段](windows-runtime.md)。不提供跨进程恢复；agents 级联范围见对应专项。
 
 当前协议和操作见 [执行任务](../../../current/jobs/index.md)。
 

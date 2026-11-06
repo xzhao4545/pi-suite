@@ -8,7 +8,7 @@ import { StringDecoder } from 'node:string_decoder';
 import { normalizeVisibleText } from '../terminal/visible-text.ts';
 import { sanitizeText } from '../../runtime/text.ts';
 import type { ResolvedShellConfig } from '../terminal/shell.ts';
-import type { CompiledMonitor, Strategy } from './compile.ts';
+import { POLL_BOUNDARY, type CompiledMonitor, type Strategy } from './compile.ts';
 
 export type MonitorEvent = {
   eventId: number; at: string; strategy: Strategy; triggerId: string; matchedText: string; lineOrDiff: string;
@@ -62,17 +62,15 @@ async function runDetector(detector: NonNullable<CompiledMonitor['detector']>, c
 
 /**
  * Watches one job's output for trigger matches. stream and file-watch match each complete line;
- * poll-diff compares what the looped command printed since the last sample. Candidates pass
- * cooldown and dedupe, then the optional detector, in order; record() persists and notifies.
+ * poll-diff compares complete OSC-delimited iterations (including stderr), not wall-clock windows.
+ * Candidates pass cooldown and dedupe, then the optional detector, in order; record() persists and notifies.
  */
 export class JobMonitor {
   private timer: NodeJS.Timeout;
   private queue = Promise.resolve();
   private lastFired = new Map<string, number>();
   private seen = new Set<string>();
-  private sample = '';
   private previous?: string;
-  private lastPoll = Date.now();
   private reading?: Promise<void>;
 
   constructor(private config: CompiledMonitor, private sources: Source[], private shell: ResolvedShellConfig, private cwd: string,
@@ -104,28 +102,36 @@ export class JobMonitor {
       if (final) text += source.decoder.end();
       this.accept(source, text, final);
     }
-    if (this.config.strategy === 'poll-diff' && (final || Date.now() - this.lastPoll >= this.config.pollMs)) this.pollSample();
   }
   private accept(source: Source, text: string, final: boolean): void {
+    if (this.config.strategy === 'poll-diff') {
+      // Keep incomplete markers/output across disk reads. A stop in the middle of an iteration
+      // must not turn its partial output into a spurious final change.
+      const samples = (source.partial + text).split(POLL_BOUNDARY);
+      source.partial = final ? '' : samples.pop()!;
+      if (final) samples.pop();
+      for (const raw of samples) {
+        const sample = raw.split(/\r?\n/).map(line =>
+          (source.pty ? normalizeVisibleText(line) : sanitizeText(line)).trimEnd()).filter(Boolean).join('\n');
+        this.pollSample(sample, source.stream);
+      }
+      return;
+    }
     const lines = (source.partial + text).split(/\r?\n/);
     source.partial = final ? '' : lines.pop()!;
     for (const raw of lines) {
       // PTY lines replay CR overwrites to the final visible text; pipe lines drop control bytes.
       const line = (source.pty ? normalizeVisibleText(raw) : sanitizeText(raw)).trimEnd();
       if (!line) continue;
-      if (this.config.strategy === 'poll-diff') this.sample += `${line}\n`;
-      else this.match(line, line, source.stream);
+      this.match(line, line, source.stream);
     }
   }
-  private pollSample(): void {
-    this.lastPoll = Date.now();
-    const sample = this.sample.trimEnd();
-    this.sample = '';
+  private pollSample(sample: string, stream: MonitorEvent['stream']): void {
     // The first sample is the baseline; afterwards only a changed sample can fire.
     if (this.previous === undefined || sample === this.previous) { this.previous ??= sample; return; }
     const diff = summarizeDiff(this.previous, sample);
     this.previous = sample;
-    this.match(sample, diff, this.sources[0].stream);
+    this.match(sample, diff, stream);
   }
   private match(text: string, lineOrDiff: string, stream: MonitorEvent['stream']): void {
     for (const trigger of this.config.triggers) {

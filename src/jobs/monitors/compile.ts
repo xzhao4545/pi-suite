@@ -6,6 +6,9 @@ import { compileSearch } from '../../runtime/read.ts';
 import { ToolError } from '../../runtime/errors.ts';
 import type { ResolvedShellConfig } from '../terminal/shell.ts';
 
+// Private OSC survives raw logs but is invisible in terminal/text readers. Only completed
+// iterations are samples; a timer cannot distinguish a slow command from an empty result.
+export const POLL_BOUNDARY = '\x1b]777;pi-suite-poll\x07';
 const ops = ['lt', 'lte', 'gt', 'gte', 'eq'] as const;
 export const monitorSchema = Type.Object({
   strategy: Type.Optional(Type.Union([Type.Literal('stream'), Type.Literal('poll-diff'), Type.Literal('file-watch')], { description: 'stream (default) matches each output line; poll-diff reruns command every poll.intervalMs and matches changed output; file-watch watches fileWatch.path instead of running a command' })),
@@ -93,6 +96,6 @@ export function compileMonitor(input: MonitorInput, command: string | undefined,
     strategy, triggers: input.triggers.map(compileTrigger), pollMs, dedupe: input.dedupeExactLine !== false, cooldownMs: input.cooldownMs,
     detector: input.detector ? { command: input.detector.command, timeoutMs: input.detector.timeoutMs ?? 3000 } : undefined,
     command: strategy === 'file-watch' ? fileWatchCommand(input.fileWatch!)
-      : strategy === 'poll-diff' ? `while true; do ${command}; sleep ${Number((pollMs / 1000).toFixed(3))}; done` : command!,
+      : strategy === 'poll-diff' ? `while true; do (\n${command}\n) 2>&1; printf '\\033]777;pi-suite-poll\\007'; sleep ${Number((pollMs / 1000).toFixed(3))}; done` : command!,
   };
 }

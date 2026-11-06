@@ -1,10 +1,14 @@
 // Imported from pi-background-jobs 0.1.3 src/windows-process.ts (MIT, third-party/licenses/pi-background-jobs.txt).
-// pi-suite change: operates on the backend-neutral Tracked handle (pid) so pipe and PTY jobs share it.
-import { execFile, spawnSync } from 'node:child_process';
+// pi-suite changes: operates on the backend-neutral Tracked handle (pid) so pipe and PTY jobs share it;
+// async CIM queries reuse one resident PowerShell instead of starting one per query.
+import { execFile, spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { createInterface } from 'node:readline';
 import { promisify } from 'node:util';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { join, win32 } from 'node:path';
 import { lstatSync, realpathSync } from 'node:fs';
+import { Type } from 'typebox';
+import { Value } from 'typebox/value';
 import type { Tracked as RunningCommand } from './process.ts';
 import type { ProcessIdentity, CleanupEvidence } from '../types.ts';
 
@@ -35,27 +39,123 @@ function pidArgument(pid: number): string {
   if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error('Invalid process PID');
   return String(pid);
 }
+// One CIM query as rows of { pid, parentPid, createdAt }; `$target` 0 lists every process.
+const QUERY_ROWS = "@(Get-CimInstance Win32_Process -Filter $(if ($target) { \"ProcessId = $target\" } else { 'ProcessId > 0' }) | ForEach-Object { [pscustomobject]@{pid=[int]$_.ProcessId;parentPid=[int]$_.ParentProcessId;createdAt=$_.CreationDate.ToUniversalTime().ToString('o')} })";
+const UTF8 = '[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false)';
 function queryArgs(pid?: number): string[] {
-  const filter = pid === undefined ? " -Filter 'ProcessId > 0'" : ` -Filter 'ProcessId = ${pidArgument(pid)}'`;
-  const script = `$ErrorActionPreference='Stop'; [Console]::OutputEncoding=[System.Text.UTF8Encoding]::new(); $rows=@(Get-CimInstance Win32_Process${filter} | ForEach-Object { [pscustomobject]@{pid=[int]$_.ProcessId;parentPid=[int]$_.ParentProcessId;createdAt=$_.CreationDate.ToUniversalTime().ToString('o')} }); ConvertTo-Json -InputObject $rows -Compress`;
-  return ['-NoProfile', '-NonInteractive', '-Command', script];
+  const target = pid === undefined ? '0' : pidArgument(pid);
+  return ['-NoProfile', '-NonInteractive', '-Command', `$ErrorActionPreference='Stop'; ${UTF8}; $target=${target}; ConvertTo-Json -InputObject ${QUERY_ROWS} -Compress`];
 }
-function parseRows(text: string): ProcessRow[] {
-  const rows: unknown = JSON.parse(text.trim());
-  if (!Array.isArray(rows)) throw new Error('Invalid CIM response');
-  for (const item of rows) {
-    if (!item || typeof item !== 'object') throw new Error('Invalid process row');
-    const row = item as ProcessRow;
-    if (!Number.isSafeInteger(row.pid) || row.pid <= 0 || !Number.isSafeInteger(row.parentPid) || typeof row.createdAt !== 'string' || !Number.isFinite(Date.parse(row.createdAt))) throw new Error('Invalid process identity');
-  }
-  return rows as ProcessRow[];
+// Requests are JSON lines { id, pid }; each reply is { id, rows } or { id, error }. A failed query
+// replies with its error and the loop continues; stdin EOF (Pi exited or idle close) ends it.
+const WORKER_SCRIPT = `$ErrorActionPreference='Stop'; ${UTF8}; while ($null -ne ($line = [Console]::In.ReadLine())) { $request = ConvertFrom-Json $line; try { $target = [int]$request.pid; $reply = [pscustomobject]@{id=$request.id; rows=${QUERY_ROWS}} } catch { $reply = [pscustomobject]@{id=$request.id; error=[string]$_} }; [Console]::Out.WriteLine((ConvertTo-Json -InputObject $reply -Compress -Depth 4)); [Console]::Out.Flush() }`;
+const rowsSchema = Type.Array(Type.Object({
+  pid: Type.Integer({ minimum: 1 }), parentPid: Type.Integer({ minimum: 0 }), createdAt: Type.String(),
+}));
+const replySchema = Type.Union([
+  Type.Object({ id: Type.Integer({ minimum: 1 }), rows: rowsSchema }),
+  Type.Object({ id: Type.Integer({ minimum: 1 }), error: Type.String() }),
+]);
+function parseRows(rows: unknown): ProcessRow[] {
+  if (!Value.Check(rowsSchema, rows) || rows.some(row => !Number.isFinite(Date.parse(row.createdAt)))) throw new Error('Invalid CIM process identities');
+  return rows;
 }
 const powershell = () => systemPath('WindowsPowerShell/v1.0/powershell.exe');
+const WORKER_IDLE_MS = 60_000;
+type Query = { id: number; pid?: number; resolve(rows: ProcessRow[]): void; reject(error: unknown): void; timer: NodeJS.Timeout; signal?: AbortSignal; abort?: () => void };
+
+/**
+ * Starting powershell.exe costs about as much as the CIM query itself, and one stop needs three
+ * queries plus each job's start identity. A single resident worker answers them in order; it is
+ * started on demand, unref'd so it never keeps Pi alive, and closed after an idle minute.
+ * Queries are read-only, so a timed-out query restarts a possibly hung worker and the others resend.
+ */
+class QueryWorker {
+  private child?: ChildProcessWithoutNullStreams;
+  private pending = new Map<number, Query>();
+  private nextId = 1;
+  private idle?: NodeJS.Timeout;
+
+  query(deadline: number, pid?: number, signal?: AbortSignal): Promise<ProcessRow[]> {
+    const delay = remaining(deadline);
+    if (pid !== undefined) pidArgument(pid);
+    signal?.throwIfAborted();
+    const { promise, resolve, reject } = Promise.withResolvers<ProcessRow[]>();
+    const query: Query = { id: this.nextId++, pid, resolve, reject, signal,
+      timer: setTimeout(() => { this.finish(query); reject(new Error('CIM query timed out')); this.restart(); }, delay) };
+    query.abort = () => { this.finish(query); reject(signal!.reason ?? new Error('Cleanup deadline exhausted')); };
+    signal?.addEventListener('abort', query.abort, { once: true });
+    this.pending.set(query.id, query);
+    clearTimeout(this.idle);
+    try { this.send(query); } catch (error) { this.finish(query); reject(error); }
+    return promise;
+  }
+  private send(query: Query): void {
+    this.child ??= this.start();
+    this.child.stdin.write(`${JSON.stringify({ id: query.id, pid: query.pid ?? 0 })}\n`);
+  }
+  private start(): ChildProcessWithoutNullStreams {
+    const child = spawn(powershell(), ['-NoProfile', '-NonInteractive', '-NoLogo', '-Command', WORKER_SCRIPT], { windowsHide: true, stdio: 'pipe' });
+    let stderr = '';
+    child.stderr.setEncoding('utf8').on('data', chunk => { stderr = (stderr + chunk).slice(-4096); });
+    createInterface({ input: child.stdout }).on('line', line => this.reply(child, line));
+    child.stdin.on('error', error => this.fail(child, error));
+    child.on('error', error => this.fail(child, error));
+    child.on('close', code => this.fail(child, new Error(`CIM worker exited with code ${code}${stderr ? `: ${stderr.trim()}` : ''}`)));
+    // Pending query timers keep the event loop alive while an answer is owed; the worker itself must not.
+    child.unref();
+    for (const stream of [child.stdin, child.stdout, child.stderr]) {
+      if ('unref' in stream && typeof stream.unref === 'function') stream.unref();
+    }
+    return child;
+  }
+  private reply(child: ChildProcessWithoutNullStreams, line: string): void {
+    if (child !== this.child) return;
+    let reply: unknown;
+    try { reply = JSON.parse(line); } catch (error) { this.fail(child, new Error(`Invalid CIM worker reply: ${String(error)}`)); return; }
+    if (!Value.Check(replySchema, reply)) { this.fail(child, new Error('Invalid CIM worker reply shape')); return; }
+    const query = this.pending.get(reply.id);
+    if (!query) return; // Already timed out or aborted.
+    this.finish(query);
+    try {
+      if ('error' in reply) throw new Error(`CIM query failed: ${reply.error}`);
+      query.resolve(parseRows(reply.rows));
+    } catch (error) { query.reject(error); }
+  }
+  private finish(query: Query): void {
+    clearTimeout(query.timer);
+    query.signal?.removeEventListener('abort', query.abort!);
+    this.pending.delete(query.id);
+    if (!this.pending.size && this.child) {
+      this.idle = setTimeout(() => this.stop(), WORKER_IDLE_MS);
+      this.idle.unref();
+    }
+  }
+  private stop(): void {
+    const child = this.child;
+    this.child = undefined;
+    child?.stdin.end();
+  }
+  /** Replace a possibly hung worker; queries still owed an answer are resent to the new one. */
+  private restart(): void {
+    const child = this.child;
+    this.child = undefined;
+    child?.kill();
+    for (const query of this.pending.values()) {
+      try { this.send(query); } catch (error) { this.finish(query); query.reject(error); }
+    }
+  }
+  /** The current worker failed: every query it owed fails with that cause; the next query starts a new one. */
+  private fail(child: ChildProcessWithoutNullStreams, error: unknown): void {
+    if (child !== this.child) return;
+    this.child = undefined;
+    child.kill();
+    for (const query of [...this.pending.values()]) { this.finish(query); query.reject(error); }
+  }
+}
+const worker = new QueryWorker();
 export const systemCommands: SystemCommands = {
-  async query(deadline, pid, signal) {
-    const result = await execute(powershell(), queryArgs(pid), { timeout: remaining(deadline), windowsHide: true, maxBuffer: 16 * 1024 * 1024, encoding: 'utf8', signal });
-    return parseRows(result.stdout);
-  },
+  query: (deadline, pid, signal) => worker.query(deadline, pid, signal),
   async kill(pid, deadline, signal) {
     try {
       await execute(systemPath('taskkill.exe'), ['/F', '/T', '/PID', pidArgument(pid)], { timeout: remaining(deadline), windowsHide: true, signal });
@@ -70,7 +170,7 @@ export const systemCommands: SystemCommands = {
 function querySync(deadline: number, pid?: number): ProcessRow[] {
   const result = spawnSync(powershell(), queryArgs(pid), { timeout: remaining(deadline), windowsHide: true, maxBuffer: 16 * 1024 * 1024, encoding: 'utf8' });
   if (result.error || result.status !== 0) throw result.error ?? new Error(result.stderr || 'CIM query failed');
-  return parseRows(result.stdout);
+  return parseRows(JSON.parse(result.stdout.trim()));
 }
 export function sameIdentity(a: ProcessIdentity, b: ProcessIdentity): boolean {
   return a.pid === b.pid && a.createdAt === b.createdAt;

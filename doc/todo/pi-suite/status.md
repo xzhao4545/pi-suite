@@ -21,6 +21,7 @@
 - [x] 验证会话切换、reload、原生 footer 40/60/120 列及 pi-starship extension_status 模块
 - [x] Linux 完整 Starship 发布入口与真实 goal/tasks/child/jobs/ask 并存验收数量上限、缺失模块和三尺寸布局
 - [ ] Windows 与真实手机 SSH 复核可见集合、复杂清理状态、用户实际 footer 与窄屏布局
+- [x] 核对用户实际 Starship 配置缺少 `$extension_status`；默认 status 模式不承诺可见，用户配置保持不变，布局验收仍保留
 
 ## 验收方式
 

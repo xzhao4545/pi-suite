@@ -23,7 +23,7 @@
 
 ## 关联计划
 
-- [同进程保活](../../../todo/pi-suite/jobs/session-lifecycle.md)
+- [同进程保活](session-lifecycle.md)
 - [实施顺序](../../../todo/pi-suite/implementation.md)
 
 ### 6.2 Pi 退出后继续运行是下一层能力

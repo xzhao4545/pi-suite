@@ -6,6 +6,8 @@
 
 共享输出预算/原始范围/续读提示、密码回显隐藏与横向 PTY 重绘、有限完成预览、实际 Pi CLI 的原样前导 `@`/附件/默认 pipe 与 fork/PTY 生命周期、Codex exec_command/Claude Bash/Read 的受控执行与停止、包技能已通过 Linux 分阶段验收；超长逻辑行的线性组装/正则资源错误和垂直/全屏支持范围已验证，其他 CLI 与未验收工具范围、Cursor 环境及 Windows/真实手机组合继续按 jobs 专项推进。
 
+Windows 完整 158 项检查和真实 Pi CLI 的 PTY 缩放/接管/退出、原生模型写回、RPC、单次调度、workflow、日志查看/停止/历史清理，以及实际 Codex/Claude pipe 工具执行与长工具清理通过，详见 [Windows 阶段](../../finished/pi-suite/jobs/windows-runtime.md)。同进程保活专项已归档；未列入该阶段的 Windows 原生入口组合、文本 PTY、外部业务服务与手机验收继续保留对应专项。当前未配置可用 SSH 主机、缺少 Cursor agent 命令；用户 Starship 根 format 缺少 `$extension_status`，未擅改用户配置。现有 WSL Node 24.14.0 的独立 TypeBox 导入阻塞，本轮不能追加 Linux 全量通过结论。
+
 影响范围：全部功能模块、两平台及手机 SSH 场景。
 
 约束：静态核对不替代运行验收；此处记录计划，不长期归档临时产物或流水账。

@@ -49,7 +49,8 @@ test('declared package resources follow Pi configured roots, exclusions, gates, 
     file(join(pkg, 'package.json'), JSON.stringify({ pi: { subagents: ['./agents', '../outside.md'] } }));
     assert.throws(() => packageResources(h.root, 'agents', false), /outside install root/);
     file(join(pkg, 'package.json'), JSON.stringify({ pi: { subagents: ['./agents'] } }));
-    file(join(h.root, 'outside.md'), 'outside'); symlinkSync(join(h.root, 'outside.md'), join(pkg, 'agents', 'escape.md'));
+    // A directory junction needs no Windows symlink privilege; Linux ignores the type.
+    mkdirSync(join(h.root, 'outside')); symlinkSync(join(h.root, 'outside'), join(pkg, 'agents', 'escape.md'), 'junction');
     assert.throws(() => packageResources(h.root, 'agents', false), /escapes install root/);
   } finally { await h.cleanup(); }
 });
@@ -194,7 +195,8 @@ test('untrusted and isolated children do not load project code or skills; disabl
     const run = await h.manager.start({ prompt: 'untrusted', background: false }, { ctx: untrusted }, h.config);
     assert.equal((await run.done.promise).state, 'completed', run.record.error);
     type(h.root, 'isolated', { isolated: true, extensions: ['*'], skills: ['project'], allowed_subagents: 'all', prompt_mode: 'append' });
-    const parent = { ...h.ctx, getSystemPrompt: () => `PARENT_PREFIX\n\n<skills>\nPARENT_SKILL\n</skills>\n\n<cwd>\n${h.root}\n</cwd>\nPARENT_EXTENSION` };
+    // Pi renders the cwd section with forward slashes on every platform.
+    const parent = { ...h.ctx, getSystemPrompt: () => `PARENT_PREFIX\n\n<skills>\nPARENT_SKILL\n</skills>\n\n<cwd>\n${h.root.replace(/\\/g, '/')}\n</cwd>\nPARENT_EXTENSION` };
     h.faux.setResponses([async context => {
       const messages = JSON.stringify(context.messages); assert.match(messages, /PARENT_PREFIX/);
       for (const forbidden of ['PARENT_SKILL', 'PROJECT_SKILL', 'PARENT_EXTENSION']) assert.ok(!messages.includes(forbidden));
