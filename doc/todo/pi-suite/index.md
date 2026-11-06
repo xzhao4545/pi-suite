@@ -18,9 +18,8 @@
 
 - [ ] Windows 上游原问题复现记录：按 [基线](../../finished/pi-suite/design/upstream-baseline.md) 区分静态源码结论与真实运行结论；与下列场景共用证据，不另跑重复验收。
 - [ ] Windows 终端监督组合：monitor 三种策略、阈值/冷却/生命周期、hands-free 增量预算、dispatch 宽限期/静默完成、launchPolicy 授权/拒绝/取消，以及终端接管后拒绝模型写入、交还后恢复。现有组件与受控进程检查已通过，剩余为实际 CLI 组合。见 [监督设计](../../finished/pi-suite/design/jobs/monitors.md)。
-- [ ] Windows 实际 Pi CLI 预设剩余契约：复杂前导 `@` 正文逐字进入模型、PTY reload/new 不重放且会话归属正确已通过；仍需核对默认参数与选项结束标记、普通正文/附件、默认 pipe/print/JSON、fork 身份与源会话保持。接管/缩放/退出的已有证据直接复用。已验证范围见 [Windows CLI 阶段](../../finished/pi-suite/jobs/windows-cli-ui.md)，设计见 [CLI 原文阶段](../../finished/pi-suite/jobs/literal-prompt.md)。
 - [ ] Windows 输出与终端边界综合复核：大日志/单长行、UTF-8 分页、search/context 与原始 offset、预算/续读提示、密码隐藏/横向重绘/全屏线性片段与当前/最后屏幕；不要求 reader 还原二维历史。核对停止竞争/重复停止、已结束/foreign 历史只读及清理未确认入口。见 [输出设计](../../finished/pi-suite/design/jobs/output.md) 与 [历史控制](../../finished/pi-suite/design/jobs/history-control.md)。
-- [ ] Cursor 实际 CLI 预设与工具/PTY 验收：当前缺少对应 agent 命令，需在具备该环境后验证默认参数、字面正文、输入接管、自然退出与停止清理；不得以其他 CLI 替代通过。
+- [ ] Cursor 实际 CLI 预设与工具/PTY 验收：当前缺少对应 agent 命令，用户选择保留环境待办，不在本轮安装。具备该环境后验证默认参数、字面正文、输入接管、自然退出与停止清理；不得以其他 CLI 替代通过。
 
 ## 子代理、资源与扩展
 
