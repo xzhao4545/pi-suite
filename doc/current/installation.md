@@ -19,6 +19,19 @@ pi update git:github.com/xzhao4545/pi-suite
 
 安装或更新后，已有交互会话执行 `/reload`，或重启 Pi。Pi Suite 默认启用 ask、tasks、jobs、goal 和 agents；可选配置见 [公共运行时与配置](./runtime/index.md)，无需为默认功能创建配置文件。
 
+## 本地安装
+
+在本地项目目录先运行 `pnpm install` 准备依赖，再通过 Pi 原生包管理命令安装该目录；将示例路径替换为实际项目的绝对路径：
+
+```sh
+pi install /absolute/path/to/pi-suite
+pi list
+```
+
+本地来源写入用户级 settings.json，Pi 直接加载项目目录的 `pi.extensions` 和 `pi.skills`。源码修改后在已有会话执行 `/reload`，依赖变更后先运行 `pnpm install`。项目目录需要保持可访问；`-l` 控制配置写入项目级，与安装来源是否为本地路径是两个不同选项。
+
+从 GitHub 来源切换时，先安装本地目录，再执行 `pi remove git:github.com/xzhao4545/pi-suite`；用 `pi list` 确认仅保留一份 Pi Suite 来源，然后执行 `/reload` 或重启 Pi。
+
 ## 替换重复扩展
 
 Pi Suite 整合下列扩展的能力。先完成 Pi Suite 安装，再通过 `pi list` 核对已安装来源，使用 `pi remove <source>` 移除对应独立扩展，避免工具、命令和界面重复注册。
