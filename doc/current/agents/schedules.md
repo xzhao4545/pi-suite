@@ -28,4 +28,6 @@ new/fork 使用独立会话文件，resume/reload 恢复当前会话的期限与
 
 关闭 agents.scheduling 后使用 /reload；绑定时撤销计时器，agent_start 的 schedule 参数和菜单入口隐藏，原文件保留。嵌套 child 的 agent_start 不注册 schedule 参数。外部消费者可以监听 subagents:scheduler_ready 与 subagents:scheduled 的 added/removed/fired/error 事件。
 
+实际 Pi 1.5.0 原生 CLI 的调度、详情确认、reload/new/resume 和退出清理已在 Linux 与 Windows 验收；Windows 使用本地 UTC+08:00，覆盖 cron/interval/once、离线过期与保持原相位的周期恢复。范围见 [Windows 调度阶段](../../finished/pi-suite/agents/windows-schedules.md)。
+
 [返回 agents](index.md)

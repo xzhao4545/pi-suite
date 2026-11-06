@@ -23,6 +23,7 @@ selection 响应保留 selections 原始标题和 optionIds；freeform 响应保
 - 默认 inline 询问位于输入区域，保留主聊天与终端历史查阅。
 - ↑/↓ 移动选项，空格或 Enter 明确选择/勾选；Tab 到操作栏，←/→ 选动作，Enter 执行 Confirm。自由输入 Enter 确认当前题。
 - `/` 搜索单选或多选；Enter 返回列表，筛选不修改勾选。PageUp/PageDown 翻页。
+- 终端支持的鼠标滚轮在选项区移动当前选项，在历史或说明正文区滚动阅读；滚轮不勾选、不提交，也不改变当前键盘焦点。
 - `d` 或操作栏 View details 打开完整问题、背景与选项说明；宽度达到 100 列时另提供选项预览。
 - `f` 或 Freeform 进入自由输入；Esc 返回选项，保留文本。
 - History 操作或默认 Ctrl+H 打开上方历史、下方问题与草稿的独立视图；Tab 在历史、回答和操作栏间切换，Ctrl+H 返回 inline。

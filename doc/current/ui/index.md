@@ -20,6 +20,8 @@ Transcript 复用 Pi 的 UserMessageComponent、AssistantMessageComponent、Tool
 
 ScrollView 为历史与每个选项详情分别保存滚动位置及搜索内容，支持按行、按页、Home/End、搜索和下一匹配。终端支持的鼠标滚轮通过 Pi 的标准事件增强阅读。尺寸改变不初始化回答草稿或勾选集合。
 
+Windows Pi 1.5.0 实际 CLI 组合验收覆盖三种标准尺寸、27/28 行预算阈值及 ui.maxRows=1 的最低回答行例外；原生键盘焦点、历史与说明的鼠标滚动、阅读位置往返和缩放后草稿/筛选外勾选保持均通过。范围与离线模型控制边界见 [Windows 询问组合](../../finished/pi-suite/ask/windows-combination.md)。
+
 DetailsView 提供统一标题、滚动正文、搜索与可配置操作栏；操作可声明快捷键、动态可用条件、默认选择与二次确认提示。←→ 选择可用动作，Enter 执行；二次确认的动作先显示提示，再按其快捷键执行，其他按键取消确认。搜索期间所有文字键交给搜索框，不触发控制动作。静态 Markdown、tasks 快照、jobs 动态日志与 agents transcript 使用同一框架。ScrollView 支持替换正文并保留阅读状态，调用方可要求下次渲染跟随底部；用户在渲染前滚动或开始搜索会取消该次跟随。日志只缓存当前字节窗口，具体操作见 [执行任务](../jobs/index.md#用户操作) 与 [任务操作](../tasks/operations.md)。
 
 公共 selectValue 复用 Pi 原生 SelectList 与主题，按终端高度限制可见选项，支持按键分页；值和显示标签独立，长行只在显示时截断。agent 模型与 thinking 使用该选择器；临时关闭并重开 DetailsView 时可以沿用同一 ScrollView，保留滚动与搜索状态。

@@ -9,6 +9,7 @@
 - [ask 默认答案与预选项](./pi-suite/ask/default-answers.md) — 默认初始化、参数冲突和明确提交。
 - [ask 批量提问、多选与推荐](./pi-suite/ask/batch-selection.md) — 独立题型、稳定选项 ID 和整批确认。
 - [询问与后台通知协调阶段](./pi-suite/ask/coordination.md) — 原生问答三种结算、两个 child 父级问题、真实 job 暂存与 goal 一次合并恢复；Linux SDK 验收。
+- [Windows 原生询问、界面与通知组合](./pi-suite/ask/windows-combination.md) — 三尺寸与最低回答行、鼠标/焦点/草稿、回答/超时/取消、两个 child 问题及真实 job 一次合并恢复。
 - [统一 Dock 与任务显示协调阶段](./pi-suite/ui-coordination.md) — 必要 agent/job 详情、父子预算、选中/阻塞任务和询问压缩摘要；Linux SDK/组件验收。
 - [完整 Starship footer 联动阶段](./pi-suite/footer-integration.md) — 实际发布入口、真实模块并存、三尺寸、数量槽位、缺失模块与显式 Dock 显示；Linux SDK 验收。
 - [目标生命周期与状态摘要基础阶段](./pi-suite/goal-core.md) — 宿主恢复、用户控制、预算、分支归属与状态发布。
@@ -40,6 +41,7 @@
 - [子代理定时调度基础阶段](./pi-suite/agents/schedules-core.md) — cron/周期/单次、会话存储、普通运行与通知、工具开关和查看取消；Linux 离线验收。
 - [调度期限与本地时区组合阶段](./pi-suite/agents/schedule-timezone.md) — 同一 UTC 期限、跨时区恢复、日历夏令时、固定周期与错过周期相位；Linux SDK 验收。
 - [实际 Pi CLI 调度与退出组合阶段](./pi-suite/agents/schedules-cli.md) — 三种真实触发、原生详情和取消、reload/new/resume 及 quit 的 child/job 清理；Linux CLI 验收。
+- [Windows 原生 CLI 调度组合](./pi-suite/agents/windows-schedules.md) — 本地 UTC+08:00、cron/interval/once、详情确认、会话恢复、过期与错过周期、退出清理。
 - [子代理 RPC 基础阶段](./pi-suite/agents/rpc-core.md) — 五通道与版本 2、启动与归属、同步消费和公共通知、cwd 与结构化结果；Linux 离线验收。
 - [实际 Pi CLI 独立扩展 RPC 组合阶段](./pi-suite/agents/rpc-cli.md) — 独立 consumer、两种加载次序、reload、目标目录信任、结构化结果与真实清理；Linux CLI 验收。
 - [子代理 Workflow 编排核心阶段](./pi-suite/agents/workflow-core.md) — 上游 Worker、流水线、嵌套共享并发、控制与预算、journal 前缀恢复；Linux 离线验收。
