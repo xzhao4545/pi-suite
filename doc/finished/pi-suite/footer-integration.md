@@ -10,7 +10,7 @@
 - [x] max_statuses=1 按扩展状态插入顺序截取，较早第三方状态可排挤 goal/runtime；disabled 和根 format 缺少 extension_status 时隐藏摘要，明确 goal.display=dock 可由公共 Dock 显示。
 - [x] 40 列的整体 footer 自动换行多于 120 列；Pi 原生 footer 为两条基础行及可选一条扩展状态行，外部 footer 总高度没有可靠公共反馈。
 
-1 项 Linux（Node 24.22.2）真实 SDK 聚合检查通过，终端尺寸由受控 fixture 提供。当前样例 footer、Dock 与询问总高度低于终端的 40%，该结论仅适用于已检查布局；任意用户 format 的高度由外部 footer 控制。Windows、真实手机 SSH 和用户实际配置继续由 [goal 状态栏待办](../../todo/pi-suite/goal-status.md) 与 [活动数量待办](../../todo/pi-suite/status.md) 验收。
+1 项 Linux（Node 24.22.2）真实 SDK 聚合检查通过，终端尺寸由受控 fixture 提供。当前样例 footer、Dock 与询问总高度低于终端的 40%，该结论仅适用于已检查布局；任意用户 format 的高度由外部 footer 控制。Windows 和用户实际配置继续由 [goal 状态栏待办](../../todo/pi-suite/index.md) 与 [活动数量待办](../../todo/pi-suite/index.md) 验收。
 
 Starship 为开发验收依赖，产品状态发布仍使用 Pi 公共 setStatus。稳定规则见 [统一界面](../../current/ui/index.md)。
 

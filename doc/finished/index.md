@@ -2,6 +2,8 @@
 
 本目录保存已完成专项记录。形成的稳定实现与规则维护在 [当前文档](../current/index.md)，未完成需求维护在 [待办索引](../todo/index.md)。
 
+已实施模块的完整设计与原验收契约见 [设计与实施记录](./pi-suite/design/index.md)；这些记录归档不表示剩余平台验收已通过，活跃 Windows 项统一见 [Windows 待办](../todo/pi-suite/index.md)。
+
 - [扩展包架构与发布](./pi-suite/architecture.md) — 单包入口、真实会话目录模块准入、共享绑定/通知/配置、来源登记与既有 owner 退出清理。
 - [统一工具设计规范](./pi-suite/tool-design.md) — 命名、公共参数/schema、返回类型、读取/等待/停止与稳定模型工具错误。
 - [ask 默认答案与预选项](./pi-suite/ask/default-answers.md) — 默认初始化、参数冲突和明确提交。
@@ -16,6 +18,7 @@
 - [Pi 原文初始任务与生命周期阶段](./pi-suite/jobs/literal-prompt.md) — 原生 flag/input 桥保留前导 @ 和附件、默认 pipe EOF、fork 新身份、reload/new 不重放与自然 quit；Linux CLI 验收。
 - [实际 Pi CLI 终端缩放与重新接管阶段](./pi-suite/jobs/terminal-resize.md) — 实际 /jobs attach、内核尺寸和 SIGWINCH、接管/交还、关闭后继续及重新 attach；Linux CLI 验收。
 - [Windows 运行时与实际 CLI 阶段](./pi-suite/jobs/windows-runtime.md) — 常驻 CIM、ConPTY 密码隐藏、OSC 轮次、共享存储竞争、Pi 缩放/模型/调度/RPC/workflow，以及实际 Codex/Claude 工具执行与清理；平台剩余范围保留待办。
+- [Windows CLI 文本 PTY 与原生 footer 阶段](./pi-suite/jobs/windows-cli-ui.md) — 实际 Codex/Claude 主对话输入接管与停止、Pi reload/new 生命周期、Starship/Pi 原生 footer 三尺寸与用户配置边界；未覆盖的操作组合保留待办。
 - [实际 Codex/Claude 文本 PTY 阶段](./pi-suite/jobs/cli-pty.md) — Linux 真实 CLI、本地主对话 SSE、复杂 prompt、用户接管/交还和确认停止；工具执行见后续阶段，平台组合保留待办。
 - [实际 CLI 工具执行与 Linux 后代清理阶段](./pi-suite/jobs/cli-tools.md) — Codex exec_command、Claude Bash/Read，独立工具进程组的身份捕获与真实停止；Linux 受控验收。
 - [jobs 技能发布阶段](./pi-suite/jobs/skill.md) — 包声明、实际 Pi 资源发现/加载、原生调用与模块关闭行为。

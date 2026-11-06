@@ -1,6 +1,6 @@
 # PTY 线性输出与屏幕支持范围
 
-Linux、Pi 1.5.0、Node.js 24 的真实 JobManager PTY 验证明确了 [输出待办](../../../todo/pi-suite/jobs/output.md) 的垂直/全屏支持范围；该阶段只核对已有 reader、xterm 与屏幕查看入口。
+Linux、Pi 1.5.0、Node.js 24 的真实 JobManager PTY 验证明确了 [输出待办](../../../todo/pi-suite/index.md) 的垂直/全屏支持范围；该阶段只核对已有 reader、xterm 与屏幕查看入口。
 
 - 垂直重写后 xterm 显示 `NEW_A / OLD_B`，线性 reader 显示 `OLD_A / NEW_A`。reader 在当前读取片段内处理单物理行的横向覆写，跨行定位不会回写此前的线性行。
 - 备用屏幕清屏并重绘两帧后，xterm 只显示当前帧；线性日志片段仍包含旧帧，可能与新帧拼接。读取、搜索与结算预览均不保证最终二维画面；原始字节偏移与实际日志长度一致。

@@ -2,13 +2,15 @@
 
 目标：在 TUI 内配置 subagent 的模型和 thinking，从已配置认证的模型中直接选择，修改立即生效，不需要编辑文件或 /reload。
 
-当前状态：共享 agents.types 配置、逐字段写回、类型选择界面、单 agent 下一请求修改与持久恢复、模型来源和认证错误已接入；5 项 Linux 契约检查覆盖实际 SDK 请求与原生选择组件，见 [模型配置基础阶段](../../../finished/pi-suite/agents/models-core.md)。enabled 的配置优先级、完整类型菜单、Enable/Disable/Use definition 与即时 @类型/workflow 刷新见 [类型与回收阶段](../../../finished/pi-suite/agents/types-retention.md)。调度/workflow/@handle 的实际请求、配置来源及持久恢复通过 Linux [入口组合阶段](../../../finished/pi-suite/agents/models-entrypoints.md)，Windows 组合验收待完成。需求与取舍已由用户确认。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+
+当前状态：共享 agents.types 配置、逐字段写回、类型选择界面、单 agent 下一请求修改与持久恢复、模型来源和认证错误已接入；5 项 Linux 契约检查覆盖实际 SDK 请求与原生选择组件，见 [模型配置基础阶段](../../agents/models-core.md)。enabled 的配置优先级、完整类型菜单、Enable/Disable/Use definition 与即时 @类型/workflow 刷新见 [类型与回收阶段](../../agents/types-retention.md)。调度/workflow/@handle 的实际请求、配置来源及持久恢复通过 Linux [入口组合阶段](../../agents/models-entrypoints.md)，Windows 组合验收待完成。需求与取舍已由用户确认。
 
 影响范围：/agents 菜单、subagent 查看器与列表、共享配置加载与写入、AgentManager 启动参数解析、agent 记录与 agent_list 详情。
 
 约束：可选模型来自 Pi 的 modelRegistry.getAvailable()；配置写入 pi-suite.json，不修改 agent 的 .md 文件；类型配置只影响之后启动的执行；配置的模型不可用时明确报错，不静默换成其他模型。
 
-相关当前文档：[公共运行时与配置](../../../current/runtime/index.md)。
+相关当前文档：[公共运行时与配置](../../../../current/runtime/index.md)。
 
 ## 任务列表
 
@@ -19,9 +21,9 @@
 - [x] 配置的模型不可用时报错并指出配置来源
 - [x] 同步操作说明与 doc/current 配置文档
 - [x] agents.types 增加 enabled，类型菜单保留 disabled 项并提供 Enable/Disable/Use definition，独立于 model/thinking 写回
-- [x] Linux 核对原生类型修改后调度/workflow/@handle 的实际 SDK 模型、thinking、来源与优先级，以及已准入/固定 resume 和回收后的持久恢复，见 [入口组合阶段](../../../finished/pi-suite/agents/models-entrypoints.md)
-- [ ] Windows 核对 40/120 列的原生选择与类型写回、运行中修改、恢复，以及调度/workflow/@handle 入口组合
-- [x] Windows 完整 SDK 检查及实际 Pi CLI 的 40/120 列类型模型写回、无需 reload 的 RPC/单次调度/workflow 模型与 thinking 传播通过，见 [Windows 阶段](../../../finished/pi-suite/jobs/windows-runtime.md)；其他原生入口组合仍保留上一项验收范围
+- [x] Linux 核对原生类型修改后调度/workflow/@handle 的实际 SDK 模型、thinking、来源与优先级，以及已准入/固定 resume 和回收后的持久恢复，见 [入口组合阶段](../../agents/models-entrypoints.md)
+- 验收跟踪：Windows 核对 40/120 列的原生选择与类型写回、运行中修改、恢复，以及调度/workflow/@handle 入口组合
+- [x] Windows 完整 SDK 检查及实际 Pi CLI 的 40/120 列类型模型写回、无需 reload 的 RPC/单次调度/workflow 模型与 thinking 传播通过，见 [Windows 阶段](../../jobs/windows-runtime.md)；其他原生入口组合仍保留上一项验收范围
 
 ## 验收方式
 
@@ -30,9 +32,9 @@
 ## 关联计划
 
 - [扩展能力：自定义类型与 frontmatter](extensions.md)
-- [运行记录与手动控制](../../../finished/pi-suite/agents/runs.md)
-- [原生会话查看](../../../finished/pi-suite/agents/viewer-controls.md)
-- [统一工具设计](../../../finished/pi-suite/tool-design.md)
+- [运行记录与手动控制](../../agents/runs.md)
+- [原生会话查看](../../agents/viewer-controls.md)
+- [统一工具设计](../../tool-design.md)
 
 ## 入口
 

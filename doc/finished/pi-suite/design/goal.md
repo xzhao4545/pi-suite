@@ -2,13 +2,15 @@
 
 目标：避免 retry、compact 和会话切换误中断 goal。
 
-当前状态：目标生命周期与摘要基础阶段已实现并通过 Windows/Linux 离线验收，记录见 [已完成阶段](../../finished/pi-suite/goal-core.md)。真实询问、两个 child 父级问题与 pipe job 完成通知的 Linux 组合通过 [协调阶段](../../finished/pi-suite/ask/coordination.md) 验收；完整 Starship 发布入口的 Linux 三尺寸组合见 [footer 联动阶段](../../finished/pi-suite/footer-integration.md)；Windows 组合、真实手机 SSH 与用户实际 footer 配置仍需综合验收。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+
+当前状态：目标生命周期与摘要基础阶段已实现并通过 Windows/Linux 离线验收，记录见 [已完成阶段](../goal-core.md)。真实询问、两个 child 父级问题与 pipe job 完成通知的 Linux 组合通过 [协调阶段](../ask/coordination.md) 验收；完整 Starship 发布入口的 Linux 三尺寸组合见 [footer 联动阶段](../footer-integration.md)；Windows 组合与用户实际 footer 配置仍需综合验收。
 
 影响范围：goal 状态、运行调度、预算、宿主事件、通知协调及状态栏摘要。
 
 约束：目标状态与运行状态分开；宿主恢复期间不叠加自己的重试。
 
-相关当前文档：[目标管理](../../current/goal/index.md)。
+相关当前文档：[目标管理](../../../current/goal/index.md)。
 
 ## 任务列表
 
@@ -16,8 +18,8 @@
 - [x] 按宿主最终结算判断错误或继续
 - [x] 处理 compact/reload/会话绑定与目标恢复
 - [x] 统一 goal/job/agent 的继续请求和去重（Linux 真实询问、child 父级问题、job 完成及 goal 请求一次边界合并）
-- [ ] 在 Windows 核对 goal、询问和 jobs/agents 的真实通知组合
-- [x] 按 [统一工具设计](../../finished/pi-suite/tool-design.md) 改用 camelCase 参数，goal_wait 增加 waitFor
+- 验收跟踪：在 Windows 核对 goal、询问和 jobs/agents 的真实通知组合
+- [x] 按 [统一工具设计](../tool-design.md) 改用 camelCase 参数，goal_wait 增加 waitFor
 - [x] 保留显式暂停、Esc、完成和预算的控制语义
 - [x] 从目标与调度状态派生单条状态栏摘要，兼容 Pi 原生 footer 与完整 pi-starship 发布入口（Linux 三尺寸与真实多模块并存；平台边界见关联专项）
 
@@ -27,10 +29,10 @@
 
 ## 关联计划
 
-- [执行任务生命周期](../../finished/pi-suite/jobs/session-lifecycle.md)
+- [执行任务生命周期](../jobs/session-lifecycle.md)
 - [等待用户](ask/interaction.md)
 - [子代理](agents/index.md)
-- [统一工具设计](../../finished/pi-suite/tool-design.md)
+- [统一工具设计](../tool-design.md)
 - [goal 状态栏联动](goal-status.md)
 
 ## 7. goal：目标状态与一次模型运行分开

@@ -8,7 +8,7 @@ Linux Node.js 24.22.2 的 100 MiB 文件单行检查通过，覆盖全文起止�
 
 真实 Pi SDK 的 job_read/agent_read 直接调用和原生工具执行管线均保留该错误，后者报告 isError:true；失败不消费 child 结果，不增加模型调用或父会话消息。job 的 100 MiB 日志由实际 pipe 进程生成；agent 输入注入真实已结束 child 的未消费记录，验证读取边界，不代表模型生成了 100 MiB 结果。同一全文普通正则成功后才消费 agent 结果，原始首尾分页保持 UTF-8 边界。
 
-Pi 公共 read/truncate 与两个 jobs 上游没有可直接替代的完整 JavaScript 正则流式搜索器；rg 使用的正则语义不能替代该契约。本阶段只扩展共享 reader，不添加另一套日志或查询框架。平台组合见 [输出待办](../../../todo/pi-suite/jobs/output.md)，屏幕范围见 [PTY 屏幕阶段](screen-range.md)。
+Pi 公共 read/truncate 与两个 jobs 上游没有可直接替代的完整 JavaScript 正则流式搜索器；rg 使用的正则语义不能替代该契约。本阶段只扩展共享 reader，不添加另一套日志或查询框架。平台组合见 [输出待办](../../../todo/pi-suite/index.md)，屏幕范围见 [PTY 屏幕阶段](screen-range.md)。
 
 当前机制见 [工具契约](../../../current/runtime/tools.md) 与 [jobs 输出读取](../../../current/jobs/index.md#输出读取)。
 

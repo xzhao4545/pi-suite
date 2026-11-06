@@ -1,0 +1,30 @@
+# 执行任务与保活待办
+
+目标：统一交互和非交互任务管理，使后台执行与会话/UI 生命周期分离。
+
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+
+当前状态：实施中；执行工具、长期 manager、pipe/PTY 后端、记录、通知、同进程保活、monitor、hands-free/dispatch、CLI 预设与有界实时日志查看已实现。基础后端通过 Windows/Linux 离线检查，监督、预设与日志查看通过 Linux 离线检查；各专项仍保留尚未完成的平台与综合验收。实现以上游 pi-background-jobs 与 pi-interactive-shell 源码导入改造，按文件处置见 [上游导入](../upstream-import.md)。
+
+输出密码回显隐藏、横向重绘、全屏提示与有限完成预览、实际 Pi CLI、Codex/Claude 文本 PTY、exec_command/Bash/Read 工具执行和包技能已通过 Linux 分阶段验收，见 [输出组合](../../jobs/output-core.md)、[实际 Pi CLI](../../jobs/pi-cli.md)、[Codex/Claude 文本 PTY](../../jobs/cli-pty.md)、[CLI 工具执行](../../jobs/cli-tools.md) 与 [技能发布](../../jobs/skill.md)。[Pi 原文初始任务](../../jobs/literal-prompt.md) 已接入前导 `@`、附件、默认 pipe 与 fork/PTY 生命周期；[超长单行](../../jobs/long-line.md) 与 [屏幕支持范围](../../jobs/screen-range.md) 已明确完整正则和屏幕读取的资源/呈现边界。其他 CLI 与未验收工具范围、Cursor 环境及 Windows组合继续保留在对应专项。
+
+影响范围：jobs、Windows/Linux 后端、日志、会话绑定和通知协调。
+
+约束：pipe 与 PTY 分别处理；保活只覆盖同一 Pi 进程，Pi 退出终止全部受管任务与 PTY；工具按 [统一工具设计](../../tool-design.md)。
+
+相关当前文档：[项目当前状态](../../../../current/index.md)。
+
+## 任务列表
+
+- [统一执行任务管理](execution.md)
+- [运行与历史记录、输入输出及手动停止](history-control.md)
+- [输出读取、搜索与截断](output.md)
+- [监视、hands-free 与 dispatch](monitors.md)
+- [x] [同一 Pi 进程内保活](../../jobs/session-lifecycle.md)
+- [x] [Pi 退出清理与保活范围决策](../../jobs/exit-scope.md)
+
+## 验收方式
+
+Windows 和 Linux 分别核对执行、输入、日志、耗时、已结束历史、手动停止、同进程会话操作，以及 Pi 退出后原任务与 PTY 的终止清理。
+
+[返回扩展包待办索引](../index.md)

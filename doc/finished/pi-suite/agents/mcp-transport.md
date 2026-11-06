@@ -6,6 +6,6 @@ Linux Pi 1.5.0 使用原生 createMcpExtension 连接实际 stdio MCP 子进程�
 
 受控真实服务另验证原生 codemode 嵌套调用、tool_search 激活、tools/list_changed 后晚注册工具在下一请求执行、isolated 与不可信项目不连接。跨 cwd RPC 仅加载用户 MCP，父项目与目标项目 MCP 均不加载；各服务进程及临时配置完成后清理。本阶段服务为本机协议夹具，不代表任意业务服务、OAuth 或 Windows 组合验收。
 
-稳定规则见 [类型与资源](../../../current/agents/resources.md)。Windows、实际业务服务及资源组合见 [扩展待办](../../../todo/pi-suite/agents/extensions.md)。
+稳定规则见 [类型与资源](../../../current/agents/resources.md)。Windows、实际业务服务及资源组合见 [扩展待办](../../../todo/pi-suite/index.md)。
 
 [返回完成索引](../../index.md)

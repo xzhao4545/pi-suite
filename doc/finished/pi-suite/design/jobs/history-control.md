@@ -2,13 +2,15 @@
 
 目标：统一查看运行中和已结束的 job，保留可分页的输入输出及时间信息，并允许用户明确停止指定 job。
 
-当前状态：实施中；记录、日志、输入记录、列表与详情、停止证据及活动数量的基础实现通过两平台检查，见 [执行任务](../../../current/jobs/index.md)。/jobs 用户入口（筛选、翻页、详情、各通道读取、确认停止、清理已结算历史）与 PTY attach/detach 已实现；有界日志窗口、实时跟随、历史翻页和列表游标通过 Linux 检查，见 [日志查看基础阶段](../../../finished/pi-suite/jobs/log-viewer-core.md)。Linux 已验证自然退出后 monitor 处理期间 stop 保留退出结果，见 [升级控制基础阶段](../../../finished/pi-suite/jobs/runtime-control-core.md)；创建归属及 child/后代级联停止已接入 agents 并通过 Linux 检查。Windows 查看流程、停止竞争与级联组合尚待验证。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+
+当前状态：实施中；记录、日志、输入记录、列表与详情、停止证据及活动数量的基础实现通过两平台检查，见 [执行任务](../../../../current/jobs/index.md)。/jobs 用户入口（筛选、翻页、详情、各通道读取、确认停止、清理已结算历史）与 PTY attach/detach 已实现；有界日志窗口、实时跟随、历史翻页和列表游标通过 Linux 检查，见 [日志查看基础阶段](../../jobs/log-viewer-core.md)。Linux 已验证自然退出后 monitor 处理期间 stop 保留退出结果，见 [升级控制基础阶段](../../jobs/runtime-control-core.md)；创建归属及 child/后代级联停止已接入 agents 并通过 Linux 检查。Windows 查看流程、停止竞争与级联组合尚待验证。
 
 影响范围：JobManager、持久元数据、日志、工具适配入口、jobs 详情与平台停止后端。
 
 约束：记录查看不重新启动进程；退出、停止请求和进程清理分开；PTY 输出不伪装为独立 stdout/stderr。
 
-相关当前文档：[项目当前状态](../../../current/index.md)。
+相关当前文档：[项目当前状态](../../../../current/index.md)。
 
 ## 任务列表
 
@@ -17,7 +19,7 @@
 - [x] 保存可查看的输入记录，区分 pipe 与 PTY 输出通道
 - [x] 支持实时查看、历史分页、attach/detach 与明确停止（Windows 综合交互验收仍待实施）
 - [x] Linux 验证停止竞争、重复停止、受管范围清理及历史只读边界
-- [ ] Windows 综合复核停止竞争、重复停止、进程树清理及历史只读边界
+- 验收跟踪：Windows 综合复核停止竞争、重复停止、进程树清理及历史只读边界
 - [x] 记录 child 创建归属，支持 subagent 停止时级联清理所属 job（Windows 综合验收待实施）
 - [x] 用户确认后清理已结算且清理已确认的单项元数据与全部日志，拒绝活动或未确认对象
 - [x] 将活动数量提供给共享状态栏发布器
@@ -29,11 +31,11 @@
 ## 关联计划
 
 - [执行模式与后端](execution.md)
-- [同进程保活](../../../finished/pi-suite/jobs/session-lifecycle.md)
+- [同进程保活](../../jobs/session-lifecycle.md)
 - [活动数量状态](../status.md)
-- [子代理停止边界](../../../finished/pi-suite/agents/runs.md)
+- [子代理停止边界](../../agents/runs.md)
 - [输出读取](output.md)
-- [统一工具设计](../../../finished/pi-suite/tool-design.md)
+- [统一工具设计](../../tool-design.md)
 
 ## 记录与历史查看
 
@@ -56,7 +58,7 @@ elapsedMs 运行中随查询或可见详情刷新更新，结束后固定；不�
 
 元数据与日志写入磁盘，列表默认只返回短摘要，打开详情才读取长命令或日志。完成对象从常驻面板收起，但历史不因折叠或通知已读被删除；第一版保留至用户主动清理。清理入口仅允许已结算且确认无活动执行的记录，并明确清理其历史与日志。当前执行协议可用的 `/jobs` 详情提供 `Clear history`，确认后通过同一 JobManager 和 JobStore 删除；清理等待结算、输入/事件写入与元数据保存，删除前复核磁盘状态，并撤销该 job 未送达的通知。执行协议受限的 owner 与只读 agents 历史不提供删除操作。
 
-Pi 重新启动后仍可读取保存的记录和日志，但不因此获得原进程或 PTY 的控制权。没有确认结算的历史保持未确认标记，在全部列表或诊断中展示，不归入已知活动或成功完成；Pi 退出终止原任务与 PTY，不提供跨 Pi 进程重新 attach，见 [退出清理范围](../../../finished/pi-suite/jobs/exit-scope.md)。
+Pi 重新启动后仍可读取保存的记录和日志，但不因此获得原进程或 PTY 的控制权。没有确认结算的历史保持未确认标记，在全部列表或诊断中展示，不归入已知活动或成功完成；Pi 退出终止原任务与 PTY，不提供跨 Pi 进程重新 attach，见 [退出清理范围](../../jobs/exit-scope.md)。
 
 ## 输入与输出
 
@@ -70,7 +72,7 @@ Pi 重新启动后仍可读取保存的记录和日志，但不因此获得原�
 
 ## 查询和控制入口
 
-统一 manager 承担全部入口；工具名与共享参数按 [统一工具设计](../../../finished/pi-suite/tool-design.md)，上游旧工具不再注册。
+统一 manager 承担全部入口；工具名与共享参数按 [统一工具设计](../../tool-design.md)，上游旧工具不再注册。
 
 | 入口 | 精简参数与返回 |
 | --- | --- |
@@ -95,4 +97,4 @@ id 查询直接返回详情；state/scope/cursor/limit 是列表参数，不能�
 
 subagent 发起的 job 由运行上下文自动记录创建归属；停止该 subagent 时，AgentManager 调用同一 JobManager 停止它及所属后代创建的活动 job，不需要模型逐项调用 job_stop。job 归属与 task/agent 的展示引用分开，执行已 detach 或创建 child 已完成仍参与级联清理。关闭视图、会话切换和 reload 仅改变绑定，不触发该停止流程。
 
-注册和启动 job 时检查创建执行是否已在停止，并先记录受管对象；若停止与启动同时发生，继续将该 job 纳入同一停止请求。停止返回 child/job 的真实结算信息，pending/unconfirmed 继续可查询，日志与历史保留。具体运行子树与执行标识规则见 [子代理停止边界](../../../finished/pi-suite/agents/runs.md)。
+注册和启动 job 时检查创建执行是否已在停止，并先记录受管对象；若停止与启动同时发生，继续将该 job 纳入同一停止请求。停止返回 child/job 的真实结算信息，pending/unconfirmed 继续可查询，日志与历史保留。具体运行子树与执行标识规则见 [子代理停止边界](../../agents/runs.md)。

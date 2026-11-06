@@ -9,7 +9,7 @@
 - [x] 回答后在一个边界合并 job 结果、两个 child 问题及 goal 继续请求；超时与取消须等待新的用户 prompt 恢复，后台消息不自动解除 waiting_user。
 - [x] 父级依次调用原生询问；第二题排队时不启动展示期限，第一题结束后才展示。父级回答两个 child 后完成实际 child 执行，已消费通知不再次唤醒。
 
-1 项 Linux（Node 24.22.2）真实 SDK 聚合检查通过，覆盖三种结算与真实进程；类型检查通过。UI 使用原生组件的键盘输入和真实定时器，终端呈现通过受控 UI 上下文驱动；Windows 组合、真实手机 SSH 输入、滚轮及缩放仍由 [询问交互](../../../todo/pi-suite/ask/interaction.md) 和 [详情滚动](../../../todo/pi-suite/ask/details-scroll.md) 验收。
+1 项 Linux（Node 24.22.2）真实 SDK 聚合检查通过，覆盖三种结算与真实进程；类型检查通过。UI 使用原生组件的键盘输入和真实定时器，终端呈现通过受控 UI 上下文驱动；Windows 输入、滚轮及缩放组合仍由 [询问交互](../design/ask/interaction.md) 和 [详情滚动](../design/ask/details-scroll.md) 验收。
 
 child 问题的父级协议期限与原生 AskQueue 的展示期限分别管理。本阶段 child 问题使用 timeoutMs:0，由父级实际询问验证排队期限，未新增询问或通知框架。
 

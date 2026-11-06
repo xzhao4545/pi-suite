@@ -134,6 +134,6 @@ pipe 与 PTY 都使用 Pi 自身的 Bash 选择（settings 的 shellPath，否�
 
 ## 未实现
 
-监督与 CLI 预设的平台验收、终端缩放的平台验证，由 [执行任务待办](../../todo/pi-suite/jobs/index.md) 管理。
+监督与 CLI 预设的平台验收、终端缩放的平台验证，由 [执行任务待办](../../todo/pi-suite/index.md) 管理。
 
 [返回当前文档](../index.md)

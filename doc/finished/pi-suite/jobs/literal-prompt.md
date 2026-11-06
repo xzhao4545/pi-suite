@@ -6,6 +6,6 @@ Pi 预设支持前导 `@` 原文，调用方保持 agent.prompt 请求契约。P
 
 Linux 实际 Pi 1.5.0 的 7 种组合、10 次模型请求通过：复杂前导 `@` 逐字入模，同名文件存在也不读取；print、JSON、默认 pipe 与 fork 各执行一次并自然 exit 0。fork 保留源上下文、使用新 session ID，源文件字节不变；自动发现与显式加载去重，原生附件和 JSON 事件保留。真实 PTY 中初始正文、后续输入、reload 后输入与 new 后输入恰好产生四次请求，reload 不重放，new 使用新 session ID，quit 自然 completed/exit 0。既有 7 项 launch 聚合同时通过实际模型 job_start 默认 pipe、精确 allow、附件与原文及 PTY 用户/模型输入，未新增永久测试条目。
 
-适用范围为上述版本的 Linux CLI、公共参数解析与现有 JobManager；Windows、真实手机 SSH、其他 CLI 与未验收工具继续由 [监督专项](../../../todo/pi-suite/jobs/monitors.md) 管理。当前请求、输入与授权见 [CLI 预设](../../../current/jobs/launch.md)，来源见 [上游登记](../../../../third-party/UPSTREAM.md)。
+适用范围为上述版本的 Linux CLI、公共参数解析与现有 JobManager；Windows、其他 CLI 与未验收工具继续由 [监督专项](../../../todo/pi-suite/index.md) 管理。当前请求、输入与授权见 [CLI 预设](../../../current/jobs/launch.md)，来源见 [上游登记](../../../../third-party/UPSTREAM.md)。
 
 [返回完成索引](../../index.md)

@@ -7,8 +7,8 @@ Linux 使用真实 Codex 0.166.0、Claude Code 2.1.153、JobManager PTY 和本�
 
 根因是 CLI 工具能够创建独立 session/进程组，单独终止 job 根进程组不能覆盖这些后代。本阶段扩展既有 Linux 停止后端，复用 Tracked、retainedScope 与 CleanupEvidence：停止前以 `/proc` start ticks 捕获根组及可追溯后代，发信号前核对身份，保留父退出后的目标并确认终止；不另建 CLI 管理器。执行协议为 10，避免 reload 复用不同停止语义的占用 manager。
 
-新增 1 项真实进程聚合覆盖 pipe/PTY 异步 stop、pipe 同步退出、忽略 TERM 的独立 session 工具、原根组内已重新挂到 PID 1 的成员，以及另一独立 job 保持运行。首次捕获前已经脱离祖先链且不在根组的进程不属于可证明范围；`/proc` 复核与 kill 之间仍有系统调用竞态，zombie 视为已经终止。本阶段不覆盖任意其他 CLI 工具、Windows、真实手机 SSH 或 Cursor。
+新增 1 项真实进程聚合覆盖 pipe/PTY 异步 stop、pipe 同步退出、忽略 TERM 的独立 session 工具、原根组内已重新挂到 PID 1 的成员，以及另一独立 job 保持运行。首次捕获前已经脱离祖先链且不在根组的进程不属于可证明范围；`/proc` 复核与 kill 之间仍有系统调用竞态，zombie 视为已经终止。本阶段不覆盖任意其他 CLI 工具、Windows 或 Cursor。
 
-稳定停止规则见 [执行任务](../../../current/jobs/index.md#结算与停止)，启动及验收范围见 [CLI 预设](../../../current/jobs/launch.md)。平台与其他 CLI 待办见 [监督专项](../../../todo/pi-suite/jobs/monitors.md)。
+稳定停止规则见 [执行任务](../../../current/jobs/index.md#结算与停止)，启动及验收范围见 [CLI 预设](../../../current/jobs/launch.md)。平台与其他 CLI 待办见 [监督专项](../design/jobs/monitors.md)。
 
 [返回完成索引](../../index.md)

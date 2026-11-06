@@ -11,7 +11,7 @@
 - [x] ui.maxRows 包含本包在原生 footer 中增加的状态行，Dock 可为 0；询问期间最多保留一条必要 Dock 行，询问至少保留一条回答行。maxRows=1 且状态行占满预算时保留最低回答行是明确例外。
 - [x] 既有任务界面聚合核对父子预算、阻塞完成与重新打开、选中稳定 ID、三种列宽、5 秒完成反馈及独立阅读快照；询问/详情继续使用公共焦点和通知阻塞机制。
 
-适用范围：Pi 1.5.0、Linux（Node 24.22.2）离线 SDK 与原生组件检查。完整发布 footer 的并存范围见 [footer 联动阶段](footer-integration.md)；Windows 与真实手机 SSH 的滚轮、缩放和全部面板组合由 [统一界面待办](../../todo/pi-suite/ui.md) 验收。
+适用范围：Pi 1.5.0、Linux（Node 24.22.2）离线 SDK 与原生组件检查。完整发布 footer 的并存范围见 [footer 联动阶段](footer-integration.md)；Windows 的滚轮、缩放和全部面板组合由 [统一界面待办](../../todo/pi-suite/index.md) 验收。
 
 稳定规则见 [统一界面](../../current/ui/index.md) 与 [任务操作](../../current/tasks/operations.md)。
 

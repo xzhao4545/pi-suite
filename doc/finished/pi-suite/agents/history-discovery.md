@@ -8,8 +8,8 @@ workspace 记录汇总完整会话树的全部分支，保留 runId、owner/anch
 
 磁盘读取使用 parseSessionEntries 与 SessionManager.inMemory，查询不触发 SDK open 的修复写入；缺失/未来 header、损坏 JSONL、无效记录/时间戳、不可读取的 child 引用与错误结束叶子明确报错。没有本进程 Execution 的保存活动状态规范为 failed，不计入活动数量，不产生或转移通知。显式恢复使用既有 SDK 执行路径，阅读不启动模型。
 
-history.ts 为本项目通过 Pi 公共存储 API 编写的发现能力，不计作上游直接源码导入；来源与适配边界见 [上游登记](../../../../third-party/UPSTREAM.md)。稳定事实维护在 [持久历史](../../../current/agents/history.md) 和 [操作说明](../../../current/agents/operations.md)。更广的启动/停止竞争、平台及综合生命周期继续由 [运行记录专项](runs.md) 与 [扩展专项](../../../todo/pi-suite/agents/extensions.md) 管理。
+history.ts 为本项目通过 Pi 公共存储 API 编写的发现能力，不计作上游直接源码导入；来源与适配边界见 [上游登记](../../../../third-party/UPSTREAM.md)。稳定事实维护在 [持久历史](../../../current/agents/history.md) 和 [操作说明](../../../current/agents/operations.md)。更广的启动/停止竞争、平台及综合生命周期继续由 [运行记录专项](runs.md) 与 [扩展专项](../../../todo/pi-suite/index.md) 管理。
 
-Linux（Node 24.22.2）新增 5 项聚合检查通过，覆盖持久 owner/类型目录/目标 cwd 发现、普通与 workflow 引用、历史叶子及分页、父级/分支发送与原生只读控制、只读存储错误和中断 owner、跨工作区缓存引用及本地编辑/真实执行优先。全量 134 项检查通过、耗时 13.00 秒；收尾变更通过 agents 53 项影响范围复核、耗时 6.16 秒，最新类型检查通过。Windows、真实手机与更广的生命周期竞争仍按对应专项验收。
+Linux（Node 24.22.2）新增 5 项聚合检查通过，覆盖持久 owner/类型目录/目标 cwd 发现、普通与 workflow 引用、历史叶子及分页、父级/分支发送与原生只读控制、只读存储错误和中断 owner、跨工作区缓存引用及本地编辑/真实执行优先。全量 134 项检查通过、耗时 13.00 秒；收尾变更通过 agents 53 项影响范围复核、耗时 6.16 秒，最新类型检查通过。Windows 与更广的生命周期竞争仍按对应专项验收。
 
 [返回已完成专项](../../index.md)

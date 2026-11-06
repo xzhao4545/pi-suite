@@ -2,11 +2,11 @@
 
 目标：保留执行能力，使用 Pi 消息组件渲染子代理会话。
 
-当前状态：共享原生 Transcript、独立详情、thinking/工具折叠、流式消息和部分结果、底部跟随及历史叶子已接入；消息输入、两次停止与真实前台转后台接入统一 DetailsView，组件身份更新和流式/窄屏离线验收通过。Windows 与真实手机 SSH 留在 [扩展专项](../../../todo/pi-suite/agents/extensions.md) 验收。
+当前状态：共享原生 Transcript、独立详情、thinking/工具折叠、流式消息和部分结果、底部跟随及历史叶子已接入；消息输入、两次停止与真实前台转后台接入统一 DetailsView，组件身份更新和流式/窄屏离线验收通过。Windows 留在 [扩展专项](../design/agents/extensions.md) 验收。
 
 查看、消息输入与模型选择往返期间使用 Manager 的 run retain 引用阻止 Execution 回收，最终退出后释放；非持久 transcript 的回收边界与完整记录保留见 [类型与回收阶段](types-retention.md)。
 
-workflow 详情使用相同原生详情、阅读与值选择框架；child Transcript、gate 日志、暂停/恢复/停止、跳过/重试和 journal 重放的接入见 [宿主接入阶段](workflow-host.md)，Windows 与真实手机 SSH 由 [扩展专项](../../../todo/pi-suite/agents/extensions.md) 验收。
+workflow 详情使用相同原生详情、阅读与值选择框架；child Transcript、gate 日志、暂停/恢复/停止、跳过/重试和 journal 重放的接入见 [宿主接入阶段](workflow-host.md)，Windows 由 [扩展专项](../design/agents/extensions.md) 验收。
 
 影响范围：child session、消息组件、工具渲染、流式更新、运行/历史查看、手动停止与常驻摘要。
 
@@ -26,16 +26,16 @@ workflow 详情使用相同原生详情、阅读与值选择框架；child Trans
 
 核对 Markdown、代码块、thinking、工具结果和实时输出；已结束记录同样可查看，查看不影响主运行或触发生命周期切换。手动停止只按选定 child 执行范围取消，历史记录保留。
 
-Linux（Node 24.22.2）新增 4 项检查覆盖真实前台转后台的调用释放、收费池转移、父级后续取消与结果通知，以及 workflow 问题回答、两次停止/搜索隔离、阅读状态、实际 child.cwd、中间并发部分结果与 assistant 更新、旧 run 延迟输入拒绝。扩展既有 Transcript 聚合检查，验证 toolCallId 配对、partial/final 更新、稳定组件和 40/60/120 列缓存/位置。类型检查与 129 项全量检查通过，全量耗时 12.77 秒；既有模型选择取消、持久历史叶子与状态契约同时通过。平台与实际手机输入适用范围按 [扩展专项](../../../todo/pi-suite/agents/extensions.md) 继续验收。
+Linux（Node 24.22.2）新增 4 项检查覆盖真实前台转后台的调用释放、收费池转移、父级后续取消与结果通知，以及 workflow 问题回答、两次停止/搜索隔离、阅读状态、实际 child.cwd、中间并发部分结果与 assistant 更新、旧 run 延迟输入拒绝。扩展既有 Transcript 聚合检查，验证 toolCallId 配对、partial/final 更新、稳定组件和 40/60/120 列缓存/位置。类型检查与 129 项全量检查通过，全量耗时 12.77 秒；既有模型选择取消、持久历史叶子与状态契约同时通过。Windows 原生输入组合按 [扩展专项](../../../todo/pi-suite/index.md) 继续验收。
 
 ## 关联计划
 
-- [统一界面](../../../todo/pi-suite/ui.md)
-- [任务引用](../../../todo/pi-suite/tasks.md)
+- [统一界面](../design/ui.md)
+- [任务引用](../design/tasks.md)
 - [统一框架边界](../architecture.md)
 - [子代理运行记录与手动控制](runs.md)
 - [主从交互](interaction.md)
-- [活动数量状态](../../../todo/pi-suite/status.md)
+- [活动数量状态](../design/status.md)
 
 ## 8. agents：复用主 agent 的消息渲染
 
@@ -48,7 +48,7 @@ Linux（Node 24.22.2）新增 4 项检查覆盖真实前台转后台的调用释
 - 查看历史时固定当前位置；只有在底部时自动跟随新输出，避免一边阅读一边被拉走。
 - 按消息和宽度缓存组件；不要每次 token 更新把全部历史拼成一个长字符串再渲染。
 
-第一版采用独立的会话查看视图，复用原生组件，但不调用 switchSession 把主会话实际换成 child。进入/退出查看不会停止主 agent、改变主会话状态或重新触发扩展生命周期。手机默认全屏查看，活动数量默认显示在状态栏，底部 agent 详情行按统一 dock 预算收缩；选择 dock 模式时才在 dock 显示数量汇总。
+第一版采用独立的会话查看视图，复用原生组件，但不调用 switchSession 把主会话实际换成 child。进入/退出查看不会停止主 agent、改变主会话状态或重新触发扩展生命周期。窄屏终端默认全屏查看，活动数量默认显示在状态栏，底部 agent 详情行按统一 dock 预算收缩；选择 dock 模式时才在 dock 显示数量汇总。
 
 如果未来必须把 Pi 原有主聊天区直接变成任意 agent 的视角，公共扩展接口目前未提供完整替换入口，再评估一个很小的 Pi 核心扩展点。第一版不先 fork Pi 核心，也不依赖私有字段。
 

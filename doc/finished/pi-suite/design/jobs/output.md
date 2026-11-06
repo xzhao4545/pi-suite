@@ -2,13 +2,15 @@
 
 目标：模型能用有限 token 读到 job 输出中需要的部分：默认看到开头、结尾和错误行，按需分页或搜索，PTY 输出转为可读文本。
 
-当前状态：实施中；共享默认截断、offset 分页与搜索已通过两平台基础检查（含 100 MiB 日志）。关键行前后上下文、truncated.keys 原始范围、超长返回文本的字节预算及 agent_read/job_read 实际续读提示通过 Linux SDK 聚合检查；统一 job 读取位于 src/jobs/output.ts。PTY 密码提示至换行的回显隐藏、横向重绘、全屏提示与完成预览通过 [读取组合阶段](../../../finished/pi-suite/jobs/output-core.md) 的 Linux 真实 PTY/通知验收；垂直光标、全屏线性片段与同进程最后屏幕的支持范围已由 [屏幕范围阶段](../../../finished/pi-suite/jobs/screen-range.md) 明确，完整二维历史还原不在 reader 范围内。[超长逻辑行阶段](../../../finished/pi-suite/jobs/long-line.md) 核对了 100 MiB 单行全文匹配、线性组装和明确的正则资源失败；Windows 与真实手机 SSH 组合验收待完成。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+
+当前状态：实施中；共享默认截断、offset 分页与搜索已通过两平台基础检查（含 100 MiB 日志）。关键行前后上下文、truncated.keys 原始范围、超长返回文本的字节预算及 agent_read/job_read 实际续读提示通过 Linux SDK 聚合检查；统一 job 读取位于 src/jobs/output.ts。PTY 密码提示至换行的回显隐藏、横向重绘、全屏提示与完成预览通过 [读取组合阶段](../../jobs/output-core.md) 的 Linux 真实 PTY/通知验收；垂直光标、全屏线性片段与同进程最后屏幕的支持范围已由 [屏幕范围阶段](../../jobs/screen-range.md) 明确，完整二维历史还原不在 reader 范围内。[超长逻辑行阶段](../../jobs/long-line.md) 核对了 100 MiB 单行全文匹配、线性组装和明确的正则资源失败；Windows 组合验收待完成。
 
 影响范围：JobStore 日志读取、PTY 可见文本转换、job_read 与 agent_read、完成通知摘要。
 
 约束：偏移始终是原始日志字节，保证分页可续读；转换与截断只影响返回内容，不修改日志；输出是不可信数据，不作为指令。
 
-相关当前文档：[项目当前状态](../../../current/index.md)。
+相关当前文档：[项目当前状态](../../../../current/index.md)。
 
 ## 任务列表
 
@@ -21,7 +23,7 @@
 - [x] 验证密码回显隐藏、横向 CSI/BS/字素重绘、重复行和全屏标志的真实 PTY 组合，以及至多 2 KiB 的结算预览（Linux 真实 PTY；既有真实 SDK 通知聚合核对预览同条投递）
 - [x] 核对大单逻辑行的完整正则搜索内存及性能边界（100 MiB 单行、中文跨块、全文锚定与续读；组装线性，单行内存随行长增长，V8 资源失败明确报错）
 - [x] 明确垂直光标与全屏程序历史输出的线性还原支持范围（Linux 真实 PTY；线性 reader 不保证二维画面，同 owner 当前/最后屏幕复用既有 xterm，重启仅有历史日志）
-- [ ] Windows 与真实手机 SSH 综合验证上述读取及终端边界
+- 验收跟踪：Windows 综合验证上述读取及终端边界
 
 ## 验收方式
 
@@ -30,8 +32,8 @@
 ## 关联计划
 
 - [运行记录与手动控制](history-control.md)
-- [统一工具设计](../../../finished/pi-suite/tool-design.md)
-- [主从交互](../../../finished/pi-suite/agents/interaction.md)
+- [统一工具设计](../../tool-design.md)
+- [主从交互](../../agents/interaction.md)
 
 ## 读取方式
 

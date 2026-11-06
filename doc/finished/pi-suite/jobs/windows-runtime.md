@@ -1,6 +1,6 @@
 # Windows 运行时与实际终端阶段
 
-本阶段完成 Windows 常驻进程查询、ConPTY 密码回显隐藏、poll-diff 轮次采样、共享 JSON 读写竞争、实际 Pi CLI 终端缩放与原生 agents 入口，以及 Codex/Claude 受控工具执行；完整跨平台与手机验收仍由 [执行待办](../../../todo/pi-suite/jobs/index.md) 管理。
+本阶段完成 Windows 常驻进程查询、ConPTY 密码回显隐藏、poll-diff 轮次采样、共享 JSON 读写竞争、实际 Pi CLI 终端缩放与原生 agents 入口，以及 Codex/Claude 受控工具执行；剩余 Windows 验收仍由 [执行待办](../../../todo/pi-suite/index.md) 管理。
 
 ## 完成项
 
@@ -19,9 +19,11 @@
 
 ## 边界
 
+实际 Codex 0.162.1、Claude Code 2.1.301 的 Windows 文本 PTY 接管/交还、Pi 1.5.0 的复杂 `@` prompt 与 reload/new 生命周期，以及完整 Starship/Pi 原生 footer 的原生组合验收见 [Windows CLI 文本 PTY 与原生 footer 阶段](windows-cli-ui.md)。
+
 常驻 PowerShell 减少重复启动成本，不消除 CIM 查询与 taskkill 自身成本；真实进程测试固定文件并发为 4，避免按高核数同时启动大量 shell、PTY、SDK 与 CIM。Windows ConPTY 会重排 OSC 与重绘，不能承诺任意 PTY 程序的轮次边界精确，需要严格比较时使用 pipe。未完成轮次不作为变化事件。
 
-真实手机 SSH、触摸滚动、用户实际第三方 footer 布局、Windows Codex/Claude 文本 PTY 输入接管与 Cursor 环境不属于本阶段完成范围。当前没有配置可用 SSH 主机；本机 Cursor 对应的 agent 命令缺失。用户实际 Starship 根 format 缺少 `$extension_status`，核对时未修改用户配置；可见性需按 [状态栏待办](../../../todo/pi-suite/goal-status.md) 继续验收。Claude 的隔离进程显式设置 CLAUDE_CODE_GIT_BASH_PATH 后提供 Bash；不能把服务返回文本或“工具不存在”的结果当作执行成功。
+用户实际第三方 footer 布局、Windows Codex/Claude 文本 PTY 输入接管与 Cursor 环境不属于本阶段完成范围，后续 CLI/footer 组合见[专门阶段](windows-cli-ui.md)。本机 Cursor 对应的 agent 命令缺失。用户实际 Starship 根 format 缺少 `$extension_status`，核对时未修改用户配置；实际可见性与 Dock 路径记录在后续阶段。Claude 的隔离进程显式设置 CLAUDE_CODE_GIT_BASH_PATH 后提供 Bash；不能把服务返回文本或“工具不存在”的结果当作执行成功。
 
 当前契约见 [执行任务](../../../current/jobs/index.md)，平台检查结论见 [基线与验证](../../../current/validation.md)。
 

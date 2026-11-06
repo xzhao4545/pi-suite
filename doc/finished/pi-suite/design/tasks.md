@@ -2,13 +2,15 @@
 
 目标：支持父任务和子任务两级管理、动态调整及自动折叠，通过精简工具参数和返回内容降低模型的 token 消耗与操作负担。
 
-当前状态：实施中；两级结构、批量编辑、进度派生、版本化存储与锁、共享 Dock/详情、会话 fork/reload、提醒及 job 引用已实现，Linux 的 8 项检查通过，见 [两级任务基础阶段](../../finished/pi-suite/tasks/core.md) 与 [当前任务文档](../../current/tasks/index.md)。多 child 共享 TaskStore、并发编辑与原 owner 的 reload/fork/回收后恢复通过两项真实 SDK 检查，见 [子代理任务集成](../../finished/pi-suite/tasks/agents-integration.md)；Windows 与真实手机的界面、并发组合继续验收。存储与会话处理以上游 @tintinweb/pi-tasks 0.9.1 导入改造，按文件处置见 [上游导入](upstream-import.md)。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+
+当前状态：实施中；两级结构、批量编辑、进度派生、版本化存储与锁、共享 Dock/详情、会话 fork/reload、提醒及 job 引用已实现，Linux 的 8 项检查通过，见 [两级任务基础阶段](../tasks/core.md) 与 [当前任务文档](../../../current/tasks/index.md)。多 child 共享 TaskStore、并发编辑与原 owner 的 reload/fork/回收后恢复通过两项真实 SDK 检查，见 [子代理任务集成](../tasks/agents-integration.md)；Windows的界面、并发组合继续验收。存储与会话处理以上游 @tintinweb/pi-tasks 0.9.1 导入改造，按文件处置见 [上游导入](upstream-import.md)。
 
 影响范围：两级任务模型、存储、查询与批量修改工具、常驻面板及 agent/job 引用。
 
 约束：父级只组织和汇总，子任务不能再有子任务；完成比例表示子任务进度，业务验收由明确的任务或 goal 规则决定。折叠和剔除显示不删除任务数据。
 
-相关当前文档：[项目当前状态](../../current/index.md)。
+相关当前文档：[项目当前状态](../../../current/index.md)。
 
 ## 任务列表
 
@@ -19,13 +21,13 @@
 - [x] 通过共享 Dock 优先保留父行与选中组，按余预算相邻展开 doing/blocked 子任务；询问期间压缩摘要按实际子任务计数（Linux 现有界面聚合验收）
 - [x] 实现版本化存储及多个 child 的统一写入入口（真实跨进程并发及 SDK 多 child 同清单写入通过）
 - [x] 保留上游存储锁、会话切换、未更新提醒与执行任务关联（存储/会话/提醒/job 关联、agents 同清单执行及多 child/reload/fork/回收后恢复通过 Linux 验收）
-- [ ] Windows 与手机终端综合验收任务界面和 agents 并发更新
+- 验收跟踪：Windows综合验收任务界面和 agents 并发更新
 
 ## 验收方式
 
 核对父子创建、批量增删改查、跨父级移动、完成后重新打开、并发更新和窄屏显示；父级计数始终反映当前子任务，界面折叠不丢失数据，不接受第三层任务。
 
-多 child 的共享 TaskStore、并发编辑和持久 owner/fork/恢复引用通过两项真实 SDK 聚合检查，范围见 [子代理任务集成](../../finished/pi-suite/tasks/agents-integration.md)；Windows 与真实手机的界面、并发组合继续验收。
+多 child 的共享 TaskStore、并发编辑和持久 owner/fork/恢复引用通过两项真实 SDK 聚合检查，范围见 [子代理任务集成](../tasks/agents-integration.md)；Windows的界面、并发组合继续验收。
 
 ## 关联计划
 
@@ -125,7 +127,7 @@ id 与 parentId 不同时使用。按 id 查询时只返回该对象，即使已
 
 当未完成父级也过多时，统一 Dock 先按选中组、当前执行、阻塞待处理、完成反馈、普通待处理组的优先级显示父行，同类以最近变更稳定排序，再按剩余预算展开相邻子行，剩余项目以数量汇总。选中组用稳定 ID 保存并显示 `>` 标记，其他 child 更新不改变选择；父级或子任务的未完成 blockedBy 提高该组优先级。长标题优先裁剪，完成比例和必要状态保留；本模块不能突破与 ask、agents、jobs、goal 共用的总高度预算。询问期间提供压缩摘要，完成数/总数、doing/blocked 均按实际子任务统计，不重复计入父级。
 
-手机在有 3 行预算时可显示：
+窄屏终端在有 3 行预算时可显示：
 
 ```text
 ▾ #1 登录改造 2/4

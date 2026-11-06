@@ -25,15 +25,15 @@
 
 ## 验收结论
 
-共享参数/schema 与返回类型通过对应 jobs、agents、tasks、wait 和字节读取的 Linux SDK/契约检查。goal 模型工具的 3 项定向检查覆盖 INVALID_ARGS、NOT_FOUND、NOT_RUNNING 与 STALE_BINDING；session job 列表与状态数量的 1 项聚合及升级控制 2 项检查覆盖 owner/branch、跨 cwd child 归属、分页前去重和 v1/v2/v3 能力边界。稳定规范维护在 [模型工具契约](../../current/runtime/tools.md)，各模块入口见 current 的对应文档。完整第三方 footer、平台与真实手机操作组合由 [实施计划](../../todo/pi-suite/implementation.md) 管理。
+共享参数/schema 与返回类型通过对应 jobs、agents、tasks、wait 和字节读取的 Linux SDK/契约检查。goal 模型工具的 3 项定向检查覆盖 INVALID_ARGS、NOT_FOUND、NOT_RUNNING 与 STALE_BINDING；session job 列表与状态数量的 1 项聚合及升级控制 2 项检查覆盖 owner/branch、跨 cwd child 归属、分页前去重和 v1/v2/v3 能力边界。稳定规范维护在 [模型工具契约](../../current/runtime/tools.md)，各模块入口见 current 的对应文档。完整第三方 footer、平台与真实手机操作组合由 [实施计划](design/implementation.md) 管理。
 
 ## 关联计划
 
-- [上游导入方式](../../todo/pi-suite/upstream-import.md)
-- [jobs 输出读取](../../todo/pi-suite/jobs/output.md)
+- [上游导入方式](design/upstream-import.md)
+- [jobs 输出读取](design/jobs/output.md)
 - [agents 主从交互](agents/interaction.md)
-- [两级任务管理](../../todo/pi-suite/tasks.md)
-- [目标状态与续跑](../../todo/pi-suite/goal.md)
+- [两级任务管理](design/tasks.md)
+- [目标状态与续跑](design/goal.md)
 
 ## 命名
 
@@ -104,7 +104,7 @@ jobs 与 agents 共用生命周期语义，各领域保留适用状态；jobs �
 
 stop 统一返回 `{ requested, state, cleanup, affected[] }`。affected 列出级联涉及的 child 与 job 及各自真实状态；存在 pending/unconfirmed 时摘要行明确写出，不报告“全部停止”。
 
-read 统一返回 `{ text, stream, offset, nextOffset, totalBytes, endOfStream, truncated?, matches? }`。默认读取的截断方式见 [jobs 输出读取](../../todo/pi-suite/jobs/output.md)，agent_read 使用同一规则。
+read 统一返回 `{ text, stream, offset, nextOffset, totalBytes, endOfStream, truncated?, matches? }`。默认读取的截断方式见 [jobs 输出读取](design/jobs/output.md)，agent_read 使用同一规则。
 
 错误使用稳定代码并在消息中指出可用的下一步：INVALID_ARGS、NOT_FOUND、AMBIGUOUS_NAME、HISTORY_READ_ONLY（只有历史，无当前控制句柄）、NOT_RUNNING、USER_CONTROL（用户接管终端中）、STALE_BINDING、CLOSING、UNSUPPORTED_STREAM、RUNTIME_UNAVAILABLE。goal 模型工具的空白参数为 INVALID_ARGS，未知 goalId 为 NOT_FOUND，非 active 目标为 NOT_RUNNING，失效修订/绑定或非所属会话为 STALE_BINDING；命令交互与持久记录解析保留各自错误边界。领域还可使用明确的类型、深度、任务关联等错误码。
 
@@ -116,19 +116,19 @@ read 统一返回 `{ text, stream, offset, nextOffset, totalBytes, endOfStream, 
 | goal_complete | goalId、summary | |
 | goal_blocked | goalId、reason、evidence、repeatedTurns | |
 | goal_wait | goalId、reason、waitFor?、resumeAfterMs? | waitFor 为 job/agent/workflow ID 数组；省略时等待任一已安排的外部事件 |
-| task_list | id?、parentId?、includeDone?、detail? | 见 [两级任务管理](../../todo/pi-suite/tasks.md) |
+| task_list | id?、parentId?、includeDone?、detail? | 见 [两级任务管理](design/tasks.md) |
 | task_edit | changes[] | 批量增删改 |
-| job_start | command 或 agent、mode?、name?、cwd?、timeoutMs?、taskId?、attach?、monitor?、handsFree? | 见 [执行任务管理](../../todo/pi-suite/jobs/execution.md) 与 [监视与委派](../../todo/pi-suite/jobs/monitors.md) |
+| job_start | command 或 agent、mode?、name?、cwd?、timeoutMs?、taskId?、attach?、monitor?、handsFree? | 见 [执行任务管理](design/jobs/execution.md) 与 [监视与委派](design/jobs/monitors.md) |
 | job_list | id? 或 state?、scope?、cursor?、limit? | |
 | job_read | id、stream?、offset?、limitBytes?、search?、context? | stream：stdout、stderr、output、input、events |
 | job_write | id、input?、keys?、paste?、submit?、sensitive? | input/keys/paste 三选一 |
 | job_stop | id | |
-| agent_start | prompt、description、type?、name?、model?、thinking?、maxTurns?、background?、inheritContext?、taskId?、schedule? | background 默认 true；false 时等待结果，child 提问时提前返回。model/thinking 优先于 TUI 类型配置与 frontmatter，见 [模型与 thinking 配置](../../todo/pi-suite/agents/models.md) |
+| agent_start | prompt、description、type?、name?、model?、thinking?、maxTurns?、background?、inheritContext?、taskId?、schedule? | background 默认 true；false 时等待结果，child 提问时提前返回。model/thinking 优先于 TUI 类型配置与 frontmatter，见 [模型与 thinking 配置](design/agents/models.md) |
 | agent_list | id? 或 state?、scope?、cursor?、limit? | id 时返回进度详情 |
 | agent_read | id、runId?、stream?、offset?、limitBytes?、search?、context? | stream 为 result 或 transcript |
 | agent_send | id、message | 按 agent 状态回答提问、引导运行或恢复会话，返回实际 action |
 | agent_stop | id、runId? | 级联停止嵌套 child 及所属 job |
-| agent_workflow | script? 或 scriptPath? 或 name?、args?、resumeFromRunId? | 见 [agents 扩展能力](../../todo/pi-suite/agents/extensions.md) |
+| agent_workflow | script? 或 scriptPath? 或 name?、args?、resumeFromRunId? | 见 [agents 扩展能力](design/agents/extensions.md) |
 | wait | ids、mode?、timeoutMs? | 见下节 |
 
 attach/detach、详情查看、停止确认与清理历史属于用户操作，经 /jobs、/agents 界面和快捷键完成，不注册为模型工具。job_start 的 attach 只在需要用户直接操作程序时立即打开终端视图。

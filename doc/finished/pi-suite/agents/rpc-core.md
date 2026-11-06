@@ -6,4 +6,4 @@ workflow/json-schema.ts 与 structured-output.ts 直接导入后局部调整错�
 
 4 项 Linux 真实 SDK/faux 与公共事件总线检查覆盖延后注册、重复绑定、reload 撤销/恢复、生命周期与用量事件、同步消费不触发父级请求、待发通知撤销、已结束引导拒绝、启动错误与模型/参数校验；排队即时返回、消息排队、信号取消、绕过满池、成功停止和嵌套/workflow/其他会话的归属拒绝通过。实际目标 cwd 保留父级扩展并禁止目标扩展执行，child 信任为 false；结构化结果的纠正提示、真实工具校验失败后修正和 JSON 结果保存通过。
 
-Windows、实际外部扩展组合及 workflow 宿主接入继续由 [扩展专项](../../../todo/pi-suite/agents/extensions.md) 验收。稳定协议见 [跨扩展 RPC](../../../current/agents/rpc.md)，来源与改动边界见 [上游登记](../../../../third-party/UPSTREAM.md)。
+Windows、实际外部扩展组合及 workflow 宿主接入继续由 [扩展专项](../../../todo/pi-suite/index.md) 验收。稳定协议见 [跨扩展 RPC](../../../current/agents/rpc.md)，来源与改动边界见 [上游登记](../../../../third-party/UPSTREAM.md)。

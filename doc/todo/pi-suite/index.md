@@ -1,37 +1,38 @@
-# Pi 自定义扩展包设计方案
+# Windows 剩余验收
 
-状态：实施中；当前实现事实维护在 doc/current，各专项按验收进度归档。
+本文件是 Pi Suite 活跃待办的唯一清单；这里只跟踪 Windows。手机 SSH 专项已取消；Linux 由用户后续在其他设备验收，不在本轮执行，也不阻塞 Windows 收尾。既有跨平台实现与 Linux 验收证据保留，不删除 Linux 代码或伪造其通过结论。
 
-目标环境：Windows、Linux；手机通过 SSH 终端使用；以最新 Pi 为目标，实现时锁定实际验证过的版本。Linux 按操作系统能力验证，不单独安排发行版专项，不安装新的发行版。
+完整设计和按文件导入处置保存在 [设计与实施记录](../../finished/pi-suite/design/index.md)，不再以整篇设计文档充当待办。归档表示设计和实施记录移出活跃清单，不表示下列未验收内容已完成。当前实现见 [doc/current](../../current/index.md)。
 
-当前状态：公共界面、会话绑定、ask、目标基础能力、执行任务核心功能与两级 tasks 基础能力已实现；ask 默认答案、批量专项、目标生命周期、PTY 监督、CLI 启动、日志查看、升级控制、两级任务、子代理执行交互、模型配置、资源、@handle、定时调度、RPC、workflow 编排核心与宿主接入、类型开关与 Execution 回收、原生查看与快捷控制、workspace 持久历史发现与只读查询阶段已完成，子代理停止竞争与共享任务清单/恢复集成通过 Linux 验收，子代理进度/通知摘要与所属活动 jobs 查询、查看和单独停止已通过 Linux 验收并归档，单包架构与统一工具规范已归档；首次真实会话目录的模块准入、完整 session job 可见集与状态投影、全禁用模块的 owner 退出清理和 goal 工具错误通过 Linux 验收，询问与后台通知组合、统一 Dock 必要详情与任务显示、完整 Starship footer 发布入口及 job 历史主动清理通过 Linux 验收并归档；Windows、真实手机 SSH 与用户实际 footer 配置继续推进。tasks、jobs、agents 以上游源码按文件导入改造，所有模型工具按统一规范注册。此目录维护目标、约束、完整设计和验收计划。实现事实见 [doc/current](../../current/index.md)，完成专项记录见 [doc/finished](../../finished/index.md)。
+## 已有 Windows 证据
 
-输出预算/原始范围/续读提示、密码回显隐藏与横向 PTY 重绘、有限完成预览、实际 Pi CLI 的原样前导 `@`/附件/默认 pipe 与 fork/PTY 生命周期、Codex exec_command/Claude Bash/Read 的受控执行与停止、包技能通过 Linux 阶段验收；超长逻辑行的线性组装/正则资源错误与垂直/全屏支持范围已验证，其他 CLI 与未验收工具范围、Cursor 环境及 Windows/真实手机组合保留在 jobs 专项。
+[Windows 阶段](../../finished/pi-suite/jobs/windows-runtime.md) 已记录类型检查、158 项完整检查，以及实际 Pi CLI 的缩放/接管/退出、类型模型写回、RPC 五通道、单次调度、workflow shell gate、日志查看/停止/历史删除；[后续 CLI/footer 阶段](../../finished/pi-suite/jobs/windows-cli-ui.md) 补充实际 Codex/Claude 文本 PTY、Pi reload/new 与 footer 三尺寸验收。实际 Codex/Claude pipe 工具执行、文件字节与长工具清理也通过。重复覆盖部分不再另设平台待办；这些证据不替代尚缺的预设参数、原生操作或外部服务组合。
 
-Windows 常驻 CIM、ConPTY 密码隐藏、OSC 轮次、共享 JSON 存储竞争、完整 158 项检查、实际 Pi CLI 的缩放/接管/模型/RPC/单次调度/workflow/日志历史入口，以及实际 Codex/Claude pipe 工具执行与清理通过，见 [Windows 阶段](../../finished/pi-suite/jobs/windows-runtime.md)；[同进程保活](../../finished/pi-suite/jobs/session-lifecycle.md) 已归档。其他原生组合、文本 PTY、真实手机、业务服务和用户 footer 仍按对应专项验收。
+## 界面、目标与任务
 
-影响范围：扩展入口、公共界面与运行时、ask、tasks、jobs、goal、agents，以及两个目标平台的验证与发布。
+- [ ] Windows 原生界面组合：goal/tasks/两个 child/两个 jobs/ask 同时存在且三尺寸可见、摘要去重与询问可提交/取消已通过；仍需核对 Dock 预算边界、焦点、鼠标滚轮、历史/说明往返、缩放后选项选择及草稿保留。已验证范围见 [Windows CLI 阶段](../../finished/pi-suite/jobs/windows-cli-ui.md)，设计见 [界面设计](../../finished/pi-suite/design/ui.md) 与 [询问设计](../../finished/pi-suite/design/ask/index.md)。
+- [ ] Windows 询问与通知组合：goal waiting_user、两个 child 父级问题、真实 job 完成暂存及恢复时的一次合并请求；核对回答/超时/取消、排队不提前计时、读取与消费不重复唤醒。见 [询问交互](../../finished/pi-suite/design/ask/interaction.md) 与 [目标设计](../../finished/pi-suite/design/goal.md)。
+- [ ] Windows 两级任务原生界面及真实 agents 并发更新组合：进度、选中/blocked 子项、折叠与筛选；多 child 更新、原 owner reload/fork、回收后恢复的界面与执行引用保持。现有存储/SDK 检查已通过，不重复登记为未实现。见 [任务设计](../../finished/pi-suite/design/tasks.md)。
 
-约束：复用 Pi 统一框架，保留设计细节；保活只覆盖同一 Pi 进程，Pi 退出终止全部受管任务与 PTY；不添加多语言支持。
+## 执行、输出与实际 CLI
 
-## 专项任务索引
+- [ ] Windows 上游原问题复现记录：按 [基线](../../finished/pi-suite/design/upstream-baseline.md) 区分静态源码结论与真实运行结论；与下列场景共用证据，不另跑重复验收。
+- [ ] Windows 终端监督组合：monitor 三种策略、阈值/冷却/生命周期、hands-free 增量预算、dispatch 宽限期/静默完成、launchPolicy 授权/拒绝/取消，以及终端接管后拒绝模型写入、交还后恢复。现有组件与受控进程检查已通过，剩余为实际 CLI 组合。见 [监督设计](../../finished/pi-suite/design/jobs/monitors.md)。
+- [ ] Windows 实际 Pi CLI 预设剩余契约：复杂前导 `@` 正文逐字进入模型、PTY reload/new 不重放且会话归属正确已通过；仍需核对默认参数与选项结束标记、普通正文/附件、默认 pipe/print/JSON、fork 身份与源会话保持。接管/缩放/退出的已有证据直接复用。已验证范围见 [Windows CLI 阶段](../../finished/pi-suite/jobs/windows-cli-ui.md)，设计见 [CLI 原文阶段](../../finished/pi-suite/jobs/literal-prompt.md)。
+- [ ] Windows 输出与终端边界综合复核：大日志/单长行、UTF-8 分页、search/context 与原始 offset、预算/续读提示、密码隐藏/横向重绘/全屏线性片段与当前/最后屏幕；不要求 reader 还原二维历史。核对停止竞争/重复停止、已结束/foreign 历史只读及清理未确认入口。见 [输出设计](../../finished/pi-suite/design/jobs/output.md) 与 [历史控制](../../finished/pi-suite/design/jobs/history-control.md)。
+- [ ] Cursor 实际 CLI 预设与工具/PTY 验收：当前缺少对应 agent 命令，需在具备该环境后验证默认参数、字面正文、输入接管、自然退出与停止清理；不得以其他 CLI 替代通过。
 
-- [x] [扩展包架构与发布](../../finished/pi-suite/architecture.md)
-- [ ] [上游基线与参考来源](upstream-baseline.md)
-- [ ] [上游源码导入与改造](upstream-import.md)
-- [x] [统一工具设计规范](../../finished/pi-suite/tool-design.md)
-- [ ] [统一面板布局](ui.md)
-- [ ] [用户询问](ask/index.md)
-- [ ] [两级任务管理与动态调整](tasks.md)
-- [ ] [统一执行任务与保活](jobs/index.md)
-- [ ] [目标状态与续跑](goal.md)
-- [ ] [goal 状态栏联动与 pi-starship 兼容](goal-status.md)
-- [ ] [公共状态栏摘要与活动数量](status.md)
-- [ ] [子代理：查看、运行记录、主从交互与扩展能力](agents/index.md)
-- [ ] [实施顺序与验收](implementation.md)
+## 子代理、资源与扩展
 
-## 验收与维护
+- [ ] Windows 模型与 @handle 原生入口组合：运行中单 agent 下一请求修改、结束/回收后恢复、@类型 克隆启动、@handle/文件补全、活动引导和会话切换；核对显式参数/类型/individual/frontmatter 优先级与认证错误。类型写回后 RPC/单次调度/workflow 传播已有证据。见 [模型设计](../../finished/pi-suite/design/agents/models.md) 与 [扩展设计](../../finished/pi-suite/design/agents/extensions.md)。
+- [ ] Windows 调度原生组合：本地时区 cron/周期/单次、reload/new/resume、过期/错过周期、详情确认取消和退出清理；单次真实触发与详情 Esc 已通过，剩余场景按 [调度操作](../../current/agents/schedules.md) 核对。
+- [ ] Windows workflow 与 child 原生查看：长名称选择、shell/gate 清理、child/gate 查看、暂停/恢复/停止/跳过/重试、journal 重放；流式消息/工具部分结果、搜索/阅读位置、输入往返、两次停止、真实前台转后台及所属 Jobs 日志/单独停止/只读入口。见 [workflow 当前契约](../../current/agents/workflow/index.md) 与 [查看器阶段](../../finished/pi-suite/agents/viewer-controls.md)。
+- [ ] Windows 持久历史与主从交互组合：默认/自定义/junction 或符号链接目录、fork/workflow 引用、分页与只读控制；多 child/嵌套提问、进度/工具参数/所属 jobs、run 级用量与错误通知消费、同步停止竞争及级联 job 清理。受控 SDK/组件检查已通过，剩余原生入口组合见 [扩展设计](../../finished/pi-suite/design/agents/extensions.md)。
+- [ ] Windows 外部业务扩展 RPC：实际 consumer 注册/加载次序/reload、启动/停止/引导/消费、生命周期、cwd/trust 与结构化结果；现有受控 consumer 五通道通过不代表任意业务扩展已验收。见 [RPC 契约](../../current/agents/rpc.md)。
+- [ ] Windows 实际 MCP 服务与资源组合：discovery、直接/桥接/晚注册、包根/junction 或符号链接、类型/技能目录信任边界、隔离与禁用名单，以及 child 结束后的服务进程清理。需要明确实际服务与认证环境，不能以返回文本假装执行成功。见 [资源契约](../../current/agents/resources.md)。
 
-验收场景和实施依赖见 [实施顺序与验收](implementation.md)。每个专项的任务清单、影响范围、约束和验收方式维护在对应文件。完成后按项目规则归入 finished，并同步 current；此索引不把设计能力描述为已实现能力。
+## 维护规则
+
+每完成一项，将证据与适用版本写入对应 finished 记录，稳定规则同步 current，再从本清单移除。未验证内容不得因完整检查通过或设计归档而勾选完成。不恢复手机 SSH 待办；Linux 后续验收由用户在目标设备单独安排。
 
 [返回待办总索引](../index.md)

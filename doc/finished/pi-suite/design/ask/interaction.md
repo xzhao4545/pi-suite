@@ -2,13 +2,15 @@
 
 目标：回答时可以查阅聊天，并为询问提供可配置截止时间。
 
-当前状态：inline 询问、历史/回答焦点、默认与单次超时、排队及单次结算已实现；goal waiting_user、两个 child 的父级提问与真实 job 完成通知暂存通过 Linux 真实 SDK 组合验收，见 [询问与后台通知协调阶段](../../../finished/pi-suite/ask/coordination.md)。Windows 组合与真实手机 SSH 操作仍待验收。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+
+当前状态：inline 询问、历史/回答焦点、默认与单次超时、排队及单次结算已实现；goal waiting_user、两个 child 的父级提问与真实 job 完成通知暂存通过 Linux 真实 SDK 组合验收，见 [询问与后台通知协调阶段](../../ask/coordination.md)。Windows 组合仍待验收。
 
 影响范围：ask_user、历史查看、焦点及阻塞期间的通知。
 
 约束：timeout=0 明确不超时；超时不自动作答，后台通知不能打断询问。
 
-相关当前文档：[项目当前状态](../../../current/index.md)。
+相关当前文档：[项目当前状态](../../../../current/index.md)。
 
 ## 任务列表
 
@@ -17,10 +19,9 @@
 - [x] 实现默认超时、单次覆盖及不超时
 - [x] 区分回答、超时和取消，并处理排队计时
 - [x] 验证 goal waiting_user、多个 agent 排队与真实 job 完成通知暂存（Linux 真实 SDK；child 提问经父级通知协议，父级原生询问顺序展示）
-- [ ] 在 Windows 核对询问、goal 与后台执行通知的组合
-- [ ] 在真实手机 SSH 终端核对查阅与输入操作
-- [x] 按 [统一工具设计](../../../finished/pi-suite/tool-design.md) 使用毫秒单位的 timeoutMs
-- [x] subagent 会话中的 ask_user 转交父 agent，见 [主从交互](../../../finished/pi-suite/agents/interaction.md)
+- 验收跟踪：在 Windows 核对询问、goal 与后台执行通知的组合
+- [x] 按 [统一工具设计](../../tool-design.md) 使用毫秒单位的 timeoutMs
+- [x] subagent 会话中的 ask_user 转交父 agent，见 [主从交互](../../agents/interaction.md)
 
 ## 验收方式
 
@@ -28,8 +29,8 @@
 
 ## 关联计划
 
-- [批量与多选](../../../finished/pi-suite/ask/batch-selection.md)
-- [默认答案与预选](../../../finished/pi-suite/ask/default-answers.md)
+- [批量与多选](../../ask/batch-selection.md)
+- [默认答案与预选](../../ask/default-answers.md)
 - [说明与滚动](details-scroll.md)
 - [统一界面](../ui.md)
 
@@ -37,11 +38,11 @@
 
 默认采用有高度上限的 inline 询问，放在输入区域；问题、选项和回答草稿不以中心弹窗遮盖聊天。
 
-保留主终端已有的历史查阅方式。由于 SSH 客户端对滚动和按键支持不同，再提供一个内置历史查阅方式：上方是当前会话历史，下方是问题和回答；历史用与 subagent 相同的原生消息组件渲染。焦点可以在历史和回答间切换，支持滚动和搜索；切换不丢失已勾选选项、输入草稿或剩余时间。
+保留主终端已有的历史查阅方式。由于终端对滚动和按键支持不同，再提供一个内置历史查阅方式：上方是当前会话历史，下方是问题和回答；历史用与 subagent 相同的原生消息组件渲染。焦点可以在历史和回答间切换，支持滚动和搜索；切换不丢失已勾选选项、输入草稿或剩余时间。
 
-这不依赖不存在的公共“替换主聊天区”API，也不修改 Pi 私有 chatContainer。快捷键可配置，并提供面板上的入口，避免手机必须输入复杂组合键。
+这不依赖不存在的公共“替换主聊天区”API，也不修改 Pi 私有 chatContainer。快捷键可配置，并提供面板上的入口，避免必须输入复杂组合键。
 
-保持 `ask_user` 原工具名，按 [统一工具设计](../../../finished/pi-suite/tool-design.md) 使用毫秒单位的 `timeoutMs`：
+保持 `ask_user` 原工具名，按 [统一工具设计](../../tool-design.md) 使用毫秒单位的 `timeoutMs`：
 
 ```json
 {"question":"选哪种方案？"}

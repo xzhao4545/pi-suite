@@ -10,7 +10,7 @@
 - [x] 共享字节分页保留实时写入中未完成的 UTF-8 字符，后续读取返回完整字符。
 - [x] Linux 真实进程核对实时与历史窗口、中文边界、40/60/120 列布局、列表插入后的游标与范围筛选。
 
-适用范围：Pi 1.5.0、Linux Node.js 24；Windows 日志查看、完整选择与确认停止流程、停止竞争和 agents 级联接入仍由 [历史控制专项](../../../todo/pi-suite/jobs/history-control.md) 管理。
+适用范围：Pi 1.5.0、Linux Node.js 24；Windows 日志查看、完整选择与确认停止流程、停止竞争和 agents 级联接入仍由 [历史控制专项](../../../todo/pi-suite/index.md) 管理。
 
 当前操作见 [执行任务](../../../current/jobs/index.md#用户操作)，共享组件见 [统一界面](../../../current/ui/index.md)。
 

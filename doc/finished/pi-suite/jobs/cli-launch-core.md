@@ -11,7 +11,7 @@
 - [x] 全部 job_start 及 detector 通过共享 ask 队列授权，取消/超时/绑定撤销不启动进程，非交互模式需精确 allow；长期 manager 不保存授权 context。
 - [x] Linux 离线验证配置合并与拒绝、实际 Bash argv、受控 CLI 启动和输出、Pi fork 参数、取消后目标停止自动续跑、monitor/detector 命令和 RPC 边界。
 
-适用范围：Pi 1.5.0、Linux Node.js 24 环境；CLI 执行通过本地受控程序验证，不依赖付费模型。Windows 验收与各实际 CLI 版本的综合运行继续由 [监视与委派待办](../../../todo/pi-suite/jobs/monitors.md) 和 [完整实施计划](../../../todo/pi-suite/implementation.md) 管理。
+适用范围：Pi 1.5.0、Linux Node.js 24 环境；CLI 执行通过本地受控程序验证，不依赖付费模型。Windows 验收与各实际 CLI 版本的综合运行继续由 [监视与委派待办](../../../todo/pi-suite/index.md) 和 [完整实施计划](../design/implementation.md) 管理。
 
 当前接口和操作见 [CLI 预设与启动授权](../../../current/jobs/launch.md)，来源见 [上游登记](../../../../third-party/UPSTREAM.md)。
 

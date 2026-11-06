@@ -6,6 +6,6 @@ Linux 使用真实 Pi 1.5.0 发布 CLI、JobManager PTY、本包与离线 provid
 
 活动 child 收到真实 steer，后续 SDK 请求包含该输入；StructuredOutput 验证后的生命周期 result 为预期 JSON，结束正文没有替换结构化结果。consumer 在完成事件同步部分 consume，重复消费成功，未唤醒父模型。stop 及 reload 后的 quit 均中断真实 child，清理其创建的受管 sleep 进程，CLI 自然退出码为 0。
 
-本阶段验证受控独立 consumer 的实际公开协议组合，未发现产品缺陷，未新增源码或永久测试；不代表任意第三方业务扩展或 Windows 集成都已验收。稳定协议见 [跨扩展 RPC](../../../current/agents/rpc.md)，基础范围见 [RPC 基础阶段](rpc-core.md)，未完成组合见 [扩展待办](../../../todo/pi-suite/agents/extensions.md)。
+本阶段验证受控独立 consumer 的实际公开协议组合，未发现产品缺陷，未新增源码或永久测试；不代表任意第三方业务扩展或 Windows 集成都已验收。稳定协议见 [跨扩展 RPC](../../../current/agents/rpc.md)，基础范围见 [RPC 基础阶段](rpc-core.md)，未完成组合见 [扩展待办](../../../todo/pi-suite/index.md)。
 
 [返回完成索引](../../index.md)

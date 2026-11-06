@@ -2,7 +2,7 @@
 
 目标：查看活动和已结束的 subagent，保留结果及原生会话历史，并允许用户停止指定 subagent 的当前执行。
 
-当前状态：基础执行、结果/会话引用、独立 runId、恢复、历史结束叶子、列表、真实取消、嵌套与遗留 job 清理已接入，见 [基础阶段](core.md)。Execution 定期回收、通知与 reader/workflow 保留引用、持久/非持久历史边界见 [类型与回收阶段](types-retention.md)；workspace 持久历史发现、完整分支汇总、增量解析与原生只读查询通过 Linux 离线验收，范围见 [历史发现阶段](history-discovery.md)，停止竞争通过 Linux 聚合验收，见 [生命周期阶段](lifecycle.md)；所属活动 job 详情、日志跳转与单独停止已接入，并通过 2 项 Linux 原生组件/真实 SDK 检查；平台组合由 [扩展专项](../../../todo/pi-suite/agents/extensions.md) 管理。
+当前状态：基础执行、结果/会话引用、独立 runId、恢复、历史结束叶子、列表、真实取消、嵌套与遗留 job 清理已接入，见 [基础阶段](core.md)。Execution 定期回收、通知与 reader/workflow 保留引用、持久/非持久历史边界见 [类型与回收阶段](types-retention.md)；workspace 持久历史发现、完整分支汇总、增量解析与原生只读查询通过 Linux 离线验收，范围见 [历史发现阶段](history-discovery.md)，停止竞争通过 Linux 聚合验收，见 [生命周期阶段](lifecycle.md)；所属活动 job 详情、日志跳转与单独停止已接入，并通过 2 项 Linux 原生组件/真实 SDK 检查；平台组合由 [扩展专项](../design/agents/extensions.md) 管理。
 
 影响范围：AgentManager、Pi child session、持久结果引用、agents 列表/查看器、停止信号及状态栏数量。
 
@@ -28,15 +28,15 @@
 
 ## 验收结论
 
-所属 Jobs 的 2 项 Linux（Node 24.22.2）原生组件/真实 SDK 聚合检查通过。覆盖所选 run 与回收后代的归属、cross-cwd、同 agent 新 run 与无关 job 排除、只停止选中单项、Transcript reader 状态和执行引用；新会话 foreign PTY 历史只读允许日志，隐藏 attach/stop，通知阻塞退出后合并释放。modules.jobs=false 保留已有 job，主会话 quit 清理不依赖此前查询。基础记录、历史发现和停止竞争的验收范围沿用上述对应阶段；Windows 与真实手机组合保留在 [扩展专项](../../../todo/pi-suite/agents/extensions.md)。
+所属 Jobs 的 2 项 Linux（Node 24.22.2）原生组件/真实 SDK 聚合检查通过。覆盖所选 run 与回收后代的归属、cross-cwd、同 agent 新 run 与无关 job 排除、只停止选中单项、Transcript reader 状态和执行引用；新会话 foreign PTY 历史只读允许日志，隐藏 attach/stop，通知阻塞退出后合并释放。modules.jobs=false 保留已有 job，主会话 quit 清理不依赖此前查询。基础记录、历史发现和停止竞争的验收范围沿用上述对应阶段；Windows组合保留在 [扩展专项](../design/agents/extensions.md)。
 
 ## 关联计划
 
 - [原生会话查看器](viewer-controls.md)
 - [主从交互](interaction.md)
-- [活动数量状态](../../../todo/pi-suite/status.md)
-- [job 查询与控制](../../../todo/pi-suite/jobs/history-control.md)
-- [目标调度](../../../todo/pi-suite/goal.md)
+- [活动数量状态](../design/status.md)
+- [job 查询与控制](../design/jobs/history-control.md)
+- [目标调度](../design/goal.md)
 - [统一工具设计](../tool-design.md)
 
 ## 运行记录与历史

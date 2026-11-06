@@ -1,14 +1,16 @@
 # 状态栏摘要与活动数量
 
-目标：统一发布 goal 状态、活动 subagent 数量和活动 job 数量，使手机终端能从简短状态栏了解执行情况。
+目标：统一发布 goal 状态、活动 subagent 数量和活动 job 数量，使窄屏终端能从简短状态栏了解执行情况。
 
-当前状态：共享发布器、goal 摘要、agents/jobs 数量、显示模式和去重已实现，原生 footer 与完整 pi-starship 发布入口的 Linux 组合通过 [footer 联动阶段](../../finished/pi-suite/footer-integration.md) 验收；workflow 的 Dock 进度和 child/gate 普通数量过滤已接入，见 [宿主接入阶段](../../finished/pi-suite/agents/workflow-host.md)。当前 owner/branch 的直属 job 与可见 agent run 子树已共用完整 session 列表/数量范围，包含跨 cwd 和回收后代的遗留 job；必要详情走共享 StatusPublisher/Dock，数量变化写状态，问题、清理与选择变化单独刷新详情。Windows 与真实手机的可见集合、清理状态及用户实际 footer 配置继续验收。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+
+当前状态：共享发布器、goal 摘要、agents/jobs 数量、显示模式和去重已实现，原生 footer 与完整 pi-starship 发布入口的 Linux 组合通过 [footer 联动阶段](../footer-integration.md) 验收；workflow 的 Dock 进度和 child/gate 普通数量过滤已接入，见 [宿主接入阶段](../agents/workflow-host.md)。当前 owner/branch 的直属 job 与可见 agent run 子树已共用完整 session 列表/数量范围，包含跨 cwd 和回收后代的遗留 job；必要详情走共享 StatusPublisher/Dock，数量变化写状态，问题、清理与选择变化单独刷新详情。Windows的可见集合、清理状态及用户实际 footer 配置继续验收。
 
 影响范围：ui/status、goal、AgentManager、JobManager、会话绑定与 dock 显示去重。
 
 约束：复用 setStatus；数量从实际执行记录派生，显示变化不启动、停止或转移执行对象。
 
-相关当前文档：[项目当前状态](../../current/index.md)。
+相关当前文档：[项目当前状态](../../../current/index.md)。
 
 ## 任务列表
 
@@ -20,7 +22,7 @@
 - [x] workflow 提交共享 Dock 进度，child 与 gate 不重复计入普通 agents/jobs 数量
 - [x] 验证会话切换、reload、原生 footer 40/60/120 列及 pi-starship extension_status 模块
 - [x] Linux 完整 Starship 发布入口与真实 goal/tasks/child/jobs/ask 并存验收数量上限、缺失模块和三尺寸布局
-- [ ] Windows 与真实手机 SSH 复核可见集合、复杂清理状态、用户实际 footer 与窄屏布局
+- 验收跟踪：Windows 复核可见集合、复杂清理状态、用户实际 footer 与窄屏布局
 - [x] 核对用户实际 Starship 配置缺少 `$extension_status`；默认 status 模式不承诺可见，用户配置保持不变，布局验收仍保留
 
 ## 验收方式
@@ -34,7 +36,7 @@
 - [goal 状态栏联动](goal-status.md)
 - [统一面板布局](ui.md)
 - [job 查询与控制](jobs/history-control.md)
-- [子代理记录与控制](../../finished/pi-suite/agents/runs.md)
+- [子代理记录与控制](../agents/runs.md)
 
 ## 发布契约
 

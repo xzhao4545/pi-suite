@@ -4,7 +4,7 @@
 
 Pi 包资源发现独立于模块开关，技能先核对实际工具；jobs 关闭时通过可用的 ask_user 询问启用意愿或说明限制，不自行修改配置。
 
-Linux 的技能格式校验与真实 Pi 包管理器、ResourceLoader、SDK 加载通过；原生 /skill 调用及 jobs=false reload 后保留 ask_user、撤销 jobs 工具的行为通过。该结论覆盖技能发现与调用，Windows/手机终端组合仍由 [jobs 待办](../../../todo/pi-suite/jobs/index.md) 验收。
+Linux 的技能格式校验与真实 Pi 包管理器、ResourceLoader、SDK 加载通过；原生 /skill 调用及 jobs=false reload 后保留 ask_user、撤销 jobs 工具的行为通过。该结论覆盖技能发现与调用，Windows/窄屏终端组合仍由 [jobs 待办](../../../todo/pi-suite/index.md) 验收。
 
 当前入口见 [执行任务](../../../current/jobs/index.md)，技能正文见 [pi-suite-jobs](../../../../skills/pi-suite-jobs/SKILL.md)。
 

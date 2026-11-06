@@ -6,4 +6,4 @@
 
 3 项 Linux 真实 SDK/faux 与 Pi 原生补全契约检查通过，覆盖 handle/alias 唯一与持久恢复、会话归属、排队暂存、文件和命令补全并存及 CJK 前缀、重复绑定、克隆上下文与单工具/单启动、普通 run 与前台结果通知、活动引导与结束恢复、取消中的启动拒绝、明确失败、附件/非用户/print 输入边界，以及配置关闭。
 
-Windows 与真实手机 SSH 输入组合由 [扩展专项](../../../todo/pi-suite/agents/extensions.md) 继续验收；调度、workflow/RPC 与类型开关按原计划实施。稳定操作见 [agents 操作](../../../current/agents/operations.md)，来源见 [上游登记](../../../../third-party/UPSTREAM.md)。
+Windows 输入组合由 [扩展专项](../../../todo/pi-suite/index.md) 继续验收；调度、workflow/RPC 与类型开关按原计划实施。稳定操作见 [agents 操作](../../../current/agents/operations.md)，来源见 [上游登记](../../../../third-party/UPSTREAM.md)。

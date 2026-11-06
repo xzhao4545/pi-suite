@@ -2,7 +2,7 @@
 
 目标：确定单包模块化结构、配置边界和上游来源维护方式。
 
-当前状态：单包唯一入口、按真实会话目录的模块准入、公共布局、会话绑定、通知协调、统一工具/命令注册与配置优先级已实现；上游版本、许可证及逐文件改造边界已登记。首次 session_start 与 reload 的模块开关通过 Linux 真实 SDK 检查，稳定事实见 [公共运行时](../../current/runtime/index.md)；业务模块的平台组合验收由 [实施计划](../../todo/pi-suite/implementation.md) 管理。
+当前状态：单包唯一入口、按真实会话目录的模块准入、公共布局、会话绑定、通知协调、统一工具/命令注册与配置优先级已实现；上游版本、许可证及逐文件改造边界已登记。首次 session_start 与 reload 的模块开关通过 Linux 真实 SDK 检查，稳定事实见 [公共运行时](../../current/runtime/index.md)；业务模块的平台组合验收由 [实施计划](design/implementation.md) 管理。
 
 影响范围：src/index.ts、公共 ui/runtime 模块、包配置与来源记录。
 
@@ -14,7 +14,7 @@
 
 - [x] 确定唯一扩展入口与模块开关
 - [x] 实现共享布局、会话绑定及通知协调边界
-- [x] 记录导入版本、许可证及更新方式，按 [上游导入](../../todo/pi-suite/upstream-import.md) 逐文件登记
+- [x] 记录导入版本、许可证及更新方式，按 [上游导入](design/upstream-import.md) 逐文件登记
 - [x] 统一工具、命令、快捷键注册和配置优先级，工具按 [统一工具设计](tool-design.md)
 
 ## 验收方式
@@ -23,21 +23,21 @@
 
 ## 验收结论
 
-唯一入口与来源登记完成；首次真实 session_start 的模块准入通过 1 项 Linux（Node 24.22.2）SDK 聚合检查。覆盖 process.cwd 与 ctx.cwd 不同、项目模块覆盖、工具/命令与手动 active-tool 选择、首次 mentions 初始化、new/resume/fork/tree 重绑与 reload 重新准入；child 的 configCwd 保持 owner 项目、cwd 保持目标工具目录。goal 模块未实际创建时，绑定、重绑、reload 与 quit 保留其他 provider 的共享 goal 键；ownership 沿本次模块集合。全禁用模块的 reload 保留既有 job、SDK child 和 workflow Worker，quit 等待已注册 owner 的真实结算与清理，不创建新 owner。平台与完整业务组合由 [实施计划](../../todo/pi-suite/implementation.md) 管理。
+唯一入口与来源登记完成；首次真实 session_start 的模块准入通过 1 项 Linux（Node 24.22.2）SDK 聚合检查。覆盖 process.cwd 与 ctx.cwd 不同、项目模块覆盖、工具/命令与手动 active-tool 选择、首次 mentions 初始化、new/resume/fork/tree 重绑与 reload 重新准入；child 的 configCwd 保持 owner 项目、cwd 保持目标工具目录。goal 模块未实际创建时，绑定、重绑、reload 与 quit 保留其他 provider 的共享 goal 键；ownership 沿本次模块集合。全禁用模块的 reload 保留既有 job、SDK child 和 workflow Worker，quit 等待已注册 owner 的真实结算与清理，不创建新 owner。平台与完整业务组合由 [实施计划](design/implementation.md) 管理。
 
 ## 关联计划
 
-- [上游基线](../../todo/pi-suite/upstream-baseline.md)
-- [上游导入](../../todo/pi-suite/upstream-import.md)
+- [上游基线](design/upstream-baseline.md)
+- [上游导入](design/upstream-import.md)
 - [统一工具设计](tool-design.md)
-- [统一界面](../../todo/pi-suite/ui.md)
-- [实施与验收](../../todo/pi-suite/implementation.md)
+- [统一界面](design/ui.md)
+- [实施与验收](design/implementation.md)
 
 ## 1. 推荐交付形式
 
 采用 **一个仓库、一个可安装的 npm/Pi 扩展包、内部按职责拆分模块**。
 
-第一版不单独发布六个 fork，不把六个原扩展直接串联加载。将需要的上游代码作为可追踪来源导入，并围绕共享界面管理和运行时管理重构。用户只安装一个包；各模块可以通过配置开关启用。ask 与 goal 已按上游契约重写；tasks、jobs、agents 以上游源码按文件导入改造，处置清单与目标子目录见 [上游导入](../../todo/pi-suite/upstream-import.md)，下方为模块级结构。
+第一版不单独发布六个 fork，不把六个原扩展直接串联加载。将需要的上游代码作为可追踪来源导入，并围绕共享界面管理和运行时管理重构。用户只安装一个包；各模块可以通过配置开关启用。ask 与 goal 已按上游契约重写；tasks、jobs、agents 以上游源码按文件导入改造，处置清单与目标子目录见 [上游导入](design/upstream-import.md)，下方为模块级结构。
 
 开发包名为 `pi-suite`，package.json 的 Pi extensions 只声明 `src/index.ts`，private 为 true；上游独立扩展不串联加载。
 
@@ -77,9 +77,9 @@ third-party/
 
 settings 统一为用户级默认值加当前 ctx.cwd 的项目级覆盖，包括模块开关、面板高度、询问默认超时和 job 退出策略。首次真实 session_start 创建本次激活的模块集合；/reload 按当前会话目录创建新激活，new/resume/fork/tree 只重绑并沿用本次模块集合。mentions 初始化与资源/schema 刷新在同一 bindSession 完成。模块开关不改变既有执行 owner 的生存期，quit 查询当前 agentDir 已注册的 jobs/agents/workflow 并等待真实清理，不因模块全关闭遗漏，不创建新的 manager/registry；避免每个模块再发明一套独立优先级。依赖锁定经验证的版本，不使用无范围的 `*` 承诺兼容所有未来宿主。
 
-goal 增加 status/dock/hidden 显示选择，默认复用 Pi 状态发布接口，不接管 footer；pi-starship 作为可选的外部状态栏扩展保留，不纳入本包 fork 或运行依赖。联动契约见 [goal 状态栏联动](../../todo/pi-suite/goal-status.md)。
+goal 增加 status/dock/hidden 显示选择，默认复用 Pi 状态发布接口，不接管 footer；pi-starship 作为可选的外部状态栏扩展保留，不纳入本包 fork 或运行依赖。联动契约见 [goal 状态栏联动](design/goal-status.md)。
 
-agents/jobs 复用相同显示取值，由共享入口合成活动数量状态；运行记录、持久历史和手动停止分别归 AgentManager 与 JobManager，ui 不持有进程控制权。公共契约见 [状态栏摘要](../../todo/pi-suite/status.md)、[子代理运行记录](agents/runs.md) 和 [job 记录](../../todo/pi-suite/jobs/history-control.md)。
+agents/jobs 复用相同显示取值，由共享入口合成活动数量状态；运行记录、持久历史和手动停止分别归 AgentManager 与 JobManager，ui 不持有进程控制权。公共契约见 [状态栏摘要](design/status.md)、[子代理运行记录](agents/runs.md) 和 [job 记录](design/jobs/history-control.md)。
 
 用户已明确不添加多语言支持。本包不引入 locale 配置、翻译表或语言切换；界面沿用现有固定文案，问题、说明和回答继续按原文显示。
 

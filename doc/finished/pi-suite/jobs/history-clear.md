@@ -10,7 +10,7 @@
 - [x] 删除撤销未送达结果/monitor 通知及 quietWakes；晚消费不重建目录，更新通知继续由已有生命周期处理。
 - [x] 当前 manager 可删除保存的 foreign 历史记录，但没有历史进程控制权；只读 agents 历史隐藏 Clear history、attach 和 stop，受限执行协议隐藏 Clear history 与 attach，查询和停止继续通过既有控制桥处理。
 
-1 项 Linux（Node 24.22.2）真实 SDK/进程聚合检查通过，覆盖拒绝边界、队列落盘与目录删除、通知阻塞期间撤销、原生取消/确认以及 foreign 历史清理。Windows 的查看流程、停止竞争与级联组合仍由 [历史控制专项](../../../todo/pi-suite/jobs/history-control.md) 验收。
+1 项 Linux（Node 24.22.2）真实 SDK/进程聚合检查通过，覆盖拒绝边界、队列落盘与目录删除、通知阻塞期间撤销、原生取消/确认以及 foreign 历史清理。Windows 的查看流程、停止竞争与级联组合仍由 [历史控制专项](../../../todo/pi-suite/index.md) 验收。
 
 历史保留至用户主动清理，不增加 TTL 删除、模型工具或控制桥协议。稳定操作见 [执行任务](../../../current/jobs/index.md#用户操作)。
 

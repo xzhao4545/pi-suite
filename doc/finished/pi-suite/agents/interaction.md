@@ -2,7 +2,7 @@
 
 目标：主 agent 可以启动、等待、查看进度、发送消息、回答提问并强制停止 subagent；child 需要信息时可以向父 agent 提问。
 
-当前状态：共享 ask schema 的父级提问、agent_send、wait/前台提前返回及统一通知已接入，见 [基础阶段](core.md)。多 run 通知/读取隔离、真实多 child any/all 与问题提前返回、嵌套 FG/BG 直接父级提问和 Esc/timeout 等待边界通过 3 项 Linux SDK 聚合检查，见 [生命周期阶段](lifecycle.md)；所属活动 jobs 与当前工具参数摘要的进度详情、结果通知的用量/错误正文已补齐，并通过 3 项 Linux 真实 SDK 聚合检查，稳定事实见 [进度与结果通知](../../../current/agents/progress.md)；平台验收由 [扩展专项](../../../todo/pi-suite/agents/extensions.md) 管理。
+当前状态：共享 ask schema 的父级提问、agent_send、wait/前台提前返回及统一通知已接入，见 [基础阶段](core.md)。多 run 通知/读取隔离、真实多 child any/all 与问题提前返回、嵌套 FG/BG 直接父级提问和 Esc/timeout 等待边界通过 3 项 Linux SDK 聚合检查，见 [生命周期阶段](lifecycle.md)；所属活动 jobs 与当前工具参数摘要的进度详情、结果通知的用量/错误正文已补齐，并通过 3 项 Linux 真实 SDK 聚合检查，稳定事实见 [进度与结果通知](../../../current/agents/progress.md)；平台验收由 [扩展专项](../../../todo/pi-suite/index.md) 管理。
 
 影响范围：AgentManager、child 会话工具注入、共享 Notifications 与 wait、agent_* 工具、状态栏计数和 goal 调度。
 
@@ -27,15 +27,15 @@
 
 ## 验收结论
 
-进度与通知的 3 项 Linux（Node 24.22.2）真实 SDK 聚合检查通过。模型正文核对并发工具及参数上限、queued/waiting 状态、活动 usage 和 streaming transcript；归属核对稳定 ID 的全部 run 根与活动 descendant job，正文最近 20 个 run 不丢完整 details/query 范围，控制查询失败保留明确原因。失败通知核对实际 SDK 用量与错误正文，agent_read 按 run 取消未投递结果。基础问答和等待边界沿用上述生命周期阶段；Windows 与真实手机组合保留在 [扩展专项](../../../todo/pi-suite/agents/extensions.md)。
+进度与通知的 3 项 Linux（Node 24.22.2）真实 SDK 聚合检查通过。模型正文核对并发工具及参数上限、queued/waiting 状态、活动 usage 和 streaming transcript；归属核对稳定 ID 的全部 run 根与活动 descendant job，正文最近 20 个 run 不丢完整 details/query 范围，控制查询失败保留明确原因。失败通知核对实际 SDK 用量与错误正文，agent_read 按 run 取消未投递结果。基础问答和等待边界沿用上述生命周期阶段；Windows组合保留在 [扩展专项](../design/agents/extensions.md)。
 
 ## 关联计划
 
 - [运行记录与手动控制](runs.md)
-- [扩展能力](../../../todo/pi-suite/agents/extensions.md)
+- [扩展能力](../design/agents/extensions.md)
 - [统一工具设计](../tool-design.md)
-- [用户询问](../../../todo/pi-suite/ask/index.md)
-- [目标调度](../../../todo/pi-suite/goal.md)
+- [用户询问](../design/ask/index.md)
+- [目标调度](../design/goal.md)
 
 ## 交互总览
 
@@ -64,7 +64,7 @@ child 会话中注册同名 ask_user，参数沿用统一 schema，使父 agent 
 5. timeoutMs 规则与 ask_user 相同：省略用配置默认值，0 不设期限。期限到达时 child 收到 timed_out，不能当作同意或默认答案。
 6. 父 agent 调用 agent_stop 时，挂起的提问以 cancelled 结束并进入正常停止流程；问题超时后不再接受该次回答。运行结算/停止清理中不能通过 agent_send 恢复，清理结束后的显式发送按普通新 run 恢复契约处理。
 
-父 agent 正在 wait 或前台 agent_start 中等待时，它的任一直接 child 提问都使等待直接返回问题，不限于正在等待的那个 child，避免父等子、子等父或提问的 child 卡到等待超时。嵌套 child 的提问交给其直接父 agent：直接父正在等待时由等待返回；直接父以后台方式启动该 child 时，问题作为引导消息插入直接父的当前执行。上游在父执行结算时停止其嵌套 child，因此不存在直接父已结束而孙级仍在提问的情况。goal_wait 的 waitFor 也不阻挡提问通知，见 [目标状态与续跑](../../../todo/pi-suite/goal.md)。
+父 agent 正在 wait 或前台 agent_start 中等待时，它的任一直接 child 提问都使等待直接返回问题，不限于正在等待的那个 child，避免父等子、子等父或提问的 child 卡到等待超时。嵌套 child 的提问交给其直接父 agent：直接父正在等待时由等待返回；直接父以后台方式启动该 child 时，问题作为引导消息插入直接父的当前执行。上游在父执行结算时停止其嵌套 child，因此不存在直接父已结束而孙级仍在提问的情况。goal_wait 的 waitFor 也不阻挡提问通知，见 [目标状态与续跑](../design/goal.md)。
 
 child 提问期间计入 agents 活动数量；goal 调度不因 child 提问进入 waiting_user，主 agent 收到通知后按普通继续处理。
 
@@ -88,7 +88,7 @@ agent_read 的 stream 有两种：
 - transcript：按消息顺序完整序列化为带角色标签的纯文本，工具调用包含名称与参数，工具结果保留文本后由共享字节读取规则分页/截断。运行中默认读取 transcript。
 - result：最终 assistant 文本或结构化输出；失败与停止时为错误和保留的部分输出。结算后默认读取 result。
 
-两种 stream 都使用与 job_read 相同的 offset、limitBytes、search、context 和默认智能截断，规则见 [jobs 输出读取](../../../todo/pi-suite/jobs/output.md)。已写完的消息偏移稳定；正在生成的最后一条消息可能在下次读取时变长。
+两种 stream 都使用与 job_read 相同的 offset、limitBytes、search、context 和默认智能截断，规则见 [jobs 输出读取](../design/jobs/output.md)。已写完的消息偏移稳定；正在生成的最后一条消息可能在下次读取时变长。
 
 ## 通知与唤醒
 

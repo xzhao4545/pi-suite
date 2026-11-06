@@ -14,6 +14,6 @@
 
 验收：Windows Node 24.22.2 与 Linux 现有 nvm Node 24.14.0 的类型检查和 27 项离线测试通过。模型生命周期使用真实 SDK 与 SDK 自带 faux provider，压缩摘要通过公开 hook 提供；原生 footer 核对 40、60、120 列。Starship 实际状态模块在 Windows 检查。日常检查在 5 分钟内。
 
-完整 Starship footer 布局、真实手机 SSH 和后续 jobs/agents 的实际完成通知综合场景继续由 [状态栏计划](../../todo/pi-suite/goal-status.md) 与 [实施计划](../../todo/pi-suite/implementation.md) 管理，本阶段不把这些范围计为已验收。
+完整 Starship footer 布局、真实手机 SSH 和后续 jobs/agents 的实际完成通知综合场景继续由 [状态栏计划](design/goal-status.md) 与 [实施计划](design/implementation.md) 管理，本阶段不把这些范围计为已验收。
 
 稳定实现与操作见 [目标管理](../../current/goal/index.md)，许可证见 [上游登记](../../../third-party/UPSTREAM.md)。

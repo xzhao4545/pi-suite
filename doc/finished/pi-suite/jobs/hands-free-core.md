@@ -11,7 +11,7 @@
 - [x] 更新复用共享通知，以请求 ID 合并；wait 提前返回并撤销通知；goal_wait 接收被等待 job 的更新。
 - [x] Linux 离线验证增量预算、定时器与暂停/释放、真实 PTY 静默终止的清理证据、宽限期、超时、自行退出，以及 reload 后目标唤醒和通知去重。
 
-适用范围：Pi 1.5.0、Linux 现有 Node.js 24 环境。Windows 上的监督验收、CLI agent 预设与 launchPolicy 保留在 [监视与委派待办](../../../todo/pi-suite/jobs/monitors.md)；本阶段不代表完整 jobs 专项完成。
+适用范围：Pi 1.5.0、Linux 现有 Node.js 24 环境。Windows 上的监督验收、CLI agent 预设与 launchPolicy 保留在 [监视与委派待办](../../../todo/pi-suite/index.md)；本阶段不代表完整 jobs 专项完成。
 
 当前实现与操作见 [PTY 监督与委派](../../../current/jobs/hands-free.md)，来源见 [上游登记](../../../../third-party/UPSTREAM.md)。
 

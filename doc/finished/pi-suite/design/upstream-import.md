@@ -2,23 +2,25 @@
 
 目标：tasks、jobs、agents 以上游发布包源码为基础导入改造，保留已解决的平台与并发边界，按文件记录导入、改造和丢弃范围。
 
-当前状态：实施中；四个上游发布包已下载核对，jobs 的后端、长期管理、PTY、monitor、hands-free 与 CLI 预设，tasks 的两级存储、依赖、会话与提醒，以及 agents 的基础执行、队列、记录、交互与资源基础能力已按职责导入改造并登记来源；类型与单 agent 模型配置已实现，@handle 输入、补全与克隆启动已导入，定时调度与 RPC 五通道、生命周期、cwd 和结构化结果已接入，workflow Worker、宿主、保存资源、工具与原生控制已接入。类型开关与 Execution 回收已按统一 catalog/config/history 适配，workspace 持久历史发现与只读查询通过 Linux 离线验收，平台与完整资源组合待验收。tasks 的多 child 共享清单及执行恢复、agents 停止竞争与主从问答生命周期通过 Linux 验收，子代理进度/通知摘要与所属活动 jobs 查询、查看和单独停止通过 Linux 验收，见 [主从交互](../../finished/pi-suite/agents/interaction.md) 与 [运行记录](../../finished/pi-suite/agents/runs.md)；单包模块准入与统一工具规范已归档，共享 session job 列表/计数通过完整 owner/branch/creator 集合派生；平台组合继续实施。本文件记录完整按文件处置结论。ask 与 goal 已按上游契约重写并通过两平台检查，不再改为导入。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+
+当前状态：实施中；四个上游发布包已下载核对，jobs 的后端、长期管理、PTY、monitor、hands-free 与 CLI 预设，tasks 的两级存储、依赖、会话与提醒，以及 agents 的基础执行、队列、记录、交互与资源基础能力已按职责导入改造并登记来源；类型与单 agent 模型配置已实现，@handle 输入、补全与克隆启动已导入，定时调度与 RPC 五通道、生命周期、cwd 和结构化结果已接入，workflow Worker、宿主、保存资源、工具与原生控制已接入。类型开关与 Execution 回收已按统一 catalog/config/history 适配，workspace 持久历史发现与只读查询通过 Linux 离线验收，平台与完整资源组合待验收。tasks 的多 child 共享清单及执行恢复、agents 停止竞争与主从问答生命周期通过 Linux 验收，子代理进度/通知摘要与所属活动 jobs 查询、查看和单独停止通过 Linux 验收，见 [主从交互](../agents/interaction.md) 与 [运行记录](../agents/runs.md)；单包模块准入与统一工具规范已归档，共享 session job 列表/计数通过完整 owner/branch/creator 集合派生；平台组合继续实施。本文件记录完整按文件处置结论。ask 与 goal 已按上游契约重写并通过两平台检查，不再改为导入。
 
 影响范围：src/tasks、src/jobs、src/agents 与共享 runtime/ui，third-party 来源登记与许可证，package.json 运行依赖。
 
-约束：导入文件保留来源注释与 MIT 许可证；单文件不超过 1000 行、单目录不超过 20 个文件；上游独立的 widget、状态键、通知、配置与设置界面接入本包共享模块；工具按 [统一工具设计](../../finished/pi-suite/tool-design.md) 重新注册。
+约束：导入文件保留来源注释与 MIT 许可证；单文件不超过 1000 行、单目录不超过 20 个文件；上游独立的 widget、状态键、通知、配置与设置界面接入本包共享模块；工具按 [统一工具设计](../tool-design.md) 重新注册。
 
-相关当前文档：[基线与验证](../../current/validation.md)、[上游登记](../../../third-party/UPSTREAM.md)。
+相关当前文档：[基线与验证](../../../current/validation.md)、[上游登记](../../../../third-party/UPSTREAM.md)。
 
 ## 任务列表
 
 - [x] 将四个上游包的导入文件放入目标目录，文件头标注包名、版本与原路径
 - [x] 删除丢弃范围的代码与依赖，拆分超限文件
-- [x] 把上游 widget、状态、通知、配置和会话事件接入共享 Dock、StatusPublisher、Notifications、SessionBinding 与配置（Linux 必要详情/询问组合通过，Windows 与真实手机由模块专项验收）
+- [x] 把上游 widget、状态、通知、配置和会话事件接入共享 Dock、StatusPublisher、Notifications、SessionBinding 与配置（Linux 必要详情/询问组合通过，Windows由模块专项验收）
 - [x] 登记许可证、导入文件清单与改动边界，更新 sources.json
 - [x] 锁定并验证新增运行依赖：zigpty、@xterm/headless、@xterm/addon-serialize、croner（Linux；Windows 实际后端由平台专项验收）
-- [x] 按新工具整理 interactive-shell 技能说明并在包中声明（真实 Pi 包资源发现、加载与模块关闭行为通过，见 [技能阶段](../../finished/pi-suite/jobs/skill.md)）
-- [ ] 按模块专项完成 Windows、真实手机与完整资源/CLI 组合验收
+- [x] 按新工具整理 interactive-shell 技能说明并在包中声明（真实 Pi 包资源发现、加载与模块关闭行为通过，见 [技能阶段](../jobs/skill.md)）
+- 验收跟踪：按模块专项完成 Windows 与完整资源/CLI 组合验收
 
 ## 验收方式
 
@@ -26,8 +28,8 @@
 
 ## 关联计划
 
-- [统一工具设计](../../finished/pi-suite/tool-design.md)
-- [扩展包架构](../../finished/pi-suite/architecture.md)
+- [统一工具设计](../tool-design.md)
+- [扩展包架构](../architecture.md)
 - [上游基线](upstream-baseline.md)
 
 ## 选择依据
@@ -117,9 +119,9 @@ src/
 
 ## @tintinweb/pi-subagents 0.23.0
 
-基础执行、队列、run 记录、类型、父级交互与任务/job 关联已导入改造，见 [基础阶段](../../finished/pi-suite/agents/core.md) 与 [来源登记](../../../third-party/UPSTREAM.md)。类型与单 agent 模型配置见 [模型基础阶段](../../finished/pi-suite/agents/models-core.md)，资源选择、技能、memory 与上下文见 [资源基础阶段](../../finished/pi-suite/agents/resources-core.md)。@handle 输入与克隆启动见 [提及基础阶段](../../finished/pi-suite/agents/mentions-core.md)。定时调度见 [调度基础阶段](../../finished/pi-suite/agents/schedules-core.md)。RPC 见 [RPC 基础阶段](../../finished/pi-suite/agents/rpc-core.md)。workflow Worker、控制与 journal 见 [核心阶段](../../finished/pi-suite/agents/workflow-core.md)，宿主、保存资源、工具与原生控制见 [宿主接入阶段](../../finished/pi-suite/agents/workflow-host.md)，类型开关和 Execution 回收见 [类型与回收阶段](../../finished/pi-suite/agents/types-retention.md)。下表保留完整处置范围；默认/配置目录与持久引用内的 workspace 历史发现见 [历史发现阶段](../../finished/pi-suite/agents/history-discovery.md)，平台资源组合继续执行。
+基础执行、队列、run 记录、类型、父级交互与任务/job 关联已导入改造，见 [基础阶段](../agents/core.md) 与 [来源登记](../../../../third-party/UPSTREAM.md)。类型与单 agent 模型配置见 [模型基础阶段](../agents/models-core.md)，资源选择、技能、memory 与上下文见 [资源基础阶段](../agents/resources-core.md)。@handle 输入与克隆启动见 [提及基础阶段](../agents/mentions-core.md)。定时调度见 [调度基础阶段](../agents/schedules-core.md)。RPC 见 [RPC 基础阶段](../agents/rpc-core.md)。workflow Worker、控制与 journal 见 [核心阶段](../agents/workflow-core.md)，宿主、保存资源、工具与原生控制见 [宿主接入阶段](../agents/workflow-host.md)，类型开关和 Execution 回收见 [类型与回收阶段](../agents/types-retention.md)。下表保留完整处置范围；默认/配置目录与持久引用内的 workspace 历史发现见 …
 
-原生查看、流式工具配对与组件缓存、消息输入、两次停止和真实前台转后台通过 Linux 离线验收，见 [查看器阶段](../../finished/pi-suite/agents/viewer-controls.md)；查看器渲染复用公共 Pi 消息组件，操作语义按上游 conversation-viewer 适配。
+原生查看、流式工具配对与组件缓存、消息输入、两次停止和真实前台转后台通过 Linux 离线验收，见 [查看器阶段](../agents/viewer-controls.md)；查看器渲染复用公共 Pi 消息组件，操作语义按上游 conversation-viewer 适配。
 
 | 文件 | 行数 | 处置 |
 | --- | --- | --- |
@@ -131,7 +133,7 @@ src/
 | src/completion-outbox.ts、group-join.ts | 116、141 | 规则并入共享 Notifications：一个边界一条消息、已读取结果撤销通知；不保留 group 参数 |
 | src/mention.ts、mention-clone.ts、ui/agent-mention.ts | 141、195、216 | 已按职责导入 @handle 输入、原生补全与克隆启动；handle/alias 并入 run 记录、工具和通知复用公共模块，取消随主绑定生命周期 |
 | src/schedule.ts、schedule-store.ts、ui/schedule-menu.ts | 386、153、105 | 已按职责导入；存储改为本包按主会话目录，文件协议与 tasks 共用异步锁和原子提交；保留 cron/单次/周期、普通 run 与通知，长延时分段与原生值选择取消 |
-| src/workflow/* | 4567 | 编排核心导入，runtime.ts 1219 行拆分，Worker 源码与 progress 按职责拆分；host/saved/collisions 已适配，gate 使用公共 JobManager 与 cwd，agent_workflow、保存脚本/journal/快照、通知和等待接入统一框架，见 [核心阶段](../../finished/pi-suite/agents/workflow-core.md) 与 [宿主接入阶段](../../finished/pi-suite/agents/workflow-host.md) |
+| src/workflow/* | 4567 | 编排核心导入，runtime.ts 1219 行拆分，Worker 源码与 progress 按职责拆分；host/saved/collisions 已适配，gate 使用公共 JobManager 与 cwd，agent_workflow、保存脚本/journal/快照、通知和等待接入统一框架，见 [核心阶段](../agents/workflow-core.md) 与 [宿主接入阶段](../agents/workflow-host.md) |
 | src/ui/workflow-card.ts、workflow-dialog.ts、workflow-menu.ts | 470、1115、193 | 按展示字段与完整控制范围重构到 workflow/ui，非逐行导入；原生 Text、DetailsView/ScrollView/值选择、child Transcript 和 job 日志查看器共用，显示行接入 Dock |
 | src/cross-extension-rpc.ts | 221 | 按职责导入到 agents/rpc，保留五通道与版本 2；会话注册、模型、归属、启动等待和消费接入共享框架；未知与内部参数报错，生命周期从公共 Manager/SDK 发出 |
 | src/settings.ts | 650 | 设置项并入共享配置 agents 节；不导入独立设置界面，仅按类型的模型与 thinking 由 /agents 写回配置，见 [模型与 thinking 配置](agents/models.md) |

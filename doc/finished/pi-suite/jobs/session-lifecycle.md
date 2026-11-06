@@ -24,9 +24,9 @@
 
 ## 关联计划
 
-- [执行模式](../../../todo/pi-suite/jobs/execution.md)
+- [执行模式](../design/jobs/execution.md)
 - [退出清理范围](exit-scope.md)
-- [目标调度](../../../todo/pi-suite/goal.md)
+- [目标调度](../design/goal.md)
 
 ### 6.1 第一版的保活承诺
 

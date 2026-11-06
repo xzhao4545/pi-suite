@@ -4,9 +4,9 @@
 
 ## 任务索引
 
-- [ ] [Pi 自定义扩展包设计与实施](./pi-suite/index.md) — 公共架构、上游基线、统一界面、ask、tasks、jobs、goal、agents 与验收计划。
+- [ ] [Pi Suite Windows 剩余验收](./pi-suite/index.md) — 界面与通知、任务、执行与实际 CLI、子代理及外部资源；所有活跃验收集中维护，不再按完整设计拆成多份待办。
 
-当前实现与开发方式见 [doc/current](../current/index.md)。各专项的目标、当前状态、影响范围、约束和验收方式维护在对应文件；ask 默认答案与批量专项已归档，其余计划继续在本目录执行。
+当前实现与开发方式见 [doc/current](../current/index.md)。完整设计、上游按文件处置与既有验收证据保存在 [设计与实施记录](../finished/pi-suite/design/index.md)，原设计细节保留。当前仅处理 Windows；手机 SSH 专项取消，Linux 由用户后续在其他设备验收，不阻塞本轮。
 
 ## 规则
 

@@ -45,4 +45,4 @@ third-party/
   licenses/         上游许可证
 ```
 
-设计与实施计划见 [doc/todo/pi-suite](./doc/todo/pi-suite/index.md)，当前项目状态见 [doc/current](./doc/current/index.md)。Pi 相关依赖以 1.5.0 为开发基线；pnpm-lock.yaml 应提交到版本控制。
+设计与实施计划见 [doc/todo/pi-suite](doc/finished/pi-suite/design/index.md)，当前项目状态见 [doc/current](./doc/current/index.md)。Pi 相关依赖以 1.5.0 为开发基线；pnpm-lock.yaml 应提交到版本控制。

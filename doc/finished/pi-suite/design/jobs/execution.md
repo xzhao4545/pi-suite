@@ -2,13 +2,15 @@
 
 目标：融合交互 shell 和非交互后台任务，共用管理、日志与通知。
 
-当前状态：实施中；pipe 与 PTY 执行、记录、工具与通知已实现并在 Windows（Git Bash）和 Linux 通过检查，见 [执行任务](../../../current/jobs/index.md)。/jobs 列表与详情、job_start 的 attach、终端视图（用户接管、Ctrl+G 交还、Ctrl+T 发送屏幕、Ctrl+B 离开）已实现。Linux 实际 Pi CLI 的 /jobs attach 缩放、接管与重新 attach 通过 [终端缩放阶段](../../../finished/pi-suite/jobs/terminal-resize.md)；Windows 实际 Pi 1.5.0 CLI 的四次缩放、内层 TTY 尺寸、输入、交还、离开后继续、重新 attach 与 quit 确认清理通过 [Windows 阶段](../../../finished/pi-suite/jobs/windows-runtime.md)。监督、CLI 预设与真实手机组合按关联专项继续验收。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+
+当前状态：实施中；pipe 与 PTY 执行、记录、工具与通知已实现并在 Windows（Git Bash）和 Linux 通过检查，见 [执行任务](../../../../current/jobs/index.md)。/jobs 列表与详情、job_start 的 attach、终端视图（用户接管、Ctrl+G 交还、Ctrl+T 发送屏幕、Ctrl+B 离开）已实现。Linux 实际 Pi CLI 的 /jobs attach 缩放、接管与重新 attach 通过 [终端缩放阶段](../../jobs/terminal-resize.md)；Windows 实际 Pi 1.5.0 CLI 的四次缩放、内层 TTY 尺寸、输入、交还、离开后继续、重新 attach 与 quit 确认清理通过 [Windows 阶段](../../jobs/windows-runtime.md)。监督与 CLI 预设组合按关联专项继续验收。
 
 影响范围：JobManager、pipe/PTY 后端、工具入口、日志和任务元数据。
 
 约束：pipe 与 PTY 保持各自语义；Windows 控制代码不能视作 Linux 支持。
 
-相关当前文档：[项目当前状态](../../../current/index.md)。
+相关当前文档：[项目当前状态](../../../../current/index.md)。
 
 ## 任务列表
 
@@ -17,9 +19,9 @@
 - [x] 实现输入、查看、attach/detach 和停止
 - [x] 保留已结束 job 历史及起止时间、耗时，向共享状态栏提供活动数量
 - [x] 验证 Windows 与 Linux 的基础 pipe/PTY 后端、记录、工具与通知
-- [x] Linux 实际 Pi CLI 的 /jobs attach 缩放、内层 TTY ioctl/stty/SIGWINCH、接管交还、关闭后继续与重新 attach 验收，见 [终端缩放阶段](../../../finished/pi-suite/jobs/terminal-resize.md)
-- [x] Windows 实际 Pi CLI 的终端缩放、内层尺寸与输入、交还、离开与重新 attach、quit 清理验收，见 [Windows 阶段](../../../finished/pi-suite/jobs/windows-runtime.md)
-- [ ] 完成 Windows 终端视图、监督与其他实际 CLI 预设的综合复核，以及真实手机 SSH 验收
+- [x] Linux 实际 Pi CLI 的 /jobs attach 缩放、内层 TTY ioctl/stty/SIGWINCH、接管交还、关闭后继续与重新 attach 验收，见 [终端缩放阶段](../../jobs/terminal-resize.md)
+- [x] Windows 实际 Pi CLI 的终端缩放、内层尺寸与输入、交还、离开与重新 attach、quit 清理验收，见 [Windows 阶段](../../jobs/windows-runtime.md)
+- 验收跟踪：完成 Windows 终端视图、监督与其他实际 CLI 预设的综合复核，保留 Windows 验收
 
 ## 验收方式
 
@@ -27,9 +29,9 @@
 
 ## 关联计划
 
-- [同进程保活](../../../finished/pi-suite/jobs/session-lifecycle.md)
-- [退出清理范围](../../../finished/pi-suite/jobs/exit-scope.md)
-- [架构与发布](../../../finished/pi-suite/architecture.md)
+- [同进程保活](../../jobs/session-lifecycle.md)
+- [退出清理范围](../../jobs/exit-scope.md)
+- [架构与发布](../../architecture.md)
 - [运行记录与手动控制](history-control.md)
 
 ## 6. jobs：融合交互 shell 与后台执行
@@ -43,7 +45,7 @@
 
 job 元数据统一包括 ID、workspace、ownerSession、可选 taskId、创建 agentId/agentRunId 及可追溯父级执行链、mode、status、创建/开始/结束时间、耗时、退出与停止/清理信息、输入记录和日志位置。创建归属从运行上下文取得，用于 subagent 停止时级联清理；通知按照原会话和分支引用投递，切换到其他会话不会把旧任务结果误发给新模型。
 
-模型工具按 [统一工具设计](../../../finished/pi-suite/tool-design.md) 注册 job_start、job_list、job_read、job_write、job_stop 与共享 wait，内部走同一个 manager；上游 interactive_shell 与 background_job_* 不再注册，旧调用方式不保留。attach/detach 是用户在 /jobs 详情或终端视图中的操作，不注册为模型工具。
+模型工具按 [统一工具设计](../../tool-design.md) 注册 job_start、job_list、job_read、job_write、job_stop 与共享 wait，内部走同一个 manager；上游 interactive_shell 与 background_job_* 不再注册，旧调用方式不保留。attach/detach 是用户在 /jobs 详情或终端视图中的操作，不注册为模型工具。
 
 | job_start 参数 | 规则 |
 | --- | --- |

@@ -8,6 +8,6 @@ AgentManager 适配上游每 60 秒检查、结束 10 分钟回收的机制，�
 
 stop 仅合并正在进行的同范围操作，完成后的请求重新查询遗留 job，不复用已经完成的清理结果；job 清理失败仍等待 child 结算后报告错误，后续请求可重试清理。host.close 等待全部 stop 后汇总错误，失败时保留 AgentRecord 身份供 owner 再次清理，并释放 Execution 保留引用。workflow 嵌套未读结果在父执行仍可接收通知时保留，顶层 child 由 host 消费。类型菜单参考上游 agent-file-toggle 的操作语义，使用本包原生选择与统一配置；回收使用上游 agent-manager 的时间规则，保留约束与历史归属由公共 Manager 负责。具体来源见 [上游登记](../../../../third-party/UPSTREAM.md)。
 
-Linux（Node 24.22.2）新增 5 项聚合检查通过，覆盖配置来源与字段保持、真实 SDK 准入与固定续接、原生菜单及即时补全/说明、回收引用与非持久历史、清理失败后结算与重试。既有 runtime/workflow-host 用例复核持久历史回收后恢复、遗留 job 清理和 host 清理失败释放引用；类型检查与 125 项全量检查通过，全量耗时 12.51 秒。Windows、实际 CLI/手机 SSH 与综合竞争场景仍按对应专项验收。
+Linux（Node 24.22.2）新增 5 项聚合检查通过，覆盖配置来源与字段保持、真实 SDK 准入与固定续接、原生菜单及即时补全/说明、回收引用与非持久历史、清理失败后结算与重试。既有 runtime/workflow-host 用例复核持久历史回收后恢复、遗留 job 清理和 host 清理失败释放引用；类型检查与 125 项全量检查通过，全量耗时 12.51 秒。Windows 实际 CLI 与综合竞争场景仍按对应专项验收。
 
-当前类型配置和操作维护在 [类型、模型与 thinking](../../../current/agents/models.md)，回收与历史边界维护在 [执行与记录](../../../current/agents/runtime.md)。workspace 全量持久历史发现、原生查看器快捷控制、平台与复杂竞争验收继续由 [agents 待办](../../../todo/pi-suite/agents/index.md) 管理。
+当前类型配置和操作维护在 [类型、模型与 thinking](../../../current/agents/models.md)，回收与历史边界维护在 [执行与记录](../../../current/agents/runtime.md)。workspace 全量持久历史发现、原生查看器快捷控制、平台与复杂竞争验收继续由 [agents 待办](../../../todo/pi-suite/index.md) 管理。

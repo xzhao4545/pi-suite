@@ -6,4 +6,4 @@ worktree 字段与 gate 提前执行钩子按确认范围删除，gate 使用宿
 
 6 项 Linux 检查使用真实 Worker，覆盖流水线无阶段屏障、嵌套阶段与并发、结构化结果及 gate、暂停期间排队/跳过/重试和用量累计；journal 成功前缀、变化和失败后的执行、schema 复核、会话 resume 的整段执行、文件损坏与显式 I/O 失败通过。JSON 与 metadata、确定性 globals、未支持选项、agent/item/nested 上限、未等待调用及无限循环 Worker 实际终止通过。完整离线检查和类型检查通过。
 
-本阶段完成内部核心；`agent_workflow` 注册、宿主与保存资源、共享通知/等待、配置开关、原生查看和控制入口继续由 [扩展专项](../../../todo/pi-suite/agents/extensions.md) 管理。稳定核心事实见 [编排核心](../../../current/agents/workflow/index.md)，来源与局部适配见 [上游登记](../../../../third-party/UPSTREAM.md)。
+本阶段完成内部核心；`agent_workflow` 注册、宿主与保存资源、共享通知/等待、配置开关、原生查看和控制入口继续由 [扩展专项](../../../todo/pi-suite/index.md) 管理。稳定核心事实见 [编排核心](../../../current/agents/workflow/index.md)，来源与局部适配见 [上游登记](../../../../third-party/UPSTREAM.md)。

@@ -8,4 +8,4 @@
 
 5 项 Linux（Node 24.22.2）真实 SDK/faux 与进程检查通过：后台启动、结构化 child、cwd gate/快速退出/EOF、普通 child/gate 隐藏、共享等待与消费、journal 重放和 SDK child 引用恢复；续接保留 schema/model/type/tools 并通过实际父模型 wait/agent_send 回答问题；reload/new/resume 保持 workflow 与排队 agent owner，quit 等待真实 gate 清理；保存资源优先级、信任、包门控、源码互斥、无效高优先级资源、truncated/损坏 journal 和持久化失败可见，工具撤销/恢复与手动禁用保持、模型使用当前动态类型描述通过；40/60/120 列原生内容、精确阶段/未分组行与暂停返回后的阅读/搜索状态通过。6 项 Worker 核心检查与类型检查通过。
 
-Windows、真实手机 SSH、shell/资源/MCP 组合和类型菜单、回收继续由 [agents 扩展专项](../../../todo/pi-suite/agents/extensions.md) 与 [agents 待办](../../../todo/pi-suite/agents/index.md) 管理。当前实现与操作维护在 [Workflow](../../../current/agents/workflow/index.md)。
+Windows、shell/资源/MCP 组合和类型菜单、回收继续由 [agents 扩展专项](../../../todo/pi-suite/index.md) 与 [agents 待办](../../../todo/pi-suite/index.md) 管理。当前实现与操作维护在 [Workflow](../../../current/agents/workflow/index.md)。

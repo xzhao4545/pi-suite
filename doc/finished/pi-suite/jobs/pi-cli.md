@@ -4,7 +4,7 @@ Linux 使用实际 Pi 1.5.0 发布 CLI、隔离资源与 faux provider 验证一
 
 新的真实 PTY 复用 attachJob 与已有终端查看器，在 40/60/120 列核对输入接管、USER_CONTROL 拒绝模型写入、Ctrl+G 交还和 Ctrl+B 离开后仍运行，最终清理确认。1 项实际 CLI 聚合验收通过，不使用付费模型。
 
-Pi 1.5.0 将以 `@` 开头的位置 prompt 解析为附件，当前 pi 预设在启动前报告 INVALID_ARGS；原样 `@` 支持保留在 [监督与 CLI 待办](../../../todo/pi-suite/jobs/monitors.md)。Codex/Claude 的 Linux 隔离文本交互见 [实际文本 PTY 阶段](cli-pty.md)；CLI 工具执行、Windows 与真实手机组合仍未验收，Cursor 的 agent 命令缺失。
+Pi 1.5.0 将以 `@` 开头的位置 prompt 解析为附件，当前 pi 预设在启动前报告 INVALID_ARGS；原样 `@` 支持保留在 [监督与 CLI 待办](../../../todo/pi-suite/index.md)。Codex/Claude 的 Linux 隔离文本交互见 [实际文本 PTY 阶段](cli-pty.md)；CLI 工具执行、Windows组合仍未验收，Cursor 的 agent 命令缺失。
 
 当前参数与操作见 [CLI 预设](../../../current/jobs/launch.md) 和 [终端操作](../../../current/jobs/index.md#用户操作)。
 

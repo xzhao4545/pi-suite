@@ -12,7 +12,7 @@
 - [x] job_start(taskId) 验证子任务并保存双向引用，任务删除与 job 结算保持独立。
 - [x] Linux 的 8 项检查覆盖批次、依赖、真实跨进程并发、存储错误与取消、宿主生命周期、job 关联、临时提醒和 40/60/120 列界面。
 
-适用范围：Pi 1.5.0、Linux Node.js 24。Windows、完整手机终端布局、agents 的统一更新和执行恢复关联继续由 [任务专项](../../../todo/pi-suite/tasks.md) 与 [子代理专项](../../../todo/pi-suite/agents/index.md) 管理。
+适用范围：Pi 1.5.0、Linux Node.js 24。Windows、完整窄屏终端布局、agents 的统一更新和执行恢复关联继续由 [任务专项](../../../todo/pi-suite/index.md) 与 [子代理专项](../../../todo/pi-suite/index.md) 管理。
 
 当前实现见 [任务索引](../../../current/tasks/index.md)。
 

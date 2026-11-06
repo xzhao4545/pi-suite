@@ -6,4 +6,4 @@
 
 Linux 离线 Pi 1.5.0 验收覆盖：两池队首阻塞与计数、排队停止、原生前台提问与回答、嵌套免占位、共享任务更新、恢复历史不混入后续消息、认证模型来源、真实 abort、问题超时和已结束 child 遗留 job 的选择性清理。
 
-完整扩展/包资源选择、单个与类型模型配置界面、@handle、调度、workflow、RPC、回收及 Windows/手机综合验收维护在 [agents 待办](../../../todo/pi-suite/agents/index.md)。本阶段不代表该专项全部完成。
+完整扩展/包资源选择、单个与类型模型配置界面、@handle、调度、workflow、RPC、回收及 Windows综合验收维护在 [agents 待办](../../../todo/pi-suite/index.md)。本阶段不代表该专项全部完成。

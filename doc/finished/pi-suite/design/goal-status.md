@@ -2,13 +2,15 @@
 
 目标：在 Pi 原生状态栏或 pi-starship 中显示准确、简短的 goal 状态，减少常驻面板占用。
 
-当前状态：摘要发布、配置、会话归属与完成反馈已实现；Pi 1.5.0 原生 footer 及 @narumitw/pi-starship 0.65.2 实际 extension_status 模块通过离线检查。完整发布入口与真实 goal/tasks/child/jobs/ask 并存通过 Linux SDK 三尺寸检查，见 [footer 联动阶段](../../finished/pi-suite/footer-integration.md)；Windows、真实手机 SSH 与用户实际 footer 配置仍待验收，目标基础记录见 [已完成阶段](../../finished/pi-suite/goal-core.md)。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+
+当前状态：摘要发布、配置、会话归属与完成反馈已实现；Pi 1.5.0 原生 footer 及 @narumitw/pi-starship 0.65.2 实际 extension_status 模块通过离线检查。完整发布入口与真实 goal/tasks/child/jobs/ask 并存通过 Linux SDK 三尺寸检查，见 [footer 联动阶段](../footer-integration.md)；Windows 与用户实际 footer 配置仍待验收，目标基础记录见 [已完成阶段](../goal-core.md)。
 
 影响范围：goal 状态投影、当前会话绑定、ui 显示配置及外部 footer 互操作。
 
 约束：目标与调度状态是唯一数据来源；复用 Pi 公共接口，不替换其他扩展的 footer，不增加模型调用或多语言支持。
 
-相关当前文档：[项目当前状态](../../current/index.md)。
+相关当前文档：[项目当前状态](../../../current/index.md)。
 
 ## 任务列表
 
@@ -17,7 +19,7 @@
 - [x] 实现 status/dock/hidden 显示配置与重复显示控制
 - [x] 验证会话切换、reload 和完成反馈不会串用旧 goal 状态
 - [x] 在原生 footer、完整 pi-starship 发布入口及 40×24、60×30、120×40 尺寸下核对可见性、占用、数量限制与显式 Dock 显示（Linux SDK）
-- [ ] 在 Windows 和真实手机 SSH 核对用户实际 footer 配置、终端缩放与输入布局
+- 验收跟踪：在 Windows 核对用户实际 footer 配置、终端缩放与输入布局
 - [x] 静态核对用户实际 Starship 根 format：缺少 `$extension_status`，本包默认 status 槽位不可见；未改写用户配置，加入模块或显式使用 Dock 后仍需实际布局复核
 
 ## 验收方式
@@ -78,17 +80,17 @@ ctx.ui.setStatus("goal", undefined); // 当前会话没有 goal 时清除
 format = "$model$thinking$context $extension_status"
 
 [extension_status]
-format = "[$statuses]($style)"
+format = "[$statuses](../../../todo/pi-suite/$style)"
 disabled = false
 icons = { goal = "" }
 styles = { goal = "fg:pi:accent" }
 ```
 
-配置来源是 `<getAgentDir()>/pi-starship.toml`；手动编辑后可通过 reload 加载。示例关闭 goal 的默认扩展图标，避免手机字体差异占用额外空间；状态含有“goal”文字，不依赖图标识别。
+配置来源是 `<getAgentDir()>/pi-starship.toml`；手动编辑后可通过 reload 加载。示例关闭 goal 的默认扩展图标，避免终端字体差异占用额外空间；状态含有“goal”文字，不依赖图标识别。
 
 Starship 的 max_statuses 按扩展状态插入顺序截取；Linux 完整发布入口检查确认 max_statuses=1 时较早的第三方状态可排挤 goal/runtime。数量上限过小、extension_status 被禁用或根 format 未引用模块时，goal 可能不可见。样式按状态键匹配，实际 emoji 与 24 位颜色可呈现；上述配置只设置 goal 的统一样式，不承诺运行、等待、失败会自动变色。
 
-Starship 对整个格式化结果自动换行；把 goal 放进已有一行不保证 footer 总高度仍为一行。手机布局需要同时精简其他模块、选择模块位置并实际缩放核对。本包发布短摘要，不能单方面裁剪第三方 footer 的整体内容。
+Starship 对整个格式化结果自动换行；把 goal 放进已有一行不保证 footer 总高度仍为一行。窄屏布局需要同时精简其他模块、选择模块位置并实际缩放核对。本包发布短摘要，不能单方面裁剪第三方 footer 的整体内容。
 
 ## 显示配置与统一预算
 

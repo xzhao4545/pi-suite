@@ -6,4 +6,4 @@
 
 4 项 Linux SDK/faux 与真实计时器检查覆盖格式和边界、竞争准入与损坏文件、原生工具参数互斥、远期单次任务、长名称取消与 40/120 列、配置关闭、实际 once/interval/cron、满池时即时触发与计数、触发时更新的类型选项、普通 run 与通知，以及真实 new/resume/reload 和不可用模型错误。共享存储复用 tasks 的真实多进程锁与宿主会话检查。
 
-Windows、真实 CLI/手机 SSH 与本地时区的综合调度场景由 [扩展专项](../../../todo/pi-suite/agents/extensions.md) 继续验收。稳定事实见 [定时调度](../../../current/agents/schedules.md)，来源见 [上游登记](../../../../third-party/UPSTREAM.md)。
+Windows 实际 CLI 与本地时区的综合调度场景由 [扩展专项](../../../todo/pi-suite/index.md) 继续验收。稳定事实见 [定时调度](../../../current/agents/schedules.md)，来源见 [上游登记](../../../../third-party/UPSTREAM.md)。

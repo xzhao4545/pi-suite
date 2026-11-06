@@ -1,14 +1,16 @@
 # 统一面板布局
 
-目标：限制常驻信息占用，保留手机 SSH 场景的聊天阅读空间。
+目标：限制常驻信息占用，保留窄屏终端场景的聊天阅读空间。
 
-当前状态：Dock 预算、状态槽位、原生历史及 ask 焦点已实现；tasks 的 blocked/选中组/压缩摘要、agents/jobs 必要详情已接入统一 Dock，Linux 组合通过 [界面协调阶段](../../finished/pi-suite/ui-coordination.md) 验收。真实 goal/tasks/child/jobs/ask 与完整 Starship 发布入口并存通过 [footer 联动阶段](../../finished/pi-suite/footer-integration.md) 验收；Windows 与真实手机 SSH 布局仍待验收。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+
+当前状态：Dock 预算、状态槽位、原生历史及 ask 焦点已实现；tasks 的 blocked/选中组/压缩摘要、agents/jobs 必要详情已接入统一 Dock，Linux 组合通过 [界面协调阶段](../ui-coordination.md) 验收。真实 goal/tasks/child/jobs/ask 与完整 Starship 发布入口并存通过 [footer 联动阶段](../footer-integration.md) 验收；Windows 布局仍待验收。
 
 影响范围：ui、ask、tasks、agents、jobs、goal 的显示与焦点。
 
 约束：所有本包面板共用预算；布局依据终端尺寸，截断不删除原数据。
 
-相关当前文档：[项目当前状态](../../current/index.md)。
+相关当前文档：[项目当前状态](../../../current/index.md)。
 
 ## 任务列表
 
@@ -19,7 +21,7 @@
 - [x] 协调 goal 状态栏摘要、Dock 去重和原生 footer 额外行占用
 - [x] 注册 subagent/job 活动数量及必要详情，保留已结束详情与手动停止入口
 - [x] 统一刷新和焦点处理（数量/详情分离刷新，既有查看入口保留选中执行与独立阅读状态）
-- [ ] Windows 与真实手机 SSH 验收全部面板并存、滚轮和缩放返回
+- 验收跟踪：Windows 验收全部面板并存、滚轮和缩放返回
 
 ## 验收方式
 
@@ -28,7 +30,7 @@
 ## 关联计划
 
 - [用户询问](ask/index.md)
-- [子代理查看](../../finished/pi-suite/agents/viewer-controls.md)
+- [子代理查看](../agents/viewer-controls.md)
 - [执行任务](jobs/index.md)
 - [goal 状态栏联动](goal-status.md)
 - [公共状态栏摘要与活动数量](status.md)
@@ -37,7 +39,7 @@
 
 tasks 与 agents/jobs 的必要常驻详情统一交给一个 dock 渲染，避免各模块独立决定高度。goal 摘要及 agents/jobs 的活动数量默认通过 Pi setStatus 显示；用户选择 dock 模式时纳入同一预算，对应摘要或计数不在两个位置重复显示。详细内容按需打开；完整数据不因界面折叠而丢失。
 
-布局根据实际终端 rows/columns 决定，不猜测设备类型，不根据 SSH 判断是否为手机。建议默认值：
+布局根据实际终端 rows/columns 决定，不猜测设备类型。建议默认值：
 
 | 可用终端尺寸 | 本包常驻面板 |
 | --- | --- |
@@ -58,7 +60,7 @@ tasks 与 agents/jobs 的必要常驻详情统一交给一个 dock 渲染，避�
 4. 任务最多父子两级，父级标题旁保留“已完成子任务数/当前子任务数”；缩短标题和次要字段，保留完成比例，不使用递归路径或多层缩进。
 5. 父级/独立摘要先分配行，子行使用剩余预算并紧邻父级；选择和排序保持稳定。活动数量与必要详情分别检测变化，等数量的状态或问题变化仍刷新详情；聚合刷新，避免多个面板各自高频刷屏。
 
-手机示意，实际字段按宽度继续缩减：
+窄屏示意，实际字段按宽度继续缩减：
 
 ```text
 任务 3/12 · 进行 1 · 阻塞 2

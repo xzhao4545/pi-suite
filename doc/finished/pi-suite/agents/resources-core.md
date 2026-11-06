@@ -6,4 +6,4 @@
 
 4 项 Linux 真实 SDK/faux 检查覆盖 Pi 配置包、manifest 拼写与优先级、精确排除与目录/单文件、项目不信任、路径及符号链接逃逸、扩展工厂不重复/不执行排除项、晚注册与主动扩大工具范围、直接与嵌套调用、MCP 服务器通配与桥接、技能预加载一次、memory 截断/读写与不建只读目录、父级上下文不含工具输出，以及前台与会话目录选项。
 
-Windows、实际 MCP 服务与更完整资源组合仍在 [扩展专项](../../../todo/pi-suite/agents/extensions.md) 验收；@handle、调度、workflow/RPC 与类型开关继续按原计划导入。稳定规则见 [类型与资源](../../../current/agents/resources.md)，来源见 [上游登记](../../../../third-party/UPSTREAM.md)。
+Windows、实际 MCP 服务与更完整资源组合仍在 [扩展专项](../../../todo/pi-suite/index.md) 验收；@handle、调度、workflow/RPC 与类型开关继续按原计划导入。稳定规则见 [类型与资源](../../../current/agents/resources.md)，来源见 [上游登记](../../../../third-party/UPSTREAM.md)。
