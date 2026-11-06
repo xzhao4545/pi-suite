@@ -19,7 +19,7 @@ import { JobLogView } from '../../src/jobs/log-viewer.ts';
 type View = Component & {handleInput?: (data: string) => void; dispose?: () => void};
 function choose(view: View, value: string) {
   for (let index = 0; index < 15; index++) {
-    if (view.render(120).some(line => stripVTControlCharacters(line).trim().startsWith(`→ ${value}`))) { view.handleInput?.('\r'); return; }
+    if ((view as View & {getSelectedItem?: () => {value: string} | null}).getSelectedItem?.()?.value === value || view.render(120).some(line => stripVTControlCharacters(line).trim().startsWith(`→ ${value}`))) { view.handleInput?.('\r'); return; }
     view.handleInput?.('\x1b[B');
   }
   assert.fail(`No selected row for ${value}: ${view.render(120).map(stripVTControlCharacters).join('\n')}`);
@@ -34,9 +34,9 @@ function scriptUI(ctx: ExtensionContext, steps: ((view: View) => void | Promise<
       dispose = () => view.dispose?.();
       for (const width of [40, 60, 120]) assert.ok(view.render(width).every(line => visibleWidth(line) <= width));
       const step = steps.shift(); assert.ok(step, 'Unexpected custom UI'); await step(view);
-    }).catch(reject);
+    }).catch(error => { open = false; dispose?.(); reject(error); });
   });
-  return {...ctx, ui: {...ctx.ui, custom, select: async (title: string, choices: string[]) => { assert.equal(open, false); return select(title, choices); }}} as ExtensionCommandContext;
+  return {...ctx, ui: {...ctx.ui, notify: (text, type) => { if (type === 'error') assert.fail(text); ctx.ui.notify(text, type); }, custom, select: async (title: string, choices: string[]) => { assert.equal(open, false); return select(title, choices); }}} as ExtensionCommandContext;
 }
 async function outputReady(path: string, marker: string) {
   const deadline = Date.now() + 5000;
@@ -74,18 +74,20 @@ test('agent Transcript reuses owned job UI across child cwd and collected runs, 
     await outputReady(jobs.logPath(ownJob, 'stdout'), 'PARENT_JOB');
     await outputReady(jobs.logPath(childJob, 'stdout'), 'CHILD_JOB');
     parentGate.resolve(); await parent.done.promise;
+    assert.equal(parent.record.toolUses, 1);
+    assert.equal(parent.record.contextUsage?.contextWindow, h.faux.getModel().contextWindow);
     const next = (await agents.send(parent.record.id, 'NEXT_RUN', {ctx}, config)).run; await next.done.promise;
     const nextJob = await owned(next, root, 'NEXT_JOB');
     const unrelated = await agents.start({prompt: 'UNRELATED_RUN', background: false}, {ctx}, config); await unrelated.done.promise;
     const unrelatedJob = await owned(unrelated, root, 'OTHER_JOB');
     agents.sweep(Date.now() + 10 * 60_000 + 1); assert.equal(agents.get(parent.record.id, parent.record.runId).run, undefined);
     let reader!: DetailsView['reader'], offset = 0, expanded = '';
-    const steps = [(view: View) => {
+    const steps = [(view: View) => choose(view, parent.record.runId), (view: View) => {
       assert.ok(view instanceof DetailsView); view.actions.find(action => action.label === 'Tools')!.run();
       reader = view.reader; expanded = reader.render(120).join('\n'); assert.match(expanded, /TOOL_FOLD_CONTENT/);
       reader.scroll(5); reader.query = 'READER_MARKER'; offset = reader.offset; view.actions.find(action => action.label === 'Jobs')!.run();
     }, (view: View) => {
-      const list = view.render(120).join('\n'); assert.ok(list.includes(ownJob.id) && list.includes(childJob.id));
+      const list = view.render(120).join('\n'); assert.ok(list.includes(ownJob.id) && list.includes(childJob.id), list);
       assert.ok(!list.includes(nextJob.id) && !list.includes(unrelatedJob.id)); choose(view, ownJob.id);
     }, (view: View) => {
       assert.ok(view instanceof JobLogView); assert.match(view.reader.render(120).join('\n'), /PARENT_JOB/); view.handleInput('\x1b');
@@ -94,7 +96,7 @@ test('agent Transcript reuses owned job UI across child cwd and collected runs, 
     (view: View) => view.handleInput?.('\x1b'), (view: View) => {
       assert.ok(view instanceof DetailsView); assert.strictEqual(view.reader, reader); assert.equal(reader.offset, offset); assert.equal(reader.query, 'READER_MARKER');
       assert.equal(reader.render(120).join('\n'), expanded); view.handleInput('\x1b');
-    }];
+    }, (view: View) => view.handleInput?.('\x1b')];
     let parentActions = 0, childActions = 0;
     const ui = scriptUI(ctx, steps, (title, choices) => {
       if (title === 'Select agent run') return choices.find(choice => choice.includes(parent.record.runId));
@@ -104,7 +106,7 @@ test('agent Transcript reuses owned job UI across child cwd and collected runs, 
       assert.fail(`Unexpected selection: ${title}`);
     });
     const before = h.faux.state.callCount;
-    await h.session.extensionRunner.getCommand('agents')!.handler('finished', ui);
+    await h.session.extensionRunner.getCommand('subagents')!.handler('finished', ui);
     assert.equal(steps.length, 0); assert.equal(h.faux.state.callCount, before, 'browsing does not invoke a model');
     assert.equal(jobs.peek(ownJob.id).state, 'stopped');
     for (const job of [childJob, nextJob, unrelatedJob]) assert.equal(jobs.peek(job.id).state, 'running');
@@ -140,19 +142,19 @@ test('new-session workspace history exposes owned PTY logs through the same menu
     assert.equal(agents.get(run.record.id).record.ownerSessionId, owner);
     current.faux.setResponses([fauxAssistantMessage('notification received after the reader closes')]);
     let actions = 0;
-    const steps = [(view: View) => choose(view, run.record.id), (view: View) => {
+    const steps = [(view: View) => choose(view, run.record.runId), (view: View) => {
       const menu = view.render(120).join('\n'); assert.ok(!menu.includes('Stop child') && !menu.includes('Model / thinking')); choose(view, 'Jobs');
     }, (view: View) => choose(view, job.id), async (view: View) => {
       assert.ok(view instanceof JobLogView); assert.match(view.reader.render(120).join('\n'), /FOREIGN_JOB/);
       const notice = await jobs.start({cwd: root, command: 'echo queued_notice', ownerSessionId: ctx.sessionManager.getSessionId(), anchorEntryId: null}, testShell());
       await jobs.wait(notice.id); assert.equal(current.faux.state.callCount, 0, 'job results cannot wake the model inside an agent job reader');
       view.handleInput('\x1b');
-    }, (view: View) => view.handleInput?.('\x1b')];
+    }, (view: View) => view.handleInput?.('\x1b'), (view: View) => view.handleInput?.('\x1b')];
     const ui = scriptUI(ctx, steps, (_title, choices) => {
       assert.ok(!choices.includes('Stop job') && !choices.includes('Attach terminal'));
       return actions++ === 0 ? 'Read output' : 'Back';
     });
-    await current.session.extensionRunner.getCommand('agents')!.handler('workspace', ui);
+    await current.session.extensionRunner.getCommand('subagents')!.handler('workspace', ui);
     assert.equal(steps.length, 0); assert.equal(jobs.peek(job.id).state, 'running');
     await current.idle(); assert.equal(current.faux.state.callCount, 1, 'closing all readers releases the pending result once');
   } finally { await runtime.dispose(); rmSync(root, {recursive: true, force: true}); }

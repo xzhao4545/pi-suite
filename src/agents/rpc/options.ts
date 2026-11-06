@@ -4,7 +4,7 @@ import { statSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
 import { Type, type Static } from 'typebox';
 import { Check, Errors } from 'typebox/value';
-import { thinkingSchema } from '../catalog.ts';
+import { thinkingSchema } from '../schema.ts';
 import type { StartAgent, StartOptions } from '../types.ts';
 
 const schema = Type.Object({

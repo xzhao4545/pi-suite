@@ -15,7 +15,6 @@ import { taskFromEntry, workflowEntryData, type OwnedWorkflowTask, type Workflow
 import { createWorkflowFiles, readWorkflowSnapshot, WorkflowStore } from './store.ts';
 import { resolveWorkflowScript } from './saved.ts';
 import { createWorkflowHost } from './host.ts';
-import { runWorkflow } from './runtime/index.ts';
 import { createWorkflowTask, completeWorkflowTask, failWorkflowTask, pauseWorkflowTask, resumeWorkflowTask, resolveResumeTarget, updateWorkflowProgressBatch, workflowResultText, workflowRunId } from './task.ts';
 
 export type WorkflowParams = {script?: string; scriptPath?: string; name?: string; args?: unknown; resumeFromRunId?: string};
@@ -24,6 +23,7 @@ export class WorkflowManager {
   readonly tasks = new Map<string, OwnedWorkflowTask>();
   private runs = new Map<string, {done: Promise<void>; store: WorkflowStore; settled: boolean}>();
   private listeners = new Set<() => void>();
+  private runtime?: Promise<typeof import('./runtime/run.ts')>;
   closed = false;
   constructor(readonly agents: AgentManager, private jobs: () => JobManager) {}
   subscribe(listener: () => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
@@ -48,7 +48,7 @@ export class WorkflowManager {
       const latest = (entry.endTime ?? 0) >= (data.endTime ?? 0) && !workflowActive(entry) ? entry : data;
       const task = taskFromEntry({...latest, notified: data.notified || entry.notified});
       // A saved running snapshot has no thread in this process; preserve its journal for explicit replay.
-      if (workflowActive(task)) { failWorkflowTask(task, 'Workflow no longer has an execution owner; resume its journal from /agents workflows'); }
+      if (workflowActive(task)) { failWorkflowTask(task, 'Workflow no longer has an execution owner; resume its journal from /subagents workflows'); }
       this.agents.restore(task.children);
       this.tasks.set(task.id, task);
     }
@@ -81,6 +81,7 @@ export class WorkflowManager {
   }
   private async execute(task: OwnedWorkflowTask, store: WorkflowStore, host: ReturnType<typeof createWorkflowHost>): Promise<void> {
     try {
+      const { runWorkflow } = await (this.runtime ??= import('./runtime/run.ts'));
       const result = await runWorkflow({script: task.script, args: task.args, host, signal: task.abortController.signal,
         onMeta: meta => { task.meta = meta; task.workflowName = meta.name; },
         journal: {entries: task.replay, append: entry => appendJournal(task.journalPath!, entry)},

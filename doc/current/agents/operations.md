@@ -12,15 +12,17 @@
 
 模型工具默认返回摘要，完整输入、thinking、工具调用和输出通过 agent_read 或原生 transcript 按需读取。workspace 列表发现当前配置工作区的持久历史并合并本进程记录；session 列表与状态数量使用同一直接子级和分支归属过滤。未知 ID 的 agent_list/read/send/stop 先发现并核对当前配置工作区，发送仍需直接父级与分支准入；分页 more 保留 scope。实际目录与引用范围、读取和合并规则见 [持久历史](history.md)。
 
-## /agents
+## /subagents
 
-`/agents` 选择 active、queued、finished 或 all；也可使用 `/agents all` 等直接指定筛选。选择一条 run 后可查看 Transcript、通过 Jobs 查看该 run 子树创建的活动 job、修改该 agent 的 Model / thinking，或选择“Stop child, nested agents and jobs”停止该运行范围。Types · enable / model / thinking 和 `/agents types` 显示全部类型，包括 disabled 类型；Enable、Disable、Use definition 与 Model / thinking 配置类型，写回位置和作用范围见 [类型配置](models.md)。
+`/subagents` 选择 active、queued、finished 或 all；也可使用 `/subagents all` 等直接指定筛选。选择一条 run 后可查看 Transcript、通过 Jobs 查看该 run 子树创建的活动 job、修改该 agent 的 Model / thinking，或选择“Stop child, nested agents and jobs”停止该运行范围。Types 和 `/subagents types` 显示全部类型，包括 disabled 类型；每行显示类型名、启用状态、默认启动会应用的模型和思考强度及来源，Enable、Disable、Use definition 与 Model / thinking 配置类型，写回位置和作用范围见 [类型配置](models.md)。
 
-Workspace records 或 `/agents workspace [active|queued|finished|all]` 查看当前配置工作区的完整记录，默认 all；列表发现保存于默认/当前配置目录及可达引用的其他主会话、分支和 child 历史，按 runId 保持原生选择身份。其他 owner 或当前分支之外的已结算记录提供 Transcript 和只读 Jobs，详情隐藏 Message、Model / thinking、Background 和 Stop subtree，仍可阅读及展开 Tools/Thinking。当前 owner/分支可见的结束记录保留模型覆盖与记录菜单的遗留 job 清理；真实运行句柄沿用既有控制。浏览不切换主会话、不转移归属或通知，发现到的中断运行显示 failed。
+列表顶部可直接输入筛选，检索 ID/runId、名称、类型、状态、模型与 prompt；按当前范围的完整记录筛选，↑↓ 和 PgUp/PgDn 选择，Tab 切换输入/列表/详情焦点，Enter 打开操作。宽屏右侧显示所选 run 的模型/思考强度及来源、上下文占用与模型窗口、工具调用次数、运行时间和任务说明，窄屏改为上下布局。Esc 先离开详情焦点或清空筛选，再退出列表；从操作返回保留筛选、runId 和各项阅读位置。状态/范围切换项保持可达，空结果明确显示。运行统计取所选 run 的 Manager 快照，历史未知上下文显示不可用；统计口径见 [执行与记录](runtime.md)。
 
-Scheduled agents 与 `/agents schedules` 查看当前会话的调度，选择一项后可确认取消；创建使用 agent_start 的 schedule，规则、开关、时间与已触发运行的控制见 [定时调度](schedules.md)。
+Workspace records 或 `/subagents workspace [active|queued|finished|all]` 查看当前配置工作区的完整记录，默认 all；列表发现保存于默认/当前配置目录及可达引用的其他主会话、分支和 child 历史，按 runId 保持原生选择身份。其他 owner 或当前分支之外的已结算记录提供 Transcript 和只读 Jobs，详情隐藏 Message、Model / thinking、Background 和 Stop subtree，仍可阅读及展开 Tools/Thinking。当前 owner/分支可见的结束记录保留模型覆盖与记录菜单的遗留 job 清理；真实运行句柄沿用既有控制。浏览不切换主会话、不转移归属或通知，发现到的中断运行显示 failed。
 
-Workflows 与 `/agents workflows` 查看当前会话与分支的编排、保存资源、阶段、日志和结果，提供暂停/恢复/停止、child 会话和 gate 日志、跳过/重试与 journal 重放；控制条件、开关和按键见 [Workflow 操作](workflow/operations.md)。
+Scheduled agents 与 `/subagents schedules` 查看当前会话的调度，选择一项后可确认取消；创建使用 agent_start 的 schedule，规则、开关、时间与已触发运行的控制见 [定时调度](schedules.md)。
+
+Workflows 与 `/subagents workflows` 查看当前会话与分支的编排、保存资源、阶段、日志和结果，提供暂停/恢复/停止、child 会话和 gate 日志、跳过/重试与 journal 重放；控制条件、开关和按键见 [Workflow 操作](workflow/operations.md)。
 
 查看器复用共享 Transcript 与 DetailsView；Markdown、thinking、工具调用/结果由 Pi 原生组件渲染，使用所选 child 的实际工作目录。工具优先使用对应 child 的渲染定义，持久历史缺少定义时使用 Pi 标准渲染；调用、流式部分输出和最终结果按 toolCallId 配对。稳定消息缓存组件及宽度渲染，每条变化的流式消息和工具部分输出随事件更新；在底部时跟随，向上阅读保留位置。
 
@@ -61,6 +63,6 @@ message 与选项 ID/标题精确匹配时返回 selection，否则在 allowFree
 
 模型与 thinking 分别按调用参数、该 agent 的 individual、agents.types 的对应字段、frontmatter、agents.defaultModel（仅模型）、父级当前值解析。配置逐类型逐字段合并；显式 provider/modelId 在认证目录中不可用时报错指出来源，不跨 Provider 替换；调用参数和 frontmatter 的模糊名仅在匹配唯一时接受。实际 thinking 由 Pi 按模型能力收紧。单独修改从下一次请求生效，结束后的修改用于恢复，详细规则见 [模型配置](models.md)。
 
-外部扩展使用 [跨扩展 RPC](rpc.md) 启动、停止、引导和消费当前会话的顶级结果。指定目标工作目录的 agent 仍按父级工作区显示在 agent_list 和 /agents 中，文件工具使用记录中的实际 cwd。
+外部扩展使用 [跨扩展 RPC](rpc.md) 启动、停止、引导和消费当前会话的顶级结果。指定目标工作目录的 agent 仍按父级工作区显示在 agent_list 和 /subagents 中，文件工具使用记录中的实际 cwd。
 
 [返回 agents](index.md)

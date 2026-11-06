@@ -1,6 +1,6 @@
 # 公共运行时与配置
 
-唯一扩展入口为 src/index.ts；首次真实 session_start 根据 ctx.cwd 读取配置并创建本次扩展激活的模块集合，工具、命令和宿主事件由入口与对应模块注册。当前工具为 ask_user、goal_complete、goal_blocked、goal_wait、task_list、task_edit、job_start、job_list、job_read、job_write、job_stop、agent_start、agent_list、agent_read、agent_send、agent_stop、agent_workflow 和共享 wait，命令为 /goal、/tasks、/jobs、/agents、/suite。
+唯一扩展入口为 src/index.ts；入口先注册 CLI prompt 协议，首次真实 session_start 按需加载 runtime/suite.ts，根据 ctx.cwd 读取配置并创建本次扩展激活的模块集合，工具、命令和宿主事件由公共运行时与对应模块注册。当前工具为 ask_user、goal_complete、goal_blocked、goal_wait、task_list、task_edit、job_start、job_list、job_read、job_write、job_stop、agent_start、agent_list、agent_read、agent_send、agent_stop、agent_workflow 和共享 wait，命令为 /goal、/tasks、/jobs、/subagents、/suite 和默认启用的 /exit。
 
 runtime/tools.ts 的 registerBoundTool 共用 Pi 公开工具注册，刷新描述/schema 时保留当前 active-tool 选择；首次晚注册只按该入口的启用规则加入本工具。agent_start 调度 schema 与 workflow 动态类型描述复用此入口。共享 ID、列表/读取 schema、等待/停止返回类型与错误边界见 [模型工具契约](tools.md)。
 
@@ -10,6 +10,7 @@ runtime/tools.ts 的 registerBoundTool 共用 Pi 公开工具注册，刷新描�
 
 ```json
 {
+  "commands": { "exit": true },
   "modules": { "ask": true },
   "ui": { "maxRows": 6 },
   "ask": { "timeout": 120000, "historyKey": "ctrl+h" },
@@ -22,15 +23,15 @@ runtime/tools.ts 的 registerBoundTool 共用 Pi 公开工具注册，刷新描�
 
 modules.ask、modules.goal、modules.tasks、modules.jobs 与 modules.agents 在本次激活首次真实 session_start 时决定是否注册对应模块；改变开关后使用 /reload 创建新激活，按该会话 cwd 重新准入。new/resume/fork/tree 只重新绑定，沿用本次模块集合；其他配置在绑定时按当前 cwd 读取。共享 goal 状态键的 ownership 按本次是否实际创建 GoalManager 传给 StatusPublisher，不因重绑时配置值变化而越权写入或清除其他 provider 的状态。modules.jobs=false 关闭 job 工具与绑定，agents 的所属 job 查询/查看和主会话 quit 清理仍使用同一进程 owner，边界见 [jobs](../jobs/index.md#结算与停止)。maxRows 范围为 1–6；timeout 为 0–2147483647 的整数毫秒，0 不设期限。historyKey 与 jobs 终端视图的 detachKey（离开视图）、returnKey（交还模型）、transferKey（发送屏幕）使用 Pi 的按键标识。公共显示配置接受 status/dock/hidden，不接管 footer。tasks.reminders 控制临时任务提醒，默认 true；任务摘要共用 Dock，见 [任务操作](../tasks/operations.md)。
 
-`/suite` 通过通知显示部分模块状态、ask 超时与 Dock 行数，只提供查看，不提供配置编辑或保存。通用设置通过上述配置文件修改；类型启用、模型与 thinking 可通过 `/agents types` 编辑。
+`/suite` 使用原生 SettingsList 搜索和编辑全部配置字段，展示默认、用户、项目来源与有效值。通用设置保存后 `/reload` 生效，模块和命令另显示当前激活值。`commands.exit` 默认 true，控制 `/exit` 是否注册；其 handler 取消忙碌操作并通过公开 shutdown 进入原生 quit 清理链。字段编辑、继承恢复、复杂 JSON 设置和生效方式见 [设置与退出操作](settings.md)。类型启用、模型与 thinking 也可通过 `/subagents types` 编辑。
 
 jobs.agents 配置 CLI 键对应的 command 与 args，按键和字段合并用户/项目覆盖。jobs.launchPolicy 为 `{command, decision}` 数组，仅用户文件可设置，project 文件出现该字段时报错；精确命令未匹配时默认询问，即使未设置规则也如此。规则与操作见 [CLI 预设与启动授权](../jobs/launch.md)。启动授权复用内部 AskManager，不受 modules.ask 是否注册 ask_user 工具影响。
 
 runtime/text.ts 提供安全字面量文本转换，供任务说明、pipe 日志与 monitor 事件共用；终端回车覆写等 PTY 语义由 jobs 的终端模块处理。
 
-runtime/json-store.ts 为 TaskStore、ScheduleStore 与 WorkflowStore 提供按目标串行入口、异步 pid:uuid 文件锁、锁内重读、复制后修改、原子保存和快照；领域 schema 与修改规则由具体 Store 定义。Windows 对已有文件的快照也取得同一跨进程锁，避免读取句柄阻止原子替换；缺失文件的快照不创建目录、锁或数据。Windows 删除中的锁文件可能暂时返回 EPERM，仅锁的创建/竞争读取按既有有界等待处理；数据读取、解析和保存错误仍上报。损坏数据保留已有有效缓存并禁止覆盖，锁超时与数据错误使用领域前缀报告。
+runtime/json-store.ts 为 ConfigStore、TaskStore、ScheduleStore 与 WorkflowStore 提供按目标串行入口、异步 pid:uuid 文件锁、锁内重读、复制后修改、原子保存和快照；领域 schema 与修改规则由具体 Store 定义。Windows 对已有文件的快照也取得同一跨进程锁，避免读取句柄阻止原子替换；缺失文件的快照不创建目录、锁或数据。Windows 删除中的锁文件可能暂时返回 EPERM，仅锁的创建/竞争读取按既有有界等待处理；数据读取、解析和保存错误仍上报。损坏数据保留已有有效缓存并禁止覆盖，锁超时与数据错误使用领域前缀报告。
 
-agents.maxConcurrent 限制后台池，maxConcurrentForeground=0 表示前台不限；maxDepth 为包含顶级的会话层数。persistSessions 控制顶级默认持久化；defaultModel 和 types.<规范类型名>.enabled/model/thinking 提供逐字段覆盖。enabled 覆盖 frontmatter 与默认 true，所有新调用共用 catalog 准入。`/agents types` 按字段定位写入用户或项目配置，保存后立即更新内存与 @类型/workflow 说明；已准入执行及 workflow 固定 child resume 保留契约。写入复用共享 schema 与最新文件内容，无效文件拒绝覆盖。启用状态、模型来源、认证要求和单 agent 操作见 [类型配置](../agents/models.md)。
+agents.maxConcurrent 限制后台池，maxConcurrentForeground=0 表示前台不限；maxDepth 为包含顶级的会话层数。persistSessions 控制顶级默认持久化；defaultModel 和 types.<规范类型名>.enabled/model/thinking 提供逐字段覆盖。enabled 覆盖 frontmatter 与默认 true，所有新调用共用 catalog 准入。`/subagents types` 按字段定位写入用户或项目配置，保存后立即更新内存与 @类型/workflow 说明；已准入执行及 workflow 固定 child resume 保留契约。写入复用共享 schema 与最新文件内容，无效文件拒绝覆盖。启用状态、模型来源、认证要求和单 agent 操作见 [类型配置](../agents/models.md)。
 
 agents.packageAgents 接受 boolean 或包名/source 数组，默认加载 Pi 已安装包显式声明的类型；false 和空数组关闭。包根由 Pi 的公共包管理器解析，项目包受父级信任约束，声明与资源范围见 [类型与资源](../agents/resources.md)。
 
@@ -39,6 +40,12 @@ agents.mentions 默认 true，控制 TUI 的 @handle 输入投递与补全。统
 agents.scheduling 默认 true，控制顶级 agent_start 的 schedule 参数、主会话计时器与 Scheduled agents 菜单。绑定时按开关更新工具 schema；关闭后使用 /reload，原调度文件保留。时间和生命周期见 [定时调度](../agents/schedules.md)。
 
 agents.workflows 默认 true，控制主会话 agent_workflow 和 Workflows 菜单；配置或默认工具冲突可撤销本工具，显式启用时报告同名冲突。agents.packageWorkflows 使用 boolean 或包名/source 数组控制包 workflow 发现，项目资源受信任约束。工具、运行控制和恢复见 [Workflow 操作](../agents/workflow/operations.md)。共享 wait 与 goal_wait.waitFor 接受 job_、agent_ 和 wf_ ID，结果消费复用公共通知。
+
+## 加载与首次就绪
+
+仅加载已准入模块的注册栈；agents 所属 job 查询沿用 jobs 模块能力。查看器在首次命令、Ask 界面在首次询问、PTY 后端在首次 PTY 启动、child 执行栈在首次 agent 启动、workflow Worker 在首次编排启动时加载。共享依赖的模块按顺序导入，首次并发执行共享加载 Promise，避免 Pi 的 Jiti 加载器暴露未完成导出。加载失败向原有命令/工具错误边界报告。
+
+首次准入与绑定共享配置快照；每次绑定为 workflow 描述和 mentions 共用一次类型目录快照，关闭 mentions 或非 TUI 时省去该补全的发现工作。类型保存、显式发送刷新、reload 与会话/分支绑定更新快照；所有启用工具、调度、RPC 和首次补全在 session_start 返回前就绪。UI 时钟只读取 Manager 元数据，不扫描历史文件或日志。
 
 ## 会话和通知
 

@@ -127,7 +127,7 @@ test('selected extensions retain late tools; direct and nested calls enforce sco
         const run = [...h.manager.runs.values()][0];
         assert.ok(run.session!.getActiveToolNames().includes('allowed'));
         assert.ok(!run.session!.getActiveToolNames().includes('denied')); assert.ok(!run.session!.getActiveToolNames().includes('lazy'));
-        assert.equal(run.session!.extensionRunner.getCommand('agents'), undefined, 'the suite is injected only as scoped child tools');
+        assert.equal(run.session!.extensionRunner.getCommand('subagents'), undefined, 'the suite is injected only as scoped child tools');
         return fauxAssistantMessage('scope checked');
       },
     ]);

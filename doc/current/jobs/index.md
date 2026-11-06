@@ -101,7 +101,7 @@ PTY 行先按回车覆写转为可见文本，pipe 行去除控制字符。事�
 
 job_start 的启动询问复用 ask 面板：↑/↓ 选择 Allow once 或 Do not launch，Enter 选中，Tab 切到操作栏再 Enter 确认。可进入详情查阅完整命令与 cwd；超时、取消或会话绑定撤销均不启动进程，超时/取消结束本轮自动工作。确认只授权本次最终命令，不写入配置；下次同一命令仍按用户级 launchPolicy 判断。非交互模式只接受精确 allow 规则。配置入口与默认值见 [启动授权](launch.md#启动策略)。
 
-`/jobs [active|finished|all] [workspace]` 打开 job 列表，默认当前会话的活动 job；列表内可切换筛选、范围并翻页。选择 job 后可查看详情、读取各通道、对运行中的 PTY job 打开终端视图（已结束的 PTY 显示最后一屏），以及在确认后停止运行中的 job。只有历史记录的 job 不提供 attach 或 stop。浏览期间暂缓结算通知，关闭后合并送达。
+`/jobs [active|finished|all] [workspace]` 打开 job 列表，默认当前会话的活动 job；列表内可切换状态、范围并输入检索 ID、名称、状态、完整命令和 cwd；检索覆盖当前范围完整元数据集合，↑↓ / PgUp/PgDn 选择，Tab 切换输入/列表/详情。宽屏右侧显示运行时长、完整命令、cwd、模式、退出和清理信息，窄屏采用上下布局；Enter 打开操作，Esc 先离开详情或清空筛选，再退出。返回列表保留查询、job ID 和详情阅读位置。运行变化通过 Manager 订阅刷新，活动时每秒更新时间，时钟不读取历史文件或完整日志。选择 job 后可查看详情、读取各通道、对运行中的 PTY job 打开终端视图（已结束的 PTY 显示最后一屏），以及在确认后停止运行中的 job。只有历史记录的 job 不提供 attach 或 stop。浏览期间暂缓结算通知，关闭后合并送达。
 
 当前执行协议可用时，已结算且 cleanup 不是 pending/unconfirmed 的记录提供 `Clear history`；用户确认 `Delete history and logs?` 后，删除该 job 的元数据与全部输入、输出和 monitor 日志。JobManager 等待已有结算、输入/事件写入和保存队列，重试未保存的终态，再由 JobStore 复核磁盘状态后删除目录；删除期间拒绝重复清理，晚到的通知消费不重新创建历史，已排队的结果与事件通知一并撤销。该操作不会停止进程或使用历史 PID，活动与未确认记录、只读 agents 历史及执行协议受限的 owner 不提供清理入口。
 

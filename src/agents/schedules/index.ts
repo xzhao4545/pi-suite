@@ -97,7 +97,7 @@ export class AgentScheduler {
   }
   private error(activation: Activation, id: string, occurrence: string, error: string): void {
     this.pi.events.emit('subagents:scheduled', { type: 'error', jobId: id, error });
-    this.notices.enqueue(activation.binding.sessionId, `schedule:${id}:${occurrence}`, `Schedule ${id} failed: ${error}\nManage: /agents schedules`);
+    this.notices.enqueue(activation.binding.sessionId, `schedule:${id}:${occurrence}`, `Schedule ${id} failed: ${error}\nManage: /subagents schedules`);
   }
   private dispatch(activation: Activation, id: string, deadline: string): void {
     const work = this.fire(activation, id, deadline).catch(error => this.error(activation, id, deadline, String(error)))

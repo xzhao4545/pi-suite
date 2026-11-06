@@ -22,7 +22,7 @@ pi -e ./src/index.ts
 
 Pi 直接加载 TypeScript 扩展，因此当前不需要构建产物。
 
-运行时使用 /suite 查看配置，询问操作和配置说明见 [ask](./doc/current/ask/index.md) 与 [公共运行时](./doc/current/runtime/index.md)。启用 ask_user 时从实际加载列表移除原版 pi-ask-user，以免同名工具重复注册。
+运行时使用 /suite 搜索、修改和保存配置，通用设置保存后 /reload 生效；/subagents 查看子代理，默认启用的 /exit 使用原生退出清理，询问操作和配置说明见 [ask](./doc/current/ask/index.md) 与 [公共运行时](./doc/current/runtime/index.md)。启用 ask_user 时从实际加载列表移除原版 pi-ask-user，以免同名工具重复注册。
 
 ## 目录
 

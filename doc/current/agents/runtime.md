@@ -2,6 +2,8 @@
 
 每个可恢复会话使用稳定 `agent_` ID，每次执行使用独立 `run_` ID。运行句柄、取消信号、父级引用、用量与槽位归属于 run；同一 agent 只能有一个未结算执行，已有停止/清理操作未返回时也不准入新的 run。恢复通过 agent_send 发起新执行，读取或打开历史不启动模型。
 
+上下文统计保存为 `contextUsage {tokens, contextWindow, percent}`，沿用 SDK getContextUsage 的当前上下文估算；tokens/percent 为 null 表示未知，累计 usage tokens 与上下文占用分别展示。runner 在工具开始、回合结束和压缩/usage 边界更新，模型切换及 child 关闭保存最后快照；恢复的新 run 重新统计，历史缺少快照时标记不可用。toolUses 按本 run 的工具执行开始计数，包含失败调用；elapsedMs 由 Manager 的单调时钟派生，排队等待单独展示。
+
 ## 并发与生命周期
 
 顶级 child 进入一个共享队列，分别按后台与前台池空位取最早可运行项，保持各池 FIFO。后台默认 10，前台默认不限。启动时保存 chargedPool，动态调整上限时既有槽位的收费归属保持稳定；结算释放槽位，停止排队项释放其等待者。嵌套与 workflow child 不占池，避免父级等待其 child 时互相占位；workflow 的并发由自身控制。

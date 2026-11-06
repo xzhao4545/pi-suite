@@ -8,7 +8,6 @@ import { resolveWorkspace } from './workspace.ts';
 import { isActive, isTerminal, settleExit } from './state.ts';
 import { stopTracked, stopTrackedSync, type Tracked } from './backends/process.ts';
 import { launchPipe } from './backends/pipe.ts';
-import { launchPty } from './backends/pty-job.ts';
 import type { ResolvedShellConfig } from './terminal/shell.ts';
 import type { PtyTerminalSession } from './terminal/session.ts';
 import { ToolError } from '../runtime/errors.ts';
@@ -19,6 +18,7 @@ import { outputPreview } from './output.ts';
 import { errnoCode, isWorkflowGate, LIMITS, type InputRecord, type JobSummary, type StartRequest, type StopReason, type StopResult, type Stream, type Workspace } from './types.ts';
 
 const JOB_ID = /^job_[a-f0-9]{8}$/;
+let ptyBackend: Promise<typeof import('./backends/pty-job.ts')> | undefined;
 type Owned = {
   job: JobSummary; run?: Tracked; launched: boolean; ready: PromiseWithResolvers<void>;
   settlement?: Promise<void>;
@@ -144,7 +144,7 @@ export class JobManager {
       await this.store.create(job);
       if (job.stopReason || this.closing || signal?.aborted) throw new ToolError('START_NOT_COMMITTED', 'Start cancelled before spawn', id);
       const run = mode === 'pty'
-        ? await launchPty({ command: job.command, cwd: job.cwd, shell, outputPath: this.store.logPath(job, 'output'), cols: request.cols ?? 120, rows: request.rows ?? 30 })
+        ? await (await (ptyBackend ??= import('./backends/pty-job.ts'))).launchPty({ command: job.command, cwd: job.cwd, shell, outputPath: this.store.logPath(job, 'output'), cols: request.cols ?? 120, rows: request.rows ?? 30 })
         : await launchPipe({ command: job.command, cwd: job.cwd, shell, stdoutPath: this.store.logPath(job, 'stdout'), stderrPath: this.store.logPath(job, 'stderr') });
       this.install(item, run, monitor && { monitor, shell });
       if (request.closeInput) run.endInput?.();

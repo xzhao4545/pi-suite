@@ -5,7 +5,7 @@ import { Type, type Static } from "typebox";
 import { Value } from "typebox/value";
 import { Key, type KeyId } from "@earendil-works/pi-tui";
 import { compileLaunchPolicy, mergePresets, policySchema, presetsSchema, type LaunchDecision, type Preset } from "../jobs/launch/config.ts";
-import { thinkingSchema } from "../agents/catalog.ts";
+import { thinkingSchema } from "../agents/schema.ts";
 import type { AgentTypeSettings } from "../agents/types.ts";
 
 const keyNames = Object.values(Key).flatMap(key => typeof key === "string"
@@ -14,6 +14,7 @@ const keyPattern = `^(?:(?:ctrl|alt|shift|super)\\+)*(?:[a-z0-9]|${keyNames.join
 
 const display = Type.String({ enum: ["status", "dock", "hidden"] });
 export const configSchema = Type.Object({
+  commands: Type.Optional(Type.Object({ exit: Type.Optional(Type.Boolean()) }, { additionalProperties: false })),
   modules: Type.Optional(Type.Object({
     ask: Type.Optional(Type.Boolean()), tasks: Type.Optional(Type.Boolean()),
     jobs: Type.Optional(Type.Boolean()), goal: Type.Optional(Type.Boolean()),
@@ -51,6 +52,7 @@ export const configSchema = Type.Object({
 
 export type DisplayMode = "status" | "dock" | "hidden";
 export interface SuiteConfig {
+  commands: { exit: boolean };
   modules: Record<"ask" | "tasks" | "jobs" | "goal" | "agents", boolean>;
   ui: { maxRows: number };
   ask: { timeout: number; historyKey: KeyId };
@@ -65,6 +67,7 @@ export interface SuiteConfig {
     agents: Record<string, Preset>; launchPolicy: (command: string) => LaunchDecision };
 }
 export const defaults: SuiteConfig = {
+  commands: { exit: true },
   modules: { ask: true, tasks: true, jobs: true, goal: true, agents: true },
   ui: { maxRows: 6 }, ask: { timeout: 120000, historyKey: "ctrl+h" },
   goal: { display: "status" }, agents: { display: "status", maxConcurrent: 10, maxConcurrentForeground: 0,

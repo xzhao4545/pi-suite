@@ -122,7 +122,7 @@ test('native schedule registration validates combinations, offers value-based ca
     const first = (await call(h, { prompt: 'first', name: names[0], schedule: '+30d' })).details.schedule!;
     const second = (await call(h, { prompt: 'second', name: names[1], schedule: '5m' })).details.schedule!;
     assert.ok(first.nextRun); assert.equal(h.manager.runs.size, 0);
-    const command = h.session.extensionRunner.getCommand('agents')!;
+    const command = h.session.extensionRunner.getCommand('subagents')!;
     let confirmed = '';
     const custom: ExtensionContext['ui']['custom'] = async factory => new Promise(resolve => {
         Promise.resolve(factory(terminal(), h.ctx.ui.theme, {} as never, resolve)).then(view => {

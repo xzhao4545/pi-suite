@@ -1,9 +1,11 @@
 # Suite 设置与原生退出别名
 
+状态：已完成。全部配置字段、两层编辑/继承和 `/reload` 命令准入通过真实加载验证；退出复用宿主生命周期。
+
 ## Suite 设置入口
 
-- [ ] `/suite` 提供可编辑设置界面，并显示有效值、来源、写入范围和生效方式。
-- [ ] 设置保存复用公共配置 schema、合并与写入能力，保留未修改字段。
+- [x] `/suite` 提供可编辑设置界面，并显示有效值、来源、写入范围和生效方式。
+- [x] 设置保存复用公共配置 schema、合并与写入能力，保留未修改字段。
 
 ### 已确认的问题
 
@@ -25,8 +27,8 @@
 
 ## Exit 原生退出别名
 
-- [ ] 添加 `/exit`，默认启用，可在 `/suite` 和配置文件中关闭。
-- [ ] 退出调用原生 quit 处理链，保持其退出时机和清理语义。
+- [x] 添加 `/exit`，默认启用，可在 `/suite` 和配置文件中关闭。
+- [x] 退出调用原生 quit 处理链，保持其退出时机和清理语义。
 
 ### 配置与注册方案
 
@@ -36,7 +38,7 @@
 
 Pi 1.5.0 的交互层对 `/quit` 直接调用 `InteractiveMode.shutdown()`；扩展公开 API 提供 `ctx.shutdown()`，最终进入同一宿主退出清理流程。不过，绑定的 shutdown handler 在主会话忙碌时只设置 `shutdownRequested`，等待 `agent_settled`；原生 `/quit` 直接开始退出。当前公开 API 没有调用内置命令 handler 的通用入口，`pi.sendUserMessage('/quit')` 也不等价于执行该内置命令，不能用它实现转发。
 
-为满足“直接调用原有 quit”的要求，实施前须补齐宿主公开的 quit 调用/命令别名能力，或统一公开 shutdown 与原生 quit 的即时退出契约，再由 `/exit` 的薄 handler 调用。仅调用现有 `ctx.shutdown()` 并忽略忙碌状态差异不能视为完成。若通过依赖升级解决，需验证实际安装的修复版本；若需修改宿主，应让能力回到 Pi 的公共命令/生命周期层，不从扩展访问 `InteractiveMode` 私有成员。
+实施采用公开 `ctx.abort()` 与 `ctx.waitForIdle()`：忙碌时先取消并等待当前操作，再调用 `ctx.shutdown()` 进入原生 quit；不依赖生成结束事件，因此手动压缩等没有 agent_settled 的操作也能退出。公开能力足以完成同一退出清理链，无需宿主私有访问或依赖补丁。实际 Pi CLI 的空闲、生成、工具执行和手动压缩退出、备用屏幕恢复及 PTY job 清理通过；生成中的 /quit 对照具有相同清理结果。
 
 扩展不得复制进程清理代码、直接 `process.exit`、向自身发信号、模拟按键，或自行发送 `session_shutdown`。agents/jobs/workflows、调度和通知清理继续由原生退出触发的现有 `session_shutdown(reason='quit')` 链负责。
 

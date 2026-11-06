@@ -13,22 +13,26 @@ export interface ListRow { job: JobSummary; live: boolean; unsettled: boolean }
 export interface ListResult { rows: ListRow[]; nextCursor?: string; errors: string[] }
 export interface SessionScope { jobs(): JobSummary[]; visible(job: JobSummary): boolean }
 
-export async function listJobs(manager: JobReader, workspace: Workspace, query: ListQuery, session?: SessionScope): Promise<ListResult> {
-  const { jobs, errors } = await manager.list(workspace);
+export function selectJobRows(jobs: { job: JobSummary; live: boolean }[], query: Pick<ListQuery, 'scope' | 'state' | 'sessionId'>, session?: SessionScope): ListRow[] {
   const merged = new Map(jobs.map(row => [row.job.id, row]));
   // Storage yields to lifecycle changes; use current owned views when merging live jobs.
   if (query.scope === 'session') for (const job of session?.jobs() ?? []) merged.set(job.id, {job, live: true});
-  const rows = [...merged.values()].map(({ job, live }) => ({ job, live, unsettled: bucket(job, live) === 'unsettled' }))
+  return [...merged.values()].map(({ job, live }) => ({ job, live, unsettled: bucket(job, live) === 'unsettled' }))
     .filter(row => !isWorkflowGate(row.job) && (query.scope === 'workspace' || (session ? session.visible(row.job) : row.job.ownerSessionId === query.sessionId)) &&
       (query.state === 'all' || bucket(row.job, row.live) === query.state));
-  const { page, nextCursor } = paginate(rows, row => row.job, query.cursor, query.limit);
+}
+export async function listJobs(manager: JobReader, workspace: Workspace, query: ListQuery, session?: SessionScope): Promise<ListResult> {
+  const { jobs, errors } = await manager.list(workspace);
+  const { page, nextCursor } = paginate(selectJobRows(jobs, query, session), row => row.job, query.cursor, query.limit);
   return { rows: page, nextCursor, errors };
 }
-export function jobDetail(job: JobSummary): string[] {
+export function jobDetail(job: JobSummary, fullCommand = false): string[] {
   return [
     `name: ${displayName(job)}`, `cwd: ${job.cwd}`,
-    `command: ${job.command.length > 2000 ? `${job.command.slice(0, 2000)}… [${job.command.length} chars]` : job.command}`,
+    `mode: ${job.mode}`, `state: ${job.state}`, `runtime: ${job.elapsedMs === undefined ? 'not started' : `${(job.elapsedMs / 1000).toFixed(1)}s`}`,
+    `command: ${!fullCommand && job.command.length > 2000 ? `${job.command.slice(0, 2000)}… [${job.command.length} chars]` : job.command}`,
     `created ${job.createdAt}${job.startedAt ? ` · started ${job.startedAt}` : ''}${job.endedAt ? ` · ended ${job.endedAt}` : ''}`,
+    ...(job.exitCode !== null || job.signal ? [`exit: ${job.exitCode ?? job.signal}`] : []),
     ...(job.timeoutMs ? [`timeoutMs: ${job.timeoutMs}`] : []),
     ...(job.handsFree ? [`supervision: ${job.handsFree.config.mode} · updates ${job.handsFree.updates} · output budget ${job.handsFree.totalCharsSent}/${job.handsFree.config.maxTotalChars} chars`] : []),
     `cleanup: ${job.cleanup.state}${job.cleanup.error ? ` (${job.cleanup.error})` : ''}`,

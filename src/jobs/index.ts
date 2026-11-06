@@ -13,7 +13,7 @@ import { isWorkflowGate, type JobSummary, type Workspace } from './types.ts';
 import type { MonitorEvent } from './monitors/runtime.ts';
 import type { HandsFreeUpdate } from './monitors/hands-free.ts';
 import type { JobControl } from './control.ts';
-import { listJobs, type ListQuery, type SessionScope } from './query.ts';
+import { listJobs, selectJobRows, type ListQuery, type ListRow, type SessionScope } from './query.ts';
 
 export function displayName(job: JobSummary): string {
   return stripVTControlCharacters(job.name).replace(/[\x00-\x1f\x7f-\x9f]/g, ' ').trim() || job.id;
@@ -106,6 +106,22 @@ export class JobsModule implements Waitable {
   list(workspace: Workspace, query: Omit<ListQuery, 'sessionId'>, ctx: ExtensionContext) {
     return listJobs(this.control(), workspace, {...query, sessionId: ctx.sessionManager.getSessionId()},
       query.scope === 'session' ? this.sessionScope(ctx) : undefined);
+  }
+  /** Browsing updates owned metadata in memory; timer ticks never reread every history file. */
+  browseRows(rows: ListRow[], query: Pick<ListQuery, 'scope' | 'state'>, ctx: ExtensionContext): ListRow[] {
+    const current = this.sessionScope(ctx);
+    const loaded = rows.flatMap(row => {
+      if (!row.live) return [row];
+      try { return [{ ...row, job: this.control().peek(row.job.id) }]; }
+      catch (error) {
+        // A settled job can be cleared by another command while this browser is open.
+        // Owners survive reload, so match the public error code across module instances.
+        if (error instanceof Error && 'code' in error && error.code === 'NOT_FOUND') return [];
+        throw error;
+      }
+    });
+    if (query.scope === 'workspace') for (const job of current.jobs()) loaded.push({ job, live: true, unsettled: false });
+    return selectJobRows(loaded, { ...query, sessionId: ctx.sessionManager.getSessionId() }, current);
   }
   get executionAvailable(): boolean { return this.runtime().mode === 'active'; }
   selectJob(id: string): void { this.selectedJob = id; this.refresh(); }

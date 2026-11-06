@@ -1,8 +1,10 @@
 # Subagents 与 jobs 列表、Types 展示
 
+状态：已完成。公共 BrowserView 接入 session/workspace 和所属 jobs 列表，统计使用现有 Manager/run 数据；同名多 run、完整集合筛选、窄屏、阅读往返及所有权检查通过。
+
 ## 命令命名
 
-- [ ] 将用户命令 `/agents` 及其子命令改为 `/subagents`。
+- [x] 将用户命令 `/agents` 及其子命令改为 `/subagents`。
 
 现状：`src/agents/viewer.ts` 的 `registerAgentsCommand` 注册 `agents`，支持状态、workspace、types、schedules 与 workflows 入口。工具描述、调度提示和当前操作文档也包含该入口。
 
@@ -12,9 +14,9 @@
 
 ## 列表筛选与右侧详情
 
-- [ ] agents/jobs 列表支持输入筛选，选中项变化时右侧立即显示详情。
-- [ ] 运行信息实时更新，退出详情后保留筛选词、选中身份及阅读位置。
-- [ ] 同时覆盖 session/workspace 列表与 agent 所属 jobs 列表，保留各自范围和控制权限。
+- [x] agents/jobs 列表支持输入筛选，选中项变化时右侧立即显示详情。
+- [x] 运行信息实时更新，退出详情后保留筛选词、选中身份及阅读位置。
+- [x] 同时覆盖 session/workspace 列表与 agent 所属 jobs 列表，保留各自范围和控制权限。
 
 ### 已确认的问题
 
@@ -51,8 +53,8 @@
 
 ## Types 展示
 
-- [ ] Types 列表显示类型名、启用状态、当前上下文中默认启动会应用的模型与思考强度。
-- [ ] 顶层菜单标签改为 `Types`，删除 `· enable / model / thinking`；进入后的设置动作仍保留。
+- [x] Types 列表显示类型名、启用状态、当前上下文中默认启动会应用的模型与思考强度。
+- [x] 顶层菜单标签改为 `Types`，删除 `· enable / model / thinking`；进入后的设置动作仍保留。
 
 现状：`src/agents/model-editor.ts` 的 `showAgentTypes` 仅拼接类型名和 enabled/disabled。类型和启动设置已有 `agentTypes` / `resolveSettings`，但列表没有调用设置解析。顶层冗长文案来自 `src/agents/viewer.ts` 的硬编码字符串。
 

@@ -10,7 +10,7 @@ import { resolveWorkspace } from './workspace.ts';
 import { isTerminal } from './state.ts';
 import { JobsModule, displayName, summaryLine } from './index.ts';
 import { jobDetail, readJobLog } from './query.ts';
-import { attachJob, screenMessage, type ViewerDeps } from './viewer.ts';
+import type { ViewerDeps } from './viewer.ts';
 import { monitorSchema } from './monitors/compile.ts';
 import { handsFreeSchema } from './monitors/hands-free.ts';
 import type { Creator, InputRecord, JobSummary, Stream } from './types.ts';
@@ -76,6 +76,7 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: Vie
       }
       const next = `read: job_read({"id":"${job.id}"})${job.mode === 'pty' ? ` · input: job_write({"id":"${job.id}","input":"…","submit":true})` : ''}`;
       if (!attach) return text([summaryLine(job), `name: ${displayName(job)}`, next], { job });
+      const { attachJob, screenMessage } = await import('./viewer.ts');
       const exit = await attachJob(ctx, viewer, job.id, signal);
       const now = manager.peek(job.id);
       return text([summaryLine(now), `name: ${displayName(now)}`,

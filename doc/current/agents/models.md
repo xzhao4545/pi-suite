@@ -1,6 +1,8 @@
 # 类型、模型与 thinking 配置
 
-`/agents types` 或 `/agents` 的类型入口配置启用状态、模型与 thinking；记录菜单和 Transcript 的 Model / thinking 操作配置单个 agent。模型修改依次选择模型与 thinking，任一步 Esc 取消整次修改。
+`/subagents types` 或 `/subagents` 的类型入口配置启用状态、模型与 thinking；记录菜单和 Transcript 的 Model / thinking 操作配置单个 agent。模型修改依次选择模型与 thinking，任一步 Esc 取消整次修改。
+
+Types 按无调用参数、无 individual 覆盖的默认启动设置解析当前有效模型/思考强度，实际级别使用 Pi 的模型能力约束。来源随值展示；不可用模型在对应行显示错误并允许进入修正，预览不创建 child 会话。
 
 模型列表来自 Pi 的 `modelRegistry.getAvailable()`，包含全部已认证模型，不受父会话 scoped models 限制。共享选择器复用 Pi 原生 SelectList，显示 provider/modelId，长行按可见宽度截断，完整值保持独立；↑↓ 和 PageUp/PageDown 移动，Enter 提交。thinking 使用 pi-ai 的模型能力列表，非推理模型仅提供 No override 与 off。
 

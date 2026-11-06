@@ -10,6 +10,7 @@ import { JobsModule, displayName, summaryLine } from './index.ts';
 import { jobDetail, streamsOf, type ListScope, type ListState } from './query.ts';
 import { showJobLog } from './log-viewer.ts';
 import type { JobSummary, Stream } from './types.ts';
+import { browse, browseState } from '../ui/browser.ts';
 
 export interface ViewerDeps { jobs: JobsModule; dock: Dock; notifications: Notifications; keys: () => TerminalKeys }
 
@@ -52,24 +53,27 @@ export function screenMessage(job: JobSummary, screen: string[]): string {
 
 const STATES: ListState[] = ['active', 'finished', 'all'];
 
-async function pickJob(ctx: ExtensionCommandContext, deps: ViewerDeps, state: ListState, scope: ListScope): Promise<JobSummary | undefined> {
+async function pickJob(pi: ExtensionAPI, ctx: ExtensionCommandContext, deps: ViewerDeps, state: ListState, scope: ListScope): Promise<void> {
   const workspace = await resolveWorkspace(ctx.cwd);
-  let cursor: string | undefined;
+  const viewState = browseState();
   for (;;) {
-    const { rows, nextCursor, errors } = await deps.jobs.list(workspace, { state, scope, cursor, limit: 20 }, ctx);
+    const { rows, errors } = await deps.jobs.list(workspace, { state: 'all', scope, limit: Number.MAX_SAFE_INTEGER }, ctx);
     for (const error of errors) ctx.ui.notify(`history error: ${error}`, 'warning');
-    const labels = new Map(rows.map(row => [`${summaryLine(row.job)} · ${displayName(row.job)}${row.unsettled ? ' · unsettled history' : ''}`, row.job]));
-    const more = nextCursor ? 'More…' : undefined;
-    const filters = STATES.filter(item => item !== state).map(item => `Show ${item}`);
-    const scopeToggle = scope === 'session' ? 'Show whole workspace' : 'Show this session only';
-    if (!rows.length) ctx.ui.notify(`No ${state} jobs (${scope})`);
-    const choice = await ctx.ui.select(`Jobs · ${state} · ${scope}`, [...labels.keys(), ...more ? [more] : [], ...filters, scopeToggle]);
+    const current = () => deps.jobs.browseRows(rows, { state, scope }, ctx);
+    const choice = await browse(ctx, deps.dock, { title: `Jobs · ${state} · ${scope}`, state: viewState,
+      subscribe: refresh => deps.jobs.control().subscribe(refresh), ticking: () => current().some(row => isActive(row.job)),
+      items: () => [...current().map(({ job, live, unsettled }) => ({ value: job.id,
+        label: `${summaryLine(job)} · ${displayName(job)}${unsettled ? ' · unsettled history' : ''}`,
+        search: `${job.id} ${displayName(job)} ${job.state} ${job.command} ${job.cwd}`,
+        details: () => [`ID: ${job.id}`, ...jobDetail(job, true), ...live ? [] : ['history only: not controlled by this Pi process']].join('\n'),
+      })), ...STATES.filter(item => item !== state).map(value => ({ value: `state:${value}`, label: `Show ${value}`, pinned: true })),
+        { value: 'scope', label: scope === 'session' ? 'Show whole workspace' : 'Show this session only', pinned: true }],
+    });
     if (choice === undefined) return;
-    if (choice === more) { cursor = nextCursor; continue; }
-    if (choice === scopeToggle) { scope = scope === 'session' ? 'workspace' : 'session'; cursor = undefined; continue; }
-    const filter = STATES.find(item => choice === `Show ${item}`);
-    if (filter) { state = filter; cursor = undefined; continue; }
-    return labels.get(choice);
+    if (choice === 'scope') { scope = scope === 'session' ? 'workspace' : 'session'; continue; }
+    if (choice.startsWith('state:')) { state = choice.slice(6) as ListState; continue; }
+    const job = current().find(row => row.job.id === choice)?.job;
+    if (job) await jobActions(pi, ctx, deps, job.id, false, job.cwd);
   }
 }
 
@@ -109,10 +113,7 @@ export async function jobActions(pi: ExtensionAPI, ctx: ExtensionContext, deps: 
 }
 
 /** /jobs [active|finished|all] [workspace]: list, details, logs, attach and stop for the user. */
-export function registerJobsCommand(pi: ExtensionAPI, deps: ViewerDeps): void {
-  pi.registerCommand('jobs', {
-    description: 'Browse jobs: [active|finished|all] [workspace]; view details and logs, attach to pty jobs, stop jobs',
-    handler: async (args, ctx) => {
+export async function showJobs(pi: ExtensionAPI, args: string, ctx: ExtensionCommandContext, deps: ViewerDeps): Promise<void> {
       const words = args.trim().split(/\s+/).filter(Boolean);
       const unknown = words.filter(word => !STATES.includes(word as ListState) && word !== 'workspace');
       if (unknown.length) throw new Error(`Unknown /jobs argument: ${unknown.join(' ')}; use active, finished, all or workspace`);
@@ -120,9 +121,6 @@ export function registerJobsCommand(pi: ExtensionAPI, deps: ViewerDeps): void {
       // Keep notices from starting a model turn while the user browses.
       const release = deps.notifications.hold();
       try {
-        const job = await pickJob(ctx, deps, (words.find(word => STATES.includes(word as ListState)) ?? 'active') as ListState, words.includes('workspace') ? 'workspace' : 'session');
-        if (job) await jobActions(pi, ctx, deps, job.id, false, job.cwd);
+        await pickJob(pi, ctx, deps, (words.find(word => STATES.includes(word as ListState)) ?? 'active') as ListState, words.includes('workspace') ? 'workspace' : 'session');
       } finally { release(); }
-    },
-  });
 }

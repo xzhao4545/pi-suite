@@ -1,4 +1,4 @@
-import type { AgentSession, ExtensionContext, SessionEntry, SessionManager, SessionStats, ToolRenderers } from '@earendil-works/pi-coding-agent';
+import type { AgentSession, ContextUsage, ExtensionContext, SessionEntry, SessionManager, SessionStats, ToolRenderers } from '@earendil-works/pi-coding-agent';
 import type { Model } from '@earendil-works/pi-ai';
 import type { AskParams, AskResult, Question } from '../ask/schema.ts';
 import type { TaskStore } from '../tasks/store.ts';
@@ -31,6 +31,8 @@ export interface AgentRecord {
   model: string; modelSource: ModelSource; thinking: Thinking; thinkingSource: ModelSource;
   sessionFile?: string; endLeafId?: string | null; persisted: boolean;
   result?: string; error?: string; usage?: Pick<SessionStats, 'tokens' | 'cost'>;
+  /** Last SDK context estimate for this run; null tokens mean compaction has no new usage yet. */
+  contextUsage?: ContextUsage;
   taskId?: string; handle?: string; alias?: string; scheduleId?: string; workflowId?: string; description?: string;
   structuredJson?: string; structuredRetried?: boolean; compactionCount?: number;
   turns?: number; toolUses?: number; activity?: string; lastUpdateAt?: string;

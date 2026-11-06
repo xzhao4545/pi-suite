@@ -1,5 +1,6 @@
 import type { Model } from '@earendil-works/pi-ai';
 import { getSupportedThinkingLevels } from '@earendil-works/pi-ai';
+import { clampThinkingLevel } from '@earendil-works/pi-ai/compat';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { SuiteConfig } from '../runtime/config.ts';
 import { agentTypeLocations, agentTypeModelAfterClear, writeAgentType, writeAgentTypeEnabled } from '../runtime/config-edit.ts';
@@ -28,8 +29,17 @@ export async function chooseModelSettings(ctx: ExtensionContext, title: string, 
 
 export async function showAgentTypes(ctx: ExtensionContext, config: SuiteConfig, reload: (cwd: string) => void): Promise<void> {
   const types = agentTypes(ctx.cwd, getAgentDir(), { trusted: ctx.isProjectTrusted(), packageGate: config.agents.packageAgents, typeSettings: config.agents.types });
-  const selected = await selectValue(ctx, 'Agent types', types.map(type => ({ value: type.name,
-    label: `${type.name} · ${type.enabled === false ? 'disabled' : 'enabled'}` })));
+  const selected = await selectValue(ctx, 'Agent types', types.map(type => {
+    let settings: string;
+    try {
+      const resolved = resolveSettings(ctx, type, { prompt: '' }, config);
+      settings = `${resolved.model.provider}/${resolved.model.id} (${resolved.modelSource}) · ${clampThinkingLevel(resolved.model, resolved.thinking)} (${resolved.thinkingSource})`;
+    } catch (error) {
+      // A bad type pin must remain selectable so the user can repair it.
+      settings = error instanceof Error ? error.message : String(error);
+    }
+    return { value: type.name, label: `${type.name} · ${type.enabled === false ? 'disabled' : 'enabled'} · ${settings}` };
+  }));
   if (selected === undefined) return;
   const type = types.find(type => type.name === selected)!;
   const override = config.agents.types[type.name]?.enabled;
@@ -39,7 +49,7 @@ export async function showAgentTypes(ctx: ExtensionContext, config: SuiteConfig,
   ], type.enabled === false ? 'enable' : 'disable');
   if (action === undefined) return;
   if (action === 'model') { await editTypeModel(ctx, config, reload, type); return; }
-  try { writeAgentTypeEnabled(ctx.cwd, type.name, action === 'definition' ? undefined : action === 'enable'); }
+  try { await writeAgentTypeEnabled(ctx.cwd, type.name, action === 'definition' ? undefined : action === 'enable'); }
   finally { reload(ctx.cwd); }
   ctx.ui.notify(`${type.name}: ${action === 'definition' ? 'using definition' : action === 'enable' ? 'enabled' : 'disabled'} for new executions`);
 }
@@ -59,7 +69,7 @@ export async function editTypeModel(ctx: ExtensionContext, config: SuiteConfig, 
     types: { [type.name]: { model: agentTypeModelAfterClear(ctx.cwd, type.name) } } } }).model;
   const changes = await chooseModelSettings(ctx, `${type.name} · model: ${locations.model} · thinking: ${locations.thinking}`, initial, fallback);
   if (!changes) return;
-  try { writeAgentType(ctx.cwd, type.name, changes); }
+  try { await writeAgentType(ctx.cwd, type.name, changes); }
   // Model and thinking may live in different files; reload also reflects any field already
   // saved if the other file reports an I/O error. The write error remains visible to the host.
   finally { reload(ctx.cwd); }
@@ -81,6 +91,7 @@ export async function updateAgentModel(manager: AgentManager, ctx: ExtensionCont
     if (session) {
       await session.setModel(resolved.model, { persist: false });
       session.setThinkingLevel(resolved.thinking, { persist: false });
+      run.record.contextUsage = session.getContextUsage();
     }
     if (!run.settled) Object.assign(run.record, { model: `${resolved.model.provider}/${resolved.model.id}`, modelSource: resolved.modelSource,
       thinking: session?.thinkingLevel ?? resolved.thinking, thinkingSource: resolved.thinkingSource });

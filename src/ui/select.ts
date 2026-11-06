@@ -11,6 +11,7 @@ export function selectValue(ctx: ExtensionContext, title: string, items: SelectI
     return {
       render: (width: number) => [truncateToWidth(title, width), ...list.render(width), truncateToWidth('↑↓ / PgUp PgDn · Enter select · Esc cancel', width)],
       invalidate: () => list.invalidate(),
+      getSelectedItem: () => list.getSelectedItem(),
       handleInput: (data: string) => { list.handleInput(data); tui.requestRender(); },
     };
   });

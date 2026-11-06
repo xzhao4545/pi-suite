@@ -12,11 +12,13 @@ import { workflowSummary, type WorkflowsModule } from './index.ts';
 import { decideWorkflowCollision } from './collisions.ts';
 import { WORKFLOW_ENTRY_TYPE, decodeWorkflowEntry, taskFromEntry } from './entry.ts';
 import { WorkflowProgress } from './ui/progress.ts';
+import type { AgentType } from '../types.ts';
 
 const schema = Type.Object({script: Type.Optional(Type.String({minLength: 1})), scriptPath: Type.Optional(Type.String({minLength: 1})),
   name: Type.Optional(Type.String({minLength: 1})), args: Type.Optional(Type.Any()),
   resumeFromRunId: Type.Optional(Type.String({pattern: '^wf_[a-f0-9]{12}$'}))}, {additionalProperties: false});
-export function registerWorkflowTool(pi: ExtensionAPI, workflows: WorkflowsModule, agents: AgentsModule, config: () => SuiteConfig) {
+export function registerWorkflowTool(pi: ExtensionAPI, workflows: WorkflowsModule, agents: AgentsModule, config: () => SuiteConfig,
+  catalog?: (ctx: ExtensionContext) => AgentType[]) {
   let registered = false, enabled = config().agents.workflows, withdrawn = false;
   const tool: ToolDefinition<typeof schema> = {name: 'agent_workflow', label: 'Workflow', parameters: schema,
     description: fullWorkflowToolDescription.replace('{{typeList}}', 'general-purpose, Explore, Plan and configured agent types.'),
@@ -25,7 +27,7 @@ export function registerWorkflowTool(pi: ExtensionAPI, workflows: WorkflowsModul
       if (!enabled || !config().agents.workflows) throw new ToolError('INVALID_ARGS', 'Workflow launch is disabled for this session');
       const task = await workflows.manager.start(params, agents.scope(ctx), config(), id);
       return textResult([workflowSummary(task), `scriptPath: ${task.scriptPath}`,
-        task.logs.at(-1), `resultPath: ${task.resultPath}`, `wait: wait({"ids":["${task.id}"]}) · manage: /agents workflows`],
+        task.logs.at(-1), `resultPath: ${task.resultPath}`, `wait: wait({"ids":["${task.id}"]}) · manage: /subagents workflows`],
       {id: task.id, status: task.status, scriptPath: task.scriptPath, resultPath: task.resultPath, resumedFrom: task.resumedFrom});
     },
     renderCall(args) { return new Text(`Workflow · ${args.name ?? args.scriptPath ?? 'inline script'}`, 0, 0); },
@@ -42,9 +44,10 @@ export function registerWorkflowTool(pi: ExtensionAPI, workflows: WorkflowsModul
   if (enabled) { pi.registerTool(tool); registered = true; }
   const refreshTypes = (ctx: ExtensionContext) => {
     if (!registered) return;
-    const description = fullWorkflowToolDescription.replace('{{typeList}}', agentTypes(ctx.cwd, getAgentDir(), {
+    const types = catalog ? catalog(ctx) : agentTypes(ctx.cwd, getAgentDir(), {
       trusted: ctx.isProjectTrusted(), packageGate: config().agents.packageAgents, typeSettings: config().agents.types,
-    }).filter(type => type.enabled !== false).map(type => `${type.name}: ${type.description}`).join('\n'));
+    });
+    const description = fullWorkflowToolDescription.replace('{{typeList}}', types.filter(type => type.enabled !== false).map(type => `${type.name}: ${type.description}`).join('\n'));
     if (description !== tool.description) { tool.description = description; registerBoundTool(pi, tool); }
   };
   return {

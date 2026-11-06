@@ -16,6 +16,7 @@ import { agentTypeLocations, writeAgentType } from '../../src/runtime/config-edi
 import { chooseModelSettings, editTypeModel, updateAgentModel } from '../../src/agents/model-editor.ts';
 import { recordsIn } from '../../src/agents/records.ts';
 import { DetailsView } from '../../src/ui/details.ts';
+import { BrowserView } from '../../src/ui/browser.ts';
 
 async function setup() {
   const root = agentDir(), other = fauxProvider({ provider: 'suite-model-test', models: [{ id: 'reasoning', reasoning: true }, { id: 'plain', reasoning: false }] });
@@ -43,7 +44,7 @@ function picker(ctx: ExtensionContext, choices: (string | undefined)[], seen: st
       if (choice === undefined) { view.handleInput?.('\x1b'); return; }
       let found = false;
       for (let i = 0; i < 200; i++) {
-        if (view.render(120).some(line => stripVTControlCharacters(line).trim() === `→ ${choice}`)) { found = true; break; }
+        if (view.render(120).some(line => (view as typeof view & {getSelectedItem?: () => {label: string} | null}).getSelectedItem?.()?.label.startsWith(choice) || stripVTControlCharacters(line).trim().startsWith(`→ ${choice}`))) { found = true; break; }
         view.handleInput?.('\x1b[B');
       }
       assert.ok(found, `Missing choice ${choice}`); view.handleInput?.('\r');
@@ -52,26 +53,26 @@ function picker(ctx: ExtensionContext, choices: (string | undefined)[], seen: st
   return { ...ctx, ui: { ...ctx.ui, custom } };
 }
 
-test('type writes edit each field at its source, retain unrelated latest settings and refuse invalid files', () => {
+test('type writes edit each field at its source, retain unrelated latest settings and refuse invalid files', async () => {
   const root = agentDir(), project = join(root, '.pi', 'pi-suite.json'), user = join(root, 'pi-suite.json');
   try {
-    writeAgentType(root, 'Explore', {}, root); assert.equal(existsSync(user), false);
+    await writeAgentType(root, 'Explore', {}, root); assert.equal(existsSync(user), false);
     mkdirSync(join(root, '.pi'), { recursive: true });
     writeFileSync(user, JSON.stringify({ ask: { timeout: 25 }, agents: { types: { Plan: { thinking: 'low' }, Explore: { model: 'user/model', thinking: 'low' } } } }));
     writeFileSync(project, JSON.stringify({ tasks: { reminders: false }, agents: { types: { Explore: { thinking: 'high' } } } }));
     assert.deepEqual(agentTypeLocations(root, 'Explore', root), { model: user, thinking: project });
-    writeAgentType(root, 'Explore', { model: 'chosen/model', thinking: 'medium' }, root);
+    await writeAgentType(root, 'Explore', { model: 'chosen/model', thinking: 'medium' }, root);
     assert.equal(loadConfig(root, root).agents.types.Explore.model, 'chosen/model');
     assert.equal(loadConfig(root, root).agents.types.Explore.thinking, 'medium');
     const data = JSON.parse(readFileSync(user, 'utf8')); assert.equal(data.ask.timeout, 25); assert.equal(data.agents.types.Plan.thinking, 'low');
     assert.equal(JSON.parse(readFileSync(project, 'utf8')).tasks.reminders, false);
-    writeAgentType(root, 'Explore', {}, root);
+    await writeAgentType(root, 'Explore', {}, root);
     assert.deepEqual(loadConfig(root, root).agents.types.Explore, { thinking: 'low' }, 'deleting a project field exposes its user-level value');
-    writeAgentType(root, 'Explore', {}, root);
+    await writeAgentType(root, 'Explore', {}, root);
     assert.equal(loadConfig(root, root).agents.types.Explore, undefined);
     for (const invalid of ['{broken', '{"unknown":true}', '{"jobs":{"launchPolicy":[]}}']) {
       writeFileSync(project, invalid); const before = readFileSync(user, 'utf8');
-      assert.throws(() => writeAgentType(root, 'Explore', { model: 'chosen/model' }, root));
+      await assert.rejects(() => writeAgentType(root, 'Explore', { model: 'chosen/model' }, root));
       assert.equal(readFileSync(project, 'utf8'), invalid); assert.equal(readFileSync(user, 'utf8'), before);
     }
   } finally { rmSync(root, { recursive: true, force: true }); }
@@ -109,7 +110,7 @@ test('native model picker uses all authenticated models, clamps thinking choices
   } finally { await h.cleanup(); }
 });
 
-test('/agents type edit applies to new tool launches without reload and leaves existing runs and explicit parameters intact', { timeout: 15000 }, async () => {
+test('/subagents type edit applies to new tool launches without reload and leaves existing runs and explicit parameters intact', { timeout: 15000 }, async () => {
   const h = await setup(), gate = Promise.withResolvers<void>(), entered = Promise.withResolvers<void>();
   try {
     h.faux.setResponses([async (_context, options, _state, model) => {
@@ -120,7 +121,7 @@ test('/agents type edit applies to new tool launches without reload and leaves e
     await entered.promise;
     const ctx = picker(h.ctx, ['Explore · enabled', 'Model / thinking', 'suite-model-test/reasoning', 'high']);
     ctx.ui.select = async (_title, values) => values.find(value => value === 'Explore');
-    await h.session.extensionRunner.getCommand('agents')!.handler('types', ctx as ExtensionCommandContext);
+    await h.session.extensionRunner.getCommand('subagents')!.handler('types', ctx as ExtensionCommandContext);
     assert.equal(original.session?.model?.id, 'offline'); assert.equal(original.record.modelSource, 'inherited');
     h.other.setResponses([fauxAssistantMessage('new model result')]);
     h.faux.appendResponses([fauxAssistantMessage(fauxToolCall('agent_start', { type: 'Explore', prompt: 'new task', background: false })), fauxAssistantMessage('parent finished')]);
@@ -187,8 +188,12 @@ test('transcript model editing closes its UI first and preserves the native read
       let dispose: (() => void) | undefined;
       const done = (value: unknown) => { opened = false; dispose?.(); resolve(value as never); };
       Promise.resolve(factory(terminal(), h.ctx.ui.theme, {} as never, done)).then(view => {
-        dispose = (view as { dispose?: () => void }).dispose;
+        dispose = (view as { dispose?: () => void }).dispose?.bind(view);
         for (const width of [40, 120]) assert.ok(view.render(width).every(line => visibleWidth(line) <= width));
+        if (view instanceof BrowserView) {
+          if (phase === 0) view.handleInput('\r'); else view.handleInput('\x1b');
+          return;
+        }
         if (phase++ === 0) {
           assert.ok(view instanceof DetailsView); reader = view.reader;
           reader.scroll(5); reader.query = 'reader'; offset = reader.offset;
@@ -202,7 +207,7 @@ test('transcript model editing closes its UI first and preserves the native read
       }).catch(reject);
     });
     const ctx = { ...h.ctx, ui: { ...h.ctx.ui, custom, select: async (title: string, values: string[]) => title === 'Select agent run' ? values[0] : 'Transcript' } };
-    await h.session.extensionRunner.getCommand('agents')!.handler('finished', ctx as ExtensionCommandContext);
+    await h.session.extensionRunner.getCommand('subagents')!.handler('finished', ctx as ExtensionCommandContext);
     assert.equal(phase, 3); assert.equal(run.record.individual, undefined);
   } finally { await h.cleanup(); }
 });

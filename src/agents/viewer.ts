@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { Dock } from '../ui/dock.ts';
 import type { Notifications } from '../runtime/notifications.ts';
 import { DetailsView } from '../ui/details.ts';
@@ -15,21 +15,28 @@ import { selectValue } from '../ui/select.ts';
 import { jobActions, type ViewerDeps } from '../jobs/viewer.ts';
 import { isActive as jobActive } from '../jobs/state.ts';
 import { displayName as jobName, summaryLine as jobSummary } from '../jobs/index.ts';
+import { browse, browseState } from '../ui/browser.ts';
+import { agentDetails } from './viewer-info.ts';
+import { jobDetail } from '../jobs/query.ts';
+import type { SubagentsDeps } from './commands.ts';
 
 export type AgentJobViewer = { pi: ExtensionAPI; viewer: ViewerDeps };
 async function showAgentJobs(ctx: ExtensionContext, deps: AgentJobViewer, runId: string, readonly: boolean): Promise<void> {
   const release = deps.viewer.notifications.hold();
-  let selected: string | undefined;
+  const viewState = browseState();
   try { for (;;) {
     // Creator ancestry selects the entire execution subtree, including jobs left by
     // collected children. Task references and another run of this agent do not confer ownership.
-    const jobs = deps.viewer.jobs.createdBy([runId]).filter(jobActive);
-    if (!jobs.length) { ctx.ui.notify('No active jobs owned by this run'); return; }
-    selected = await selectValue(ctx, 'Jobs owned by this run and its descendants', jobs.map(job => ({
-      value: job.id, label: `${jobSummary(job)} · ${jobName(job)}`,
-    })), selected);
+    const current = () => deps.viewer.jobs.createdBy([runId]).filter(jobActive);
+    if (!current().length) { ctx.ui.notify('No active jobs owned by this run'); return; }
+    const selected = await browse(ctx, deps.viewer.dock, { title: 'Jobs owned by this run and its descendants', state: viewState,
+      subscribe: refresh => deps.viewer.jobs.control().subscribe(refresh), ticking: () => current().length > 0,
+      items: () => current().map(job => ({ value: job.id, label: `${jobSummary(job)} · ${jobName(job)}`,
+        search: `${job.id} ${jobName(job)} ${job.state} ${job.command} ${job.cwd}`, details: () => jobDetail(job, true).join('\n') })),
+    });
     if (selected === undefined) return;
-    const job = jobs.find(job => job.id === selected)!;
+    const job = current().find(job => job.id === selected);
+    if (!job) continue;
     await jobActions(deps.pi, ctx, deps.viewer, job.id, readonly, job.cwd);
   } } finally { release(); }
 }
@@ -99,32 +106,43 @@ export async function showAgent(ctx: ExtensionContext, agents: Pick<AgentsModule
     } catch (error) { ctx.ui.notify(error instanceof Error ? error.message : String(error), 'error'); }
   } } finally { release(); }
 }
-export function registerAgentsCommand(pi: ExtensionAPI, agents: AgentsModule, dock: Dock, notices: Notifications, config: () => SuiteConfig, reload: (cwd: string) => void, scheduler?: AgentScheduler,
-  workflows?: {available(): boolean; show(ctx: ExtensionContext): Promise<void>}, jobs?: AgentJobViewer): void {
-  pi.registerCommand('agents', { description: 'Read child sessions and workspace history, configure models and stop execution trees', handler: async (args, ctx) => {
+export async function showSubagents(args: string, ctx: ExtensionCommandContext, deps: SubagentsDeps): Promise<void> {
+    const { agents, dock, notices, config, reload, scheduler, workflows, jobs } = deps;
     if (ctx.mode !== 'tui') { ctx.ui.notify('Use agent_list and agent_read outside the terminal UI'); return; }
     const release = notices.hold();
     try {
-      const selectedMenu = args.trim() || await ctx.ui.select('Agents', ['active', 'queued', 'finished', 'all', 'Workspace records', 'Types · enable / model / thinking', ...scheduler?.isActive ? ['Scheduled agents'] : [], ...workflows?.available() ? ['Workflows'] : []]);
+      const selectedMenu = args.trim() || await ctx.ui.select('Subagents', ['active', 'queued', 'finished', 'all', 'Workspace records', 'Types', ...scheduler?.isActive ? ['Scheduled agents'] : [], ...workflows?.available() ? ['Workflows'] : []]);
       if (!selectedMenu) return;
       if (selectedMenu === 'workflows' || selectedMenu === 'Workflows') { await workflows?.show(ctx); return; }
       if (selectedMenu === 'schedules' || selectedMenu === 'Scheduled agents') { if (scheduler) await showSchedules(ctx, scheduler); return; }
-      if (selectedMenu === 'Types · enable / model / thinking' || selectedMenu === 'types') { await showAgentTypes(ctx, config(), reload); return; }
-      const [command, filter] = selectedMenu.split(/\s+/), workspace = command === 'workspace' || selectedMenu === 'Workspace records';
-      const state = workspace ? command === 'workspace' ? filter ?? 'all' : 'all' : selectedMenu;
+      if (selectedMenu === 'Types' || selectedMenu === 'types') { await showAgentTypes(ctx, config(), reload); return; }
+      const [command, filter] = selectedMenu.split(/\s+/);
+      let workspace = command === 'workspace' || selectedMenu === 'Workspace records';
+      let state = workspace ? command === 'workspace' ? filter ?? 'all' : 'all' : selectedMenu;
+      if (!['active', 'queued', 'finished', 'all'].includes(state)) throw new Error(`Unknown /subagents state: ${state}`);
+      const viewState = browseState();
+      let discovered = false;
+      for (;;) {
       const scope = agents.scope(ctx);
-      if (workspace) await agents.manager.discover(scope, config());
-      const records = agents.manager.records().filter(record => workspace
+      if (workspace && !discovered) { await agents.manager.discover(scope, config()); discovered = true; }
+      const records = () => agents.manager.records().filter(record => workspace
         ? recordWorkspace(record) === (scope.run?.configCwd ?? ctx.cwd) && (scope.run || record.workflowId === undefined)
         : agents.manager.visible(record, scope))
         .filter(record => state === 'all' || state === 'active' && executing(record.state) || state === 'queued' && record.state === 'queued' || state === 'finished' && !active(record.state))
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-      if (!records.length) { ctx.ui.notify(`No ${state} agents`); return; }
-      const labels = records.map(summaryLine), selected = workspace
-        ? await selectValue(ctx, 'Workspace agent records', records.map(record => ({ value: record.runId, label: summaryLine(record) })))
-        : await ctx.ui.select('Select agent run', labels);
-      if (!selected) return;
-      const record = workspace ? records.find(record => record.runId === selected)! : records[labels.indexOf(selected)];
+      const selected = await browse(ctx, dock, { title: workspace ? 'Workspace agent records' : `Subagents · ${state}`, state: viewState,
+        subscribe: refresh => agents.manager.subscribe(refresh), ticking: () => records().some(record => active(record.state)),
+        items: () => [...records().map(record => ({ value: record.runId, label: summaryLine(record),
+          search: `${record.id} ${record.runId} ${record.name} ${record.type} ${record.state} ${record.model} ${record.prompt}`,
+          details: () => agentDetails(record) })),
+          ...['active', 'queued', 'finished', 'all'].filter(value => value !== state).map(value => ({ value: `state:${value}`, label: `Show ${value}`, pinned: true })),
+          { value: 'scope', label: workspace ? 'Show this session only' : 'Show whole workspace', pinned: true }],
+      });
+      if (selected === undefined) return;
+      if (selected === 'scope') { workspace = !workspace; discovered = false; continue; }
+      if (selected.startsWith('state:')) { state = selected.slice(6); continue; }
+      const record = records().find(record => record.runId === selected);
+      if (!record) continue;
       agents.selectRun(record.runId);
       const run = agents.manager.get(record.id, record.runId).run;
       // Discovery preserves ownership. Archived foreign branches can be read, while
@@ -140,6 +158,6 @@ export function registerAgentsCommand(pi: ExtensionAPI, agents: AgentsModule, do
         const outcome = await agents.manager.stop(record.id, record.runId);
         ctx.ui.notify(`${record.id} ${outcome.state} · cleanup ${outcome.cleanup}`);
       }
+      }
     } finally { release(); }
-  } });
 }

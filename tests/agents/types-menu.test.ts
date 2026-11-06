@@ -30,7 +30,7 @@ function picker(ctx: ExtensionContext, choices: (string | undefined)[]): Extensi
       const choice = choices.shift();
       if (choice === undefined) { view.handleInput?.('\x1b'); return; }
       for (let i = 0; i < 200; i++) {
-        if (view.render(120).some(line => stripVTControlCharacters(line).trim() === `→ ${choice}`)) {
+        if (view.render(120).some(line => (view as typeof view & {getSelectedItem?: () => {label: string} | null}).getSelectedItem?.()?.label.startsWith(choice) || stripVTControlCharacters(line).trim().startsWith(`→ ${choice}`))) {
           view.handleInput?.('\r'); return;
         }
         view.handleInput?.('\x1b[B');
@@ -41,7 +41,7 @@ function picker(ctx: ExtensionContext, choices: (string | undefined)[]): Extensi
   return { ...ctx, ui: { ...ctx.ui, custom } };
 }
 
-test('type enabled writes preserve model fields, edit the active source and restore exact definition identities', () => {
+test('type enabled writes preserve model fields, edit the active source and restore exact definition identities', async () => {
   const root = agentDir(), user = join(root, 'pi-suite.json'), project = join(root, '.pi', 'pi-suite.json');
   const previousDir = process.env.PI_CODING_AGENT_DIR;
   process.env.PI_CODING_AGENT_DIR = root;
@@ -56,23 +56,23 @@ test('type enabled writes preserve model fields, edit the active source and rest
     const snapshot = agentTypes(root, root, options()).find(type => type.name === 'Explore')!;
     assert.equal(snapshot.enabled, true);
     assert.equal(resolveType(root, 'dormant', options()).enabled, true);
-    writeAgentTypeEnabled(root, 'Explore', false, root);
+    await writeAgentTypeEnabled(root, 'Explore', false, root);
     assert.deepEqual(loadConfig(root, root).agents.types.Explore, { enabled: false, model: 'user/model', thinking: 'high' });
     assert.equal(snapshot.enabled, true, 'changing config cannot rewrite an admitted type snapshot');
     assert.equal(JSON.parse(readFileSync(project, 'utf8')).agents.types.Explore.enabled, false);
     assert.throws(() => resolveType(root, 'Explore', options()), /disabled/);
-    writeAgentType(root, 'Explore', {}, root);
+    await writeAgentType(root, 'Explore', {}, root);
     assert.deepEqual(loadConfig(root, root).agents.types.Explore, { enabled: false, thinking: 'low' });
-    writeAgentTypeEnabled(root, 'Explore', undefined, root);
+    await writeAgentTypeEnabled(root, 'Explore', undefined, root);
     assert.deepEqual(loadConfig(root, root).agents.types.Explore, { thinking: 'low' });
     assert.notEqual(resolveType(root, 'Explore', options()).enabled, false, 'lowercase config keys do not pin another type');
-    writeAgentTypeEnabled(root, 'dormant', undefined, root);
+    await writeAgentTypeEnabled(root, 'dormant', undefined, root);
     assert.throws(() => resolveType(root, 'dormant', options()), /disabled/);
     assert.equal(JSON.parse(readFileSync(user, 'utf8')).ask.timeout, 25);
     assert.equal(JSON.parse(readFileSync(project, 'utf8')).tasks.reminders, false);
     writeFileSync(project, '{"agents":{"types":{"Explore":{"enabled":"no"}}}}');
     const before = readFileSync(user, 'utf8');
-    assert.throws(() => writeAgentTypeEnabled(root, 'Explore', true, root), /Invalid/);
+    await assert.rejects(() => writeAgentTypeEnabled(root, 'Explore', true, root), /Invalid/);
     assert.equal(readFileSync(user, 'utf8'), before);
   } finally {
     if (previousDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
@@ -97,7 +97,7 @@ test('disabled types reject ordinary, nested, workflow and restored launches whi
     }]);
     const run = await manager.start({ type: 'switchable', prompt: 'first', background: false }, scope, config);
     await entered.promise;
-    writeAgentTypeEnabled(root, 'switchable', false, root);
+    await writeAgentTypeEnabled(root, 'switchable', false, root);
     const disabled = loadConfig(root, root), request = { type: 'switchable', prompt: 'new task' };
     await assert.rejects(manager.start(request, scope, disabled), /disabled/);
     await assert.rejects(manager.start(request, { ctx, run }, disabled), /disabled/);
@@ -117,7 +117,7 @@ test('disabled types reject ordinary, nested, workflow and restored launches whi
   } finally { release.resolve(); await h.dispose(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test('/agents types manages disabled types with native selection and immediately refreshes completion and workflow description', { timeout: 15000 }, async () => {
+test('/subagents types manages disabled types with native selection and immediately refreshes completion and workflow description', { timeout: 15000 }, async () => {
   const root = agentDir(), name = 'switchable-with-a-long-resource-identity-for-native-phone-selection';
   const other = fauxProvider({ provider: 'suite-type-menu', models: [{ id: 'plain', reasoning: false }] });
   const chosen = 'suite-type-menu/plain';
@@ -135,7 +135,7 @@ test('/agents types manages disabled types with native selection and immediately
     const description = () => pi.getAllTools().find(tool => tool.name === 'agent_workflow')!.description;
     const active = pi.getActiveTools();
     const menu = async (...choices: (string | undefined)[]) => {
-      await h.session.extensionRunner.getCommand('agents')!.handler('types', picker(ctx, choices) as ExtensionCommandContext);
+      await h.session.extensionRunner.getCommand('subagents')!.handler('types', picker(ctx, choices) as ExtensionCommandContext);
       assert.deepEqual(pi.getActiveTools(), active, 'description refresh preserves user tool choices');
     };
     assert.deepEqual(await complete(), []); assert.doesNotMatch(description(), /SWITCHABLE_DESCRIPTION/);

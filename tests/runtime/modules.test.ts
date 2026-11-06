@@ -54,7 +54,7 @@ test('SDK uses real project module admission, preserves child config and joins d
     for (const [module, name] of Object.entries(moduleTools)) {
       assert.equal(Boolean(session.getToolDefinition(name)), modules[module as keyof typeof initial], name);
       assert.equal(session.getActiveToolNames().includes(name), modules[module as keyof typeof initial], `${name} active`);
-      if (module !== 'ask') assert.equal(Boolean(session.extensionRunner.getCommand(module)), modules[module as keyof typeof initial], `${module} command`);
+      if (module !== 'ask') assert.equal(Boolean(session.extensionRunner.getCommand(module === 'agents' ? 'subagents' : module)), modules[module as keyof typeof initial], `${module} command`);
     }
     assert.ok(session.extensionRunner.getCommand('suite'));
     if (!modules.goal) assert.equal(statuses.get('goal'), 'External goal', 'disabled suite goal preserves another provider');

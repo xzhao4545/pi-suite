@@ -4,7 +4,7 @@ agent_workflow 仅由主会话使用，参数为 script、scriptPath 或 name �
 
 `wait({"ids":["wf_…"]})` 使用公共 any/all 等待，问题、其他对象结算、monitor/hands-free 更新和用户插话仍可提前返回。结束后可通过返回的 resultPath 使用 read 读取完整输出。
 
-## /agents workflows
+## /subagents workflows
 
 Workflows 菜单显示当前会话与分支的运行，按开始时间倒序排列；Saved workflows 选择保存资源，可查看源码或输入 JSON args 启动。运行详情展示名称、说明、状态、agent 进度、阶段、实际模型/thinking、尝试原因、用量、提示/结果预览、错误、日志与最终结果。metadata 阶段标题精确匹配；未声明阶段的 agent 保留独立 Agents 分组。
 

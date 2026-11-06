@@ -11,12 +11,13 @@ import type { registerAgentTools } from '../tools.ts';
 import type { AgentType } from '../types.ts';
 
 export function registerAgentMentions(pi: ExtensionAPI, agents: AgentsModule, binding: SessionBinding,
-  config: () => SuiteConfig, startTool: ReturnType<typeof registerAgentTools>) {
+  config: () => SuiteConfig, startTool: ReturnType<typeof registerAgentTools>, catalog?: (ctx: Parameters<AgentsModule['scope']>[0], fresh?: boolean) => AgentType[]) {
   const clones = new Set<AbortController>();
   let providerRegistered = false, types: AgentType[] = [];
   const enabled = () => config().agents.mentions;
-  const loadTypes = (ctx: Parameters<AgentsModule['scope']>[0], settings = config()) => {
-    types = agentTypes(ctx.cwd, undefined, { trusted: ctx.isProjectTrusted(), packageGate: settings.agents.packageAgents, typeSettings: settings.agents.types });
+  const loadTypes = (ctx: Parameters<AgentsModule['scope']>[0], fresh = false) => {
+    const settings = config();
+    types = catalog ? catalog(ctx, fresh) : agentTypes(ctx.cwd, undefined, { trusted: ctx.isProjectTrusted(), packageGate: settings.agents.packageAgents, typeSettings: settings.agents.types });
   };
   const roster = () => {
     const current = binding.current;
@@ -27,10 +28,11 @@ export function registerAgentMentions(pi: ExtensionAPI, agents: AgentsModule, bi
   pi.on('session_shutdown', cancel);
   const bind = (ctx: Parameters<AgentsModule['scope']>[0]) => {
     cancel();
+    if (ctx.mode !== 'tui' || !enabled()) { types = []; return; }
     // A session switch retains the host's provider stack; reload replaces the activation.
     // Discover types at bind/dispatch, rather than reading every markdown/package per key.
     loadTypes(ctx);
-    if (ctx.mode !== 'tui' || providerRegistered) return;
+    if (providerRegistered) return;
     providerRegistered = true;
     ctx.ui.addAutocompleteProvider(current => createMentionProvider(current, roster, enabled, error => {
       binding.current?.ctx.ui.notify(`File completion failed: ${String(error)}`, 'error');
@@ -45,7 +47,7 @@ export function registerAgentMentions(pi: ExtensionAPI, agents: AgentsModule, bi
     if (!mention) return { action: 'continue' };
     if (isReservedHandle(mention.handle)) return { action: 'transform', text: mention.message, images: event.images };
     if (event.images?.length) return { action: 'continue' };
-    loadTypes(ctx);
+    loadTypes(ctx, true);
     const targets = roster(), alias = stripAgentPrefix(mention.handle);
     const target = resolveMentionTarget(targets, mention.handle) ?? (alias ? resolveMentionTarget(targets, alias) : undefined);
     if (!target) return { action: 'continue' };
@@ -68,5 +70,5 @@ export function registerAgentMentions(pi: ExtensionAPI, agents: AgentsModule, bi
       .finally(() => { clones.delete(controller); });
     return { action: 'handled' };
   });
-  return { bind, refreshTypes() { if (binding.current) loadTypes(binding.current.ctx); } };
+  return { bind, refreshTypes() { if (binding.current && enabled()) loadTypes(binding.current.ctx, true); } };
 }

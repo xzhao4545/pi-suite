@@ -5,7 +5,7 @@ import { basename, join, resolve } from 'node:path';
 import { getAgentDir } from '@earendil-works/pi-coding-agent';
 import { packageResources, type PackageGate } from '../resources/packages.ts';
 import { hasMetaDeclaration } from './meta.ts';
-import { MAX_SCRIPT_LENGTH, type WorkflowScriptSource } from './runtime/index.ts';
+import { MAX_SCRIPT_LENGTH, type WorkflowScriptSource } from './runtime/types.ts';
 
 export type WorkflowResources = { trusted: boolean; packageGate?: PackageGate; agentDir?: string };
 export function savedWorkflowRoots(cwd: string, options: WorkflowResources): string[] {

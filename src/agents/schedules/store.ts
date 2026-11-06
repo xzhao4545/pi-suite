@@ -5,7 +5,7 @@ import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
 import { JsonStore } from '../../runtime/json-store.ts';
 import { ToolError } from '../../runtime/errors.ts';
-import { thinkingSchema } from '../catalog.ts';
+import { thinkingSchema } from '../schema.ts';
 import { parseSchedule, nextOccurrence } from './parse.ts';
 
 const iso = Type.String({ format: 'date-time' });

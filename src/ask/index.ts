@@ -3,11 +3,9 @@ import type { SuiteConfig } from "../runtime/config.ts";
 import type { SessionBinding } from "../runtime/binding.ts";
 import type { Notifications } from "../runtime/notifications.ts";
 import type { Dock } from "../ui/dock.ts";
-import { Transcript } from "../ui/transcript.ts";
-import { AskForm } from "./form.ts";
+import type { AskView } from "./view.ts";
 import { AskQueue, cancelled } from "./queue.ts";
 import { askSchema, normalize, type AskParams, type AskResult, type Question } from "./schema.ts";
-import { AskView } from "./view.ts";
 
 export function askDetails(params: AskParams, questions: Question[], result: AskResult) {
   // Keep the upstream non-answer flag while status distinguishes expiry from cancellation.
@@ -31,6 +29,11 @@ export class AskManager {
     if (!captured || captured.sessionId !== ctx.sessionManager.getSessionId()) return { result: cancelled(), questions };
     if (ctx.mode !== "tui") throw new Error("ask_user requires an interactive Pi terminal");
     const result = await this.queue.enqueue(async () => {
+      const { Transcript } = await import('../ui/transcript.ts');
+      const { AskForm } = await import('./form.ts');
+      const { AskView } = await import('./view.ts');
+      // Loading the first question can outlive a reload or cancellation.
+      if (signal?.aborted) return cancelled();
       if (!this.binding.isCurrent(captured)) return cancelled();
       const release = this.notifications.hold();
       this.dock.setAsk(true);

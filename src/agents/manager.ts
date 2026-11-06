@@ -10,7 +10,7 @@ import { resolveSettings } from './models.ts';
 import { hydrate, transcript } from './records.ts';
 import { AgentHistory } from './history.ts';
 import { answerParent } from './questions.ts';
-import { closeAgent } from './runner.ts';
+import { closeAgent } from './session.ts';
 import { buildParentContext } from './resources/context.ts';
 import { captureParent } from './parent.ts';
 import { assignHandle, handleBase } from './mentions/grammar.ts';
@@ -170,7 +170,7 @@ export class AgentManager {
       model: `${settings.model.provider}/${settings.model.id}`, modelSource: settings.modelSource,
       thinking: settings.thinking, thinkingSource: settings.thinkingSource,
       persisted: previous?.persisted ?? type.persistSession ?? (!scope.run && config.agents.persistSessions), sessionFile: previous?.sessionFile,
-      taskId: request.taskId ?? previous?.taskId, individual: previous?.individual };
+      taskId: request.taskId ?? previous?.taskId, individual: previous?.individual, toolUses: 0, turns: 0 };
     const run: Execution = { record, type, model: settings.model, parent: scope, controller: new AbortController(),
       done: Promise.withResolvers(), pendingMessages: [], consumed: false, notifyResult: options.detached, maxTurns: type.maxTurns ?? request.maxTurns, request, config,
       isolated: type.isolated ?? request.isolated, bypassQueue: options.bypassQueue, configCwd, configTrusted, options,

@@ -4,11 +4,11 @@
 
 ## 任务索引
 
-- [Pi Suite 待办](pi-suite/index.md) — 命令命名、列表筛选与详情、Types 展示、设置入口、退出别名、tmux 复制及启动性能。
+- [Pi Suite 待办](pi-suite/index.md) — 活跃计划与专项归档入口。
 
 Pi Suite Windows 验收见 [收尾记录](../finished/pi-suite/windows-completion.md)；Cursor CLI 验收按用户要求移除。
 
-当前实现与开发方式见 [doc/current](../current/index.md)。完整设计、上游按文件处置与既有验收证据保存在 [设计与实施记录](../finished/pi-suite/design/index.md)，原设计细节保留。既有验收专项仅处理 Windows；手机 SSH 专项取消，Linux 由用户后续在其他设备验收，不阻塞该专项。新增 tmux 复制需求的环境与验收范围单独维护在对应待办中。
+当前实现与开发方式见 [doc/current](../current/index.md)。完整设计、上游按文件处置与既有验收证据保存在 [设计与实施记录](../finished/pi-suite/design/index.md)，原设计细节保留。既有验收专项仅处理 Windows；手机 SSH 专项取消，Linux 由用户后续在其他设备验收，不阻塞该专项。新增交互与启动需求及 tmux 复制的环境与验收范围已归档到 [对应专项](../finished/pi-suite/interaction-improvements/index.md)。
 
 ## 规则
 

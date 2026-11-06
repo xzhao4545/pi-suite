@@ -9,7 +9,7 @@ import { defaultTypes } from './defaults.ts';
 import type { AgentType, AgentTypeSettings } from './types.ts';
 import { packageResources, type PackageGate } from './resources/packages.ts';
 
-export const thinkingSchema = Type.Union([Type.Literal('off'), Type.Literal('minimal'), Type.Literal('low'), Type.Literal('medium'), Type.Literal('high'), Type.Literal('xhigh'), Type.Literal('max')]);
+import { thinkingSchema } from './schema.ts';
 const frontmatter = Type.Object({
   name: Type.Optional(Type.String({ minLength: 1 })), description: Type.Optional(Type.String()),
   display_name: Type.Optional(Type.String({ minLength: 1 })),

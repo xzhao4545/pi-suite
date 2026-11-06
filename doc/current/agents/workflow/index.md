@@ -3,7 +3,7 @@
 编排核心位于 `src/agents/workflow`，由 @tintinweb/pi-subagents 0.23.0 的 runtime、worker-source、meta、journal、task 与 progress 源码导入适配。核心通过 WorkflowHost 接入公共 AgentManager、JobManager、资源发现、记录、通知和等待；agent_workflow 与原生查看使用同一运行 owner。按文件来源见 [上游登记](../../../../third-party/UPSTREAM.md)。
 
 - [宿主、资源与记录](host.md) — child/gate 生命周期、保存脚本、快照与会话归属。
-- [工具与原生操作](operations.md) — agent_workflow、共享等待、/agents workflows 与控制。
+- [工具与原生操作](operations.md) — agent_workflow、共享等待、/subagents workflows 与控制。
 
 ## 执行与边界
 

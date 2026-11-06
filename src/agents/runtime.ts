@@ -1,8 +1,6 @@
 import { loadConfig } from '../runtime/config.ts';
 import { acquireRuntime } from '../jobs/runtime.ts';
 import { AgentManager } from './manager.ts';
-import { executeAgent } from './runner.ts';
-import { childSuite } from './child.ts';
 import { getAgentDir } from '@earendil-works/pi-coding-agent';
 
 /** Reload changes listeners; existing SDK sessions and queued runs keep their owner. */
@@ -13,10 +11,14 @@ export function agentRuntime(): AgentManager {
   const agentDir = getAgentDir();
   if (!managers.has(agentDir) || managers.get(agentDir)!.closed) {
     const runtime = acquireRuntime(agentDir);
-    const manager = new AgentManager(run => {
+    let execution: Promise<readonly [typeof import('./runner.ts'), typeof import('./child.ts')]> | undefined;
+    const manager = new AgentManager(async run => {
       // Resolve ordinary child settings when its slot starts. Workflow continuation
       // fixes its original config; resources and tools must read the same snapshot.
       if (!run.record.workflowId) run.config = loadConfig(run.configCwd);
+      // Concurrent first starts share one load; Jiti must finish shared dependencies in order.
+      execution ??= (async () => [await import('./runner.ts'), await import('./child.ts')] as const)();
+      const [{ executeAgent }, { childSuite }] = await execution;
       return executeAgent(run, pi => childSuite(pi, run, manager), manager.changed,
         (kind, details) => manager.event(kind, run, details));
     }, async ids => {

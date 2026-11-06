@@ -46,6 +46,7 @@ export async function executeAgent(run: Execution, factory: ExtensionFactory, ch
   const updateUsage = () => {
     const usage = session.getSessionStats(); record.usage = { tokens: Object.fromEntries(Object.entries(usage.tokens)
       .map(([key, value]) => [key, value - before.tokens[key as keyof typeof before.tokens]])) as typeof usage.tokens, cost: usage.cost - before.cost };
+    record.contextUsage = usage.contextUsage;
   };
   const inflight = new Map<string, string>();
   let turns = 0;
@@ -114,18 +115,4 @@ export async function executeAgent(run: Execution, factory: ExtensionFactory, ch
     record.activity = undefined;
     unsubscribe(); run.controller.signal.removeEventListener('abort', abort);
   }
-}
-
-export async function closeAgent(run: Execution): Promise<void> {
-  const session = run.session;
-  if (!session) return;
-  try {
-    // Shutdown cancels module subscriptions and pending notifications; dispose alone does not.
-    await session.extensionRunner.emit({ type: 'session_shutdown', reason: 'quit' });
-    run.record.sessionFile = session.sessionManager.getSessionFile();
-    run.record.endLeafId = session.sessionManager.getLeafId();
-    run.record.result ??= resultText(session.sessionManager.getBranch());
-    session.sessionManager.appendCustomEntry(AGENT_ENTRY, { ...run.record });
-    run.entries = session.sessionManager.getBranch(run.record.endLeafId ?? undefined);
-  } finally { session.dispose(); run.session = undefined; }
 }

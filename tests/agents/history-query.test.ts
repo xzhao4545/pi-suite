@@ -53,7 +53,7 @@ function nativePicker(ctx: ExtensionContext, choices: (string | undefined)[], in
       const choice = choices.shift();
       if (choice === undefined) { view.handleInput?.('\x1b'); return; }
       for (let i = 0; i < 200; i++) {
-        if (view.render(400).some(line => stripVTControlCharacters(line).trim() === `→ ${choice}`)) {
+        if (view.render(400).some(line => (view as typeof view & {getSelectedItem?: () => {label: string} | null}).getSelectedItem?.()?.label === choice || stripVTControlCharacters(line).trim() === `→ ${choice}`)) {
           view.handleInput?.('\r'); return;
         }
         view.handleInput?.('\x1b[B');
@@ -100,7 +100,7 @@ test('unknown saved IDs retain send ownership and workspace cleanup while foreig
     assert.equal((stopped.details as { cleanup: string }).cleanup, 'confirmed');
     await assert.rejects(h.invoke('agent_send', { id: h.foreign.id, message: 'foreign resume' }), /not a direct child/);
     let frames = 0;
-    const ctx = nativePicker(h.ctx, [summaryLine(h.previous), 'Transcript'], view => {
+    const ctx = nativePicker(h.ctx, [summaryLine(h.previous), 'Transcript', undefined], view => {
       frames++;
       if (frames === 2) {
         const rows = view.render(400).map(stripVTControlCharacters).slice(1).join('\n');
@@ -111,11 +111,10 @@ test('unknown saved IDs retain send ownership and workspace cleanup while foreig
         assert.match(view.render(400).map(stripVTControlCharacters).join('\n'), /first saved/);
       }
     });
-    await h.session.extensionRunner.getCommand('agents')!.handler('workspace finished', ctx as ExtensionCommandContext);
-    assert.equal(frames, 3);
-    await h.session.extensionRunner.getCommand('agents')!.handler('all', h.ctx as ExtensionCommandContext);
-    assert.ok(h.notices.some(notice => notice.text === 'No all agents'));
-    await h.session.extensionRunner.getCommand('agents')!.handler('workspace', nativePicker(h.ctx, [undefined]) as ExtensionCommandContext);
+    await h.session.extensionRunner.getCommand('subagents')!.handler('workspace finished', ctx as ExtensionCommandContext);
+    assert.equal(frames, 4);
+    await h.session.extensionRunner.getCommand('subagents')!.handler('all', nativePicker(h.ctx, [undefined]) as ExtensionCommandContext);
+    await h.session.extensionRunner.getCommand('subagents')!.handler('workspace', nativePicker(h.ctx, [undefined]) as ExtensionCommandContext);
     assert.equal(h.manager.get(h.foreign.id).record.ownerSessionId, h.foreign.ownerSessionId);
     assert.equal(h.faux.state.callCount, 0);
   } finally { await h.cleanup(); }
@@ -138,13 +137,13 @@ test('workspace branch history stays readonly while visible saved records retain
     assert.equal(h.manager.visible(hidden, { ctx: h.ctx }), false);
     const checkMenu = async (record: typeof hidden, editable: boolean) => {
       let frames = 0;
-      const ctx = nativePicker(h.ctx, [summaryLine(record), undefined], view => {
+      const ctx = nativePicker(h.ctx, [summaryLine(record), undefined, undefined], view => {
         if (++frames !== 2) return;
         const rows = view.render(400).map(stripVTControlCharacters).slice(1).join('\n');
         assert.equal(rows.includes('Model / thinking'), editable); assert.equal(rows.includes('Stop child, nested agents and jobs'), editable);
       });
-      await h.session.extensionRunner.getCommand('agents')!.handler('workspace finished', ctx as ExtensionCommandContext);
-      assert.equal(frames, 2);
+      await h.session.extensionRunner.getCommand('subagents')!.handler('workspace finished', ctx as ExtensionCommandContext);
+      assert.equal(frames, 3);
     };
     await checkMenu(hidden, false); await checkMenu(visible, true);
     const session = await h.invoke('agent_list', { state: 'all' });

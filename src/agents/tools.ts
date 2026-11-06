@@ -7,7 +7,7 @@ import { sanitizeText } from '../runtime/text.ts';
 import { LIST_LIMITS, listFields, newestFirst, objectId, paginate, readFields, registerBoundTool, rejectContextWithoutSearch, rejectListWithId, textResult as text } from '../runtime/tools.ts';
 import type { WaitRegistry } from '../runtime/wait.ts';
 import { taskId } from '../tasks/types.ts';
-import { thinkingSchema } from './catalog.ts';
+import { thinkingSchema } from './schema.ts';
 import { AgentsModule, agentSummary, summaryLine, usageText } from './index.ts';
 import { active, executing, recordWorkspace } from './types.ts';
 import { transcript, transcriptText } from './records.ts';
@@ -32,7 +32,7 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
   const startSchema = buildStartSchema();
   const description = 'Start a same-process Pi child session. background=true (default) returns an ID immediately; false waits and returns early on any direct child question. ' +
     'Types: general-purpose, Explore, Plan or a configured agent markdown file. Read with agent_read, answer/steer/resume with agent_send, stop its subtree with agent_stop, wait with wait.';
-  const scheduleDescription = ' schedule registers a future job instead of starting now: six-field cron, interval 5m/1h, or one-shot +10m/ISO. Do not combine with background:false or inheritContext. Manage via /agents schedules.';
+  const scheduleDescription = ' schedule registers a future job instead of starting now: six-field cron, interval 5m/1h, or one-shot +10m/ISO. Do not combine with background:false or inheritContext. Manage via /subagents schedules.';
   const startTool: ToolDefinition<typeof startSchema> = { name: 'agent_start', label: 'Start agent',
     description: description + (scheduling ? scheduleDescription : ''),
     parameters: startSchema,
@@ -42,7 +42,7 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
       if (schedule !== undefined) {
         if (!scheduler || !config().agents.scheduling) throw new ToolError('INVALID_ARGS', 'Scheduling is disabled');
         const job = await scheduler.add(request, schedule, ctx, signal);
-        return text([`${job.id} ${job.scheduleType} · ${job.name}`, `next: ${job.nextRun}`, 'manage: /agents schedules'], { schedule: job });
+        return text([`${job.id} ${job.scheduleType} · ${job.name}`, `next: ${job.nextRun}`, 'manage: /subagents schedules'], { schedule: job });
       }
       const run = await agents.manager.start(request, agents.scope(ctx), config());
       // A mention clone has no real parent tool-call ID. Its transient result cannot
