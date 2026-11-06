@@ -148,7 +148,7 @@ test('actual child any/all waits preserve pending runs and an unrelated direct q
     assert.equal(early.reason, 'question'); assert.deepEqual(early.pending, [target.record.id]);
     assert.equal(early.others[0].id, question.record.id); assert.equal(early.others[0].question, true);
     assert.equal(question.record.state, 'waiting'); assert.ok(question.question);
-    assert.match(h.statuses.get('pi-suite:runtime')!, /agents 2/);
+    assert.match(h.statuses.get('pi-suite:runtime')!, /🤖2/);
     const progress = await h.invoke('agent_list', { id: question.record.id });
     assert.equal((progress.details as { agent: { state: string } }).agent.state, 'waiting');
     assert.match(output(await h.invoke('agent_read', { id: question.record.id, stream: 'transcript' })), /QUESTION_FOR_PARENT/);

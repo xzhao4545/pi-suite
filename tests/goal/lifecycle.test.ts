@@ -26,8 +26,8 @@ test("real host rejects invalid goal evidence, continues unfinished work once, t
     assert.equal(errors.length, 3); for (const error of errors) assert.match(error, /INVALID_ARGS:/);
     assert.equal(h.faux.state.callCount, 5);
     assert.equal(h.goal()?.status, "completed"); assert.equal(h.goal()?.turns, 5);
-    assert.equal(h.statuses.get("goal"), "goal 完成");
-    assert.ok(h.writes.includes("goal 运行")); assert.ok(h.writes.includes("goal 宿主恢复"));
+    assert.equal(h.statuses.get("goal"), "✅ goal");
+    assert.ok(h.writes.includes("🎯 goal")); assert.ok(h.writes.includes("⏳ goal"));
     assert.ok(h.session.sessionManager.getBranch().some(e => e.type === "custom_message" && e.customType === "pi-suite:notification"));
   } finally { await h.dispose(); }
 });
@@ -42,7 +42,7 @@ test("host retry succeeds without suite retry; exhausted retries persist final f
     h.faux.setResponses([error(), error()]);
     await h.session.prompt("/goal Verify final error"); await h.idle();
     assert.equal(h.faux.state.callCount, 4); assert.equal(h.goal()?.status, "failed");
-    assert.match(h.goal()?.error ?? "", /503/); assert.equal(h.statuses.get("goal"), "goal 请求失败");
+    assert.match(h.goal()?.error ?? "", /503/); assert.equal(h.statuses.get("goal"), "❌ goal");
   } finally { await h.dispose(); }
 });
 
@@ -54,7 +54,7 @@ test("Esc preserves the goal, foreign work cannot resume it, and explicit resume
     await h.session.prompt("/goal Keep control after Esc"); await started.promise;
     const aborted = h.session.abort(); release.resolve(); await aborted; await h.idle();
     assert.equal(h.goal()?.status, "active"); assert.equal(h.goal()?.automatic, false);
-    assert.equal(h.statuses.get("goal"), "goal 待继续");
+    assert.equal(h.statuses.get("goal"), "⏳ goal");
     h.faux.setResponses([context => {
       const updates = context.messages.filter(m => m.role === "system");
       assert.ok(updates.some(m => m.sections?.["pi-suite-goal"] === null), "foreign work removes the stale goal contract");
@@ -73,7 +73,7 @@ test("unanswered native ask terminates without consent; new user input resumes g
     h.faux.setResponses([() => fauxAssistantMessage(fauxToolCall("ask_user", { question: "Approve action?", timeoutMs: 0 }))]);
     await h.session.prompt("/goal Ask before acting"); await h.idle();
     assert.equal(h.faux.state.callCount, 1); assert.equal(h.goal()?.status, "active");
-    assert.equal(h.goal()?.waiting, "user"); assert.equal(h.statuses.get("goal"), "goal 待答");
+    assert.equal(h.goal()?.waiting, "user"); assert.equal(h.statuses.get("goal"), "⏳ goal");
     h.faux.setResponses([complete]); await h.session.prompt("Continue with my explicit instructions"); await h.idle();
     assert.equal(h.goal()?.status, "completed"); assert.equal(h.faux.state.callCount, 2);
   } finally { await h.dispose(); }
@@ -85,7 +85,7 @@ test("an explicit budget stops model work, can be raised, and clear removes the 
     h.faux.setResponses([fauxAssistantMessage("Progress")]);
     await h.session.prompt("/goal --tokens 1 Stay within budget"); await h.idle();
     assert.equal(h.goal()?.status, "budget_limited"); assert.equal(h.faux.state.callCount, 1);
-    assert.ok(h.goal()!.usedTokens >= 1); assert.equal(h.statuses.get("goal"), "goal 预算耗尽");
+    assert.ok(h.goal()!.usedTokens >= 1); assert.equal(h.statuses.get("goal"), "⏹ goal");
     h.faux.setResponses([complete]);
     await h.session.prompt("/goal edit --tokens 100k"); await h.session.prompt("/goal resume"); await h.idle();
     assert.equal(h.goal()?.status, "completed");
@@ -136,7 +136,7 @@ test("reload preserves an arranged wait; branch navigation restores its own goal
     assert.equal(h.goal(), undefined); assert.equal(h.statuses.get("goal"), undefined);
     assert.equal(h.session.sessionManager.getEntryCount(), count, "navigation must not append outgoing goal into the selected branch");
     await h.session.navigateTree(leaf);
-    assert.equal(h.goal()?.id, id); assert.equal(h.statuses.get("goal"), "goal 待任务");
+    assert.equal(h.goal()?.id, id); assert.equal(h.statuses.get("goal"), "⏳ goal");
     assert.equal(h.faux.state.callCount, 1);
     const activeEntry = h.session.sessionManager.getBranch().find(e => e.type === "custom" && e.customType === "pi-suite:goal" &&
       (e.data as { goal: { status: string; waiting?: string } }).goal.status === "active" && !(e.data as { goal: { waiting?: string } }).goal.waiting)!;
@@ -166,7 +166,7 @@ test("manual compact aborts an active response and resumes once after host becom
     const compacting = h.session.compact(); release.resolve(); await compacting;
     await resumed.promise; await h.idle();
     assert.equal(h.faux.state.callCount, 3); assert.equal(h.goal()?.status, "completed");
-    assert.ok(h.writes.includes("goal 宿主恢复"));
+    assert.ok(h.writes.includes("⏳ goal"));
   } finally { release.resolve(); await h.dispose(); }
 });
 

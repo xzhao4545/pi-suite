@@ -26,16 +26,16 @@ export function restoreGoal(ctx: ExtensionContext): Goal | undefined {
   return entry.data.goal ? { ...entry.data.goal } as Goal : undefined;
 }
 
-export function goalSummary(goal: Goal | undefined, schedule: Schedule, queued: boolean, now = Date.now()): string | undefined {
+export function goalSummary(goal: Goal | undefined, schedule: Schedule, now = Date.now()): string | undefined {
   if (!goal || schedule === "detached") return;
   const terminal: Record<Exclude<GoalStatus, "active">, string> = {
-    paused: "goal 暂停", blocked: "goal 阻塞", failed: "goal 请求失败",
-    completed: "goal 完成", budget_limited: "goal 预算耗尽",
+    paused: "⏸ goal", blocked: "⚠ goal", failed: "❌ goal",
+    completed: "✅ goal", budget_limited: "⏹ goal",
   };
   if (goal.status === "completed" && now >= (goal.completedAt ?? 0) + 5000) return;
   if (goal.status !== "active") return terminal[goal.status];
-  return { running: "goal 运行", waiting_user: "goal 待答", waiting_jobs: "goal 待任务",
-    waiting_host: "goal 宿主恢复", idle: queued ? "goal 待运行" : "goal 待继续" }[schedule];
+  // The footer identifies the state; /goal retains the precise wait and error details.
+  return schedule === "running" ? "🎯 goal" : "⏳ goal";
 }
 
 export function goalContract(goal: Goal): string {

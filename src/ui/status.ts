@@ -50,7 +50,7 @@ export class StatusPublisher {
   private flush(): void {
     const goal = this.modes.goal === "status" ? this.goal : undefined;
     const runtime = (["agents", "jobs"] as const).filter(key => this.modes[key] === "status" && this[key].size)
-      .map(key => `${key} ${this[key].size}`).join(" · ") || undefined;
+      .map(key => `${key === "agents" ? "🤖" : "⚙"}${this[key].size}`).join(" · ") || undefined;
     for (const [key, text] of [["goal", goal], ["pi-suite:runtime", runtime]] as const) {
       // The goal key is shared with pi-goal; a disabled suite module does not own it.
       if (key === 'goal' && !this.ownsGoal) continue;

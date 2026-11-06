@@ -69,7 +69,7 @@ test('incompatible reload preserves query, stop and quit through the owner bridg
     assert.equal(globals[key], registration, 'occupied registration is never replaced');
     const restricted = acquireRuntime(root); assert.equal(restricted.mode, 'restricted');
     assert.deepEqual(view.createdBy(['run_bridge']).map(job => job.id), [first.id, descendant.id]);
-    assert.equal(h.statuses.get('pi-suite:runtime'), 'jobs 2');
+    assert.equal(h.statuses.get('pi-suite:runtime'), '⚙2');
     assert.match(await call('job_list', { id: first.id }), /bridge-output/);
     assert.match(await call('job_read', { id: first.id }), /bridge-output/);
     assert.match(await call('job_start', { command: 'echo forbidden' }), /RUNTIME_UNAVAILABLE/);
@@ -78,7 +78,7 @@ test('incompatible reload preserves query, stop and quit through the owner bridg
     assert.equal(jobs.peek(first.id).state, 'stopped');
     assert.deepEqual(view.createdBy(['run_bridge']).map(job => job.id), [first.id, descendant.id], 'settled jobs stay in the full creation scope');
     assert.equal(jobs.peek(second.id).state, 'running');
-    assert.equal(h.statuses.get('pi-suite:runtime'), 'jobs 1');
+    assert.equal(h.statuses.get('pi-suite:runtime'), '⚙1');
     assert.match(await call('wait', { ids: [first.id] }), /stopped/);
     await h.dispose();
     assert.equal(jobs.peek(second.id).stopReason, 'quit');

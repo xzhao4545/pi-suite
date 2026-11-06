@@ -64,7 +64,7 @@ test('SDK session list and activity share branch and creator scope across workin
     const finished = await jobs.start({...request, ownerSessionId: 'foreign-session', command: 'echo SETTLED_JOB', closeInput: true,
       creator: {agentId: 'agent_descendant', runId: 'run_descendant', ancestors: roots}}, testShell()); await jobs.wait(finished.id);
     const active = [...childJobs, direct, duplicate];
-    assert.deepEqual(ids((await list()).jobs), ids(active)); assert.equal(h.statuses.get('pi-suite:runtime'), 'jobs 4');
+    assert.deepEqual(ids((await list()).jobs), ids(active)); assert.equal(h.statuses.get('pi-suite:runtime'), '⚙4');
     assert.deepEqual(ids((await list({state: 'all'})).jobs), ids([...active, finished]));
     const firstPage = await list({limit: 2}), secondPage = await list({limit: 2, cursor: firstPage.nextCursor});
     assert.ok(firstPage.nextCursor); assert.deepEqual(ids([...firstPage.jobs, ...secondPage.jobs]), ids(active));
@@ -75,25 +75,25 @@ test('SDK session list and activity share branch and creator scope across workin
     const originalList = jobs.list.bind(jobs);
     jobs.list = async workspace => { await jobs.stop(duplicate.id); return originalList(workspace); };
     try { assert.deepEqual(ids((await list()).jobs), ids([...childJobs, direct])); } finally { jobs.list = originalList; }
-    assert.equal(h.statuses.get('pi-suite:runtime'), 'jobs 3');
+    assert.equal(h.statuses.get('pi-suite:runtime'), '⚙3');
     assert.match(output(await invoke('job_read', {id: childJobs[0].id})), /VISIBLE_FIRST_JOB/);
     await invoke('job_write', {id: childJobs[0].id, input: 'finish', submit: true}); await settled(jobs, childJobs[0].id); await h.idle();
     assert.notEqual(jobs.peek(childJobs[0].id).notified, true, 'a host-visible child result still belongs to its child session');
     assert.ok(!h.session.sessionManager.getBranch().some(entry => entry.type === 'custom_message' && entry.customType === 'pi-suite:notification'
       && JSON.stringify(entry.content).includes(childJobs[0].id)));
-    assert.equal(h.statuses.get('pi-suite:runtime'), 'jobs 2');
+    assert.equal(h.statuses.get('pi-suite:runtime'), '⚙2');
 
     writeFileSync(join(root, 'pi-suite.json'), JSON.stringify({...suiteConfig, modules: {agents: false}}));
     await h.session.reload();
     assert.deepEqual(ids((await list()).jobs), ids([childJobs[1], direct]));
-    assert.equal(h.statuses.get('pi-suite:runtime'), 'jobs 2', 'saved visible child runs preserve leftover jobs when agents are disabled');
+    assert.equal(h.statuses.get('pi-suite:runtime'), '⚙2', 'saved visible child runs preserve leftover jobs when agents are disabled');
 
     assert.ok(bridge.version === 3);
     const {sessionJobs: _sessionJobs, ...v2Jobs} = bridge.jobs;
     registration.protocolVersion = PROTOCOL_VERSION - 1; registration.control = {version: 2, jobs: v2Jobs, quit: () => bridge.quit()};
     await h.session.reload();
     assert.match(h.notices.at(-1)!.text, /Status shows direct jobs on this branch only/);
-    assert.equal(h.statuses.get('pi-suite:runtime'), 'jobs 1');
+    assert.equal(h.statuses.get('pi-suite:runtime'), '⚙1');
     await assert.rejects(invoke('job_list', {}), /RUNTIME_UNAVAILABLE.*complete session queries require v3/);
     assert.deepEqual((await list({scope: 'workspace'})).jobs, []);
     assert.match(output(await invoke('job_read', {id: childJobs[1].id})), /NESTED_JOB/);

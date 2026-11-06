@@ -27,7 +27,7 @@ test("native Pi footer reads the goal status slot and budgets one visible status
     await h.session.prompt("/goal Display waiting goal"); await h.idle();
     for (const width of [40, 60, 120]) {
       const lines = footer.render(width);
-      assert.equal(lines.length, 3); assert.match(lines[2], /goal 待任务/);
+      assert.equal(lines.length, 3); assert.match(lines[2], /⏳ goal/);
       assert.ok(lines.every(line => visibleWidth(line) <= width));
     }
     const calls = h.faux.state.callCount;
@@ -51,7 +51,7 @@ test("published pi-starship footer coexists with real suite execution and ask at
   const data: ReadonlyFooterDataProvider = {getGitBranch: () => null, getAvailableProviderCount: () => 1,
     onBranchChange: () => () => {}, getExtensionStatuses: () => statuses};
   const base = 'format = "会话模块共存目标验收 $model$thinking$context $extension_status"\n';
-  const options = '[extension_status]\nseparator = " · "\nicons = {goal = "", "pi-suite:runtime" = ""}\n';
+  const options = '[extension_status]\nseparator = " · "\nicons = {"pi-suite:runtime" = "", fallback = ""}\n';
   writeFileSync(join(root, "pi-starship.toml"), base + options);
   const h = await host({root, tools: ["task_edit"], additionalExtensionPaths: [join(dirname(release), "dist/index.ts")],
     extend: pi => { pi.on("session_start", (_event, context) => { ctx = context; }); },
@@ -71,7 +71,7 @@ test("published pi-starship footer coexists with real suite execution and ask at
     assert.ok([...foot, ...panel, ...ask].every(line => visibleWidth(line) <= width));
     assert.ok(panel.length + ask.length <= dock.budget(height), "suite components share their height allowance");
     assert.ok(foot.length + panel.length + ask.length < height * 0.4, "configured external footer leaves chat space");
-    assert.ok(!text(panel).includes("goal") && !text(panel).includes("agents 1") && !text(panel).includes("jobs 1"));
+    assert.ok(!text(panel).includes("goal") && !text(panel).includes("🤖1") && !text(panel).includes("⚙1"));
     return foot;
   });
   const configure = async (toml: string, display = "status") => {
@@ -93,18 +93,18 @@ test("published pi-starship footer coexists with real suite execution and ask at
     await runtime.manager.start({command: "read line", cwd: root, ownerSessionId: ctx.sessionManager.getSessionId(), anchorEntryId: null}, testShell());
     const calls = h.faux.state.callCount, initial = render();
     assert.ok(initial[0].length > initial[2].length, "the full external format wraps at narrow widths");
-    for (const lines of initial) { assert.match(text(lines), /goal\s+待任务/); assert.match(text(lines), /agents 1 · jobs 1/); assert.ok(!text(lines).includes("🔌")); }
+    for (const lines of initial) { assert.match(text(lines), /⏳\s+goal/); assert.match(text(lines), /🤖1 · ⚙1/); assert.ok(!text(lines).includes("🔌")); }
     assert.match(text(dock.render(120)), /任务/);
 
     await configure(base + '[extension_status]\nicons = {goal = "🎯", "pi-suite:runtime" = ""}\nstyles = {goal = "bold fg:#123456"}\n');
     for (const lines of render()) { assert.ok(text(lines).includes("🎯")); assert.match(lines.join(""), /38;2;18;52;86/); }
     ctx.ui.setStatus("earlier", "Earlier provider");
     await configure(base + options + "max_statuses = 1\n");
-    for (const lines of render()) { assert.ok(!text(lines).includes("goal") && !text(lines).includes("agents 1")); assert.match(text(lines), /Earlier provider/); }
+    for (const lines of render()) { assert.ok(!text(lines).includes("goal") && !text(lines).includes("🤖1")); assert.match(text(lines), /Earlier provider/); }
     await configure(base + options + "disabled = true\n");
-    for (const lines of render()) assert.ok(!text(lines).includes("goal") && !text(lines).includes("agents 1"));
+    for (const lines of render()) assert.ok(!text(lines).includes("goal") && !text(lines).includes("🤖1"));
     await configure('format = "$model$thinking$context"\n' + options);
-    for (const lines of render()) assert.ok(!text(lines).includes("goal") && !text(lines).includes("agents 1"));
+    for (const lines of render()) assert.ok(!text(lines).includes("goal") && !text(lines).includes("🤖1"));
     assert.equal(h.faux.state.callCount, calls, "format and size changes do not wake either model");
 
     await configure(base + options);
@@ -113,7 +113,7 @@ test("published pi-starship footer coexists with real suite execution and ask at
     await new Promise(resolve => setImmediate(resolve));
     const notice = await runtime.manager.start({command: "echo queued_notice", closeInput: true, cwd: root,
       ownerSessionId: ctx.sessionManager.getSessionId(), anchorEntryId: null}, testShell()); await runtime.manager.wait(notice.id);
-    for (const lines of render(view)) { assert.match(text(lines), /goal\s+待答/); assert.match(text(lines), /agents 1 · jobs 1/); }
+    for (const lines of render(view)) { assert.match(text(lines), /⏳\s+goal/); assert.match(text(lines), /🤖1 · ⚙1/); }
     assert.equal(h.faux.state.callCount, calls + 1, "the explicit ask turn is the only new model call"); assert.notEqual(child.settled, true);
     view.cancel(); await asking;
     // Explicit placement remains available when an external format omits the slot.

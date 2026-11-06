@@ -73,7 +73,7 @@ test("a job settling after the turn wakes the owner session exactly once; status
       },
     ]);
     await h.session.prompt("Start it"); await h.idle();
-    assert.equal(h.statuses.get("pi-suite:runtime"), "jobs 1");
+    assert.equal(h.statuses.get("pi-suite:runtime"), "⚙1");
     const deadline = Date.now() + 15000;
     while (h.faux.state.callCount < 3 && Date.now() < deadline) await sleep(50);
     await h.idle(); await sleep(300); await h.idle();

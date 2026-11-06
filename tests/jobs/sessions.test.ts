@@ -39,7 +39,7 @@ test("new/resume/fork keep the original job process; only the owner session is n
     ]);
     await current.session.prompt("Start a ticking job"); await current.idle();
     const originalPath = current.session.sessionFile!, log = logPath(root, id);
-    assert.equal(current.statuses.get("pi-suite:runtime"), "jobs 1");
+    assert.equal(current.statuses.get("pi-suite:runtime"), "⚙1");
 
     await runtime.newSession();
     assert.equal(current.statuses.get("pi-suite:runtime"), undefined, "a new session does not count another session's job");
@@ -78,7 +78,7 @@ test("reload keeps a running job; the reloaded extension counts it and delivers 
     ]);
     await h.session.prompt("Start then reload"); await h.idle();
     await h.session.reload();
-    assert.equal(h.statuses.get("pi-suite:runtime"), "jobs 1", "the reloaded extension sees the same running job");
+    assert.equal(h.statuses.get("pi-suite:runtime"), "⚙1", "the reloaded extension sees the same running job");
     h.faux.setResponses([context => {
       assert.match(JSON.stringify(context.messages.at(-1)), new RegExp(`${id} completed · exit 0`));
       return fauxAssistantMessage("result after reload");

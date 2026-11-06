@@ -51,8 +51,7 @@ export class GoalManager {
     this.publish();
   }
   private publish(): void {
-    const queued = Boolean(this.goal && this.binding.current && this.notifications.has(this.binding.current.sessionId, this.requestId));
-    this.status.setGoal(goalSummary(this.goal, this.schedule, queued));
+    this.status.setGoal(goalSummary(this.goal, this.schedule));
   }
   restore(ctx: ExtensionContext, _reason: SessionStartEvent["reason"]): void {
     this.detach(); this.goal = restoreGoal(ctx);

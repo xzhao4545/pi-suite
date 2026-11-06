@@ -48,10 +48,10 @@ test("status publishing deduplicates IDs, clears old bindings and honors status/
   const writes: [string, string | undefined][] = [];
   const ui = { setStatus: (key: string, text?: string) => { writes.push([key, text]); } } as ExtensionContext["ui"];
   publisher.bind(ui, { goal: "status", agents: "status", jobs: "dock" });
-  publisher.setGoal("goal 待答"); publisher.setActivities("agents", ["a", "a", "b"]); publisher.setActivities("jobs", ["j"]);
-  assert.deepEqual(writes.at(-1), ["pi-suite:runtime", "agents 2"]);
+  publisher.setGoal("⏳ goal"); publisher.setActivities("agents", ["a", "a", "b"]); publisher.setActivities("jobs", ["j"]);
+  assert.deepEqual(writes.at(-1), ["pi-suite:runtime", "🤖2"]);
   const length = writes.length, before = renders;
-  publisher.setActivities("agents", ["b", "a"]); publisher.setActivities("jobs", ["another-job"]); publisher.setGoal("goal 待答");
+  publisher.setActivities("agents", ["b", "a"]); publisher.setActivities("jobs", ["another-job"]); publisher.setGoal("⏳ goal");
   assert.equal(writes.length, length); assert.equal(renders, before, 'unchanged summaries do not invalidate Dock');
   assert.ok(dock.render(40).some(line => line.includes("jobs 1")));
   assert.ok(dock.render(40).every(line => !line.includes("agents 2") && !line.includes("goal")));

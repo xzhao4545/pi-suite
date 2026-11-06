@@ -51,9 +51,9 @@ test("wait and completion timers cannot mutate edited objectives or revoked bind
     assert.equal(g.goal!.waiting, undefined); assert.equal(g.goal!.text, "Different objective");
     const request = `goal:${g.goal!.id}`;
     assert.ok(notifications.has("main", request));
-    run(); g.complete(g.goal!.id, "Verified", ctx); assert.equal(statuses.get("goal"), "goal 完成");
+    run(); g.complete(g.goal!.id, "Verified", ctx); assert.equal(statuses.get("goal"), "✅ goal");
     g.start("New goal", ctx); const id = g.goal!.id; t.mock.timers.tick(5000);
-    assert.equal(g.goal!.id, id); assert.equal(statuses.get("goal"), "goal 待运行");
+    assert.equal(g.goal!.id, id); assert.equal(statuses.get("goal"), "⏳ goal");
     run(); g.wait(id, "Late event", 100, ctx); binding.revoke(); t.mock.timers.tick(100);
     assert.throws(() => g.requireOwned(id, ctx), { name: "ToolError", code: "STALE_BINDING", objectId: id });
     assert.equal(g.goal!.waiting, "jobs"); assert.equal(g.goal!.id, id);
