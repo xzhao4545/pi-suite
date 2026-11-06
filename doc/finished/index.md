@@ -35,6 +35,7 @@
 - [子代理执行与交互基础阶段](./pi-suite/agents/core.md) — 同进程会话、两池队列、父级提问、持久 run 记录、任务共享与 job 清理；Linux 离线验收。
 - [子代理模型配置基础阶段](./pi-suite/agents/models-core.md) — 类型逐字段写回、单 agent 下一请求切换与持久恢复、原生选择与阅读状态；Linux 离线验收。
 - [类型模型配置与启动入口组合阶段](./pi-suite/agents/models-entrypoints.md) — 调度、workflow 与 @handle 的实际模型请求、参数来源、固定续接及回收后恢复；Linux SDK 验收。
+- [Windows 模型与 @handle 原生入口](./pi-suite/agents/windows-models.md) — 运行中下一请求修改、持久恢复、类型与文件补全、会话切换、配置来源与认证目录错误。
 - [子代理类型与资源基础阶段](./pi-suite/agents/resources-core.md) — 扩展动态工具范围、技能、包声明与信任、memory、父级上下文与会话目录；Linux 离线验收。
 - [真实 MCP 传输与资源组合阶段](./pi-suite/agents/mcp-transport.md) — 原生 stdio 发现、资源显式选择、桥接与晚注册、信任和进程清理；Linux 受控服务验收。
 - [Windows Context7 MCP 与资源边界](./pi-suite/agents/windows-context7.md) — 官方外部服务真实查询、直接/桥接/晚注册、禁用与隔离、服务进程退出；通用资源边界由组件检查覆盖。
@@ -45,6 +46,7 @@
 - [Windows 原生 CLI 调度组合](./pi-suite/agents/windows-schedules.md) — 本地 UTC+08:00、cron/interval/once、详情确认、会话恢复、过期与错过周期、退出清理。
 - [子代理 RPC 基础阶段](./pi-suite/agents/rpc-core.md) — 五通道与版本 2、启动与归属、同步消费和公共通知、cwd 与结构化结果；Linux 离线验收。
 - [实际 Pi CLI 独立扩展 RPC 组合阶段](./pi-suite/agents/rpc-cli.md) — 独立 consumer、两种加载次序、reload、目标目录信任、结构化结果与真实清理；Linux CLI 验收。
+- [Windows 原生 CLI 跨扩展 RPC](./pi-suite/agents/windows-rpc.md) — 独立 consumer 五通道、cwd/trust/结构化与清理，真实 pi-tasks 业务启动/结果/停止及两种加载次序与 reload。
 - [子代理 Workflow 编排核心阶段](./pi-suite/agents/workflow-core.md) — 上游 Worker、流水线、嵌套共享并发、控制与预算、journal 前缀恢复；Linux 离线验收。
 - [子代理 Workflow 宿主接入阶段](./pi-suite/agents/workflow-host.md) — 保存资源、共享执行/存储/等待/通知、固定 child 续接与原生控制；Linux SDK/进程验收。
 - [子代理类型开关与执行引用回收阶段](./pi-suite/agents/types-retention.md) — 统一 enabled 准入、原生类型菜单、完整历史与通知/reader/workflow 引用保留。

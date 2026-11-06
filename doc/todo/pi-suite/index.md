@@ -15,11 +15,6 @@
 - [ ] Windows 输出与终端边界综合复核：大日志/单长行、UTF-8 分页、search/context 与原始 offset、预算/续读提示、密码隐藏/横向重绘/全屏线性片段与当前/最后屏幕；不要求 reader 还原二维历史。核对停止竞争/重复停止、已结束/foreign 历史只读及清理未确认入口。见 [输出设计](../../finished/pi-suite/design/jobs/output.md) 与 [历史控制](../../finished/pi-suite/design/jobs/history-control.md)。
 - [ ] Cursor 实际 CLI 预设与工具/PTY 验收：当前缺少对应 agent 命令，用户选择保留环境待办，不在本轮安装。具备该环境后验证默认参数、字面正文、输入接管、自然退出与停止清理；不得以其他 CLI 替代通过。
 
-## 子代理、资源与扩展
-
-- [ ] Windows 模型与 @handle 原生入口组合：运行中单 agent 下一请求修改、结束/回收后恢复、@类型 克隆启动、@handle/文件补全、活动引导和会话切换；核对显式参数/类型/individual/frontmatter 优先级与认证错误。类型写回后 RPC/单次调度/workflow 传播已有证据。见 [模型设计](../../finished/pi-suite/design/agents/models.md) 与 [扩展设计](../../finished/pi-suite/design/agents/extensions.md)。
-- [ ] Windows 外部业务扩展 RPC：实际 consumer 注册/加载次序/reload、启动/停止/引导/消费、生命周期、cwd/trust 与结构化结果；现有受控 consumer 五通道通过不代表任意业务扩展已验收。见 [RPC 契约](../../current/agents/rpc.md)。
-
 ## 维护规则
 
 每完成一项，将证据与适用版本写入对应 finished 记录，稳定规则同步 current，再从本清单移除。未验证内容不得因完整检查通过或设计归档而勾选完成。不恢复手机 SSH 待办；Linux 后续验收由用户在目标设备单独安排。

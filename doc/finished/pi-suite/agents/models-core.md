@@ -6,4 +6,4 @@
 
 Linux 的 5 项契约检查覆盖实际 /agents 命令与 agent_start 工具、新旧执行独立、当前请求不中断/下一请求切换、恢复与历史模型不被改写、认证丢失、40/120 列选择与阅读、取消不写入、逐字段定位、项目删除后用户值生效，以及无效文件不覆盖。
 
-调度/workflow/@handle 的 Linux 综合入口验证见 [入口组合阶段](models-entrypoints.md)，Windows 继续留在 [模型专项](../../../todo/pi-suite/index.md)。当前稳定规则见 [模型配置](../../../current/agents/models.md)。
+调度/workflow/@handle 的 Linux 综合入口验证见 [入口组合阶段](models-entrypoints.md)，Windows 原生操作见 [Windows 模型组合](windows-models.md)。当前稳定规则见 [模型配置](../../../current/agents/models.md)。

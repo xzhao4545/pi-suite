@@ -53,4 +53,6 @@ subagents:usage 按每个 assistant message_end 发出一次，包含 Pi 原生 
 
 structuredOutput 通过上游 StructuredOutput 工具采集并验证 JSON。无有效调用时，执行层最多追加一次明确纠正提示；工具验证失败可在运行内修正。最终没有有效 JSON 时记录失败，有效结果写入 structuredJson 和 result；工具外的结束文本不作为结构化结果。工具由公共动态范围准入，结构化结果、错误与会话均使用普通 run 的存储、读取和通知路径。
 
+实际 Pi 1.5.0 CLI 的独立公共协议 consumer 已在 Linux 与 Windows 验证两种加载次序、reload 唯一回复、跨 cwd 信任、结构化结果、同步消费与停止清理。Windows 的 `@tintinweb/pi-tasks 0.9.1` 另验证了真实 TaskExecute、TaskOutput、TaskStop、两种加载次序和活动运行跨 reload；范围见 [原生 CLI RPC 阶段](../../finished/pi-suite/agents/windows-rpc.md)。该扩展将停止任务记为 completed，Suite run 保留 stopped；业务任务状态与执行状态分别读取。其他业务扩展按其实际工具与事件处理另行验收。
+
 [返回 agents](index.md)

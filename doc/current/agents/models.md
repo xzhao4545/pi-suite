@@ -49,4 +49,6 @@ workspace 发现的其他 owner 或当前分支之外的已结算记录只提供
 
 agent_list 详情与记录操作界面显示实际模型、thinking 及来源：parameter、individual、type、frontmatter、default、inherited。显式模型不可用或匹配不唯一时报告来源与错误，不跨 provider 替换；调用参数和 frontmatter 可使用匹配唯一的模糊名，配置和界面存储使用精确身份。
 
+认证目录变化后，模型选择仅提供当前可用模型及 No override。新准入或普通恢复引用失去认证的显式配置时报告 MODEL_UNAVAILABLE 并指出对应字段，在建立新 run 与请求前拒绝；用户可通过类型或 individual 配置选择可用模型或取消覆盖。
+
 [返回 agents](index.md)
