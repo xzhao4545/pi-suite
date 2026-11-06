@@ -3,14 +3,15 @@
 | 入口 | 当前行为 |
 | --- | --- |
 | agent_start | prompt、type?、name?、background?、model?、thinking?、maxTurns?、taskId?、inheritContext?、isolated?、schedule?；普通执行 background 默认 true，类型 run_in_background 优先；schedule 登记未来后台任务 |
-| agent_list | id 查进度详情、全部已知 run 及其所属活动 jobs，字段见 [进度与通知](progress.md)；列表 state 为 active/queued/finished/all，默认 active；scope 为 session/workspace，默认 session；cursor/limit 分页，默认 20、最多 100 |
+| agent_list | state 为 active/queued/finished/all，默认 active；scope 为 session/workspace，默认 session；agentId 可组合筛选某 agent 的执行历史；cursor/limit 分页，默认 10、最多 100、约 4 KiB，返回准确 runId |
+| agent_get | id、runId?、detail?；查看指定或当前 run 的状态、活动、模型/thinking 和任务，保留完整待答问题；detail:true 增加来源、上下文、用量及所属活动 jobs，字段见 [进度与通知](progress.md) |
 | agent_read | id、runId?；活动默认 transcript，结束默认 result；offset/limitBytes/search/context 使用 [共享读取规则](../jobs/index.md) |
 | agent_send | id、message；返回 answered、steered、queued 或 resumed，只有直接父级可以发送；停止/清理尚未结束时不能恢复为新 run |
 | agent_stop | id、runId?；取消运行子树及其创建的活动 job，返回真实状态和 cleanup |
 | agent_workflow | script、scriptPath 或 name 三选一，args?、resumeFromRunId?；始终后台启动，返回 wf_ ID 与保存路径，见 [Workflow 操作](workflow/operations.md) |
 | wait | 接受 job、agent 与 workflow ID 的 any/all 等待；结果、问题与其他事件使用统一返回结构，超时或取消只结束调用；同 agent 的旧未读 run 作为其他执行返回 |
 
-模型工具默认返回摘要，完整输入、thinking、工具调用和输出通过 agent_read 或原生 transcript 按需读取。workspace 列表发现当前配置工作区的持久历史并合并本进程记录；session 列表与状态数量使用同一直接子级和分支归属过滤。未知 ID 的 agent_list/read/send/stop 先发现并核对当前配置工作区，发送仍需直接父级与分支准入；分页 more 保留 scope。实际目录与引用范围、读取和合并规则见 [持久历史](history.md)。
+模型工具默认返回摘要，完整输入、thinking、工具调用和输出通过 agent_read 或原生 transcript 按需读取。workspace 列表发现当前配置工作区的持久历史并合并本进程记录；session 列表与状态数量使用同一直接子级和分支归属过滤。未知 ID 的 agent_get/read/send/stop 先发现并核对当前配置工作区，发送仍需直接父级与分支准入；分页 more 保留 scope。实际目录与引用范围、读取和合并规则见 [持久历史](history.md)。
 
 ## /subagents
 

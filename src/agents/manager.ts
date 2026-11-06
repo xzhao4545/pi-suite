@@ -106,7 +106,7 @@ export class AgentManager {
     const records = this.records().filter(record => record.id === id && (!runId || record.runId === runId))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.runId.localeCompare(a.runId));
     const record = records[0];
-    if (!record) throw new ToolError('NOT_FOUND', `No agent ${id}${runId ? ` run ${runId}` : ''}`, id);
+    if (!record) throw new ToolError('NOT_FOUND', `No agent ${id}${runId ? ` run ${runId}` : ''}; discover with agent_list({"scope":"workspace","state":"all"})`, id);
     return { record, run: this.runs.get(record.runId) };
   }
   visible(record: AgentRecord, scope: ParentScope): boolean {

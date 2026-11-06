@@ -32,7 +32,7 @@ test('real concurrent processes reread under file locks; lock retries yield the 
 test('invalid files and aborted edits never overwrite valid cached data or partially commit a batch', async () => {
   const root = mkdtempSync(join(tmpdir(), 'pi-suite-tasks-data-')), path = join(root, 'nested', 'tasks.json'), store = new TaskStore(path);
   try {
-    assert.deepEqual(await store.snapshot(), {version: 1, nextId: 1, tasks: []});
+    assert.deepEqual(await store.snapshot(), {version: 2, nextId: 1, tasks: []});
     assert.equal(existsSync(join(root, 'nested')), false, 'reading an unused store creates no directory or lock');
     await store.edit([{ op: 'add', title: 'keep', children: ['child'] }]);
     const good = readFileSync(path, 'utf8'), data = await store.snapshot();
@@ -52,4 +52,24 @@ test('invalid files and aborted edits never overwrite valid cached data or parti
     assert.equal((await store.snapshot()).tasks.length, 3);
     assert.equal((await store.snapshot()).tasks[1].status, 'done');
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('shared JSON subscriptions observe external atomic writes and report invalid files without polling or corrupting cache', {timeout: 8000}, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'pi-suite-task-watch-')), path = join(root, 'nested', 'tasks.json'), store = new TaskStore(path);
+  let changed = Promise.withResolvers<void>(), failed = Promise.withResolvers<unknown>();
+  const off = store.subscribe(() => changed.resolve(), error => failed.resolve(error));
+  const timeout = setTimeout(() => { changed.reject(new Error('External commit was not observed')); failed.reject(new Error('External invalid data was not reported')); }, 5000);
+  try {
+    const writer = new TaskStore(path);
+    await writer.edit([{op: 'add', title: 'external group', children: ['execution']}]);
+    await changed.promise;
+    assert.equal(store.current.tasks.length, 2, 'UI current state changes without explicitly reading a snapshot');
+    changed = Promise.withResolvers<void>();
+    await writer.edit([{op: 'done', id: '2'}]); await changed.promise;
+    assert.equal(store.current.tasks[1].status, 'done');
+    const good = structuredClone(store.current);
+    writeFileSync(path, '{invalid');
+    assert.match(String(await failed.promise), /TASK_STORE_INVALID/);
+    assert.deepEqual(store.current, good);
+  } finally { off(); clearTimeout(timeout); rmSync(root, {recursive: true, force: true}); }
 });

@@ -12,6 +12,8 @@ goal 模型工具的 3 项 Linux 契约检查通过，核对空白参数 INVALID
 
 交互与启动专项通过真实 Pi TypeScript 加载、完整集合筛选/稳定身份/窄屏阅读、配置锁与两层覆盖、设置保存及 reload 准入验证。Linux 实际 CLI 覆盖 /exit 的空闲、生成、工具及压缩取消、PTY 清理与终端恢复；独立 tmux 验证 Pi 原生 OSC 52 在 external 阻断、on 转发中文多行内容，用户确认其 Linux/SSH/tmux 全屏拖选可在本机粘贴。性能结论与范围见 [交互与启动专项](../finished/pi-suite/interaction-improvements/index.md)。
 
+任务/工具协议与 Goal 交互通过 Linux SDK 验证：Provider 转换后的 object schema、查询修正、按记录字节预算分页与组上下文、单操作/原子批量、多 doing 与手动/依赖阻塞、共享目录监听、稳定浏览身份、单次通知/问题交付、真实停止清理、累计运行计时及取消/恢复交错。Pi 1.5.0 原生终端分发与焦点编辑器覆盖普通/全屏的正文和思考取消，AbortSignal 与 aborted 结算一致，取消后无新增 delta；用户复测确认现有环境 Esc 已正常中断。时钟 tick 不持久写入或发模型请求。协议内容与代表性字节/token 比较见 [专项验收](../finished/pi-suite/tool-protocol/reference-validation.md)。
+
 ## 检查
 
 ```sh

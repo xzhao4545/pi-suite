@@ -28,18 +28,18 @@ test('two SDK children edit their owner list concurrently without losing changes
     new AbortController().signal, undefined, ctx as never);
   try {
     h.faux.setResponses([fauxAssistantMessage('parent seed')]); await h.session.prompt('seed durable owner');
-    await invoke('task_edit', {changes: [{op: 'add', title: 'parallel work', children: ['first', 'second']}]});
+    await invoke('task_edit', {op: 'batch', changes: [{op: 'add', title: 'parallel work', children: ['first', 'second']}]});
     const path = taskPath(root, ctx.sessionManager.getSessionId()), store = taskStore(path, path);
     const response = async (context: TranscriptContext) => {
       const id = JSON.stringify(context.messages.find(message => message.role === 'user')).includes('first child') ? '2' : '3';
       const result = lastTool(context);
-      if (!result) return fauxAssistantMessage(fauxToolCall('task_list', {id, detail: true}));
-      if (result.toolName === 'task_list') {
+      if (!result) return fauxAssistantMessage(fauxToolCall('task_get', {id}));
+      if (result.toolName === 'task_get') {
         assert.match(JSON.stringify(result.content), /parallel work|first|second/);
         // Both children have read the same pre-edit list before either may issue its write.
         if (++arrived === 2) barrier.resolve();
         await barrier.promise;
-        return fauxAssistantMessage(fauxToolCall('task_edit', {changes: [{op: 'update', id, status: 'doing', description: `child ${id} update`}]}));
+        return fauxAssistantMessage(fauxToolCall('task_edit', {op: 'batch', changes: [{op: 'update', id, status: 'doing', description: `child ${id} update`}]}));
       }
       return fauxAssistantMessage(`child ${id} finished`);
     };
@@ -68,7 +68,7 @@ test('SDK child retains its owner store across parent reload and fork; historica
   const extend = (pi: ExtensionAPI) => {
     pi.on('session_start', (_event, context) => { ctx = context; });
   };
-  const tools = ['task_edit', 'task_list', 'agent_send'];
+  const tools = ['task_edit', 'task_list', 'task_get', 'agent_send'];
   let current = await host({root, persisted: true, tools, extend});
   const first = current, manager = agentRuntime();
   const runtime = new AgentSessionRuntime(current.session, current.services, async options => {
@@ -79,11 +79,11 @@ test('SDK child retains its owner store across parent reload and fork; historica
     first.faux.setResponses([fauxAssistantMessage('parent seed')]); await first.session.prompt('seed durable owner');
     const originalFile = first.session.sessionFile!, originalId = ctx.sessionManager.getSessionId();
     const originalPath = taskPath(root, originalId), originalStore = taskStore(originalPath, originalPath);
-    await first.session.getToolDefinition('task_edit')!.execute('tasks-lifecycle', {changes: [{op: 'add', title: 'owned work', children: ['execution']},
+    await first.session.getToolDefinition('task_edit')!.execute('tasks-lifecycle', {op: 'batch', changes: [{op: 'add', title: 'owned work', children: ['execution']},
       {op: 'update', id: '2', status: 'doing'}]}, new AbortController().signal, undefined, ctx as never);
     first.faux.setResponses([async () => {
       entered.resolve(); await continueChild.promise;
-      return fauxAssistantMessage(fauxToolCall('task_edit', {changes: [{op: 'update', id: '2', description: 'original child after fork'}]}));
+      return fauxAssistantMessage(fauxToolCall('task_edit', {op: 'batch', changes: [{op: 'update', id: '2', description: 'original child after fork'}]}));
     }, context => { lastTool(context); return fauxAssistantMessage('original child completed'); }]);
     const run = await manager.start({prompt: 'continue owner task', taskId: '2', background: false}, {ctx, taskStore: originalStore}, loadConfig(root, root));
     await entered.promise;
@@ -105,7 +105,7 @@ test('SDK child retains its owner store across parent reload and fork; historica
     assert.equal(manager.get(run.record.id).run, undefined);
     await runtime.switchSession(originalFile);
     assert.equal(ctx.sessionManager.getSessionId(), originalId);
-    current.faux.setResponses([fauxAssistantMessage(fauxToolCall('task_edit', {changes: [{op: 'update', id: '2', description: 'resumed child progress'}]})),
+    current.faux.setResponses([fauxAssistantMessage(fauxToolCall('task_edit', {op: 'batch', changes: [{op: 'update', id: '2', description: 'resumed child progress'}]})),
       async context => { lastTool(context); resumedEntered.resolve(); await finishResume.promise; return fauxAssistantMessage('resume interrupted'); }]);
     const resumed = await current.session.getToolDefinition('agent_send')!.execute('tasks-resume', {id: run.record.id, message: 'resume owner task'},
       new AbortController().signal, undefined, ctx as never);

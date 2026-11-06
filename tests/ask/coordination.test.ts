@@ -88,7 +88,7 @@ test('native asks hold real child questions and job completion; nonanswers requi
     h.faux.setResponses(Array(20).fill(respond));
     try {
       await h.session.prompt(`/goal Coordinate ${outcome}`); await gateReady.promise;
-      assert.equal(h.statuses.get('goal'), '⏳ goal'); assert.equal(rootCalls, 2);
+      assert.match(h.statuses.get('goal') ?? '', /^⏳ goal \d+:\d{2}(?::\d{2})?$/); assert.equal(rootCalls, 2);
       const runs = [];
       for (const prompt of ['CHILD_A', 'CHILD_B']) {
         const run = await agents.start({ prompt }, { ctx }, config); runs.push(run); children.push(run.record.id);

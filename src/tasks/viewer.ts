@@ -1,53 +1,61 @@
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { Text, type TUI } from '@earendil-works/pi-tui';
-import { DetailsView } from '../ui/details.ts';
+import type { ExtensionAPI, ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
+import { truncateToWidth, type TUI } from '@earendil-works/pi-tui';
+import { BrowserView, browseState } from '../ui/browser.ts';
 import type { Dock } from '../ui/dock.ts';
 import type { Notifications } from '../runtime/notifications.ts';
 import type { TasksModule } from './index.ts';
-import { queryTasks, taskDetails } from './query.ts';
+import { queryTasks, taskDetails, type TaskFilter } from './query.ts';
 import { taskViews } from './model.ts';
-import { sanitizeText } from '../runtime/text.ts';
-import type { TaskData } from './types.ts';
+import { taskDisplay, taskIcon, taskStyle } from './presentation.ts';
+import type { TaskData, TaskView } from './types.ts';
 
-/** The reader uses a snapshot; completion timers and child edits never move its selection. */
-export class TaskDetailsView extends DetailsView {
-  private expanded = true;
-  private includeDone: boolean;
-  constructor(tui: TUI, private data: TaskData, done: () => void, private parentId?: string, includeDone = false) {
-    super(tui, () => `Tasks · ${this.includeDone ? 'all' : 'unfinished'} · ${this.expanded ? 'expanded' : 'collapsed'}`, new Text('', 0, 0), done, [
-      { label: 'Expand / collapse', run: () => { this.expanded = !this.expanded; this.update(); } },
-      { label: 'Show / hide completed', run: () => { this.includeDone = !this.includeDone; this.update(); } },
-    ]);
-    this.includeDone = includeDone; this.update();
-  }
-  private update(): void {
-    const views = new Map(taskViews(this.data).map(task => [task.id, task])), rows = queryTasks(this.data, { parentId: this.parentId, includeDone: this.includeDone });
-    const lines = rows.filter(task => this.expanded || !task.parentId).flatMap(task => [
-      ...taskDetails(task, views).map(line => task.parentId ? `  ${line}` : line), '',
-    ]);
-    this.reader.setContent(new Text(sanitizeText(lines.join('\n')) || '(no tasks)', 0, 0));
+/** Selection and readers belong to stable task IDs; data stays in the shared store. */
+export class TaskBrowserView extends BrowserView {
+  constructor(tui: TUI, data: () => TaskData, done: (value?: string) => void, groupId?: string, state: TaskFilter = 'unfinished',
+    subscribe?: (refresh: () => void) => () => void, theme?: Theme) {
+    const groups = () => taskViews(data()).filter(task => !task.parentId);
+    let views = new Map<string, TaskView>();
+    super(tui, { title: 'Tasks', state: browseState(), subscribe,
+      layout: { truncatePrimary: ({item, text, maxWidth}) => taskStyle(views.get(item.value)!, truncateToWidth(text, maxWidth, ''), theme) },
+      controls: [
+        { label: 'Group', selected: () => groupId ?? 'all', items: () => [{ value: 'all', label: 'All' },
+          ...groups().map(group => ({ value: group.id, label: `#${group.id}` }))], select: value => { groupId = value === 'all' ? undefined : value; } },
+        { label: 'State', selected: () => state, items: () => [
+          { value: 'unfinished', label: 'Unfinished' }, { value: 'doing', label: 'Running' }, { value: 'blocked', label: 'Blocked' },
+          { value: 'done', label: 'Completed' }, { value: 'all', label: 'All' }], select: value => { state = value as TaskFilter; } },
+      ], items: () => {
+        if (groupId && !groups().some(group => group.id === groupId)) groupId = undefined;
+        const current = data(); views = new Map(taskViews(current).map(task => [task.id, task]));
+        return queryTasks(current, { parentId: groupId, state }).map(task => ({ value: task.id,
+          label: `${task.parentId ? '  ' : ''}${taskDisplay(task)}`,
+          description: `${taskIcon(task.status)}${task.progress ? ` ${task.progress.done}/${task.progress.total}` : ''}`,
+          search: `#${task.id} ${task.title} ${task.description ?? ''} ${task.blockedReason ?? ''} ${task.status}`,
+          details: () => taskDetails(task, views).join('\n') }));
+      } }, done);
   }
 }
 
 export function registerTasksCommand(pi: ExtensionAPI, tasks: TasksModule, dock: Dock, notifications: Notifications): void {
   pi.registerCommand('tasks', {
-    description: 'Browse tasks: [all] [group ID]; expand/collapse and search without changing task data',
+    description: 'Browse tasks: [all] [group ID]; filter group/state, search and read live details',
     handler: async (args, ctx) => {
       const words = args.trim().split(/\s+/).filter(Boolean);
       if (words.some(word => word !== 'all' && !/^[1-9][0-9]*$/.test(word)) || words.filter(word => word !== 'all').length > 1) throw new Error('Use /tasks [all] [group ID]');
-      const parentId = words.find(word => word !== 'all'), includeDone = words.includes('all');
-      const { data, rows } = await tasks.list(ctx, { parentId, includeDone });
-      tasks.selectGroup(parentId);
+      const groupId = words.find(word => word !== 'all'), state = words.includes('all') ? 'all' : 'unfinished';
+      const { data, rows } = await tasks.list(ctx, { parentId: groupId, state });
+      tasks.selectGroup(groupId);
       if (ctx.mode !== 'tui') {
         const views = new Map(taskViews(data).map(task => [task.id, task]));
         ctx.ui.notify(rows.map(task => taskDetails(task, views).join('\n')).join('\n\n') || 'No tasks'); return;
       }
       const release = notifications.hold(); dock.setDetail(true);
-      try { await showTaskDetails(ctx, data, parentId, includeDone); }
+      try { await showTasks(ctx, tasks, groupId, state); }
       finally { dock.setDetail(false); release(); }
     },
   });
 }
-async function showTaskDetails(ctx: ExtensionContext, data: TaskData, parentId?: string, includeDone = false): Promise<void> {
-  await ctx.ui.custom<void>((tui, _theme, _keys, done) => new TaskDetailsView(tui, data, done, parentId, includeDone));
+async function showTasks(ctx: ExtensionContext, tasks: TasksModule, groupId: string | undefined, state: TaskFilter): Promise<void> {
+  const selected = await ctx.ui.custom<string | undefined>((tui, theme, _keys, done) =>
+    new TaskBrowserView(tui, () => tasks.current(ctx), done, groupId, state, refresh => tasks.subscribe(ctx, refresh), theme));
+  if (selected) { const task = taskViews(tasks.current(ctx)).find(task => task.id === selected); tasks.selectGroup(task?.parentId ?? task?.id); }
 }

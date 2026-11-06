@@ -7,6 +7,7 @@ import { GoalManager } from "../../src/goal/manager.ts";
 import { Dock } from "../../src/ui/dock.ts";
 import { StatusPublisher } from "../../src/ui/status.ts";
 import { WaitRegistry } from "../../src/runtime/wait.ts";
+import { goalDuration } from '../../src/goal/state.ts';
 
 function fixture() {
   const binding = new SessionBinding();
@@ -51,9 +52,9 @@ test("wait and completion timers cannot mutate edited objectives or revoked bind
     assert.equal(g.goal!.waiting, undefined); assert.equal(g.goal!.text, "Different objective");
     const request = `goal:${g.goal!.id}`;
     assert.ok(notifications.has("main", request));
-    run(); g.complete(g.goal!.id, "Verified", ctx); assert.equal(statuses.get("goal"), "✅ goal");
+    run(); g.complete(g.goal!.id, "Verified", ctx); assert.match(statuses.get("goal") ?? "", /^✅ goal \d+:\d{2}(?::\d{2})?$/);
     g.start("New goal", ctx); const id = g.goal!.id; t.mock.timers.tick(5000);
-    assert.equal(g.goal!.id, id); assert.equal(statuses.get("goal"), "⏳ goal");
+    assert.equal(g.goal!.id, id); assert.match(statuses.get("goal") ?? "", /^⏳ goal \d+:\d{2}(?::\d{2})?$/);
     run(); g.wait(id, "Late event", 100, ctx); binding.revoke(); t.mock.timers.tick(100);
     assert.throws(() => g.requireOwned(id, ctx), { name: "ToolError", code: "STALE_BINDING", objectId: id });
     assert.equal(g.goal!.waiting, "jobs"); assert.equal(g.goal!.id, id);
@@ -73,5 +74,44 @@ test("a settlement merges goal/job/agent wakeups and yields to pending host mess
     assert.equal(result.continue, true); assert.equal(result.entries!.length, 1);
     assert.match(JSON.stringify(result.entries), /Job finished.*Agent finished.*Active goal/);
     assert.equal(n.beforeSettle(event), undefined);
+  } finally { g.detach(); }
+});
+
+test('goal clock freezes at pause/wait and resumes cumulatively without persisting ticks or duplicate resume work', t => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  let now = 0;
+  t.mock.method(performance, 'now', () => now);
+  const { manager: g, ctx, run, statuses, notifications } = fixture();
+  Object.assign(ctx, { mode: 'tui' });
+  try {
+    g.start('Clock', ctx); run();
+    let entries = 0;
+    t.mock.method((g as unknown as { pi: ExtensionAPI }).pi, 'appendEntry', () => { entries++; });
+    now = 65000; t.mock.timers.tick(1000);
+    assert.equal(statuses.get('goal'), '🎯 goal 01:05'); assert.equal(entries, 0);
+    assert.equal(g.resume(), 'running');
+    assert.equal(notifications.has('main', `goal:${g.goal!.id}`), false);
+    assert.equal(statuses.get('goal'), '🎯 goal 01:05');
+    g.pause(ctx); const saved = entries;
+    now = 100000; t.mock.timers.tick(10000);
+    assert.equal(statuses.get('goal'), '⏸ goal 01:05'); assert.equal(entries, saved);
+    g.resume(); run(); now = 102000;
+    g.wait(g.goal!.id, 'External work', undefined, ctx);
+    now = 120000; t.mock.timers.tick(10000);
+    assert.equal(statuses.get('goal'), '⏳ goal 01:07');
+    assert.equal(goalDuration(27 * 3600000 + 3000), '27:00:03');
+  } finally { g.detach(); }
+});
+
+test('explicit resume during abort settlement survives the older run and queues exactly one continuation', () => {
+  const { manager: g, ctx, run, notifications } = fixture();
+  try {
+    g.start('Resume race', ctx); run();
+    g.endRun(); g.resume();
+    g.beforeSettle({ outcome: 'aborted' } as AgentBeforeSettleEvent);
+    g.settled(true);
+    assert.equal(g.goal!.automatic, true);
+    assert.ok(notifications.has('main', `goal:${g.goal!.id}`));
+    run(); assert.equal(notifications.has('main', `goal:${g.goal!.id}`), false);
   } finally { g.detach(); }
 });

@@ -1,4 +1,5 @@
-import { Type, type TSchema } from 'typebox';
+import { Type, type TSchema, type Static } from 'typebox';
+import { Value } from 'typebox/value';
 import type { ExtensionAPI, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { READ_LIMITS } from './read.ts';
 import { ToolError } from './errors.ts';
@@ -20,20 +21,22 @@ export function registerBoundTool<P extends TSchema>(pi: ExtensionAPI, tool: Too
   pi.setActiveTools(activate ? [...new Set([...active, tool.name])] : active);
 }
 
-export const LIST_LIMITS = { defaultLimit: 20, maxLimit: 100 };
-/** id views one item; the rest filter and page a list, newest first. id and list fields are exclusive. */
+export const LIST_LIMITS = { defaultLimit: 10, maxLimit: 100, defaultBytes: 4096 };
+/** Validate model input without guessing away conflicting fields; return a usable repair. */
+export function checkedArguments<P extends TSchema>(schema: P, hint: string) {
+  return (args: unknown): Static<P> => {
+    if (!Value.Check(schema, args)) throw new ToolError('INVALID_ARGS', `${Value.Errors(schema, args)[0]?.message ?? 'Invalid arguments'}. ${hint}`);
+    return args as Static<P>;
+  };
+}
+/** Filters and paging belong to list tools; single-item tools define their own fields. */
 export function listFields<S extends string>(states: readonly S[]) {
   return {
-    state: Type.Optional(Type.Union(states.map(state => Type.Literal(state)), { description: `Default ${states[0]}` })),
+    state: Type.Optional(Type.Unsafe<S>({ type: 'string', enum: [...states], description: `Default ${states[0]}` })),
     scope: Type.Optional(Type.Union([Type.Literal('session'), Type.Literal('workspace')], { description: 'session (default): what this session sees; workspace: every session in this workspace' })),
     cursor: Type.Optional(Type.String({ maxLength: 200, description: 'nextCursor from a previous page' })),
     limit: Type.Optional(Type.Integer({ minimum: 1, maximum: LIST_LIMITS.maxLimit, description: `Default ${LIST_LIMITS.defaultLimit}` })),
   };
-}
-export function rejectListWithId(params: { id?: string; state?: string; scope?: string; cursor?: string; limit?: number }): void {
-  if (params.id !== undefined && (params.state ?? params.scope ?? params.cursor ?? params.limit) !== undefined) {
-    throw new ToolError('INVALID_ARGS', 'id cannot be combined with state, scope, cursor or limit');
-  }
 }
 
 type Position = { createdAt: string; id: string };
@@ -42,16 +45,23 @@ export function newestFirst(a: Position, b: Position): number {
   return b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id);
 }
 /** Sorts newest first and returns one page after cursor; the cursor encodes the last row's position. */
-export function paginate<T>(items: T[], position: (item: T) => Position, cursor: string | undefined, limit: number): { page: T[]; nextCursor?: string } {
-  let rows = [...items].sort((a, b) => newestFirst(position(a), position(b)));
+export function paginate<T>(items: T[], position: (item: T) => Position, cursor: string | undefined, limit: number,
+  options: { oldest?: boolean; size?: (item: T) => number; budgetBytes?: number } = {}): { page: T[]; nextCursor?: string } {
+  const compare = (a: Position, b: Position) => newestFirst(a, b) * (options.oldest ? -1 : 1);
+  let rows = [...items].sort((a, b) => compare(position(a), position(b)));
   if (cursor) {
     const [createdAt, id] = Buffer.from(cursor, 'base64url').toString().split('|');
-    if (!createdAt || !id) throw new ToolError('INVALID_ARGS', 'cursor is not a nextCursor from this list');
-    rows = rows.filter(row => newestFirst(position(row), { createdAt, id }) > 0);
+    if (!createdAt || !id) throw new ToolError('INVALID_ARGS', 'cursor is not a nextCursor from this list; restart the same list without cursor');
+    rows = rows.filter(row => compare(position(row), { createdAt, id }) > 0);
   }
-  const page = rows.slice(0, limit);
+  const page: T[] = []; let bytes = 0;
+  for (const row of rows) {
+    const size = options.size?.(row) ?? 0;
+    if (page.length >= limit || page.length && bytes + size > (options.budgetBytes ?? Infinity)) break;
+    page.push(row); bytes += size;
+  }
   const last = page.at(-1);
-  return { page, nextCursor: rows.length > limit && last ? Buffer.from(`${position(last).createdAt}|${position(last).id}`).toString('base64url') : undefined };
+  return { page, nextCursor: rows.length > page.length && last ? Buffer.from(`${position(last).createdAt}|${position(last).id}`).toString('base64url') : undefined };
 }
 
 /** Byte-offset paging, regex search and default smart truncation; shared by job_read and agent_read. */

@@ -33,7 +33,7 @@ function moduleFor(pi: ExtensionAPI): JobsModule {
 test('incompatible reload preserves query, stop and quit through the owner bridge; idle reload replaces it', { timeout: 30000 }, async () => {
   const root = agentDir();
   let view!: JobsModule;
-  const h = await host({ root, tools: ['job_start', 'job_list', 'job_read', 'job_write', 'job_stop', 'wait'], extend: pi => { view = moduleFor(pi); } });
+  const h = await host({ root, tools: ['job_start', 'job_list', 'job_get', 'job_read', 'job_write', 'job_stop', 'wait'], extend: pi => { view = moduleFor(pi); } });
   const active = acquireRuntime(root); assert.equal(active.mode, 'active');
   if (active.mode !== 'active') throw new Error('runtime unavailable');
   const jobs = active.manager;
@@ -70,7 +70,7 @@ test('incompatible reload preserves query, stop and quit through the owner bridg
     const restricted = acquireRuntime(root); assert.equal(restricted.mode, 'restricted');
     assert.deepEqual(view.createdBy(['run_bridge']).map(job => job.id), [first.id, descendant.id]);
     assert.equal(h.statuses.get('pi-suite:runtime'), '⚙2');
-    assert.match(await call('job_list', { id: first.id }), /bridge-output/);
+    assert.match(await call('job_get', { id: first.id }), /bridge-output/);
     assert.match(await call('job_read', { id: first.id }), /bridge-output/);
     assert.match(await call('job_start', { command: 'echo forbidden' }), /RUNTIME_UNAVAILABLE/);
     assert.match(await call('job_write', { id: first.id, input: 'forbidden', submit: true }), /RUNTIME_UNAVAILABLE/);

@@ -14,8 +14,8 @@ import { buildMemoryBlock, buildReadOnlyMemoryBlock } from './memory.ts';
 import { inheritableParentPrompt } from './prompts.ts';
 
 const builtins = ['read', 'write', 'edit', 'bash', 'grep', 'find', 'ls', 'powershell'];
-const suiteTools = ['task_list', 'task_edit', 'job_start', 'job_list', 'job_read', 'job_write', 'job_stop', 'wait'];
-const nestedTools = ['agent_start', 'agent_list', 'agent_read', 'agent_send', 'agent_stop', 'wait'];
+const suiteTools = ['task_list', 'task_get', 'task_edit', 'job_start', 'job_list', 'job_get', 'job_read', 'job_write', 'job_stop', 'wait'];
+const nestedTools = ['agent_start', 'agent_list', 'agent_get', 'agent_read', 'agent_send', 'agent_stop', 'wait'];
 export function resourcePath(path: string, cwd: string): string {
   const expanded = path === '~' || path.startsWith('~/') || path.startsWith('~\\') ? homedir() + path.slice(1) : path;
   return isAbsolute(expanded) ? expanded : resolve(cwd, expanded);

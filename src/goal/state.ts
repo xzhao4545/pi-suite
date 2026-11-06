@@ -26,16 +26,23 @@ export function restoreGoal(ctx: ExtensionContext): Goal | undefined {
   return entry.data.goal ? { ...entry.data.goal } as Goal : undefined;
 }
 
-export function goalSummary(goal: Goal | undefined, schedule: Schedule, now = Date.now()): string | undefined {
+export function goalDuration(elapsedMs: number): string {
+  const seconds = Math.floor(elapsedMs / 1000), minutes = Math.floor(seconds / 60), hours = Math.floor(minutes / 60);
+  const pair = (value: number) => String(value).padStart(2, '0');
+  return hours ? `${hours}:${pair(minutes % 60)}:${pair(seconds % 60)}` : `${pair(minutes)}:${pair(seconds % 60)}`;
+}
+
+export function goalSummary(goal: Goal | undefined, schedule: Schedule, now = Date.now(), elapsedMs = goal?.elapsedMs ?? 0): string | undefined {
   if (!goal || schedule === "detached") return;
   const terminal: Record<Exclude<GoalStatus, "active">, string> = {
     paused: "⏸ goal", blocked: "⚠ goal", failed: "❌ goal",
     completed: "✅ goal", budget_limited: "⏹ goal",
   };
   if (goal.status === "completed" && now >= (goal.completedAt ?? 0) + 5000) return;
-  if (goal.status !== "active") return terminal[goal.status];
+  const time = goalDuration(elapsedMs);
+  if (goal.status !== "active") return `${terminal[goal.status]} ${time}`;
   // The footer identifies the state; /goal retains the precise wait and error details.
-  return schedule === "running" ? "🎯 goal" : "⏳ goal";
+  return `${schedule === 'running' ? '🎯 goal' : !goal.automatic && !goal.waiting ? '⏸ goal' : '⏳ goal'} ${time}`;
 }
 
 export function goalContract(goal: Goal): string {

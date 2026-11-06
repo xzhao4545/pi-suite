@@ -44,19 +44,26 @@ export class Dock implements Component {
     if (this.detail) return [];
     const limit = this.dockAllowance(this.tui?.terminal.rows ?? 24);
     const rows = [...this.sources.values()].flatMap(source => source(this.ask)).sort((a, b) => b.priority - a.priority);
-    // Reserve space for group summaries before expanding children; an orphan child
-    // or a large active group must not consume another group's only progress line.
-    const roots = rows.filter(row => !row.parentId).slice(0, limit), ids = new Set(roots.map(row => row.id));
-    const children = rows.filter(row => row.parentId && ids.has(row.parentId)).slice(0, limit - roots.length);
-    const shown = roots.flatMap(row => [row, ...children.filter(child => child.parentId === row.id)]);
+    const byId = new Map(rows.map(row => [row.id, row])), ids = new Set<string>();
+    // An important child reserves its parent too. This makes execution changes
+    // visible while keeping hierarchy and the shared height limit intact.
+    for (const row of rows) {
+      const parent = row.parentId ? byId.get(row.parentId) : undefined;
+      if (row.parentId && !parent) continue;
+      const needed = [parent, row].filter((item): item is DockRow => !!item && !ids.has(item.id));
+      if (ids.size + needed.length <= limit) for (const item of needed) ids.add(item.id);
+    }
+    const shown = rows.filter(row => !row.parentId && ids.has(row.id))
+      .flatMap(row => [row, ...rows.filter(child => child.parentId === row.id && ids.has(child.id))]);
     return shown.map((row, i) => {
-      const hidden = i === shown.length - 1 && rows.length > limit ? ` · +${rows.length - limit}` : "";
+      const hidden = i === shown.length - 1 && rows.length > shown.length ? ` · +${rows.length - shown.length}` : "";
       // Overflow counts and progress belong to the row contract, so long titles
       // cannot push either off a phone, including rows with no domain suffix.
       const suffix = truncateToWidth((row.suffix ?? '') + hidden, width);
       if (!suffix) return truncateToWidth(row.text, width);
       const titleWidth = Math.max(0, width - visibleWidth(suffix) - 1);
-      return (titleWidth ? truncateToWidth(row.text, titleWidth, '') + ' ' : '') + suffix;
+      const title = truncateToWidth(row.text, titleWidth, '');
+      return (titleWidth ? title + ' '.repeat(titleWidth - visibleWidth(title) + 1) : '') + suffix;
     });
   }
 

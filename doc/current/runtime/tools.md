@@ -9,16 +9,16 @@ runtime/tools.ts 提供 objectId、listFields、paginate、readFields、WAIT_ID_
 | 契约 | 当前规则 |
 | --- | --- |
 | 对象 ID | job_/agent_/run_ 后接 8 位小写十六进制，wf_ 后接 12 位；task 为清单内递增数字字符串，goal 使用当前目标契约的精确 goalId |
-| 单项与列表 | id 与 state/scope/cursor/limit 互斥；列表默认 active/session，agent 另有 queued |
-| 分页 | limit 默认 20、最大 100；按创建时间与 ID 倒序，返回 nextCursor |
-| 字节读取 | limitBytes 默认 16384、最大 65536；offset 为原始字节位置，处理 UTF-8 边界；返回 text/stream/offset/nextOffset/totalBytes/endOfStream 及截断或搜索信息 |
+| 单项与列表 | task/job/agent 使用 list 与 get 独立入口；列表没有单项 id，agent_list.agentId 可与历史筛选组合。tasks 默认 unfinished，jobs/agents 默认 active/session，agent 另有 queued |
+| 分页 | limit 默认 10、最大 100；同时限制约 4 KiB 页面正文，按记录边界返回 nextCursor。jobs/agents 按创建时间与 ID 倒序；tasks 按组创建时间、组/子 ID 正序，中间页补充组上下文 |
+| 字节读取 | limitBytes 默认 4096、最大 65536；offset 为原始字节位置，处理 UTF-8 边界；返回 text/stream/offset/nextOffset/totalBytes/endOfStream 及截断或搜索信息 |
 | 搜索 | 正则与 /re/flags 共用读取语法；context 默认 2、最大 20，不能脱离 search 单独使用 |
 | 等待 | wait.ids 为 1–50 个 job/agent/workflow ID，mode 默认 all；timeoutMs 默认 300000、最大 3600000，只结束此次调用，不停止对象 |
 | 停止 | requested/state/cleanup/affected，affected 列出真实受影响对象；清理尚未确认时不报告全部停止 |
 
-单对象操作首行显示对象摘要，列表与 wait 显示集合摘要，goal 显示目标动作；其后提供必要正文与可用后续入口。details 保存同一结果的结构化字段。完整输出与日志通过 read 按需读取，规则见 [jobs 读取与操作](../jobs/index.md)。
+单对象操作首行显示对象摘要，列表与 wait 显示集合摘要，goal 显示目标动作；其后提供实际变化、失败、问题与必要读取入口，固定操作说明位于工具描述。普通回执目标 1–3 行、约 512 B；批量新 ID、完整问题/选项、真实错误与清理结果优先于预算。details 保存同一结果的结构化字段，用于本地显示和控制，Provider 的模型正文使用 content。完整输出与日志通过 read 按需读取，规则见 [jobs 读取与操作](../jobs/index.md)。
 
-runtime/read.ts 的 readContinuation 共用 offset/search/context/limitBytes 续读字段，job_read 与 agent_read 的 more 提示保留当前读取方式。默认截断的 keys 数组记录所选匹配行及上下文原始范围；搜索正文、上下文和标注共同计入字节预算，超长返回行显式截断，boundedText 也供结算预览复用。
+runtime/read.ts 的 readContinuation 共用 offset/search/context/limitBytes 续读字段，job_read 与 agent_read 的 more 提示保留当前读取方式。默认截断的 keys 数组记录所选匹配行及上下文原始范围；正文明确标注遗漏，full 提示使用 offset:0 进入连续读取；搜索正文、上下文和标注共同计入字节预算，超长返回行显式截断，boundedText 也供结算预览复用。
 
 逻辑行按块累积，仅在 LF 或 EOF 合并一次；匹配前保留整行，匹配后按返回预算保存上下文。组装与原始字节扫描为线性成本，单行缓冲及解码内存随最长逻辑行增长。boundedText 只编码可能进入返回值的前缀，避免为小预览分配整行的 UTF-8 副本。
 
@@ -28,7 +28,7 @@ ask_user.timeoutMs 只控制询问期限；wait.timeoutMs 只控制等待调用�
 
 ## 错误边界
 
-模型工具使用共享 ToolError，在文本消息开头保留错误码，并指出原因或下一步。公共错误包括 INVALID_ARGS、NOT_FOUND、HISTORY_READ_ONLY、NOT_RUNNING、USER_CONTROL、STALE_BINDING、CLOSING、UNSUPPORTED_STREAM；领域还可报告明确的类型、深度、任务关联或运行时协议错误。原始存储/命令交互错误由对应边界解释，不作为另一套模型工具协议。
+模型工具使用共享 ToolError，在文本消息开头保留错误码，并指出原因或下一步。列表入口的 prepareArguments 拒绝单项或未知字段并给出 list/get 修正示例；task_edit 的 op 与字段共同校验，错误明确整批未提交。公共错误包括 INVALID_ARGS、NOT_FOUND、HISTORY_READ_ONLY、NOT_RUNNING、USER_CONTROL、STALE_BINDING、CLOSING、UNSUPPORTED_STREAM；领域还可报告明确的类型、深度、任务关联或运行时协议错误。原始存储/命令交互错误由对应边界解释，不作为另一套模型工具协议。
 
 goal_complete、goal_blocked、goal_wait 的空白参数为 INVALID_ARGS，未知 goalId 为 NOT_FOUND，非 active 目标为 NOT_RUNNING，失效运行归属或绑定为 STALE_BINDING，详见 [目标操作](../goal/operations.md)。占用的 jobs 运行时缺少所需控制能力时为 RUNTIME_UNAVAILABLE，详见 [jobs 协议与范围](../jobs/index.md)。
 

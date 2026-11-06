@@ -8,7 +8,8 @@ import type { SessionBinding } from '../runtime/binding.ts';
 import { ToolError } from '../runtime/errors.ts';
 import { taskStore, type TaskStore } from './store.ts';
 import { taskViews } from './model.ts';
-import { openBlockers, queryTasks, taskLabel, taskTitle, type TaskQuery } from './query.ts';
+import { queryTasks, taskLabel, type TaskQuery } from './query.ts';
+import { taskDisplay, taskIcon } from './presentation.ts';
 import type { TaskChange, TaskData, TaskView } from './types.ts';
 
 export const taskPath = (cwd: string, id: string) => join(resolve(cwd), '.pi', 'tasks', `tasks-${id}.json`);
@@ -32,7 +33,7 @@ export class TasksModule {
     const path = persisted ? taskPath(ctx.cwd, ctx.sessionManager.getSessionId()) : undefined;
     const store = this.inheritedStore ?? taskStore(path ?? `memory:${resolve(ctx.cwd)}:${ctx.sessionManager.getSessionId()}`, path);
     this.store = store;
-    this.unsubscribe = store.subscribe(() => this.refresh());
+    this.unsubscribe = store.subscribe(() => this.refresh(), error => ctx.ui.notify(String(error), 'error'));
     try {
       if (event.reason === 'fork') {
         // The SDK may rebuild the extension for a fork. Resolve the parent from its session
@@ -64,6 +65,10 @@ export class TasksModule {
   async edit(ctx: ExtensionContext, changes: TaskChange[], signal?: AbortSignal) {
     const result = await this.scope(ctx).edit(changes, signal); this.used(); return result;
   }
+  subscribe(ctx: ExtensionContext, refresh: () => void): () => void {
+    return this.scope(ctx).subscribe(refresh, error => ctx.ui.notify(String(error), 'error'));
+  }
+  current(ctx: ExtensionContext): TaskData { return this.scope(ctx).current; }
   private used(): void { this.lastUse = this.turn; this.reminded = false; }
   private refresh(): void {
     const next = this.store ? taskViews(this.store.current) : [];
@@ -85,11 +90,11 @@ export class TasksModule {
   rows(compact = false): DockRow[] {
     if (!this.binding.current) return [];
     const groups = this.views.filter(task => task.progress), completed = groups.filter(task => task.status === 'done').length;
-    const views = new Map(this.views.map(task => [task.id, task])), leaves = this.views.filter(task => task.parentId);
-    const blocked = new Set(this.views.filter(task => task.status !== 'done' && openBlockers(task, views).length).map(task => task.id));
+    const leaves = this.views.filter(task => task.parentId);
+    const blocked = new Set(this.views.filter(task => task.status === 'blocked').map(task => task.id));
     // Group rows are organization, so compact totals count execution tasks only.
     if (compact) return groups.length ? [{id: 'tasks:summary', text: 'Tasks', priority: 30,
-      suffix: `${leaves.filter(task => task.status === 'done').length}/${leaves.length} · doing ${leaves.filter(task => task.status === 'doing').length} · blocked ${leaves.filter(task => blocked.has(task.id)).length}`}] : [];
+      suffix: `${leaves.filter(task => task.status === 'done').length}/${leaves.length} · ⟳ ${leaves.filter(task => task.status === 'doing').length} · ⚠ ${leaves.filter(task => blocked.has(task.id)).length}`}] : [];
     const rows: DockRow[] = [];
     const children = new Map<string, TaskView[]>();
     const recent = new Map(groups.map(group => [group.id, group.updatedAt]));
@@ -106,12 +111,12 @@ export class TasksModule {
       const blockedCount = Number(blocked.has(group.id)) + (children.get(group.id) ?? []).filter(task => blocked.has(task.id)).length;
       const priority = (selected ? 50 : group.status === 'doing' ? 40 : blockedCount ? 38 : this.feedback.has(group.id) ? 35 : 30)
         + (groups.length - index) / (groups.length + 1) * 0.25;
-      rows.push({ id: `task:${group.id}`, text: `${selected ? '> ' : ''}#${group.id} ${taskTitle(group)}`,
-        suffix: `${group.progress!.done}/${group.progress!.total} ${group.status}${blockedCount ? ` · blocked ${blockedCount}` : ''}`, priority });
+      rows.push({ id: `task:${group.id}`, text: `${selected ? '› ' : ''}${taskDisplay(group, this.binding.current?.ctx.ui.theme)}`,
+        suffix: `${taskIcon(group.status)} ${group.progress!.done}/${group.progress!.total}`, priority });
       for (const task of children.get(group.id) ?? []) {
         rows.push({ id: `task:${task.id}`, parentId: `task:${group.id}`,
-          text: `  ${task.status === 'done' ? '✓' : blocked.has(task.id) ? '!' : '▶'} #${task.id} ${taskTitle(task)}`,
-          priority: task.status === 'doing' ? 40 : blocked.has(task.id) ? 38 : 35 });
+          text: `  ${taskDisplay(task, this.binding.current?.ctx.ui.theme)}`, suffix: taskIcon(task.status),
+          priority: priority + 0.5 });
       }
     }
     if (completed) rows.push({ id: 'tasks:finished', text: `Tasks · completed ${completed} groups`, priority: 10 });
@@ -120,7 +125,7 @@ export class TasksModule {
   selectGroup(id?: string): void { this.selectedGroup = id; this.dock.invalidate(); }
   registerReminders(pi: ExtensionAPI, config: () => SuiteConfig): void {
     pi.on('turn_start', () => { this.turn++; });
-    pi.on('tool_result', event => { if (event.toolName === 'task_list' || event.toolName === 'task_edit') this.used(); });
+    pi.on('tool_result', event => { if (['task_list', 'task_get', 'task_edit'].includes(event.toolName)) this.used(); });
     pi.on('context', async (event, ctx) => {
       if (!config().tasks.reminders || this.reminded || this.turn - this.lastUse < 2) return;
       const data = await this.scope(ctx).snapshot(), views = taskViews(data);

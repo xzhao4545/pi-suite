@@ -9,6 +9,8 @@ import { emptyTasks, storeSchema, type TaskChange, type TaskData } from './types
 export class TaskStore extends JsonStore<TaskData> {
   constructor(path?: string) {
     super(path, emptyTasks(), value => {
+      // Existing lists retain their IDs and content; only the storage version changes.
+      if (value && typeof value === 'object' && 'version' in value && value.version === 1) value = { ...value, version: 2 };
       if (!Value.Check(storeSchema, value)) throw new Error('Invalid version or task data');
       validateHierarchy(value); return value;
     }, 'TASK');
@@ -30,7 +32,7 @@ export class TaskStore extends JsonStore<TaskData> {
 
 // All child consumers in this Pi process share one store/queue per target. Memory-only
 // sessions also retain their list across /reload; files still lock against external writers.
-const key = Symbol.for('pi-suite.tasks.stores.v1');
+const key = Symbol.for('pi-suite.tasks.stores.v2');
 const globals = globalThis as typeof globalThis & { [key]?: Map<string, TaskStore> };
 export function taskStore(target: string, path?: string): TaskStore {
   const stores = globals[key] ??= new Map();

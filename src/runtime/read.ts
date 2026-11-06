@@ -13,7 +13,7 @@ export type ReadPage = {
   truncated?: { head: [number, number]; keys: [number, number][]; tail: [number, number]; omittedBytes: number; keyLines: number };
   matches?: number;
 };
-export const READ_LIMITS = { defaultBytes: 16384, maxBytes: 65536, maxMatches: 50, defaultContext: 2, maxContext: 20, chunk: 65536 };
+export const READ_LIMITS = { defaultBytes: 4096, maxBytes: 65536, maxMatches: 50, defaultContext: 2, maxContext: 20, chunk: 65536 };
 // Lines worth surfacing from an omitted middle section; matched case-insensitively.
 const KEY_LINE = /\b(error|errors|fail(?:ed|ure|s)?|fatal|exception|traceback|panic|denied|not found|warn(?:ing)?|exit code|segmentation fault|assert(?:ion)?)\b/i;
 

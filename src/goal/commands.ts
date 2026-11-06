@@ -3,6 +3,7 @@ import type { Notifications } from "../runtime/notifications.ts";
 import type { Dock } from "../ui/dock.ts";
 import { showDetails } from "../ui/details.ts";
 import type { GoalManager } from "./manager.ts";
+import { goalDuration } from './state.ts';
 
 export function parseGoalArgs(args: string): { text?: string; budget?: number } {
   let text = args.trim(); let budget: number | undefined;
@@ -24,7 +25,7 @@ export function registerGoalCommand(pi: ExtensionAPI, manager: GoalManager, dock
     const release = notifications.hold();
     try {
       await showDetails(ctx, dock, "Goal", `# ${goal.text}\n\nStatus: ${goal.status} · ${manager.schedule}\n\n` +
-        `ID: ${goal.id}\n\nTokens: ${goal.usedTokens}${goal.budget ? `/${goal.budget}` : " (no limit)"} · Turns: ${goal.turns} · Active elapsed: ${Math.round(goal.elapsedMs / 1000)}s\n\n` +
+        `ID: ${goal.id}\n\nTokens: ${goal.usedTokens}${goal.budget ? `/${goal.budget}` : " (no limit)"} · Turns: ${goal.turns} · Active elapsed: ${goalDuration(manager.elapsedMs)}\n\n` +
         `Progress: ${goal.progress || "not yet recorded"}${goal.error ? `\n\nError: ${goal.error}` : ""}`);
     } finally { release(); }
   };
@@ -34,7 +35,10 @@ export function registerGoalCommand(pi: ExtensionAPI, manager: GoalManager, dock
       const trimmed = args.trim();
       if (!trimmed || trimmed === "status") { await details(ctx); return; }
       if (trimmed === "pause") { manager.pause(ctx); return; }
-      if (trimmed === "resume") { manager.resume(); return; }
+      if (trimmed === "resume") {
+        if (manager.resume() === 'waiting_host') ctx.ui.notify('Goal resumed; waiting for the current response, cancellation or host operation to finish.');
+        return;
+      }
       if (trimmed === "clear" || trimmed === "stop") { manager.clear(ctx); return; }
       if (trimmed === "edit" || trimmed.startsWith("edit ")) {
         const input = parseGoalArgs(trimmed.slice(4));

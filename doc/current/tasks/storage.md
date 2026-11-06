@@ -4,11 +4,11 @@
 
 ## 数据与提交
 
-存储版本为 1，封装包含 version、nextId、tasks。任务记录包含 id、title、可选 description、可选 parentId、子任务 status、blockedBy、可选 owner、jobIds、createdAt、updatedAt。父级进度与反向依赖属于查询派生数据。
+存储版本为 2，封装包含 version、nextId、tasks。任务记录包含 id、title、可选 description、可选 parentId、子任务 status、可选 blockedReason、blockedBy、可选 owner、jobIds、createdAt、updatedAt。父级进度与反向依赖属于查询派生数据。变更回执还报告未直接编辑但有效状态变化的依赖任务，以及跨组受影响进度；不为派生状态新增存储副本。读取 version:1 时保留所有任务、ID 和内容并升级结构版本；新的状态原因按 schema 与层级不变量校验。
 
 同一 Pi 进程通过目标键取得同一个 TaskStore，每个目标的读写串行执行。持久化修改取得 `<file>.lock`，在锁内重读最新文件、复制数据并处理整个批次，再写唯一临时文件和原子重命名；校验失败或提交前取消不修改原文件和缓存。
 
-锁、串行入口、快照与原子提交由公共 runtime/json-store.ts 提供，与 agents ScheduleStore 共用；TaskStore 定义任务 schema、层级校验、整批修改与执行关联。
+锁、串行入口、快照与原子提交由公共 runtime/json-store.ts 提供，与 agents ScheduleStore 共用；TaskStore 定义任务 schema、层级校验、整批修改与执行关联。快照加载发生实际变化时广播订阅；TasksModule 与浏览器通过带错误回调的订阅启用目录 fs.watch，原子替换后合并短时间内的事件并串行读取。目录尚未创建时观察现有祖先，首次创建后转为目标目录；没有外部订阅者时释放 watcher 与刷新计时器。文件事件不调用模型，也不持续轮询；解析或监听错误明确显示，保留有效缓存。
 
 Windows 读取已有快照时也取得同一文件锁，使读取句柄在写入方原子替换前关闭；缺失快照直接返回当前状态，不创建任务目录。其他平台的快照继续读取原子发布的完整文件。删除中的 Windows 锁文件暂时不可打开时，竞争方在既有约 5 秒的锁等待范围内重试；取消与锁超时仍明确失败。
 

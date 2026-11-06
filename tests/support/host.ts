@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { fauxProvider, fauxAssistantMessage, fauxToolCall, type FauxResponseStep, type TranscriptContext } from "@earendil-works/pi-ai";
+import { fauxProvider, fauxAssistantMessage, fauxToolCall, type FauxResponseStep, type TranscriptContext, type RegisterFauxProviderOptions } from "@earendil-works/pi-ai";
 import {
   createAgentSession, DefaultResourceLoader, SessionManager, SettingsManager,
   type ExtensionAPI, type ExtensionUIContext, type Theme, type SessionStartEvent,
@@ -25,11 +25,12 @@ export async function host(options: {
   tools?: string[];
   /** Set before session_start, for turns the extension starts while binding. */
   responses?: FauxResponseStep[];
+  streaming?: Pick<RegisterFauxProviderOptions, 'tokensPerSecond' | 'tokenSize'>;
 } = {}) {
   const root = options.root ?? mkdtempSync(join(tmpdir(), "pi-suite-goal-"));
   // The extension resolves its agent dir from the environment; keep it on the session's dir.
   process.env.PI_CODING_AGENT_DIR = root;
-  const faux = fauxProvider({ provider: `suite-test-${randomUUID()}`, models: [{ id: "offline", contextWindow: options.contextWindow }] });
+  const faux = fauxProvider({ provider: `suite-test-${randomUUID()}`, models: [{ id: "offline", contextWindow: options.contextWindow }], ...options.streaming });
   if (options.responses) faux.setResponses(options.responses);
   const settingsManager = SettingsManager.inMemory({
     retry: { enabled: options.retry ?? false, maxRetries: 1, baseDelayMs: 1 },

@@ -4,10 +4,11 @@ import type { SuiteConfig } from '../runtime/config.ts';
 import { ToolError } from '../runtime/errors.ts';
 import { readBounded, readContinuation, textSource } from '../runtime/read.ts';
 import { sanitizeText } from '../runtime/text.ts';
-import { LIST_LIMITS, listFields, newestFirst, objectId, paginate, readFields, registerBoundTool, rejectContextWithoutSearch, rejectListWithId, textResult as text } from '../runtime/tools.ts';
+import { checkedArguments, LIST_LIMITS, listFields, objectId, paginate, readFields, registerBoundTool, rejectContextWithoutSearch, textResult as text } from '../runtime/tools.ts';
 import type { WaitRegistry } from '../runtime/wait.ts';
 import { taskId } from '../tasks/types.ts';
 import { thinkingSchema } from './schema.ts';
+import { questionText } from './questions.ts';
 import { AgentsModule, agentSummary, summaryLine, usageText } from './index.ts';
 import { active, executing, recordWorkspace } from './types.ts';
 import { transcript, transcriptText } from './records.ts';
@@ -17,6 +18,9 @@ import type { JobSummary } from '../jobs/types.ts';
 import { isActive as jobActive } from '../jobs/state.ts';
 
 const id = objectId('agent', 'agent_3fa1c2d0'), runId = objectId('run', 'run_3fa1c2d0');
+const listSchema = Type.Object({ agentId: Type.Optional(id), ...listFields(['active', 'queued', 'finished', 'all'] as const) }, { additionalProperties: false });
+const getSchema = Type.Object({ id, runId: Type.Optional(runId), detail: Type.Optional(Type.Boolean()) }, { additionalProperties: false });
+const queryHint = 'List history: agent_list({"agentId":"agent_3fa1c2d0","state":"all"}); one run: agent_get({"id":"agent_3fa1c2d0"}).';
 export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits: WaitRegistry, config: () => SuiteConfig, scheduler?: AgentScheduler, jobs?: Pick<JobsModule, 'createdBy'>) {
   let scheduling = Boolean(scheduler && config().agents.scheduling);
   const startFields = { prompt: Type.String({ minLength: 1 }), type: Type.Optional(Type.String({ minLength: 1 })),
@@ -42,13 +46,13 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
       if (schedule !== undefined) {
         if (!scheduler || !config().agents.scheduling) throw new ToolError('INVALID_ARGS', 'Scheduling is disabled');
         const job = await scheduler.add(request, schedule, ctx, signal);
-        return text([`${job.id} ${job.scheduleType} · ${job.name}`, `next: ${job.nextRun}`, 'manage: /subagents schedules'], { schedule: job });
+        return text([`${job.id} ${job.scheduleType} · next ${job.nextRun}`], { schedule: job });
       }
       const run = await agents.manager.start(request, agents.scope(ctx), config());
       // A mention clone has no real parent tool-call ID. Its transient result cannot
       // consume the child's answer, even when frontmatter selects a foreground run.
       if (!_id) { run.notifyResult = true; agents.manager.changed(); }
-      if (run.record.background || !_id) return text([summaryLine(agents.manager.view(run)), `read: agent_read({"id":"${run.record.id}"})`], { agent: agentSummary(agents.manager.view(run)) });
+      if (run.record.background || !_id) return text([summaryLine(agents.manager.view(run)), run.record.error], { agent: agentSummary(agents.manager.view(run)) });
       // Esc cancels only the active foreground call. Returning for a question removes this
       // listener, so answering the parent later can continue the same child in the background.
       const abort = () => { if (!run.record.background) void agents.manager.stop(run.record.id, run.record.runId); };
@@ -68,8 +72,8 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
         const record = agents.manager.view(run);
         if (!active(record.state)) agents.consume({ ...agents.settlement(record.id), runId: record.runId });
         else { run.notifyResult = true; agents.manager.changed(); }
-        return text([summaryLine(record), record.result?.slice(0, 500), record.error, ...waiting.others.map(item => item.summary),
-          waiting.results.find(item => item.question)?.summary, `read: agent_read({"id":"${record.id}"})`], { agent: agentSummary(record), wait: waiting });
+        return text([...waiting.reason !== 'condition' ? [`wait: ${waiting.reason}${waiting.pending.length ? ` · pending ${waiting.pending.join(', ')}` : ''}`] : [],
+          ...waiting.results.map(item => item.summary), ...waiting.others.map(item => item.summary)], { agent: agentSummary(record), wait: waiting });
       } finally {
         run.foreground = undefined;
         waiter.abort(new Error('Foreground caller released its wait'));
@@ -78,42 +82,47 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
     } };
   pi.registerTool(startTool);
   pi.registerTool({ name: 'agent_list', label: 'List agents',
-    description: 'List child summaries, or give id for progress, model sources and runs. state=active (default), queued, finished or all. session scope shows direct children; workspace scope discovers saved records across owners and branches.',
-    parameters: Type.Object({ id: Type.Optional(id), ...listFields(['active', 'queued', 'finished', 'all'] as const) }, { additionalProperties: false }),
+    description: 'List child runs. state=active (default), queued, finished or all; session scope shows direct children, workspace discovers saved records. agentId filters history and combines with all list fields. One run uses agent_get({id,runId?}).',
+    parameters: listSchema, prepareArguments: checkedArguments(listSchema, queryHint),
     async execute(_id, params, signal, _update, ctx) {
-      rejectListWithId(params);
       const scope = agents.scope(ctx);
-      if (params.id) {
-        const { record, run } = await agents.manager.lookup(params.id, scope, config(), undefined, signal);
-        const runs = agents.manager.records().filter(item => item.id === record.id).map(agentSummary);
-        const recent = [...runs].sort((a, b) => newestFirst({ createdAt: a.createdAt, id: a.runId }, { createdAt: b.createdAt, id: b.runId })).slice(0, LIST_LIMITS.defaultLimit);
-        let created: JobSummary[] = [], jobsUnavailable = jobs ? undefined : 'Owned job query unavailable';
-        if (jobs) try { created = await jobs.createdBy(runs.map(item => item.runId)); }
-        catch (error) {
-          if (!(error instanceof ToolError) || error.code !== 'RUNTIME_UNAVAILABLE') throw error;
-          jobsUnavailable = error.message;
-        }
-        const ownedJobs = created.filter(jobActive).map(job => ({ id: job.id, name: job.name, state: job.state, cleanup: job.cleanup.state }));
-        return text([summaryLine(record), `state: ${record.state}${run?.question ? ' · waitingFor: parent' : ''}`,
-          record.activity ? `activity: ${record.activity}` : undefined,
-          `turns: ${record.turns ?? 0} · toolUses: ${record.toolUses ?? 0} · elapsedMs: ${record.elapsedMs ?? 0}`,
-          record.lastUpdateAt ? `lastUpdateAt: ${record.lastUpdateAt}` : undefined, usageText(record),
-          `runs: ${recent.length}/${runs.length}${runs.length > recent.length ? ` · ${runs.length - recent.length} more via workspace history` : ''} · ${recent.map(item => `${item.runId} ${item.state}`).join(', ')}`,
-          `model: ${record.model} (${record.modelSource}) · thinking: ${record.thinking} (${record.thinkingSource})`,
-          record.error, run?.question ? agents.settlement(record.id).summary : undefined,
-          jobsUnavailable ? `jobs unavailable: ${jobsUnavailable}` : `jobs: ${ownedJobs.length} active`,
-          ...ownedJobs.map(job => `${job.id} ${job.state} · cleanup ${job.cleanup} · read: job_read({"id":"${job.id}"})`),
-          `read: agent_read({"id":"${record.id}"})`], { agent: agentSummary(record), runs, jobs: ownedJobs, jobsUnavailable,
-          question: run?.question?.params, waitingFor: run?.question ? 'parent' : undefined });
-      }
       if (params.scope === 'workspace') await agents.manager.discover(scope, config(), signal);
-      const state: string = params.state ?? 'active';
+      const state = params.state ?? 'active';
       const rows = agents.manager.records().filter(record => recordWorkspace(record) === (scope.run?.configCwd ?? ctx.cwd)
         && (scope.run || record.workflowId === undefined) && (params.scope === 'workspace' || agents.manager.visible(record, scope)))
-        .filter(record => state === 'all' || state === 'active' && executing(record.state) || state === 'queued' && record.state === 'queued' || state === 'finished' && !active(record.state));
-      const { page, nextCursor } = paginate(rows, record => ({ createdAt: record.createdAt, id: record.runId }), params.cursor, params.limit ?? LIST_LIMITS.defaultLimit);
-      return text([`${page.length} ${state} agents (${params.scope ?? 'session'})`, ...page.map(summaryLine),
-        nextCursor ? `more: agent_list({"state":"${state}","scope":"${params.scope ?? 'session'}","cursor":"${nextCursor}"})` : undefined], { agents: page.map(agentSummary), nextCursor });
+        .filter(record => (!params.agentId || record.id === params.agentId) && (state === 'all' || state === 'active' && executing(record.state)
+          || state === 'queued' && record.state === 'queued' || state === 'finished' && !active(record.state)));
+      const label = (record: typeof rows[number]) => `${summaryLine(record)}${agents.manager.runs.get(record.runId)?.question ? ' · waiting(parent)' : ''}${record.error ? ` · error: ${record.error}` : ''}${!agents.manager.visible(record, scope) ? ' · read-only' : ''}`;
+      const { page, nextCursor } = paginate(rows, record => ({ createdAt: record.createdAt, id: record.runId }), params.cursor, params.limit ?? LIST_LIMITS.defaultLimit,
+        { budgetBytes: LIST_LIMITS.defaultBytes - 512, size: record => Buffer.byteLength(label(record)) + 1 });
+      return text([`${page.length} ${state} agents (${params.scope ?? 'session'})`, ...page.map(label),
+        nextCursor ? `more: agent_list(${JSON.stringify({ ...params, cursor: nextCursor })})` : undefined], { agents: page.map(agentSummary), nextCursor });
+    } });
+  pi.registerTool({ name: 'agent_get', label: 'Agent',
+    description: 'Get current or specified run status, progress, model/thinking and task reference. detail:true adds configuration sources, usage and owned active jobs. Discover previous runIds with agent_list({agentId,state:"all"}); results/transcript use agent_read.',
+    parameters: getSchema, prepareArguments: checkedArguments(getSchema, queryHint),
+    async execute(_id, params, signal, _update, ctx) {
+      const scope = agents.scope(ctx), { record, run } = await agents.manager.lookup(params.id, scope, config(), params.runId, signal);
+      const lines = [summaryLine(record) + (!agents.manager.visible(record, scope) ? ' · read-only' : ''),
+        `model: ${record.model} · thinking: ${record.thinking} · turns ${record.turns ?? 0} · tools ${record.toolUses ?? 0}${record.taskId ? ` · task #${record.taskId}` : ''}`,
+        record.activity ? `activity: ${record.activity}` : undefined, record.error,
+        run?.question ? questionText(run) : undefined];
+      let created: JobSummary[] = [], jobsUnavailable: string | undefined;
+      if (params.detail) {
+        lines.push(`sources: model ${record.modelSource} · thinking ${record.thinkingSource}`, usageText(record),
+          record.contextUsage ? `context: ${record.contextUsage.tokens ?? 'unknown'}/${record.contextUsage.contextWindow} tokens${record.contextUsage.percent === null ? '' : ` · ${record.contextUsage.percent.toFixed(1)}%`}` : undefined,
+          record.lastUpdateAt ? `lastUpdateAt: ${record.lastUpdateAt}` : undefined);
+        // Explicit runId scopes ownership to that execution; an agent-level detail
+        // must also reveal jobs left by earlier executions of this same agent.
+        const roots = params.runId ? [record.runId] : agents.manager.records().filter(item => item.id === record.id).map(item => item.runId);
+        if (jobs) try { created = (await jobs.createdBy(roots)).filter(jobActive); }
+        catch (error) { if (!(error instanceof ToolError) || error.code !== 'RUNTIME_UNAVAILABLE') throw error; jobsUnavailable = error.message; }
+        else jobsUnavailable = 'Owned job query unavailable';
+        lines.push(jobsUnavailable ? `jobs unavailable: ${jobsUnavailable}` : `jobs: ${created.length} active`,
+          ...created.map(job => `${job.id} ${job.state} · cleanup ${job.cleanup.state}${job.cleanup.error ? ` · ${job.cleanup.error}` : ''}`));
+      }
+      return text(lines, { agent: agentSummary(record), jobs: created, jobsUnavailable, question: run?.question?.params,
+        waitingFor: run?.question ? 'parent' : undefined });
     } });
   pi.registerTool({ name: 'agent_read', label: 'Read agent',
     description: 'Read result (default when settled) or transcript (default while active). runId selects a previous execution of the same agent. Byte paging and regex search follow job_read; reading never resumes a model.',
@@ -125,6 +134,7 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
       const page = await readBounded(textSource(output), params, sanitizeText);
       if (!active(record.state)) agents.consume({ id: record.id, runId: record.runId, state: record.state, summary: summaryLine(record), settled: true });
       return text([`${summaryLine(record)} · ${stream} bytes ${page.offset}-${page.nextOffset} of ${page.totalBytes}`, page.text,
+        page.truncated ? `full: agent_read(${JSON.stringify({ id: record.id, runId: record.runId, stream, ...readContinuation(params, 0) })})` : undefined,
         page.endOfStream ? undefined : `more: agent_read(${JSON.stringify({ id: record.id, runId: record.runId, stream, ...readContinuation(params, page.nextOffset) })})`], { ...page, stream, agent: agentSummary(record) });
     } });
   pi.registerTool({ name: 'agent_send', label: 'Send to agent',
@@ -144,7 +154,8 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
       const { record } = await agents.manager.lookup(params.id, scope, config(), params.runId, signal);
       if (scope.run && !agents.manager.visible(record, scope)) throw new ToolError('NOT_OWNER', `${params.id} is not a direct child of this run`);
       const outcome = await agents.manager.stop(params.id, params.runId);
-      return text([`${params.id} ${outcome.state} · cleanup ${outcome.cleanup}`, ...outcome.affected.map(item => `${item.id} ${item.state}${item.cleanup ? ` · ${item.cleanup}` : ''}`)], outcome);
+      return text([`${params.id} ${outcome.state} · cleanup ${outcome.cleanup} · ${record.runId} · requested ${outcome.requested}`,
+        ...outcome.affected.map(item => `${item.id} ${item.state}${item.cleanup ? ` · ${item.cleanup}` : ''}`)], { ...outcome, runId: record.runId });
     } });
   return Object.assign(startTool, { refreshSchema() {
     const next = Boolean(scheduler && config().agents.scheduling);

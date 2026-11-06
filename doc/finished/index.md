@@ -4,6 +4,8 @@
 
 已实施模块的完整设计与原验收契约见 [设计与实施记录](./pi-suite/design/index.md)；平台证据按各专项的实际范围读取，Windows 本轮状态见 [Windows 验收收尾](./pi-suite/windows-completion.md)。
 
+- [Tasks 交互与 Goal 实时计时](./pi-suite/tasks-goal-interaction.md) — 8 项需求、统一任务显示/浏览器、原子短操作与状态同步、原生 Esc 和 resume 交错、有效运行时间。
+- [模型工具参数与精简返回](./pi-suite/tool-protocol/index.md) — list/get 查询拆分、字节预算、关键结果/问题/清理保留、全文读取与固定 schema 开销比较。
 - [交互、命令与启动优化](./pi-suite/interaction-improvements/index.md) — /subagents、可筛选详情列表、Types 模型/思考强度、/suite 编辑、/exit 原生清理与真实加载性能，以及 tmux 原生通道与用户本机粘贴验收。
 - [扩展包架构与发布](./pi-suite/architecture.md) — 单包入口、真实会话目录模块准入、共享绑定/通知/配置、来源登记与既有 owner 退出清理。
 - [统一工具设计规范](./pi-suite/tool-design.md) — 命名、公共参数/schema、返回类型、读取/等待/停止与稳定模型工具错误。

@@ -1,9 +1,9 @@
 import { resolve } from 'node:path';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
-import { fileSource, readContinuation } from '../runtime/read.ts';
+import { boundedText, fileSource, readContinuation } from '../runtime/read.ts';
 import { ToolError } from '../runtime/errors.ts';
-import { LIST_LIMITS, listFields, objectId, readFields, rejectContextWithoutSearch, rejectListWithId, textResult as text, type StopOutcome } from '../runtime/tools.ts';
+import { checkedArguments, LIST_LIMITS, listFields, objectId, readFields, rejectContextWithoutSearch, textResult as text, type StopOutcome } from '../runtime/tools.ts';
 import { translateInput } from './terminal/keys.ts';
 import { resolvePiShell } from './terminal/shell.ts';
 import { resolveWorkspace } from './workspace.ts';
@@ -22,6 +22,9 @@ import type { TasksModule } from '../tasks/index.ts';
 import { taskId as taskIdSchema } from '../tasks/types.ts';
 
 const id = objectId('job', 'job_3fa1c2d0');
+const listSchema = Type.Object(listFields(['active', 'finished', 'all'] as const), { additionalProperties: false });
+const getSchema = Type.Object({ id, detail: Type.Optional(Type.Boolean()) }, { additionalProperties: false });
+const queryHint = 'List: job_list({"state":"all"}); one job: job_get({"id":"job_3fa1c2d0"}).';
 
 export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: ViewerDeps, launch: { ask: Pick<AskManager, 'ask'>; config: () => SuiteConfig; tasks?: TasksModule; creator?: Creator; parentQuestions?: boolean }): void {
   pi.registerTool({
@@ -72,44 +75,46 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: Vie
       }
       if (taskStore && params.taskId) {
         try { await taskStore.link(params.taskId, { jobId: job.id }); }
-        catch (error) { throw new ToolError('TASK_LINK_FAILED', `${job.id} started but task #${params.taskId} could not be linked: ${String(error)}; inspect the job with job_list`, job.id); }
+        catch (error) { throw new ToolError('TASK_LINK_FAILED', `${job.id} started but task #${params.taskId} could not be linked: ${String(error)}; inspect with job_get`, job.id); }
       }
-      const next = `read: job_read({"id":"${job.id}"})${job.mode === 'pty' ? ` · input: job_write({"id":"${job.id}","input":"…","submit":true})` : ''}`;
-      if (!attach) return text([summaryLine(job), `name: ${displayName(job)}`, next], { job });
+      if (!attach) return text([summaryLine(job) + (job.timeoutMs ? ` · timeout ${job.timeoutMs}ms` : ''), job.error], { job });
       const { attachJob, screenMessage } = await import('./viewer.ts');
       const exit = await attachJob(ctx, viewer, job.id, signal);
       const now = manager.peek(job.id);
-      return text([summaryLine(now), `name: ${displayName(now)}`,
-        exit.action === 'transfer' ? screenMessage(now, exit.screen) : 'The user left the terminal view; read the output to see what happened.', next],
+      return text([summaryLine(now), now.error,
+        exit.action === 'transfer' ? screenMessage(now, exit.screen) : 'User left terminal; job continues.'],
       { job: now, attach: exit.action });
     },
   });
 
   pi.registerTool({
     name: 'job_list', label: 'List Jobs',
-    description: 'List jobs as short summaries, or give id for one job\'s detail. state: active (default), finished or all; scope: session (default) or workspace. Unsettled records from another or crashed Pi process appear only under all.',
-    parameters: Type.Object({ id: Type.Optional(id), ...listFields(['active', 'finished', 'all'] as const) }, { additionalProperties: false }),
+    description: 'List jobs. state: active (default), finished or all; scope: session (default) or workspace. Unsettled records from another or crashed process appear under all as read-only history. One job uses job_get({id}).',
+    parameters: listSchema, prepareArguments: checkedArguments(listSchema, queryHint),
     async execute(_callId, params, _signal, _update, ctx) {
-      const manager = jobs.control();
       const workspace = await resolveWorkspace(ctx.cwd);
-      rejectListWithId(params);
-      if (params.id !== undefined) {
-        const { job, live } = await manager.get(params.id, workspace);
-        return text([summaryLine(job), ...jobDetail(job), ...(live ? [] : ['history only: not controlled by this Pi process']),
-          `read: job_read({"id":"${job.id}"${job.mode === 'pipe' && job.state === 'failed' ? ',"stream":"stderr"' : ''}})`], { job, live });
-      }
       const state = params.state ?? 'active';
       const { rows, nextCursor, errors } = await jobs.list(workspace, {
-        state, scope: params.scope ?? 'session', cursor: params.cursor, limit: params.limit ?? LIST_LIMITS.defaultLimit,
+        state, scope: params.scope ?? 'session', cursor: params.cursor, limit: params.limit ?? LIST_LIMITS.defaultLimit, budgetBytes: LIST_LIMITS.defaultBytes - 512,
       }, ctx);
       return text([
         `${rows.length} ${state} job${rows.length === 1 ? '' : 's'} (${params.scope ?? 'session'})`,
-        ...rows.map(row => `${summaryLine(row.job)} · ${displayName(row.job)}${row.unsettled ? ' · unsettled history' : ''}`),
+        ...rows.map(row => `${summaryLine(row.job)} · ${boundedText(displayName(row.job), 200)}${!row.live ? ' · read-only history' : ''}${row.unsettled ? ' · unsettled' : ''}${row.job.error ? ` · error: ${row.job.error}` : ''}`),
         ...errors.map(error => `history error: ${error}`),
         nextCursor ? `more: job_list({"state":"${state}"${params.scope ? `,"scope":"${params.scope}"` : ''},"cursor":"${nextCursor}"})` : undefined,
       ], { jobs: rows.map(row => row.job), nextCursor, errors });
     },
   });
+
+  pi.registerTool({ name: 'job_get', label: 'Job', description: 'Get one job status and short command. detail:true returns full command, cwd, timing, ownership and supervision. History marked read-only cannot be controlled.',
+    parameters: getSchema, prepareArguments: checkedArguments(getSchema, queryHint),
+    async execute(_callId, params, _signal, _update, ctx) {
+      const { job, live } = await jobs.control().get(params.id, await resolveWorkspace(ctx.cwd));
+      return text([`${summaryLine(job)} · ${displayName(job)}${live ? '' : ' · read-only history'}`,
+        ...params.detail ? jobDetail(job, true) : [`command: ${boundedText(job.command, 256)}`,
+          `cleanup: ${job.cleanup.state}${job.cleanup.error ? ` · ${job.cleanup.error}` : ''}${job.taskId ? ` · task #${job.taskId}` : ''}`, job.error],
+        !params.detail && Buffer.byteLength(job.command) > 256 ? `full: job_get({"id":"${job.id}","detail":true})` : undefined], { job, live });
+    } });
 
   pi.registerTool({
     name: 'job_read', label: 'Read Job',
@@ -135,8 +140,9 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: Vie
       return text([
         `${summaryLine(job)} · ${stream} bytes ${page.offset}-${page.nextOffset} of ${page.totalBytes}${page.matches !== undefined ? ` · ${page.matches} matches` : ''}`,
         stderrNote, page.text,
+        page.truncated ? `full: job_read(${JSON.stringify({ id: job.id, stream, ...readContinuation(params, 0) })})` : undefined,
         page.endOfStream ? undefined : `more: job_read(${JSON.stringify({ id: job.id, stream, ...readContinuation(params, page.nextOffset) })})`,
-      ], page);
+      ], { ...page, id: job.id, state: job.state, exitCode: job.exitCode, signal: job.signal });
     },
   });
 
@@ -171,8 +177,7 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: Vie
       const shown = params.keys ? params.keys.join(' ') : params.paste ?? params.input ?? '';
       let current = data ? manager.write(job.id, data, { source: 'model', kind, text: params.submit ? `${shown}⏎` : shown, sensitive: params.sensitive }) : job;
       if (params.endInput) current = manager.endInput(job.id);
-      return text([summaryLine(current), `sent ${Buffer.byteLength(data)} bytes${params.endInput ? ' · stdin closed' : ''}`,
-        `read: job_read({"id":"${job.id}"})`], { job: current });
+      return text([`${summaryLine(current)} · sent ${Buffer.byteLength(data)} bytes${params.endInput ? ' · stdin closed' : ''}`], { job: current });
     },
   });
 
@@ -192,7 +197,7 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: Vie
       return text([summaryLine(job),
         requested ? (unproven ? `stop requested; cleanup ${job.cleanup.state}${job.cleanup.error ? `: ${job.cleanup.error}` : ''}` : 'stopped; managed processes confirmed gone')
           : 'already settled; no stop sent',
-        `read: job_read({"id":"${job.id}"})`], { ...outcome, job });
+        `requested: ${requested} · cleanup: ${job.cleanup.state}${job.cleanup.error ? ` · ${job.cleanup.error}` : ''}`, job.error], { ...outcome, job });
     },
   });
 }

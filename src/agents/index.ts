@@ -5,6 +5,7 @@ import type { StatusPublisher } from '../ui/status.ts';
 import type { DockRow } from '../ui/dock.ts';
 import type { Settlement, Waitable } from '../runtime/wait.ts';
 import { sanitizeText } from '../runtime/text.ts';
+import { boundedText } from '../runtime/read.ts';
 import { active, executing, type AgentRecord, type Execution, type ParentScope } from './types.ts';
 import { AGENT_ENTRY, recordsIn } from './records.ts';
 import { questionText } from './questions.ts';
@@ -13,19 +14,20 @@ import type { AgentManager } from './manager.ts';
 import type { TasksModule } from '../tasks/index.ts';
 
 export function summaryLine(record: AgentRecord): string {
-  return `${record.id} ${record.state} · ${sanitizeText(record.name).replace(/[\r\n\t]/g, ' ')} · ${record.runId}${record.elapsedMs === undefined ? '' : ` · ${(record.elapsedMs / 1000).toFixed(1)}s`}`;
+  return `${record.id} ${record.state} · ${boundedText(sanitizeText(record.name).replace(/[\r\n\t]/g, ' '), 200)} · ${record.runId}${record.elapsedMs === undefined ? '' : ` · ${(record.elapsedMs / 1000).toFixed(1)}s`}`;
 }
 export function agentSummary(record: AgentRecord) {
   const { prompt, result, ...summary } = record;
-  return { ...summary, promptSummary: prompt.slice(0, 200), resultSummary: result?.slice(0, 500) };
+  return { ...summary, promptSummary: boundedText(prompt, 200), resultSummary: result === undefined ? undefined : boundedText(result, 500) };
 }
 export function usageText(record: AgentRecord): string | undefined {
   const usage = record.usage;
   return usage && `usage: input ${usage.tokens.input} · output ${usage.tokens.output} · cacheRead ${usage.tokens.cacheRead} · cacheWrite ${usage.tokens.cacheWrite} · total ${usage.tokens.total} · cost $${usage.cost.toFixed(6)}`;
 }
 function resultSummary(record: AgentRecord): string {
-  return [summaryLine(record), usageText(record), record.error ? `error: ${sanitizeText(record.error).slice(0, 500)}` : undefined,
-    record.result?.slice(0, 500), `read: agent_read({"id":"${record.id}","runId":"${record.runId}"})`].filter(value => value !== undefined).join('\n');
+  return [summaryLine(record), record.error ? usageText(record) : undefined, record.error ? `error: ${record.error}` : undefined,
+    record.result === undefined ? undefined : boundedText(record.result, 2048),
+    record.result && Buffer.byteLength(record.result) > 2048 ? `full: agent_read({"id":"${record.id}","runId":"${record.runId}","stream":"result","offset":0})` : undefined].filter(value => value !== undefined).join('\n');
 }
 export class AgentsModule implements Waitable {
   readonly prefix = 'agent_';

@@ -13,7 +13,7 @@ import type { WaitResult } from '../../src/runtime/wait.ts';
 
 async function setup() {
   const root = agentDir(); let ctx!: ExtensionContext;
-  const h = await host({ root, tools: ['agent_start', 'agent_send', 'agent_read', 'agent_list', 'wait'],
+  const h = await host({ root, tools: ['agent_start', 'agent_send', 'agent_read', 'agent_list', 'agent_get', 'wait'],
     extend: pi => { pi.on('session_start', (_event, context) => { ctx = context; }); } });
   return { ...h, root, ctx, manager: agentRuntime(), config: loadConfig(root, root),
     invoke: (name: string, params: object, signal = new AbortController().signal) => h.session.getToolDefinition(name)!.execute('interaction', params, signal, undefined, ctx as never),
@@ -149,7 +149,7 @@ test('actual child any/all waits preserve pending runs and an unrelated direct q
     assert.equal(early.others[0].id, question.record.id); assert.equal(early.others[0].question, true);
     assert.equal(question.record.state, 'waiting'); assert.ok(question.question);
     assert.match(h.statuses.get('pi-suite:runtime')!, /🤖2/);
-    const progress = await h.invoke('agent_list', { id: question.record.id });
+    const progress = await h.invoke('agent_get', { id: question.record.id });
     assert.equal((progress.details as { agent: { state: string } }).agent.state, 'waiting');
     assert.match(output(await h.invoke('agent_read', { id: question.record.id, stream: 'transcript' })), /QUESTION_FOR_PARENT/);
     await h.invoke('agent_send', { id: question.record.id, message: 'yes' }); await question.done.promise;

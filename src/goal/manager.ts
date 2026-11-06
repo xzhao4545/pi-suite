@@ -18,6 +18,9 @@ export class GoalManager {
   private waitTimer?: NodeJS.Timeout;
   private waitWatch?: () => void;
   private completedTimer?: NodeJS.Timeout;
+  private clock?: NodeJS.Timeout;
+  private controlRevision = 0;
+  private runControlRevision = 0;
 
   constructor(private pi: ExtensionAPI, private binding: SessionBinding, private notifications: Notifications, private status: StatusPublisher,
     private waits: WaitRegistry) {
@@ -36,22 +39,35 @@ export class GoalManager {
     if (this.goal && this.binding.current) this.notifications.cancel(this.binding.current.sessionId, this.requestId);
   }
   private elapsed(): void {
-    if (this.goal && this.runningSince !== undefined) this.goal.elapsedMs += Math.max(0, Date.now() - this.runningSince);
+    if (this.goal) this.goal.elapsedMs = this.elapsedMs;
     this.runningSince = undefined;
+  }
+  /** UI ticks read the unfinished segment; only lifecycle saves append session entries. */
+  get elapsedMs(): number {
+    return (this.goal?.elapsedMs ?? 0) + (this.runningSince === undefined ? 0 : Math.max(0, performance.now() - this.runningSince));
   }
   private transition(schedule: Schedule): void {
     this.elapsed(); this.schedule = schedule;
-    if (schedule === "running" && this.goal?.status === "active") this.runningSince = Date.now();
+    if (schedule === "running" && this.goal?.status === "active") this.runningSince = performance.now();
     this.publish();
   }
   private save(): void {
     this.elapsed();
-    if (this.schedule === "running" && this.goal?.status === "active") this.runningSince = Date.now();
+    if (this.schedule === "running" && this.goal?.status === "active") this.runningSince = performance.now();
     this.pi.appendEntry(GOAL_ENTRY, { version: 1, goal: this.goal ? { ...this.goal } : null });
     this.publish();
   }
   private publish(): void {
-    this.status.setGoal(goalSummary(this.goal, this.schedule));
+    this.status.setGoal(goalSummary(this.goal, this.schedule, Date.now(), this.elapsedMs));
+    const ticking = this.goal?.status === 'active' && this.schedule === 'running' && this.status.goalVisible && this.binding.current?.ctx.mode === 'tui';
+    if (!ticking) { clearInterval(this.clock); this.clock = undefined; }
+    else if (!this.clock) {
+      const captured = this.binding.current!, goalId = this.goal!.id;
+      this.clock = setInterval(() => {
+        if (this.binding.isCurrent(captured) && this.goal?.id === goalId) this.publish();
+      }, 1000);
+      this.clock.unref();
+    }
   }
   restore(ctx: ExtensionContext, _reason: SessionStartEvent["reason"]): void {
     this.detach(); this.goal = restoreGoal(ctx);
@@ -66,6 +82,7 @@ export class GoalManager {
   detach(): void {
     this.cancelRequest(); this.elapsed(); this.disarmWait();
     clearTimeout(this.completedTimer); this.completedTimer = undefined;
+    clearInterval(this.clock); this.clock = undefined;
     this.runGoalId = undefined; this.runBinding = undefined;
     this.schedule = "detached";
     this.status.setGoal(undefined);
@@ -98,12 +115,17 @@ export class GoalManager {
     if (text !== undefined && this.goal.status === "active" && this.goal.automatic) this.request();
   }
   pause(ctx: ExtensionContext): void { if (!this.goal) throw new Error("No goal to pause"); this.stop("paused"); if (this.owned) ctx.abort(); }
-  resume(): void {
+  resume(): 'running' | 'scheduled' | 'waiting_host' {
     if (!this.goal || this.goal.status === "completed") throw new Error("No unfinished goal to resume");
     if (this.goal.budget !== undefined && this.goal.usedTokens >= this.goal.budget) throw new Error("Raise the token budget above current usage before resuming");
+    const running = this.owned && this.schedule === 'running' && this.goal.status === 'active' && this.goal.automatic;
+    // A newer explicit resume survives the aborted settlement of an older response.
+    this.controlRevision++;
     this.goal.status = "active"; this.goal.automatic = true;
     this.clearWait(); delete this.goal.error;
+    if (running) { this.save(); return 'running'; }
     this.transition("idle"); this.save(); this.request();
+    return this.binding.current?.ctx.isIdle() ? 'scheduled' : 'waiting_host';
   }
   clear(ctx: ExtensionContext): void {
     const abortRun = this.owned;
@@ -125,6 +147,7 @@ export class GoalManager {
     this.publish();
   }
   beforeStart(userInput: boolean): boolean {
+    this.runControlRevision = this.controlRevision;
     this.runGoalId = this.goal?.status === "active" && (this.goal.automatic || userInput) ? this.goal.id : undefined;
     this.runRevision = this.goal?.revision;
     this.runBinding = this.binding.current;
@@ -157,13 +180,19 @@ export class GoalManager {
   beforeSettle(event: AgentBeforeSettleEvent): void {
     if (!this.owned || this.goal?.status !== "active") return;
     if (event.outcome === "error") { this.stop("failed", this.lastError ?? "Model request failed"); return; }
-    if (event.outcome === "aborted") { this.suspend(); return; }
+    if (event.outcome === "aborted") {
+      if (this.runControlRevision === this.controlRevision) this.suspend();
+      return;
+    }
     if (!this.goal.waiting && this.goal.automatic) { this.transition("idle"); this.request(); }
   }
   settled(aborted: boolean): void {
     if (this.owned && this.goal?.status === "active") {
-      if (aborted && !this.goal.waiting) this.suspend();
-      else if (!this.goal.waiting) this.transition("idle");
+      if (aborted && !this.goal.waiting && this.runControlRevision === this.controlRevision) this.suspend();
+      else if (!this.goal.waiting) {
+        this.transition("idle");
+        if (aborted && this.goal.automatic) this.request();
+      }
     }
     this.runGoalId = undefined; this.runBinding = undefined; this.lastError = undefined;
   }

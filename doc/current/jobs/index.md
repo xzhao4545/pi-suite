@@ -53,19 +53,20 @@ job_list 的 session 范围、/jobs 默认列表与状态数量共用 JobsModule
 | 工具 | 参数与行为 |
 | --- | --- |
 | job_start | command 或 agent、mode?（pipe 默认、pty）、name?、cwd?、timeoutMs?（省略不限时）、taskId?、attach?、monitor?、handsFree?；授权后启动并返回 ID，未匹配策略的命令先询问用户。tasks 启用时 taskId 须对应当前清单的子任务，job ID 写回其执行引用；任务与 job 状态分别管理。agent 指定 preset、prompt、fork?，见 [CLI 预设与启动授权](launch.md)。attach 只用于需要用户直接操作程序的 PTY job（登录、交互提示），立即打开终端视图，用户离开视图后返回；非 PTY 或非交互界面在启动前返回 INVALID_ARGS。monitor 见下节；file-watch 不传 command 或 agent；handsFree 仅用于 PTY，见 [监督与委派](hands-free.md) |
-| job_list | id 查看详情，或 state?（active 默认、finished、all）、scope?（session 默认、workspace）、cursor?、limit?（默认 20，最大 100）；id 与列表参数混用返回 INVALID_ARGS；其他或已崩溃 Pi 进程未结算的记录只在 all 中显示为 unsettled history |
+| job_list | state?（active 默认、finished、all）、scope?（session 默认、workspace）、cursor?、limit?（默认 10，最大 100）；同时使用约 4 KiB 预算按记录分页，长名称明确缩略；历史只读和错误保持可见，其他或已崩溃 Pi 进程未结算记录只在 all 中显示为 unsettled |
+| job_get | id、detail?；默认状态、名称、短命令、任务和清理结果，长命令提供 full 入口；detail:true 返回完整命令、cwd、时间、归属和监督信息。没有本进程控制句柄时标明 read-only history |
 | job_read | id、stream?、offset?、limitBytes?、search?、context?；pipe 为 stdout（默认）、stderr、input，PTY 为 output（默认）、input，带 monitor 的 job 另有 events，其他组合返回 UNSUPPORTED_STREAM；PTY 输出转为可见文本，偏移仍指原始字节 |
 | job_write | id 与 input、keys、paste 之一，submit 追加回车，sensitive 不保存正文；endInput 关闭 pipe stdin；keys 仅 PTY；非运行状态返回 NOT_RUNNING |
 | job_stop | id；返回真实状态、requested、cleanup 与 affected |
 | wait | ids（job_/agent_/wf_ 前缀，1–50）、mode?（all 默认、any）、timeoutMs?（默认 300000，最大 3600000）；超时或取消只结束等待，不停止对象。除 ids 按 mode 满足外，当前会话可见的其他对象结算（列在 also 下并撤销其通知）、monitor 事件与 hands-free 更新（包括被等待 job 自身的）、直接 child 提问、用户插话（steer）也提前返回；details.reason 为 condition、question、event、other、user 或 timeout |
 
-结果首行格式为 `job_3fa1c2d0 completed · exit 0 · 12.4s · pipe`，清理未确认时附 cleanup 状态，最后一行给出后续调用。
+结果首行格式为 `job_3fa1c2d0 completed · exit 0 · 12.4s · pipe`，清理未确认时附 cleanup 状态。启动回执保留真实状态、mode、运行期限和错误；写入仅报告已发送字节/关闭输入，不回显正文；停止保留 requested 与实际清理结果。固定操作指南放在工具描述，失败、截断或交接保留具体后续入口。
 
 ## 输出读取
 
-src/jobs/output.ts 为模型工具、日志查看器和结算预览提供同一 reader，调用共享 runtime/read.ts；agent_read 的结果与 transcript 也复用共享读取。默认按头部、关键行和尾部组合，关键行带前后各一行，truncated 的 head/keys/tail 保留原始字节范围。搜索把正文、上下文及前缀一起计入 limitBytes，超长返回行按 UTF-8 裁剪并标注；job_read/agent_read 的续读提示保留 search/context/limitBytes。
+src/jobs/output.ts 为模型工具、日志查看器和结算预览提供同一 reader，调用共享 runtime/read.ts；agent_read 的结果与 transcript 也复用共享读取。默认 limitBytes 为 4096、最大 65536；按头部、关键行和尾部组合，关键行带前后各一行，truncated 的 head/keys/tail 保留原始字节范围。搜索把正文、上下文及前缀一起计入 limitBytes，超长返回行按 UTF-8 裁剪并标注；job_read/agent_read 的续读提示保留 search/context/limitBytes。
 
-显式 offset 页的 nextOffset 位于完整 UTF-8 字符边界，可能小于 offset+limitBytes；续读使用返回的 nextOffset。默认智能截断的 endOfStream=true 表示已扫描至文件结尾，省略的中间区域通过 truncated 范围另行 offset 或 search 读取。
+显式 offset 页的 nextOffset 位于完整 UTF-8 字符边界，可能小于 offset+limitBytes；续读使用返回的 nextOffset。默认智能截断的 endOfStream=true 表示已扫描至文件结尾，省略的中间区域通过 truncated 范围另行 offset 或 search 读取，模型正文的 full 提示用 offset:0 开始连续取回。运行中 EOF 只表示当前文件边界，不证明执行已结束。
 
 PTY 输出先以等字节空白隐藏密码回显，再处理 CR、BS、横向 CSI 定位/移动/行清理与字素宽度，折叠连续重复行；提示识别忽略紧邻提示的 CSI 控制序列，并跟踪 ConPTY 的换行、光标回移与重绘回显。无回显时的下一行普通文字保留。原始日志与分页偏移保持原值，提示之后的 offset 页仍恢复隐藏上下文。可见文本转换的范围是当前读取片段内的单条物理行；垂直移动、跨行定位、清屏与备用屏幕切换保留为按日志顺序出现的文本片段，不保证得到最终二维画面。搜索与结算预览沿用这一范围。
 

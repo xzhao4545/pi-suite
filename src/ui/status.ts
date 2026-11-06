@@ -36,6 +36,7 @@ export class StatusPublisher {
     if (text === this.goal) return;
     this.goal = text; this.flush();
   }
+  get goalVisible(): boolean { return Boolean(this.ui && this.modes.goal !== 'hidden'); }
   setActivities(kind: "agents" | "jobs", ids: Iterable<string>, details: DockRow[] = []): void {
     const next = new Set(ids), previousSize = this[kind].size;
     this[kind] = next;

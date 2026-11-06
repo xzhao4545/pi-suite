@@ -18,7 +18,7 @@ async function setup(config: object = {}) {
   const root = agentDir(); writeFileSync(join(root, 'pi-suite.json'), JSON.stringify(config));
   const metered = fauxProvider({ provider: 'suite-progress', models: [{ id: 'probe' }], tokensPerSecond: 10000, tokenSize: { min: 200, max: 200 } });
   let ctx!: ExtensionContext;
-  const h = await host({ root, tools: ['agent_list', 'agent_read'], extend: pi => {
+  const h = await host({ root, tools: ['agent_list', 'agent_get', 'agent_read'], extend: pi => {
     pi.registerProvider({ ...metered.provider, auth: { apiKey: { name: 'Offline auth', resolve: async () => ({ auth: {} }) } } });
     pi.on('session_start', (_event, context) => { ctx = context; });
   } });
@@ -62,7 +62,7 @@ test('SDK model content exposes bounded parallel activity, queued state, live us
   let observed: string | undefined, target = '';
   const respond: FauxResponseFactory = context => {
     const result = toolResult(context);
-    if (!result) return fauxAssistantMessage(fauxToolCall('agent_list', { id: target }));
+    if (!result) return fauxAssistantMessage(fauxToolCall('agent_get', { id: target, detail: true }));
     observed = output(result); return fauxAssistantMessage('progress inspected');
   };
   h.faux.setResponses(Array(10).fill(respond));
@@ -74,11 +74,11 @@ test('SDK model content exposes bounded parallel activity, queued state, live us
     const run = await h.manager.start({ type: 'probe', prompt: 'parallel probe', background: false }, { ctx: h.ctx }, h.config);
     await Promise.all([state.entered.alpha.promise, state.entered.beta.promise]);
     const queued = await h.manager.start({ type: 'probe', prompt: 'queued probe', background: false }, { ctx: h.ctx }, h.config);
-    await query(queued.record.id, value => { assert.match(value, /state: queued/); assert.match(value, /turns: 0 · toolUses: 0 · elapsedMs: 0/); });
+    await query(queued.record.id, value => { assert.match(value, /agent_[a-f0-9]+ queued/); assert.match(value, /turns 0 · tools 0/); });
     await query(run.record.id, value => {
-      assert.match(value, /state: running/); assert.match(value, /alpha/); assert.match(value, /SECOND_PARAMETER/);
+      assert.match(value, /agent_[a-f0-9]+ running/); assert.match(value, /alpha/); assert.match(value, /SECOND_PARAMETER/);
       assert.match(value, /ARGUMENT_HEAD/); assert.doesNotMatch(value, /ARGUMENT_TAIL/);
-      assert.match(value, /toolUses: 2/); assert.match(value, /lastUpdateAt:/); assert.match(value, /usage:.*total \d+.*cost \$/);
+      assert.match(value, /tools 2/); assert.match(value, /lastUpdateAt:/); assert.match(value, /usage:.*total \d+.*cost \$/);
     });
     assert.ok(run.record.usage!.tokens.total > 0);
     state.release.alpha.resolve(); await until(h.manager, () => !run.record.activity?.includes('alpha'));
@@ -88,7 +88,7 @@ test('SDK model content exposes bounded parallel activity, queued state, live us
     state.release.beta.resolve(); await streamed.promise;
     const reading = await h.invoke('agent_read', { id: run.record.id, stream: 'transcript' });
     assert.match(output(reading), /STREAM_VISIBLE/);
-    await query(run.record.id, value => { assert.match(value, /activity: Generating response/); assert.match(value, /turns: 2 · toolUses: 2/); });
+    await query(run.record.id, value => { assert.match(value, /activity: Generating response/); assert.match(value, /turns 2 · tools 2/); });
     off(); assert.equal((await run.done.promise).state, 'completed'); assert.equal((await queued.done.promise).state, 'completed');
   } finally { state.release.alpha.resolve(); state.release.beta.resolve(); delete (globalThis as unknown as Record<string, unknown>)[key]; await h.cleanup(); }
 });
@@ -104,7 +104,7 @@ test('agent progress uses all execution roots for active descendant jobs and bou
     if (prompt === 'JOB_PARENT_SECOND') return !result ? fauxAssistantMessage(fauxToolCall('agent_start', { prompt: 'JOB_NESTED', background: false })) : fauxAssistantMessage('second finished');
     if (prompt === 'JOB_NESTED') return !result ? fauxAssistantMessage(fauxToolCall('job_start', { command: 'echo NESTED_JOB; read line', name: 'owned-descendant' })) : fauxAssistantMessage('nested finished');
     if (prompt.startsWith('QUIET_')) return fauxAssistantMessage('quiet finished');
-    if (!result) return fauxAssistantMessage(fauxToolCall('agent_list', { id: target }));
+    if (!result) return fauxAssistantMessage(fauxToolCall('agent_get', { id: target, detail: true }));
     observed = output(result); return fauxAssistantMessage('jobs inspected');
   }) satisfies FauxResponseFactory));
   const original = JobsModule.prototype.createdBy;
@@ -128,22 +128,23 @@ test('agent progress uses all execution roots for active descendant jobs and bou
       const value = observed;
       assert.match(value, /jobs: 2 active/); for (const job of owned) { assert.ok(value.includes(job.id)); assert.match(value, new RegExp(`${job.id} running · cleanup`)); }
       assert.ok(!value.includes(finished.id)); assert.ok(!value.includes(cleanup.id)); assert.ok(!value.includes(unrelated.id));
-      const recent = value.split('\n').find(line => line.startsWith('runs:'))!;
-      assert.match(recent, /runs: 20\/21 · 1 more via workspace history/); assert.ok(!recent.includes(first.record.runId));
+      assert.ok(!value.includes('runs:'), 'history is paged separately');
       assert.doesNotMatch(value, /echo CHILD_JOB|echo NESTED_JOB/);
     }
-    const details = (await h.invoke('agent_list', { id: target })).details as { jobs: { id: string; cleanup: string }[]; runs: unknown[] };
-    assert.equal(details.runs.length, 21); assert.deepEqual(new Set(details.jobs.map(job => job.id)), new Set(owned.map(job => job.id)));
+    const history = (await h.invoke('agent_list', {agentId: target, state: 'all', limit: 100})).details as {agents: unknown[]};
+    assert.equal(history.agents.length, 11);
+    const details = (await h.invoke('agent_get', { id: target, detail: true })).details as { jobs: { id: string; cleanup: {state: string} }[] };
+    assert.deepEqual(new Set(details.jobs.map(job => job.id)), new Set(owned.map(job => job.id)));
     // A control bridge may report process exit before cleanup completes. Keep that job active.
     JobsModule.prototype.createdBy = function (runIds) { return original.call(this, runIds).map(job => job.id === cleanup.id ? { ...job, cleanup: { ...job.cleanup, state: 'pending' as const } } : job); };
-    const pending = await h.invoke('agent_list', { id: target });
+    const pending = await h.invoke('agent_get', { id: target, detail: true });
     assert.match(output(pending), new RegExp(`${cleanup.id} completed · cleanup pending`));
     JobsModule.prototype.createdBy = () => { throw new ToolError('RUNTIME_UNAVAILABLE', 'Legacy owner cannot query creation scope'); };
-    const unavailable = await h.invoke('agent_list', { id: target });
-    assert.match(output(unavailable), /state: completed/); assert.match(output(unavailable), /jobs unavailable:.*Legacy owner/);
+    const unavailable = await h.invoke('agent_get', { id: target, detail: true });
+    assert.match(output(unavailable), /agent_[a-f0-9]+ completed/); assert.match(output(unavailable), /jobs unavailable:.*Legacy owner/);
     assert.match((unavailable.details as { jobsUnavailable: string }).jobsUnavailable, /Legacy owner/);
     JobsModule.prototype.createdBy = () => { throw new Error('Unexpected ownership query failure'); };
-    await assert.rejects(h.invoke('agent_list', { id: target }), /Unexpected ownership query failure/);
+    await assert.rejects(h.invoke('agent_get', { id: target, detail: true }), /Unexpected ownership query failure/);
   } finally { JobsModule.prototype.createdBy = original; await h.cleanup(); }
 });
 
@@ -166,7 +167,7 @@ test('model progress includes parent waiting and failed notification exposes act
   try {
     const asking = await h.manager.start({ prompt: 'ASK_PARENT', background: false }, { ctx: h.ctx }, h.config);
     await until(h.manager, () => Boolean(asking.question));
-    assert.match(output(await h.invoke('agent_list', { id: asking.record.id })), /state: waiting · waitingFor: parent/);
+    assert.match(output(await h.invoke('agent_get', { id: asking.record.id })), /waiting\(parent\)/);
     await h.manager.send(asking.record.id, 'continue', { ctx: h.ctx }, h.config); await asking.done.promise;
     const failed = await h.manager.start({ prompt: 'FAIL_AFTER_TOOL' }, { ctx: h.ctx }, h.config);
     const finished = await failed.done.promise; failedId = failed.record.runId;

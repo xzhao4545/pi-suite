@@ -1,14 +1,15 @@
 import { paginate } from '../runtime/tools.ts';
+import { boundedText } from '../runtime/read.ts';
 import { bucket } from './state.ts';
 import type { JobReader } from './control.ts';
 import { isWorkflowGate, type JobSummary, type Workspace } from './types.ts';
-import { displayName } from './index.ts';
+import { displayName, summaryLine } from './index.ts';
 export { readJobLog, renderInput, streamsOf } from './output.ts';
 
 /** Filters shared by job_list and /jobs: same buckets and session scope as the status count. */
 export type ListState = 'active' | 'finished' | 'all';
 export type ListScope = 'session' | 'workspace';
-export interface ListQuery { state: ListState; scope: ListScope; sessionId: string; cursor?: string; limit: number }
+export interface ListQuery { state: ListState; scope: ListScope; sessionId: string; cursor?: string; limit: number; budgetBytes?: number }
 export interface ListRow { job: JobSummary; live: boolean; unsettled: boolean }
 export interface ListResult { rows: ListRow[]; nextCursor?: string; errors: string[] }
 export interface SessionScope { jobs(): JobSummary[]; visible(job: JobSummary): boolean }
@@ -23,7 +24,8 @@ export function selectJobRows(jobs: { job: JobSummary; live: boolean }[], query:
 }
 export async function listJobs(manager: JobReader, workspace: Workspace, query: ListQuery, session?: SessionScope): Promise<ListResult> {
   const { jobs, errors } = await manager.list(workspace);
-  const { page, nextCursor } = paginate(selectJobRows(jobs, query, session), row => row.job, query.cursor, query.limit);
+  const { page, nextCursor } = paginate(selectJobRows(jobs, query, session), row => row.job, query.cursor, query.limit,
+    { budgetBytes: query.budgetBytes, size: row => Buffer.byteLength(summaryLine(row.job) + boundedText(displayName(row.job), 200) + (row.job.error ?? '')) + 80 });
   return { rows: page, nextCursor, errors };
 }
 export function jobDetail(job: JobSummary, fullCommand = false): string[] {

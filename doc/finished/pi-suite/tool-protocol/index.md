@@ -1,12 +1,12 @@
 # 模型工具参数与返回精简计划
 
-状态：需求、根因与方案已记录，尚未修改实现。与 [Tasks/Goal 交互专项](../tasks-goal-interaction.md) 共同实施，保留其 8 项需求及取消/恢复优先级。
+状态：协议、返回、任务交互与验收已完成；下文保留记录时的根因和实施计划，最终行为见 current 与验收结论。与 [Tasks/Goal 交互专项](../tasks-goal-interaction.md) 共同实施，保留其 8 项需求及取消/恢复优先级。
 
 ## 新增需求
 
-- [ ] 消除 task_list 的 `INVALID_ARGS: id and parentId are exclusive` 重复失败，从参数设计提升首次调用正确率。
-- [ ] 精简 tasks、jobs、subagents 相关方法的模型返回，减少上下文占用，同时保留执行决策所需信息。
-- [ ] 对照 OMP 的真实协议、返回及全文读取方式，形成统一、可验证的实施方案。
+- [x] 消除 task_list 的 `INVALID_ARGS: id and parentId are exclusive` 重复失败，从参数设计提升首次调用正确率。
+- [x] 精简 tasks、jobs、subagents 相关方法的模型返回，减少上下文占用，同时保留执行决策所需信息。
+- [x] 对照 OMP 的真实协议、返回及全文读取方式，形成统一、可验证的实施方案。
 
 ## 根因与范围
 
@@ -40,4 +40,10 @@ Pi 的 OpenAI Responses/Completions 适配实际发送 toolResult.content，不�
 
 不新增另一套对象存储、协议注册表、模型摘要服务或 Provider 适配系统。共同参数、分页、读取与错误继续扩展 runtime/tools.ts、runtime/read.ts、runtime/errors.ts；各模块负责自身字段与状态。
 
-[返回 Pi Suite 待办](../index.md)
+## 实施完成
+
+list/get 独立注册并同步 child 白名单、错误示例、原生 UI 和模型说明；task_edit 使用短操作和原子 batch。普通回执删去固定重复指南，关键错误、退出/清理、运行期限、runId、问题、游标与全文入口保留在 content；本地 details 继续服务 UI 和控制。列表默认 10 条、约 4 KiB，读取默认 4 KiB、最大 64 KiB。wait、前台结果与 Notifications 保留原消费归属，workflow/clone 使用同一启动回执，结构化输出校验与 payload 保持完整。
+
+参数、中文/多字节页、组计数、并发/原子性、真实控制与通知组合已通过。代表性回执下降而新增 get 增加固定 schema 成本，具体数值及统计边界见 [验收结论](reference-validation.md#本轮验收结论)。
+
+[返回已完成专项](../../index.md)

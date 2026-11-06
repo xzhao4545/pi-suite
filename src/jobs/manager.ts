@@ -166,7 +166,7 @@ export class JobManager {
     }
     if (job.stopReason || this.closing || signal?.aborted) {
       await this.stop(id, signal?.aborted ? 'start_aborted' : 'quit');
-      throw new ToolError('START_NOT_COMMITTED', `Job was stopped during start; inspect with job_list({"id":"${id}"})`, id);
+      throw new ToolError('START_NOT_COMMITTED', `Job was stopped during start; inspect with job_get({"id":"${id}"})`, id);
     }
     return this.view(item);
   }
@@ -373,7 +373,7 @@ export class JobManager {
     if (item) return { job: this.view(item), live: true };
     try { return { job: await this.store.load(workspace, id), live: false }; }
     catch (error) {
-      if (errnoCode(error) === 'ENOENT') throw new ToolError('NOT_FOUND', `No job ${id} in this workspace`, id);
+      if (errnoCode(error) === 'ENOENT') throw new ToolError('NOT_FOUND', `No job ${id} in this workspace; discover with job_list({"scope":"workspace","state":"all"})`, id);
       throw error;
     }
   }

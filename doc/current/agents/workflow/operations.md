@@ -1,6 +1,6 @@
 # 工具与原生操作
 
-agent_workflow 仅由主会话使用，参数为 script、scriptPath 或 name 三选一，args?、resumeFromRunId?。工具始终后台启动，初始文件写入后返回 wf_ ID、保存的 scriptPath 和 resultPath。使用前提是用户明确要求编排、调用要求编排的技能或指定保存的 workflow；工具描述保留完整脚本、并发、结构化结果与恢复指引。
+agent_workflow 仅由主会话使用，参数为 script、scriptPath 或 name 三选一，args?、resumeFromRunId?。工具始终后台启动，初始文件写入后返回 wf_ ID、真实状态、必要日志和 resultPath；本地 details 保留 scriptPath 与恢复来源。使用前提是用户明确要求编排、调用要求编排的技能或指定保存的 workflow；工具描述保留完整脚本、并发、结构化结果与恢复指引。
 
 `wait({"ids":["wf_…"]})` 使用公共 any/all 等待，问题、其他对象结算、monitor/hands-free 更新和用户插话仍可提前返回。结束后可通过返回的 resultPath 使用 read 读取完整输出。
 

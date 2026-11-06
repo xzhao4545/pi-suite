@@ -1,8 +1,9 @@
 // Shared file locks, reload-before-write and atomic snapshots extracted from TaskStore.
 // Adapted from @tintinweb/pi-tasks 0.9.1 src/task-store.ts (MIT).
 import { randomUUID } from 'node:crypto';
+import { watch, type FSWatcher } from 'node:fs';
 import { access, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { basename, dirname } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { ToolError } from './errors.ts';
 
@@ -48,8 +49,46 @@ export class JsonStore<Data> {
   protected data: Data;
   private queue = Promise.resolve();
   private listeners = new Set<() => void>();
+  private observers = new Map<() => void, (error: unknown) => void>();
+  private watcher?: FSWatcher;
+  private refreshTimer?: NodeJS.Timeout;
   constructor(readonly path: string | undefined, initial: Data, private decode: (value: unknown) => Data, private prefix: string) { this.data = initial; }
-  subscribe(listener: () => void): () => void { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
+  subscribe(listener: () => void, onExternalError?: (error: unknown) => void): () => void {
+    this.listeners.add(listener);
+    if (onExternalError) { this.observers.set(listener, onExternalError); this.observe(); }
+    return () => {
+      this.listeners.delete(listener); this.observers.delete(listener);
+      if (!this.observers.size) { this.watcher?.close(); this.watcher = undefined; clearTimeout(this.refreshTimer); this.refreshTimer = undefined; }
+    };
+  }
+  private observe(): void {
+    if (!this.path || this.watcher || !this.observers.size) return;
+    const target = dirname(this.path);
+    let directory = target;
+    for (;;) {
+      try {
+        // Observe the directory because commits replace the inode. Before its first
+        // creation, an existing ancestor detects new directories without polling.
+        this.watcher = watch(directory, { persistent: false }, (_event, name) => {
+          if (directory !== target) { this.watcher?.close(); this.watcher = undefined; this.observe(); }
+          else if (name && String(name) !== basename(this.path!)) return;
+          if (!this.observers.size) return;
+          clearTimeout(this.refreshTimer);
+          this.refreshTimer = setTimeout(() => {
+            this.refreshTimer = undefined;
+            void this.snapshot().catch(error => { for (const report of this.observers.values()) report(error); });
+          }, 25);
+          this.refreshTimer.unref();
+        });
+        this.watcher.on('error', error => { for (const report of this.observers.values()) report(error); });
+        return;
+      } catch (error) {
+        if (code(error) === 'ENOENT' && dirname(directory) !== directory) { directory = dirname(directory); continue; }
+        for (const report of this.observers.values()) report(error);
+        return;
+      }
+    }
+  }
   get current(): Data { return this.data; }
   private async load(): Promise<Data> {
     if (!this.path) return this.data;
@@ -77,7 +116,12 @@ export class JsonStore<Data> {
         catch (error) { if (code(error) === 'ENOENT') return structuredClone(this.data); throw error; }
       }
       const token = lockPath ? await lock(lockPath, this.prefix) : undefined;
-      try { this.data = await this.load(); return structuredClone(this.data); }
+      try {
+        const data = await this.load(), changed = JSON.stringify(data) !== JSON.stringify(this.data);
+        this.data = data;
+        if (changed) for (const listener of this.listeners) listener();
+        return structuredClone(this.data);
+      }
       finally { if (lockPath && token) await unlock(lockPath, token); }
     });
   }

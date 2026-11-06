@@ -92,7 +92,7 @@ test('child asks its parent through native tools; frontend wait returns, answer 
     h.faux.setResponses([
       fauxAssistantMessage(fauxToolCall('ask_user', { question: 'Which target?', options: [{ id: 'a', title: 'Alpha' }], timeoutMs: 0 })),
       fauxAssistantMessage('Parent saw question'),
-      context => { assert.match(JSON.stringify(context.messages), /"optionIds":\["a"\]/); return fauxAssistantMessage(fauxToolCall('task_edit', { changes: [{ op: 'update', id: '2', status: 'doing' }] })); },
+      context => { assert.match(JSON.stringify(context.messages), /"optionIds":\["a"\]/); return fauxAssistantMessage(fauxToolCall('task_edit', { op: 'batch', changes: [{ op: 'update', id: '2', status: 'doing' }] })); },
       fauxAssistantMessage('child finished'),
     ]);
     run = await h.manager.start({ prompt: 'ask then work', taskId: '2', background: false }, { ctx: h.ctx, taskStore: store }, h.config);

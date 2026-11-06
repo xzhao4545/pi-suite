@@ -37,7 +37,7 @@ async function setup() {
   const outsideRun = await sourceManager.start({ prompt: 'other workspace prompt', background: false }, { ctx: { ...ctx, cwd: other } }, loadConfig(other, root));
   const outside = await outsideRun.done.promise;
   await source.dispose();
-  const h = await host({ root, persisted: true, tools: ['agent_list', 'agent_read', 'agent_send', 'agent_stop'],
+  const h = await host({ root, persisted: true, tools: ['agent_list', 'agent_get', 'agent_read', 'agent_send', 'agent_stop'],
     extend: pi => { pi.on('session_start', (_event, context) => { ctx = context; }); } });
   const manager = agentRuntime();
   const invoke = async (name: string, params: object) => h.session.getToolDefinition(name)!.execute('history-query', params, new AbortController().signal, undefined, ctx as never);
@@ -71,9 +71,9 @@ test('workspace queries discover durable owners, custom-directory target runs an
     assert.ok(h.foreign.sessionFile!.startsWith(h.customDir)); assert.equal(h.foreign.cwd, h.target);
     const old = await h.invoke('agent_read', { id: h.previous.id, runId: h.previous.runId, stream: 'transcript' });
     assert.match(JSON.stringify(old.content), /first saved answer/); assert.doesNotMatch(JSON.stringify(old.content), /second saved answer/);
-    const progress = await h.invoke('agent_list', { id: h.foreign.id });
-    const details = progress.details as { agent: Summary; runs: Summary[] };
-    assert.equal(details.agent.runId, h.foreign.runId); assert.equal(details.runs.length, 2);
+    const progress = await h.invoke('agent_get', { id: h.foreign.id });
+    const details = progress.details as { agent: Summary };
+    assert.equal(details.agent.runId, h.foreign.runId);
     assert.equal(details.agent.ownerSessionId, h.foreign.ownerSessionId);
     const found: Summary[] = []; let cursor: string | undefined;
     do {
@@ -86,7 +86,9 @@ test('workspace queries discover durable owners, custom-directory target runs an
     assert.equal(found.length, 3, 'pagination must not repeat runs of the same agent');
     const session = await h.invoke('agent_list', { state: 'all' });
     assert.deepEqual((session.details as { agents: Summary[] }).agents, []);
-    for (const tool of ['agent_list', 'agent_read', 'agent_send', 'agent_stop']) {
+    const history = await h.invoke('agent_list', {agentId: h.foreign.id, scope: 'workspace', state: 'all'});
+    assert.equal((history.details as {agents: Summary[]}).agents.length, 2);
+    for (const tool of ['agent_get', 'agent_read', 'agent_send', 'agent_stop']) {
       await assert.rejects(h.invoke(tool, { id: h.outside.id, ...tool === 'agent_send' ? { message: 'foreign workspace' } : {} }), { code: 'NOT_FOUND' });
     }
     assert.equal(h.faux.state.callCount, 0, 'history reads perform no model requests');

@@ -84,7 +84,7 @@ test("published pi-starship footer coexists with real suite execution and ask at
       async () => { entered.resolve(); await gate.promise; return fauxAssistantMessage("child done"); },
       fauxAssistantMessage(fauxToolCall("ask_user", {question: "是否继续当前任务？", options: ["继续", "等待"], timeoutMs: 0}))]);
     await h.session.prompt("/goal Footer coexistence"); await h.idle();
-    await h.session.getToolDefinition("task_edit")!.execute("tasks", {changes: [
+    await h.session.getToolDefinition("task_edit")!.execute("tasks", {op: 'batch', changes: [
       {op: "add", title: "当前任务中文长标题".repeat(7), children: ["执行任务一", "执行任务二"]},
       {op: "update", id: "2", status: "doing"},
     ]}, new AbortController().signal, undefined, ctx as never);

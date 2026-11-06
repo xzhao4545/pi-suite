@@ -32,7 +32,7 @@ test("goal_wait waitFor holds other notices until the waited job settles; settle
     assert.equal(h.faux.state.callCount, 3); assert.deepEqual(h.goal()?.waitFor, [slow]);
     await sleep(800);
     assert.equal(h.faux.state.callCount, 3, "the fast job's notice does not end a waitFor wait");
-    assert.equal(h.statuses.get("goal"), "⏳ goal");
+    assert.match(h.statuses.get("goal") ?? "", /^⏳ goal \d+:\d{2}(?::\d{2})?$/);
     const deadline = Date.now() + 15000;
     while (h.goal()?.status !== "completed" && Date.now() < deadline) { await sleep(50); await h.idle(); }
     assert.equal(h.faux.state.callCount, 5); assert.equal(h.goal()?.status, "completed");
