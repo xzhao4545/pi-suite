@@ -22,6 +22,8 @@ runtime/tools.ts 的 registerBoundTool 共用 Pi 公开工具注册，刷新描�
 
 modules.ask、modules.goal、modules.tasks、modules.jobs 与 modules.agents 在本次激活首次真实 session_start 时决定是否注册对应模块；改变开关后使用 /reload 创建新激活，按该会话 cwd 重新准入。new/resume/fork/tree 只重新绑定，沿用本次模块集合；其他配置在绑定时按当前 cwd 读取。共享 goal 状态键的 ownership 按本次是否实际创建 GoalManager 传给 StatusPublisher，不因重绑时配置值变化而越权写入或清除其他 provider 的状态。modules.jobs=false 关闭 job 工具与绑定，agents 的所属 job 查询/查看和主会话 quit 清理仍使用同一进程 owner，边界见 [jobs](../jobs/index.md#结算与停止)。maxRows 范围为 1–6；timeout 为 0–2147483647 的整数毫秒，0 不设期限。historyKey 与 jobs 终端视图的 detachKey（离开视图）、returnKey（交还模型）、transferKey（发送屏幕）使用 Pi 的按键标识。公共显示配置接受 status/dock/hidden，不接管 footer。tasks.reminders 控制临时任务提醒，默认 true；任务摘要共用 Dock，见 [任务操作](../tasks/operations.md)。
 
+`/suite` 通过通知显示部分模块状态、ask 超时与 Dock 行数，只提供查看，不提供配置编辑或保存。通用设置通过上述配置文件修改；类型启用、模型与 thinking 可通过 `/agents types` 编辑。
+
 jobs.agents 配置 CLI 键对应的 command 与 args，按键和字段合并用户/项目覆盖。jobs.launchPolicy 为 `{command, decision}` 数组，仅用户文件可设置，project 文件出现该字段时报错；精确命令未匹配时默认询问，即使未设置规则也如此。规则与操作见 [CLI 预设与启动授权](../jobs/launch.md)。启动授权复用内部 AskManager，不受 modules.ask 是否注册 ask_user 工具影响。
 
 runtime/text.ts 提供安全字面量文本转换，供任务说明、pipe 日志与 monitor 事件共用；终端回车覆写等 PTY 语义由 jobs 的终端模块处理。
