@@ -84,7 +84,7 @@ Suite 需要保留两级结构、稳定短 ID、多个执行任务并发、TaskS
 
 ### 修改建议
 
-task_edit 支持顶层单操作，日常进度使用 start/done/block/unblock；add/update/delete 处理创建和通用字段变更。批量继续用 changes，且仍在同一个 TaskStore 事务内提交，不拆成逐项工具执行。顶层单操作与批量入口互斥，schema 和执行校验使用统一操作契约。
+task_edit 支持顶层单操作，日常进度使用 start/done/block/unblock；add/update/delete 处理创建和通用字段变更。批量使用 op=batch 与 changes，且仍在同一个 TaskStore 事务内提交，不拆成逐项工具执行。顶层由 op 明确选择操作，schema 和执行校验使用统一操作契约。
 
 ```json
 {"changes":[{"op":"update","id":"2","status":"done"}]}
@@ -98,7 +98,7 @@ task_edit 支持顶层单操作，日常进度使用 start/done/block/unblock；
 {"op":"block","id":"4","reason":"等待服务恢复"}
 {"op":"unblock","id":"4"}
 {"op":"add","title":"登录流程优化","children":["检查请求链路","修复状态同步","回归验证"]}
-{"changes":[{"op":"done","id":"2"},{"op":"start","id":"3"}]}
+{"op":"batch","changes":[{"op":"done","id":"2"},{"op":"start","id":"3"}]}
 ```
 
 - 继续用短 ID，不要求模型重复完整标题；不添加字符串缩写 DSL 或含糊的位置索引。
@@ -106,6 +106,8 @@ task_edit 支持顶层单操作，日常进度使用 start/done/block/unblock；
 - 约定 unblock 将手动 blocked 任务返回 todo；完成任务不因批量 block 重新打开；父级进度与状态由统一模型派生。具体父级阻塞规则、持久 schema 升级及完成依赖的行为随实现一并明确。
 - 保留并发执行，不按 OMP 的 start 操作自动把其他 doing 任务降回 todo；不隐式完成整个 goal。
 - 调整模型工具说明，要求只发送有变化的字段，状态更新与后续实际工作尽可能同轮调用，减少纯任务更新的模型往返。
+
+用户追加的 task_list 参数冲突与所有 tasks/jobs/subagents 工具返回精简统一见 [模型工具协议计划](tool-protocol/index.md)。该计划进一步明确列表/单项入口、模型 content 与本地 details 的边界，以及批量 op=batch 的协议。
 
 ## 4. 输入框附近状态同步
 
