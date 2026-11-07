@@ -1,6 +1,6 @@
 # Ask 空闲计时、题型标记、多题切换与跳过语义
 
-状态：方案待确认，未实施。ask_user 的工具调用显示（renderCall/renderResult）归入 [工具调用显示](tool-display.md)，本文件只处理询问界面与结果语义。
+状态：方案已确认，未实施。ask_user 的工具调用显示（renderCall/renderResult）归入 [工具调用显示](tool-display.md)，本文件只处理询问界面与结果语义。
 
 ## 原始需求
 
@@ -22,7 +22,7 @@
 
 相关的同类问题：
 
-- `src/jobs/launch/authorize.ts` 第 19 行把启动确认的非 answered 结果转成 `LAUNCH_NOT_CONFIRMED`，`src/jobs/tools.ts` 第 71–73 行随后返回 `terminate: true`，所以在 job 启动确认上按 Esc 同样会结束本轮。
+- `src/jobs/launch/authorize.ts` 第 19 行把启动确认的非 answered 结果转成 `LAUNCH_NOT_CONFIRMED`，`src/jobs/tools.ts` 第 71–73 行随后返回 `terminate: true`，所以在 job 启动确认上按 Esc 同样会结束本轮。用户已决定删除 job 启动确认，见 [删除 job 启动确认](jobs-launch-confirmation.md)，本方案不再处理该路径。
 - 嵌套状态下 Esc 需要连按多次才能关闭询问（搜索/评论/操作栏 → 选项，自由输入 → 选项，最后才取消），用户连按时最后一次 Esc 可能落到宿主输入框。[INFERENCE] 宿主仍在 streaming 时这次 Esc 会调用 `session.abort()`，未实际观察到。
 
 ## OMP 参考结论
@@ -54,10 +54,6 @@
 - `src/ask/index.ts`：`terminate` 改为 `result.status === "cancelled"`；`askDetails` 的兼容字段 `cancelled` 改为 `status === "skipped" || status === "cancelled"`。工具描述与 promptGuidelines 改为：skipped 表示用户未回答；timed_out 的答案是自动选择，可作为推荐方案继续，但不得作为破坏性或需要用户同意操作的授权，这类操作需要再次询问。
 - `AskManager` 的 `onResult` 回调改为传入 status；`GoalManager.askResult` 在 answered/timed_out 时转为 running，skipped 不改变目标状态，只有 cancelled 进入 waiting_user。
 - 子代理向父级提问的 `src/agents/child.ts` 与 `src/agents/questions.ts` 由父级模型回答，不经过用户 Esc，保持现状。
-- `src/jobs/launch/authorize.ts`：
-  - 启动确认问题给 `deny`（Do not launch）加 `recommended: true`，超时自动选择的结果也是不启动。
-  - 仍保留 `result.status !== 'answered'` 才算未确认的判断，超时即使选中 allow 也不启动；这是授权问题，不接受自动选择。
-  - skipped 与 timed_out 抛出 `LAUNCH_NOT_CONFIRMED`，`src/jobs/tools.ts` 返回 `started:false` 且不 terminate，模型继续；cancelled 仍 terminate。
 - Esc 分层不变：搜索、评论、操作栏、详情、历史、带选项题的文字输入各退一层；只有回到题目的选项列表（或无选项题的输入框）时 Esc 才跳过整个询问。底部提示行显示 `Esc skip`，用户能预知下一次 Esc 的效果。
 - 跳过后焦点回到宿主输入框，模型继续生成；此时再按 Esc 是 Pi 原生的中断，这是用户主动停止模型的入口，写入 current 文档。
 
@@ -66,8 +62,9 @@
 - `AskView` 新增 `touch()`：已开始计时且未结束时，把 `deadline` 设为 `Date.now() + timeout`，清除并重新设置 `setTimeout`。
 - 调用点：`handleInput` 通过 closed 检查后的每次输入（含粘贴、搜索、阅读历史与详情）；`handleMouse` 实际处理的滚轮与点击。终端缩放不算操作。
 - 首次 render 时开始计时、排队期间不计时、整批共用一个计时器、`timeoutMs: 0` 不计时，均保持现状。
-- 倒计时显示改为 `idle 95s`，提示这是剩余空闲时间；每次操作后回到完整时长。
-- `src/ask/schema.ts` 的 `timeoutMs` 描述改为 “Milliseconds of user inactivity before expiry. Omit for configured default; 0 disables expiry. On expiry each question submits the user's current draft, else recommended options, else the first option.”；`ask.timeout` 配置含义同步改为空闲时长，默认值 120000 不变。
+- 倒计时显示改为 `idle 9:35`（分:秒），提示这是剩余空闲时间；每次操作后回到完整时长。
+- `src/ask/schema.ts` 的 `timeoutMs` 描述改为 “Milliseconds of user inactivity before expiry. Omit for configured default (600000); 0 disables expiry. On expiry each question submits the user's current draft, else recommended options, else the first option.”；`ask.timeout` 配置含义同步改为空闲时长。
+- 默认值由 120000 改为 600000（10 分钟，用户确认）：`src/runtime/config.ts` 的 `defaults.ask.timeout`、`/suite` 显示的默认值与 `doc/current/ask/index.md`、`doc/current/runtime/index.md` 的配置示例同步修改。
 
 #### 到期自动提交
 
@@ -140,14 +137,12 @@
 - `src/ask/form.ts`：增加 `answered(index)` 供页签与 Review 页使用（复用 `response(index)`）。
 - `src/ask/index.ts`、`src/ask/schema.ts`：skipped、terminate 条件、描述文本。
 - `src/goal/manager.ts`：`askResult` 按状态分支。
-- `src/jobs/launch/authorize.ts`、`src/jobs/tools.ts`：启动确认的 skipped 分支。
 
 ## 测试调整
 
 - `tests/ask/view.test.ts`：现有 “timeout starts at first render” 用例改为验证空闲计时：操作后期限后移，停止操作满期限后只结算一次 timed_out；到期答案按“草稿 → 推荐 → 第一项”选择并带 `autoSelected`，无选项且无文字的题为 unanswered。
 - `tests/ask/contracts.test.ts`：status 增加 skipped；断言只有 cancelled terminate，skipped/timed_out 不 terminate。
 - `tests/ask/coordination.test.ts`：goal 在 skipped 时状态不变，timed_out 时转为 running，cancelled 时进入 waiting_user。
-- job 启动确认：超时不启动（即使草稿选中 allow），作为授权边界的回归风险保留 1 项断言。
 - 题型标记、页签外观等显示细节不新增永久测试，在实际 CLI 中验收。
 
 ## 验收
@@ -156,7 +151,6 @@
 - [ ] 持续按键或滚动时倒计时不断回到完整时长；停止操作后到期自动提交：有草稿用草稿，否则推荐项，否则第一项；结果为 timed_out 且模型继续。
 - [ ] 3 题询问：←/→ 循环切题（含 Review 页）、页签状态、草稿保留、Review 页提交；文字输入中 ←/→ 只移动光标。
 - [ ] 模型生成中调用 ask_user，按 Esc 跳过后模型继续本轮并收到 skipped；再按 Esc 才中断模型。
-- [ ] job 启动确认按 Esc 或超时均返回未启动结果，模型继续。
-- [ ] 完成后更新 `doc/current/ask/index.md`（超时、结果状态、操作）、`doc/current/jobs/launch.md`（启动确认跳过）与 goal 操作文档中 waiting_user 的触发条件。
+- [ ] 完成后更新 `doc/current/ask/index.md`（超时、结果状态、操作）与 goal 操作文档中 waiting_user 的触发条件。
 
 [返回 Pi Suite 待办](index.md)

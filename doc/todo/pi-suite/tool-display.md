@@ -97,7 +97,7 @@ export function toolRenderers<A, D>(view: ToolView<A, D>): Pick<ToolDefinition, 
 
 | 工具 | 调用中 | 折叠 | 展开 |
 | --- | --- | --- | --- |
-| job_start | `⟳ Job · <name 或命令首行 60 列>`，meta `pipe`/`pty` | `<状态图标> job_xxx · <name> · <mode>`，带 timeout 时 meta `timeout 30s`；attach 返回时 meta `screen returned` 或 `left terminal`；未启动（拒绝/跳过）为 `⊘ Job · not started` | 完整命令、cwd、timeout、任务 ID；attach 交还时的屏幕内容 |
+| job_start | `⟳ Job · <name 或命令首行 60 列>`，meta `pipe`/`pty` | `<状态图标> job_xxx · <name> · <mode>`，带 timeout 时 meta `timeout 30s`；attach 返回时 meta `screen returned` 或 `left terminal` | 完整命令、cwd、timeout、任务 ID；attach 交还时的屏幕内容 |
 | job_list | `Jobs` | `Jobs · 3 active (session)`，有下一页时 meta `more` | 每个 job 一行 `<图标> job_xxx · name · 12.4s`，历史错误 |
 | job_get | `Job · job_xxx` | `<图标> job_xxx · <name> · <state>`，有错误时 meta `error` | 全文 |
 | job_read | `Job read · job_xxx · <stream>` | `Job read · job_xxx · <stream> 0–4096 / 12000 B`，搜索时 meta `5 matches` | 本页正文与续读提示（全文） |
