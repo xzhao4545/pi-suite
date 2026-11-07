@@ -12,16 +12,16 @@ export function askKey(data: string, form: AskForm, options: Option[], height: n
   if (data === "d") return "details";
   if (form.reviewing) return matchesKey(data, Key.enter) ? "confirm" : undefined;
   const draft = form.draft;
-  const count = options.length + Number(form.question.allowFreeform);
+  const count = options.length + 1;
   if (matchesKey(data, Key.up)) draft.cursor = Math.max(0, draft.cursor - 1);
   else if (matchesKey(data, Key.down)) draft.cursor = Math.min(count - 1, draft.cursor + 1);
   else if (matchesKey(data, Key.pageUp)) draft.cursor = Math.max(0, draft.cursor - Math.max(1, height - 2));
   else if (matchesKey(data, Key.pageDown)) draft.cursor = Math.min(count - 1, draft.cursor + Math.max(1, height - 2));
   else if (data === "/") return "search";
-  else if (data === "f" && form.question.allowFreeform) return "text";
+  else if (data === "f") return "text";
   else if (matchesKey(data, Key.enter) || data === " ") {
     const option = options[draft.cursor];
-    if (!option && form.question.allowFreeform) return "text";
+    if (!option) return "text";
     if (data === " ") { if (option) form.choose(option.id); }
     else {
       // Enter confirms multi-select without toggling its focused item off.

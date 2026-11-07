@@ -16,7 +16,8 @@ export class AskForm {
       text: question.defaultAnswer ?? "", comment: "",
       selected: new Set(question.defaultOptionIds ?? (question.defaultOptionId ? [question.defaultOptionId] : [])),
       freeform: !question.options.length || question.defaultAnswer !== undefined,
-      editing: !question.options.length || question.defaultAnswer !== undefined, cursor: 0, query: "",
+      // Page navigation owns focus until the user explicitly enters the editor.
+      editing: false, cursor: question.defaultAnswer !== undefined ? question.options.length : 0, query: "",
     }));
   }
   get question(): Question { return this.questions[this.index]; }
@@ -46,6 +47,11 @@ export class AskForm {
   answered(index: number): boolean { return this.response(index) !== undefined; }
   get complete(): boolean { return this.questions.every((_, index) => this.answered(index)); }
   responses(): Response[] { return this.questions.map((_, index) => this.response(index)!); }
+  skip(): AskResult {
+    // Skipping closes the form, not the answers already drafted; keep empty slots
+    // so subsequent responses remain attached to their original questions.
+    return { status: "skipped", responses: this.questions.map((_, index) => this.response(index)) };
+  }
   expire(): AskResult {
     // Keep question positions even when a text question has no draft: dropping a slot
     // would incorrectly attribute the next answer to the unanswered question.

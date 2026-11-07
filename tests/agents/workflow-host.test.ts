@@ -91,7 +91,7 @@ test('workflow child resume preserves its original schema/model/type/tools and p
   });
   try {
     const childResponses = [fauxAssistantMessage(fauxToolCall('StructuredOutput', {answer: 'first'})), fauxAssistantMessage('first done'),
-      (context: TranscriptContext) => { assert.match(JSON.stringify(context.messages), /FIRST/); return fauxAssistantMessage(fauxToolCall('ask_user', {question: 'Continue?', allowFreeform: true})); },
+      (context: TranscriptContext) => { assert.match(JSON.stringify(context.messages), /FIRST/); return fauxAssistantMessage(fauxToolCall('ask_user', {question: 'Continue?'})); },
       fauxAssistantMessage(fauxToolCall('StructuredOutput', {answer: 'continued'})), fauxAssistantMessage('continued done')];
     let childCall = 0, receivedQuestion = false, activeTools: string[] = [];
     h.faux.setResponses(Array(15).fill((context: TranscriptContext) => {

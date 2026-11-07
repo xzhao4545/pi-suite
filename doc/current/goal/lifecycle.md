@@ -13,7 +13,7 @@
 | 自动阈值/溢出 compact | 保留 active；willRetry 时由宿主恢复响应，否则由统一协调器调度 |
 | compact 取消或失败 | 保留 active 与等待原因，保存可用错误，停止自动工作 |
 | 宿主输入框 Esc | active、idle，停止自动续跑；新用户输入或 /goal resume 可恢复 |
-| ask_user skipped | active，保持自动许可并继续本轮；无答案，不作为同意 |
+| ask_user skipped | active，保持自动许可并继续本轮；保留已有答案，不作为整批确认或同意 |
 | ask_user timed_out | active、running，自动答案作为推荐方案继续，不作为授权 |
 | ask_user cancelled | active、waiting_user，结束宿主循环，停止自动工作 |
 | goal_wait | active、waiting_jobs；外部唤醒或单次期限恢复工作 |

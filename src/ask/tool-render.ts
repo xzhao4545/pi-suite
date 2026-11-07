@@ -14,7 +14,8 @@ export function askRenderers(title = 'Ask') {
       const batch = 'answers' in data, answers = batch ? data.answers : [{ response: data.response }];
       const unanswered = answers.filter(answer => !answer.response).length;
       return { ...stateLine(data.status), title,
-        summary: data.status === 'skipped' || data.status === 'cancelled' ? data.status : batch
+        summary: data.status === 'cancelled' ? data.status : data.status === 'skipped'
+          ? `skipped · ${batch ? `${answers.length - unanswered} answered` : answerText(data.response ?? undefined) ?? 'unanswered'}` : batch
           ? `${answers.length - unanswered} answered` : `${truncateToWidth(data.question ?? '', 40)} → ${answerText(data.response ?? undefined) ?? 'unanswered'}`,
         meta: data.status === 'timed_out' ? ['auto-selected', ...unanswered ? [`${unanswered} unanswered`] : []] : [] };
     },

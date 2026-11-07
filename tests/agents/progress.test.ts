@@ -155,7 +155,7 @@ test('model progress includes parent waiting and failed notification exposes act
   h.faux.setResponses(Array(30).fill((async context => {
     const prompt = userText(context), result = toolResult(context);
     if (prompt.includes('HOLD_PARENT')) { entered.resolve(); await release.promise; return fauxAssistantMessage('parent finished'); }
-    if (prompt === 'ASK_PARENT') return !result ? fauxAssistantMessage(fauxToolCall('ask_user', { question: 'Which action?', allowFreeform: true, timeoutMs: 0 })) : fauxAssistantMessage('answered');
+    if (prompt === 'ASK_PARENT') return !result ? fauxAssistantMessage(fauxToolCall('ask_user', { question: 'Which action?', timeoutMs: 0 })) : fauxAssistantMessage('answered');
     if (prompt === 'FAIL_AFTER_TOOL') return !result ? fauxAssistantMessage(fauxToolCall('read', { path: 'input.txt' }))
       : fauxAssistantMessage('partial answer', { stopReason: 'error', errorMessage: 'PROVIDER_REFUSED' });
     if (prompt === 'READ_CANCEL') return fauxAssistantMessage('read this result');

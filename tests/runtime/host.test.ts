@@ -29,7 +29,7 @@ test("actual Pi SDK registers one ask_user and executes typed results through it
       theme, setStatus() {}, setWidget() {}, notify() {},
       custom: async (factory: Parameters<ExtensionUIContext["custom"]>[0]) => new Promise(resolve => {
         Promise.resolve(factory(tui, theme, {} as never, resolve)).then(view => {
-          view.render(40); view.handleInput?.("\r");
+          view.render(40); view.handleInput?.("\r"); view.handleInput?.("\r");
         });
       }),
     } as unknown as ExtensionUIContext;

@@ -41,7 +41,7 @@ test("native ask results terminate only system cancellation and preserve automat
       ui: ui => ({ ...ui, custom: (async factory => new Promise(resolve => {
         Promise.resolve(factory(terminal(), ui.theme, {} as never, resolve)).then(component => {
           const view = component as AskView; view.render(40);
-          if (status === "answered") view.handleInput("\r");
+          if (status === "answered") { view.handleInput("\r"); view.handleInput("\r"); }
           else if (status === "skipped") view.handleInput("\x1b");
           else if (status === "cancelled") view.cancel();
         });
@@ -51,9 +51,10 @@ test("native ask results terminate only system cancellation and preserve automat
         question: "Q", defaultAnswer: "draft", timeoutMs: status === "timed_out" ? 1 : 0,
       }, new AbortController().signal, undefined, ctx as never);
       assert.equal(result.terminate, status === "cancelled");
-      const details = result.details as { status: string; cancelled: boolean; response: { autoSelected?: true } | null };
+      const details = result.details as { status: string; cancelled: boolean; response: { text: string; autoSelected?: true } | null };
       assert.equal(details.status, status); assert.equal(details.cancelled, status === "skipped" || status === "cancelled");
       if (status === "timed_out") assert.equal(details.response?.autoSelected, true);
+      if (status === "skipped") assert.equal(details.response?.text, 'draft');
     } finally { await h.dispose(); }
   }
 });
@@ -61,15 +62,47 @@ test("native ask results terminate only system cancellation and preserve automat
 test("external schemas and semantic normalization reject conflicting defaults and batch settings", () => {
   for (const timeoutMs of [-1, Infinity, 0.5, 2147483648]) assert.equal(Value.Check(askSchema, { question: "Q", timeoutMs }), false);
   assert.equal(Value.Check(askSchema, { question: "Q", timeoutMs: 0 }), true);
+  assert.equal(Value.Check(askSchema, { question: 'Q', allowFreeform: false }), false);
+  assert.equal(Value.Check(askSchema, { questions: [{ question: 'A', allowFreeform: false }, { question: 'B' }] }), false);
   for (const params of [
     { question: "Q", options: ["a"], defaultOptionId: "missing" },
     { question: "Q", options: ["a"], allowMultiple: true, defaultOptionId: "option-1" },
     { question: "Q", options: ["a"], defaultOptionIds: ["option-1"] },
     { question: "Q", options: ["a"], defaultAnswer: "x", defaultOptionId: "option-1" },
-    { question: "Q", options: ["a"], defaultAnswer: "x", allowFreeform: false },
     { question: "Q", options: [{ id: "a", title: "A" }, { id: "a", title: "B" }] },
     { questions: [{ question: "A" }, { question: "B" }], allowMultiple: true },
   ]) assert.throws(() => normalize(params));
+});
+
+test("native skip returns selected options, text and unanswered positions to the model and details", async () => {
+  let ctx!: ExtensionContext;
+  const h = await host({ extend: pi => { pi.on('session_start', (_event, context) => { ctx = context; }); },
+    ui: ui => ({ ...ui, custom: (async factory => new Promise(resolve => {
+      Promise.resolve(factory(terminal(), ui.theme, {} as never, resolve)).then(component => {
+        const view = component as AskView; view.render(80);
+        view.handleInput(' '); view.handleInput('\x1b[C'); view.handleInput('\x1b[C');
+        view.handleInput(' '); view.handleInput('\x1b[B'); view.handleInput(' ');
+        view.handleInput('\x1b[C'); view.handleInput('\r'); view.handleInput('partial');
+        view.handleInput('\x1b'); view.handleInput('\x1b');
+      });
+    })) as ExtensionUIContext['custom'] }) });
+  try {
+    const result = await h.session.getToolDefinition('ask_user')!.execute('partial', { questions: [
+      { question: 'Single', options: ['A', 'B'] }, { question: 'Unanswered', options: ['X'] },
+      { question: 'Multi', options: ['C', 'D'], allowMultiple: true }, { question: 'Text' },
+    ], timeoutMs: 0 }, new AbortController().signal, undefined, ctx as never);
+    const expected = { status: 'skipped', cancelled: true, kind: 'batch',
+      answers: [
+        { status: 'answered', response: { kind: 'selection', selections: ['A'], optionIds: ['option-1'] } },
+        { status: 'unanswered' },
+        { status: 'answered', response: { kind: 'selection', selections: ['C', 'D'], optionIds: ['option-1', 'option-2'] } },
+        { status: 'answered', response: { kind: 'freeform', text: 'partial' } },
+      ] };
+    assert.equal(result.terminate, false);
+    assert.ok(result.content[0].type === 'text');
+    assert.partialDeepStrictEqual(JSON.parse(result.content[0].text), expected);
+    assert.partialDeepStrictEqual(result.details, expected);
+  } finally { await h.dispose(); }
 });
 
 test("queued asks start in order and cancelled queued asks never display", async () => {

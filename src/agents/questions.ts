@@ -45,7 +45,6 @@ function answer(question: Question, text: string | string[]): Response {
     return { kind: 'selection', selections: options.map(option => option.title), optionIds: [...new Set(options.map(option => option.id))] };
   }
   if (Array.isArray(text)) throw new ToolError('INVALID_ANSWER', 'Every selection must match an option ID or title');
-  if (!question.allowFreeform) throw new ToolError('INVALID_ANSWER', 'Answer must match an option ID or title');
   return { kind: 'freeform', text };
 }
 export function answerParent(run: Execution, message: string): void {

@@ -50,10 +50,10 @@ test("mixed batches require final confirmation and retain each question's indepe
   view.render(40); view.handleInput("\r");
   assert.equal(form.index, 1); view.handleInput(" ");
   view.handleInput("\r");
-  assert.equal(form.index, 2); view.handleInput("\r");
+  assert.equal(form.index, 2); view.handleInput("\r"); view.handleInput("\r");
   assert.equal(form.reviewing, true); assert.equal(results.length, 0);
   view.handleInput("\x1b[D"); assert.equal(form.index, 2);
-  view.handleInput("\r"); assert.equal(form.reviewing, true);
+  view.handleInput("\r"); view.handleInput("\r"); assert.equal(form.reviewing, true);
   assert.equal(form.drafts[2].text, "feature/work", "reconfirming text never clears its draft");
   view.render(40); view.handleInput("\r");
   assert.equal(results[0].status, "answered");
@@ -66,7 +66,7 @@ test("mixed batches require final confirmation and retain each question's indepe
 
 test("history and answer share one view and focus changes retain text drafts", () => {
   const { view, form } = fixture({ question: "Branch", defaultAnswer: "feature/a", timeoutMs: 0 });
-  view.render(40); view.handleInput("\x08"); const history = view.render(40);
+  view.render(40); view.handleInput("\r"); view.handleInput("\x08"); const history = view.render(40);
   assert.ok(history.some(line => line.includes("Branch")));
   view.handleInput("\t"); view.handleInput("x"); view.render(40);
   assert.equal(form.draft.text, "feature/ax");
@@ -98,7 +98,7 @@ test("idle expiry keeps draft/recommended/first choices and unanswered slots; ac
   assert.deepEqual(multi.expire().responses[0], { kind: "freeform", text: "draft", comment: "reason", autoSelected: true });
   assert.deepEqual(new AskForm(normalize({ question: "Empty" })).expire(), { status: "timed_out", responses: [] });
   const answered = fixture({ question: "Q", defaultAnswer: "yes", timeoutMs: 15 });
-  answered.view.render(40); answered.view.handleInput("\r"); t.mock.timers.tick(25);
+  answered.view.render(40); answered.view.handleInput("\r"); answered.view.handleInput("\r"); t.mock.timers.tick(25);
   assert.equal(answered.results.length, 1); assert.equal(answered.results[0].status, "answered");
   const unlimited = fixture({ question: "Q", defaultAnswer: "yes", timeoutMs: 0 });
   unlimited.view.render(40); t.mock.timers.tick(100); assert.deepEqual(unlimited.results, []); unlimited.view.cancel();
@@ -126,7 +126,7 @@ test("multi-line choices, tabs, preview and Review details retain identity throu
   assert.equal(form.draft.text.endsWith('ANSWER_END'), true);
   view.handleInput('\t'); view.handleInput('\r'); // View details remains reachable while text is focused.
   assert.ok(view.render(80).some(line => line.includes('Text question')));
-  view.handleInput('\x1b'); view.handleInput('\r'); // Review
+  view.handleInput('\x1b'); view.handleInput('\r'); view.handleInput('\r'); // Review
   view.handleInput('\x1b[B'); view.handleInput('d'); view.render(80); view.handleInput('\x1b[F');
   assert.ok(view.render(80).some(line => line.includes('ANSWER_END')), 'Review full reading contains the answer');
   view.handleInput('\x1b'); view.handleInput('\x1b[C'); // first question
@@ -138,4 +138,31 @@ test("multi-line choices, tabs, preview and Review details retain identity throu
   assert.equal(form.draft.cursor, 1, 'preview wheel does not move the list cursor');
   assert.deepEqual(form.draft.selected, selected);
   view.dispose();
+});
+
+test("every choice permits text and text pages navigate outside explicit editing without losing drafts", () => {
+  for (const allowMultiple of [false, true]) {
+    const { view, form, results } = fixture({ questions: [
+      { question: 'Choice', options: ['A', 'B'], allowMultiple }, { question: 'Text' },
+    ], timeoutMs: 0 });
+    assert.match(view.render(40).join('\n'), /Type your own answer/);
+    view.handleInput('\x1b[B'); view.handleInput('\x1b[B'); view.handleInput('\r');
+    assert.equal(form.draft.editing, true);
+    view.handleInput('custom'); view.handleInput('\x1b');
+    assert.equal(form.draft.editing, false); assert.equal(form.draft.text, 'custom');
+    view.handleInput('\x1b[C'); assert.equal(form.index, 1); assert.equal(form.draft.editing, false);
+    view.handleInput('\x1b[D'); assert.equal(form.index, 0);
+    view.handleInput('\x1b[C'); view.handleInput('\r'); view.handleInput('kept');
+    view.handleInput('\x1b'); assert.equal(form.draft.editing, false);
+    assert.deepEqual(results, []); assert.equal(form.draft.text, 'kept');
+    view.handleInput('\x1b[C'); assert.equal(form.reviewing, true);
+    view.handleInput('\x1b[C'); assert.equal(form.index, 0);
+    view.handleInput('\x1b[C'); assert.equal(form.index, 1);
+    view.handleInput('\r'); view.handleInput(' text'); view.handleInput('\r');
+    assert.equal(form.reviewing, true); assert.equal(form.draft.editing, false);
+    view.handleInput('\r');
+    assert.deepEqual(results, [{ status: 'answered', responses: [
+      { kind: 'freeform', text: 'custom' }, { kind: 'freeform', text: 'kept text' },
+    ] }]);
+  }
 });

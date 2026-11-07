@@ -14,6 +14,7 @@
 - [交互、命令与启动优化](./pi-suite/interaction-improvements/index.md) — /subagents、可筛选详情列表、Types 模型/思考强度、/suite 编辑、/exit 原生清理与真实加载性能，以及 tmux 原生通道与用户本机粘贴验收。
 - [扩展包架构与发布](./pi-suite/architecture.md) — 单包入口、真实会话目录模块准入、共享绑定/通知/配置、来源登记与既有 owner 退出清理。
 - [统一工具设计规范](./pi-suite/tool-design.md) — 命名、公共参数/schema、返回类型、读取/等待/停止与稳定模型工具错误。
+- [Ask 自由回复与部分答案](./pi-suite/ask/freeform.md) — 所有题型文字入口、显式编辑与切题、跳过保留部分答案；Linux 实际 CLI 验收。
 - [ask 默认答案与预选项](./pi-suite/ask/default-answers.md) — 默认初始化、参数冲突和明确提交。
 - [ask 批量提问、多选与推荐](./pi-suite/ask/batch-selection.md) — 独立题型、稳定选项 ID 和整批确认。
 - [询问与后台通知协调阶段](./pi-suite/ask/coordination.md) — 原生问答三种结算、两个 child 父级问题、真实 job 暂存与 goal 一次合并恢复；Linux SDK 验收。

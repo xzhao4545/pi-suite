@@ -93,7 +93,7 @@ export class AskView implements Component {
     this.dock.setDetail(false);
   }
   cancel(): void { this.abort(); }
-  private skip(): void { this.finish({ status: "skipped", responses: [] }); }
+  private skip(): void { this.finish(this.form.skip()); }
   private touch(): void {
     if (!this.started || this.closed || this.timeout === 0) return;
     this.deadline = Date.now() + this.timeout;
@@ -124,6 +124,7 @@ export class AskView implements Component {
     } else this.notice = this.form.question.allowMultiple && !this.form.draft.editing ? "Space to select" : "Answer required";
   }
   private selectPage(page: number): void {
+    this.form.draft.editing = false;
     this.form.reviewing = page === this.form.questions.length;
     if (!this.form.reviewing) this.form.index = page;
     this.search.setValue(this.form.draft.query); this.focus = "answer"; this.action = 0; this.notice = "";
@@ -209,7 +210,7 @@ export class AskView implements Component {
       if (this.reading) this.closeReader(); else this.openHistory();
     } else if (matchesKey(data, Key.escape)) {
       if (this.focus !== "answer") this.focus = "answer";
-      else if (!this.form.reviewing && this.form.draft.editing && this.form.question.options.length) this.form.draft.editing = false;
+      else if (!this.form.reviewing && this.form.draft.editing) this.form.draft.editing = false;
       else this.skip();
     } else if (matchesKey(data, Key.tab)) {
       this.focus = this.focus === "actions" ? "answer" : "actions"; this.action = 0;
@@ -243,7 +244,7 @@ export class AskView implements Component {
       && event.y >= this.listRegion.y && event.y < this.listRegion.y + this.listRegion.indices.length) {
       if (event.type === 'wheel') {
         if (this.form.reviewing) this.reviewCursor = Math.max(0, Math.min(this.form.questions.length - 1, this.reviewCursor + (event.wheelDelta ?? 0)));
-        else this.form.draft.cursor = Math.max(0, Math.min(this.options().length - 1 + Number(this.form.question.allowFreeform), this.form.draft.cursor + (event.wheelDelta ?? 0)));
+        else this.form.draft.cursor = Math.max(0, Math.min(this.options().length, this.form.draft.cursor + (event.wheelDelta ?? 0)));
         result = { handled: true };
       } else if (event.type === 'click' && event.button === 'left') {
         const index = this.listRegion.indices[event.y - this.listRegion.y];
@@ -257,7 +258,7 @@ export class AskView implements Component {
     return result;
   }
   private get escapeHint(): string {
-    return this.reading || this.focus !== "answer" || (!this.form.reviewing && this.form.draft.editing && this.form.question.options.length) ? "Esc back" : "Esc skip";
+    return this.reading || this.focus !== "answer" || (!this.form.reviewing && this.form.draft.editing) ? "Esc back" : "Esc skip";
   }
   private renderActions(width: number): string {
     const active = this.actions[this.action] ?? this.actions[0];
@@ -279,7 +280,6 @@ export class AskView implements Component {
     if (this.form.reviewing) return reviewLines(this.form, this.theme, width, false)[this.reviewCursor][0];
     if (this.form.draft.editing) return this.editorLines(width, 1)[0] ?? "";
     const options = this.options();
-    if (!options.length && !this.form.question.allowFreeform) return "No matching options";
     return truncateToWidth(optionRow(this.theme, this.form.question, this.form.draft, options[this.form.draft.cursor], this.focus === "answer"), width);
   }
   private preview(option: Option): ScrollView {
@@ -289,7 +289,7 @@ export class AskView implements Component {
     return this.descriptions.get(key)!;
   }
   private optionLines(width: number, height: number, y: number, x: number): string[] {
-    const options = this.options(), choices = [...options, ...this.form.question.allowFreeform ? [undefined] : []];
+    const options = this.options(), choices = [...options, undefined];
     this.form.draft.cursor = Math.max(0, Math.min(this.form.draft.cursor, choices.length - 1));
     const wide = this.tui.terminal.columns >= 100, listWidth = wide ? Math.floor(width * 0.5) : width;
     const blocks = choices.map((option, index) => choiceLines(this.theme, this.form.question, this.form.draft, option,
@@ -317,7 +317,7 @@ export class AskView implements Component {
     const heights = this.form.questions.map((question, index) => {
       const header = questionLines(question, this.theme, geometry.width, headerCap, this.expanded).length;
       const options = question.options.reduce((height, option) => height + choiceLines(this.theme, question, this.form.drafts[index], option,
-        false, listWidth, this.expanded, wide).length, Number(question.allowFreeform));
+        false, listWidth, this.expanded, wide).length, 1);
       const preview = wide ? Math.max(0, ...question.options.map(option => this.previewForMeasure(option, geometry.width - listWidth - 3))) : 0;
       return chrome + header + Math.max(1, options, preview);
     });
@@ -390,7 +390,7 @@ export class AskView implements Component {
     else if (this.form.draft.editing) body = this.editorLines(geometry.width, bodyHeight);
     else body = this.optionLines(geometry.width, bodyHeight, bodyY, geometry.inset);
     lines.push(...body, ...Array(Math.max(0, bodyHeight - body.length)).fill(''));
-    const count = this.form.reviewing ? this.form.questions.length : this.options().length + Number(this.form.question.allowFreeform);
+    const count = this.form.reviewing ? this.form.questions.length : this.options().length + 1;
     const cursor = this.form.reviewing ? this.reviewCursor : this.form.draft.cursor;
     const scroll = this.scrollPosition, scrolling = scroll.total > scroll.height;
     if (geometry.inset && scrolling) {

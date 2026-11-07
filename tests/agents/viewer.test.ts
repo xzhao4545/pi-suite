@@ -55,7 +55,7 @@ const visibleActions = (view: DetailsView) => view.actions.filter(action => acti
 test('viewer answers workflow questions, preserves search through input and requires two x presses to stop the selected live run', {timeout: 15000}, async () => {
   const h = await setup(), gate = Promise.withResolvers<void>(), entered = Promise.withResolvers<void>();
   try {
-    h.faux.setResponses([fauxAssistantMessage(fauxToolCall('ask_user', {question: 'What next?', allowFreeform: true, timeoutMs: 0})),
+    h.faux.setResponses([fauxAssistantMessage(fauxToolCall('ask_user', {question: 'What next?', timeoutMs: 0})),
       async (_context, options) => { entered.resolve(); options?.signal?.addEventListener('abort', () => gate.resolve(), {once: true}); await gate.promise; return fauxAssistantMessage('question answered'); }]);
     const run = await h.manager.start({prompt: 'workflow question'}, {ctx: h.ctx}, h.config, undefined, {workflowId: 'wf_viewer'});
     await until(h.manager, () => Boolean(run.question));

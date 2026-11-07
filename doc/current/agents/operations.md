@@ -62,7 +62,7 @@ TUI 输入 `@explore 消息` 或 `@agent-explore 消息` 可以发送给 Explore
 
 child ask_user 使用共享 schema 与 response/details，工具挂起期间为 waiting(parent)。问题只交给直接父级，包含选项 ID、标题和 agent_send 提示；顶级通过统一 Notifications，嵌套通过父 child 的通知边界/共享等待返回。提问与结果请求分别使用 `agent:<agentId>:<runId>:ask`、`agent:<agentId>:<runId>:result`，消费或撤销限定该次 run，恢复后的新执行保留自己的通知。顶层 workflow child 的问题也交给所属主会话，可用 agent_send 回答；普通引导与恢复由 workflow 控制。
 
-message 与选项 ID/标题精确匹配时返回 selection，否则在 allowFreeform=true 时返回 freeform。多选可发送 JSON 字符串数组；批量问题发送对应题数的 JSON 数组，每题元素为文本或选择数组。返回标记 source=parent，不能把父级回答声称为用户直接授权。期限默认使用 ask.timeout，timeoutMs=0 无期限；超时和取消保留非回答状态，并使 child 以 stopped 结算。
+message 与选项 ID/标题精确匹配时返回 selection，否则返回 freeform，单选与多选同样允许文字回答。多选可发送 JSON 字符串数组；批量问题发送对应题数的 JSON 数组，每题元素为文本或选择数组。返回标记 source=parent，不能把父级回答声称为用户直接授权。期限默认使用 ask.timeout，timeoutMs=0 无期限；超时和取消保留非回答状态，并使 child 以 stopped 结算。
 
 ## 类型与模型
 

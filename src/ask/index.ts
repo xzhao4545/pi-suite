@@ -11,7 +11,7 @@ import { registerBoundTool, toolRenderer } from '../runtime/tools.ts';
 import { askRenderers } from './tool-render.ts';
 
 export function askDetails(params: AskParams, questions: Question[], result: AskResult) {
-  // Expired answers are recommendations, while skipped/cancelled contain no user answer.
+  // A skipped form retains partial user answers; cancellation carries no answers.
   const common = { status: result.status, cancelled: result.status === "skipped" || result.status === "cancelled" };
   return params.questions ? {
     ...common, kind: "batch", heading: params.question, questions,
@@ -66,9 +66,9 @@ export function registerAsk(pi: ExtensionAPI, manager: AskManager, getConfig: ()
   registerBoundTool(pi, {
     ...askRenderers(),
     name: "ask_user", label: "Ask user",
-    description: "Ask one focused question or 2–4 independent questions. User input resets the idle timeout (default 10 minutes). Expiry submits drafts, else recommended options, else the first option; timed_out answers are auto-selected, never consent. Esc skips without stopping your response.",
+    description: "Ask one focused question or 2–4 independent questions. Every question permits a freeform answer, including single/multiple choice. User input resets the idle timeout (default 10 minutes). Expiry submits drafts, else recommended options, else the first option; timed_out answers are auto-selected, never consent. Esc skips while retaining existing answers without stopping your response.",
     promptGuidelines: ["Put batch settings inside each questions entry. Recommended options are separate from defaultOptionId/defaultOptionIds.",
-      "skipped means the user did not answer: continue work that does not depend on the answer, or ask again later.",
+      "skipped retains partial answers; unanswered entries remain unanswered. Use the supplied answers and continue independent work, or ask missing questions again later.",
       "timed_out answers are automatic recommendations, not explicit user choices. Do not use skipped, timed_out or cancelled as authorization for destructive actions or work requiring consent; ask again for explicit consent."],
     parameters: askSchema, executionMode: "sequential",
     async execute(_id, params, signal, _update, ctx) {

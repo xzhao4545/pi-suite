@@ -26,7 +26,7 @@ function waitFor(subscribe: (listener: () => void) => () => void, condition: () 
     const off = subscribe(() => { if (condition()) { clearTimeout(timer); off(); resolve(); } });
   });
 }
-function answer(view: AskView) { view.handleInput('\r'); }
+function answer(view: AskView) { view.handleInput('\r'); view.handleInput('\r'); }
 
 test('native asks hold real child questions and job completion; only system cancellation requires user input and each wake merges once', { timeout: 15000 }, async () => {
   for (const outcome of ['answered', 'skipped', 'timed_out', 'cancelled'] as const) {
