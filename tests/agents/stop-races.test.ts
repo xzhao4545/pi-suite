@@ -13,6 +13,7 @@ import type { Execution } from '../../src/agents/types.ts';
 import { loadConfig } from '../../src/runtime/config.ts';
 import { ToolError } from '../../src/runtime/errors.ts';
 import type { StopOutcome } from '../../src/runtime/tools.ts';
+import { JobStore } from '../../src/jobs/store.ts';
 import { TaskStore } from '../../src/tasks/store.ts';
 
 async function setup() {
@@ -110,9 +111,9 @@ test('pending cleanup closes resume admission after task I/O and old-run stop pr
   } finally { releaseOld?.(); admission.resolve(); cleanup.resolve(); sweepCleanup.resolve(); next.resolve(); await manager.shutdown(); await h.cleanup(); }
 });
 
-test('cascade cleanup joins descendant finalization, isolates jobs and prevents late process launch', {timeout: 15000}, async () => {
-  const h = await setup(), parentGate = Promise.withResolvers<void>(), authorized = Promise.withResolvers<void>();
-  const authorizationEntered = Promise.withResolvers<void>(), jobs = jobManager(h.root), shell = testShell();
+test('cascade cleanup joins descendant finalization, isolates jobs and prevents late process launch', {timeout: 15000}, async t => {
+  const h = await setup(), parentGate = Promise.withResolvers<void>(), lookupFinished = Promise.withResolvers<void>();
+  const lookupEntered = Promise.withResolvers<void>(), jobs = jobManager(h.root), shell = testShell();
   const naturalParentGate = Promise.withResolvers<void>(), finalization = Promise.withResolvers<void>();
   const childFinalizing = Promise.withResolvers<void>();
   const failingParentGate = Promise.withResolvers<void>(), siblingGate = Promise.withResolvers<void>();
@@ -141,13 +142,19 @@ test('cascade cleanup joins descendant finalization, isolates jobs and prevents 
     manager.sweep(Date.now() + 10 * 60_000 + 1);
     assert.equal(manager.get(child.record.id).run, undefined);
     const sibling = await jobs.start({...owner, command: 'read sibling'}, shell);
+    const workspaceBytes = JobStore.prototype.workspaceBytes;
+    // Pause an actual pre-allocation I/O boundary while the creator scope closes.
+    t.mock.method(JobStore.prototype, 'workspaceBytes', async function(this: JobStore, workspace: Parameters<JobStore['workspaceBytes']>[0]) {
+      lookupEntered.resolve(); await lookupFinished.promise;
+      return workspaceBytes.call(this, workspace);
+    });
     late = jobs.start({...owner, command: 'echo late; read line', creator: {
       agentId: child.record.id, runId: child.record.runId, ancestors: child.record.ancestors,
-    }}, shell, undefined, async () => { authorizationEntered.resolve(); await authorized.promise; }).then(
+    }}, shell).then(
       () => assert.fail('a closed creator must not launch a process'),
       (error: unknown) => { assert.ok(error instanceof ToolError); assert.equal(error.code, 'START_NOT_COMMITTED'); return error; },
     );
-    await authorizationEntered.promise;
+    await lookupEntered.promise; t.mock.restoreAll();
     const stopping = manager.stop(parent.record.id);
     parentGate.resolve(); const stopped = await stopping;
     assert.equal(stopped.cleanup, 'confirmed');
@@ -155,7 +162,7 @@ test('cascade cleanup joins descendant finalization, isolates jobs and prevents 
     assert.equal(jobs.peek(childJobId).cleanup.rootExited, true);
     assert.equal(jobs.peek(sibling.id).state, 'running');
     assert.equal(manager.get(child.record.id).record.state, 'completed');
-    authorized.resolve(); const error = await late; assert.ok(error.objectId);
+    lookupFinished.resolve(); const error = await late; assert.ok(error.objectId);
     const prevented = jobs.peek(error.objectId);
     assert.equal(prevented.state, 'stopped'); assert.equal(prevented.stopReason, 'agent');
     assert.equal(prevented.startedAt, undefined); assert.equal(prevented.cleanup.state, 'not_required');
@@ -223,7 +230,7 @@ test('cascade cleanup joins descendant finalization, isolates jobs and prevents 
     assert.equal((await lastChild.done.promise).state, 'completed');
     assert.equal(jobs.peek(parentJobId).state, 'stopped'); assert.equal(jobs.peek(parentJobId).cleanup.rootExited, true);
   } finally {
-    parentGate.resolve(); authorized.resolve(); naturalParentGate.resolve(); finalization.resolve();
+    parentGate.resolve(); lookupFinished.resolve(); naturalParentGate.resolve(); finalization.resolve();
     failingParentGate.resolve(); siblingGate.resolve(); lastFinalization.resolve(); await late;
     await failing?.shutdown(); await natural?.shutdown(); await manager.shutdown(); await jobs.shutdown(Date.now() + 5000); await h.cleanup();
   }

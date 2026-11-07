@@ -4,6 +4,7 @@
 
 已实施模块的完整设计与原验收契约见 [设计与实施记录](./pi-suite/design/index.md)；平台证据按各专项的实际范围读取，Windows 本轮状态见 [Windows 验收收尾](./pi-suite/windows-completion.md)。
 
+- [删除 job 启动确认](./pi-suite/jobs/launch-confirmation.md) — 普通命令、CLI 预设、monitor 与 detector 直接执行，严格配置与设置入口同步；Linux 实际 Pi CLI PTY 验收。
 - [Tasks 交互与 Goal 实时计时](./pi-suite/tasks-goal-interaction.md) — 8 项需求、统一任务显示/浏览器、原子短操作与状态同步、原生 Esc 和 resume 交错、有效运行时间。
 - [模型工具参数与精简返回](./pi-suite/tool-protocol/index.md) — list/get 查询拆分、字节预算、关键结果/问题/清理保留、全文读取与固定 schema 开销比较。
 - [交互、命令与启动优化](./pi-suite/interaction-improvements/index.md) — /subagents、可筛选详情列表、Types 模型/思考强度、/suite 编辑、/exit 原生清理与真实加载性能，以及 tmux 原生通道与用户本机粘贴验收。

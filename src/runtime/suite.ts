@@ -38,8 +38,8 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
   if (tasks) { taskApi![1].registerTaskTools(pi, tasks); taskApi![2].registerTasksCommand(pi, tasks, dock, notifications); tasks.registerReminders(pi, () => config); }
   const waits = new WaitRegistry();
   const goal = config.modules.goal ? new goalApi![0].GoalManager(pi, binding, notifications, status, waits) : undefined;
-  const ask = new AskManager(binding, notifications, dock, (answered, ctx) => goal?.askResult(answered, ctx));
-  if (config.modules.ask) registerAsk(pi, ask, () => config);
+  const ask = config.modules.ask ? new AskManager(binding, notifications, dock, (answered, ctx) => goal?.askResult(answered, ctx)) : undefined;
+  if (ask) registerAsk(pi, ask, () => config);
   const creatorRoots = () => {
     const ctx = binding.current?.ctx;
     if (!ctx) return [];
@@ -51,7 +51,7 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
   const jobs = config.modules.jobs ? new jobApi![0].JobsModule(pi, binding, notifications, status, creatorRoots) : undefined;
   const jobViewer = jobs ? { jobs, dock, notifications, keys: () => config.jobs } : undefined;
   if (jobs) {
-    jobApi![1].registerJobTools(pi, jobs, jobViewer!, { ask, config: () => config, tasks }); jobApi![2].registerJobsCommand(pi, jobViewer!); waits.register(jobs);
+    jobApi![1].registerJobTools(pi, jobs, jobViewer!, { config: () => config, tasks }); jobApi![2].registerJobsCommand(pi, jobViewer!); waits.register(jobs);
   }
   const agents = config.modules.agents ? new agentApi![0].AgentsModule(pi, binding, notifications, status, tasks) : undefined;
   const agentJobViewer = agents ? {pi, viewer: jobViewer ?? {jobs: new jobApi![0].JobsModule(pi, binding, notifications, status, creatorRoots), dock, notifications, keys: () => config.jobs}} : undefined;
@@ -91,7 +91,7 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
   const bindSession = async (ctx: Parameters<SessionBinding["bind"]>[0], reason: "startup" | "reload" | "new" | "resume" | "fork", previousSessionFile?: string) => {
     // Tree navigation has no shutdown event. Revoke the old readers and timers before
     // rebinding, without appending their state into the branch the host just selected.
-    schedules?.stop(); ask.cancel(); goal?.detach(); jobs?.detach(); workflows?.detach(); agents?.detach(); notifications.detach();
+    schedules?.stop(); ask?.cancel(); goal?.detach(); jobs?.detach(); workflows?.detach(); agents?.detach(); notifications.detach();
     if (!firstBinding) config = loadConfig(ctx.cwd);
     firstBinding = false; cachedTypes = undefined;
     await prepareClipboard(pi, ctx);
@@ -111,7 +111,7 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
   pi.on("session_shutdown", async event => {
     agentRpc?.detach();
     schedules?.stop();
-    ask.cancel(); goal?.shutdown();
+    ask?.cancel(); goal?.shutdown();
     tasks?.detach();
     // Detach before revoking so pending job notices are cancelled under the old session ID.
     (jobs ?? agentJobViewer?.viewer.jobs)?.detach();

@@ -112,7 +112,6 @@ test('child asks its parent through native tools; frontend wait returns, answer 
 test('stop cascades to a child-created job after child settlement, joins repeated requests and leaves unrelated jobs alone', { timeout: 15000 }, async () => {
   const h = await setup();
   try {
-    writeFileSync(join(h.root, 'pi-suite.json'), JSON.stringify({ jobs: { launchPolicy: [{ command: 'echo created; read line', decision: 'allow' }] } }));
     h.faux.setResponses([
       fauxAssistantMessage(fauxToolCall('job_start', { command: 'echo created; read line' })),
       fauxAssistantMessage('started background job'),

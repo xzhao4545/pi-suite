@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rmSync, writeFileSync } from 'node:fs';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fauxAssistantMessage, fauxToolCall, type FauxResponseFactory, type TranscriptContext } from '@earendil-works/pi-ai';
@@ -31,7 +31,6 @@ function answer(view: AskView) { view.handleInput('\r'); }
 test('native asks hold real child questions and job completion; nonanswers require user input and each wake merges once', { timeout: 15000 }, async () => {
   for (const outcome of ['answered', 'timed_out', 'cancelled'] as const) {
     const root = agentDir(), command = 'read line; echo COORDINATED_DONE';
-    writeFileSync(join(root, 'pi-suite.json'), JSON.stringify({ jobs: { launchPolicy: [{ command, decision: 'allow' }] } }));
     let ctx!: ExtensionContext, dock!: Dock;
     const h = await host({ root, tools: ['job_start', 'job_read', 'job_write', 'agent_send', 'agent_read'],
       extend: pi => { pi.on('session_start', (_event, context) => { ctx = context; }); },

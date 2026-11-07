@@ -52,7 +52,7 @@ job_list 的 session 范围、/jobs 默认列表与状态数量共用 JobsModule
 
 | 工具 | 参数与行为 |
 | --- | --- |
-| job_start | command 或 agent、mode?（pipe 默认、pty）、name?、cwd?、timeoutMs?（省略不限时）、taskId?、attach?、monitor?、handsFree?；授权后启动并返回 ID，未匹配策略的命令先询问用户。tasks 启用时 taskId 须对应当前清单的子任务，job ID 写回其执行引用；任务与 job 状态分别管理。agent 指定 preset、prompt、fork?，见 [CLI 预设与启动授权](launch.md)。attach 只用于需要用户直接操作程序的 PTY job（登录、交互提示），立即打开终端视图，用户离开视图后返回；非 PTY 或非交互界面在启动前返回 INVALID_ARGS。monitor 见下节；file-watch 不传 command 或 agent；handsFree 仅用于 PTY，见 [监督与委派](hands-free.md) |
+| job_start | command 或 agent、mode?（pipe 默认、pty）、name?、cwd?、timeoutMs?（省略不限时）、taskId?、attach?、monitor?、handsFree?；检查参数后直接启动并返回 ID。tasks 启用时 taskId 须对应当前清单的子任务，job ID 写回其执行引用；任务与 job 状态分别管理。agent 指定 preset、prompt、fork?，见 [CLI 预设与直接启动](launch.md)。attach 只用于需要用户直接操作程序的 PTY job（登录、交互提示），立即打开终端视图，用户离开视图后返回；非 PTY 或非交互界面在启动前返回 INVALID_ARGS。monitor 见下节；file-watch 不传 command 或 agent；handsFree 仅用于 PTY，见 [监督与委派](hands-free.md) |
 | job_list | state?（active 默认、finished、all）、scope?（session 默认、workspace）、cursor?、limit?（默认 10，最大 100）；同时使用约 4 KiB 预算按记录分页，长名称明确缩略；历史只读和错误保持可见，其他或已崩溃 Pi 进程未结算记录只在 all 中显示为 unsettled |
 | job_get | id、detail?；默认状态、名称、短命令、任务和清理结果，长命令提供 full 入口；detail:true 返回完整命令、cwd、时间、归属和监督信息。没有本进程控制句柄时标明 read-only history |
 | job_read | id、stream?、offset?、limitBytes?、search?、context?；pipe 为 stdout（默认）、stderr、input，PTY 为 output（默认）、input，带 monitor 的 job 另有 events，其他组合返回 UNSUPPORTED_STREAM；PTY 输出转为可见文本，偏移仍指原始字节 |
@@ -100,7 +100,7 @@ PTY 行先按回车覆写转为可见文本，pipe 行去除控制字符。事�
 
 ## 用户操作
 
-job_start 的启动询问复用 ask 面板：↑/↓ 选择 Allow once 或 Do not launch，Enter 选中，Tab 切到操作栏再 Enter 确认。可进入详情查阅完整命令与 cwd；超时、取消或会话绑定撤销均不启动进程，超时/取消结束本轮自动工作。确认只授权本次最终命令，不写入配置；下次同一命令仍按用户级 launchPolicy 判断。非交互模式只接受精确 allow 规则。配置入口与默认值见 [启动授权](launch.md#启动策略)。
+job_start 检查参数后直接执行，普通命令、CLI 预设及 monitor（含 detector）遵循同一启动流程。TUI 与非交互模式均直接启动；`attach: true` 打开 PTY 用户操作视图，要求交互终端。配置入口与默认值见 [CLI 预设与直接启动](launch.md#启动行为)。
 
 `/jobs [active|finished|all] [workspace]` 打开 job 列表，默认当前会话的活动 job；列表内可切换状态、范围并输入检索 ID、名称、状态、完整命令和 cwd；检索覆盖当前范围完整元数据集合，↑↓ / PgUp/PgDn 选择，Tab 切换输入/列表/详情。宽屏右侧显示运行时长、完整命令、cwd、模式、退出和清理信息，窄屏采用上下布局；Enter 打开操作，Esc 先离开详情或清空筛选，再退出。返回列表保留查询、job ID 和详情阅读位置。运行变化通过 Manager 订阅刷新，活动时每秒更新时间，时钟不读取历史文件或完整日志。选择 job 后可查看详情、读取各通道、对运行中的 PTY job 打开终端视图（已结束的 PTY 显示最后一屏），以及在确认后停止运行中的 job。只有历史记录的 job 不提供 attach 或 stop。浏览期间暂缓结算通知，关闭后合并送达。
 
@@ -137,6 +137,6 @@ pipe 与 PTY 都使用 Pi 自身的 Bash 选择（settings 的 shellPath，否�
 
 ## 验证范围
 
-Windows 实际 Pi CLI 的监督、启动询问、输出分页/搜索、密码隐藏、当前/最后屏幕与只读入口见 [监督与输出阶段](../../finished/pi-suite/jobs/windows-supervision-output.md)；预设参数见 [Pi 预设阶段](../../finished/pi-suite/jobs/windows-pi-presets.md)，实际 Codex/Claude 接管见 [CLI 阶段](../../finished/pi-suite/jobs/windows-cli-ui.md)。Cursor 预设有参数构造契约，实际 agent CLI 未在本轮验收；本轮范围见 [Windows 收尾记录](../../finished/pi-suite/windows-completion.md)。
+Windows 实际 Pi CLI 的监督、输出分页/搜索、密码隐藏、当前/最后屏幕与只读入口见 [监督与输出阶段](../../finished/pi-suite/jobs/windows-supervision-output.md)；预设参数见 [Pi 预设阶段](../../finished/pi-suite/jobs/windows-pi-presets.md)，实际 Codex/Claude 接管见 [CLI 阶段](../../finished/pi-suite/jobs/windows-cli-ui.md)。Cursor 预设有参数构造契约，实际 agent CLI 未在本轮验收；本轮范围见 [Windows 收尾记录](../../finished/pi-suite/windows-completion.md)。
 
 [返回当前文档](../index.md)

@@ -24,7 +24,7 @@ Use only parameters exposed by the current tool schema. `RUNTIME_UNAVAILABLE` me
 
 `cwd` resolves against the session cwd. Use either `command` or `agent`, never both. CLI presets are `pi`, `codex`, `claude`, `cursor` or a configured key; supply the actual task in `agent.prompt`. `agent.fork: true` requires the Pi preset and a persisted current session. A preset does not install its executable.
 
-Every launch uses the user's exact-command policy. An unmatched command asks for one-time confirmation before starting; denial or unanswered confirmation is not permission to launch another way. In noninteractive mode, explain `LAUNCH_CONFIRMATION_REQUIRED` instead of changing the policy.
+`job_start` executes directly after argument and task-reference checks, in interactive and noninteractive sessions. Monitor commands and detectors use the same launch path.
 
 ## Common launches
 

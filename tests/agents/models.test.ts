@@ -76,7 +76,7 @@ test('type writes edit each field at its source, retain unrelated latest setting
     assert.deepEqual(loadConfig(root, root).agents.types.Explore, { thinking: 'low' }, 'deleting a project field exposes its user-level value');
     await writeAgentType(root, 'Explore', {}, root);
     assert.equal(loadConfig(root, root).agents.types.Explore, undefined);
-    for (const invalid of ['{broken', '{"unknown":true}', '{"jobs":{"launchPolicy":[]}}']) {
+    for (const invalid of ['{broken', '{"unknown":true}', '{"jobs":{"unknown":[]}}']) {
       writeFileSync(project, invalid); const before = readFileSync(user, 'utf8');
       await assert.rejects(() => writeAgentType(root, 'Explore', { model: 'chosen/model' }, root));
       assert.equal(readFileSync(project, 'utf8'), invalid); assert.equal(readFileSync(user, 'utf8'), before);

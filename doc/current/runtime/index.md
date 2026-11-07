@@ -25,7 +25,7 @@ modules.ask、modules.goal、modules.tasks、modules.jobs 与 modules.agents 在
 
 `/suite` 使用原生 SettingsList 搜索和编辑全部配置字段，展示默认、用户、项目来源与有效值。通用设置保存后 `/reload` 生效，模块和命令另显示当前激活值。`commands.exit` 默认 true，控制 `/exit` 是否注册；其 handler 取消忙碌操作并通过公开 shutdown 进入原生 quit 清理链。字段编辑、继承恢复、复杂 JSON 设置和生效方式见 [设置与退出操作](settings.md)。类型启用、模型与 thinking 也可通过 `/subagents types` 编辑。
 
-jobs.agents 配置 CLI 键对应的 command 与 args，按键和字段合并用户/项目覆盖。jobs.launchPolicy 为 `{command, decision}` 数组，仅用户文件可设置，project 文件出现该字段时报错；精确命令未匹配时默认询问，即使未设置规则也如此。规则与操作见 [CLI 预设与启动授权](../jobs/launch.md)。启动授权复用内部 AskManager，不受 modules.ask 是否注册 ask_user 工具影响。
+jobs.agents 配置 CLI 键对应的 command 与 args，按键和字段合并用户/项目覆盖。job_start 检查参数后直接执行普通命令、CLI 预设与 monitor，规则见 [CLI 预设与直接启动](../jobs/launch.md)。AskManager 按 modules.ask 准入，与 job 启动相互独立。
 
 runtime/text.ts 提供安全字面量文本转换，供任务说明、pipe 日志与 monitor 事件共用；终端回车覆写等 PTY 语义由 jobs 的终端模块处理。
 

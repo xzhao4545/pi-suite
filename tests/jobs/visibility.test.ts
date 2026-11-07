@@ -21,9 +21,6 @@ const output = (value: {content: {type: string; text?: string}[]}) => value.cont
 test('SDK session list and activity share branch and creator scope across working directories without taking child notifications', { timeout: 15000 }, async () => {
   const root = agentDir(), target = join(root, 'target'); mkdirSync(target); mkdirSync(join(root, 'agents'));
   writeFileSync(join(root, 'agents', 'delegator.md'), '---\nname: delegator\nallowed_subagents: all\nextensions: false\nskills: false\n---\nDelegate.');
-  const suiteConfig = {jobs: {launchPolicy: ['HIDDEN', 'VISIBLE_FIRST', 'NESTED']
-    .map(prompt => ({command: `echo ${prompt}_JOB; read line`, decision: 'allow'}))}};
-  writeFileSync(join(root, 'pi-suite.json'), JSON.stringify(suiteConfig));
   let ctx!: ExtensionContext;
   const h = await host({root, tools: ['job_list', 'job_read', 'job_write'], extend: pi => {
     pi.on('session_start', (_event, context) => { ctx = context; });
@@ -83,7 +80,7 @@ test('SDK session list and activity share branch and creator scope across workin
       && JSON.stringify(entry.content).includes(childJobs[0].id)));
     assert.equal(h.statuses.get('pi-suite:runtime'), '⚙2');
 
-    writeFileSync(join(root, 'pi-suite.json'), JSON.stringify({...suiteConfig, modules: {agents: false}}));
+    writeFileSync(join(root, 'pi-suite.json'), JSON.stringify({modules: {agents: false}}));
     await h.session.reload();
     assert.deepEqual(ids((await list()).jobs), ids([childJobs[1], direct]));
     assert.equal(h.statuses.get('pi-suite:runtime'), '⚙2', 'saved visible child runs preserve leftover jobs when agents are disabled');

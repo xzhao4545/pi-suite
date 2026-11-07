@@ -21,13 +21,12 @@ import { Dock } from '../../src/ui/dock.ts';
 import { StatusPublisher } from '../../src/ui/status.ts';
 import { TerminalView } from '../../src/ui/terminal.ts';
 
-test('preset field merging and exact policy matching keep user-only rules and deny precedence', () => {
+test('preset field merging preserves user commands and project arguments', () => {
   const root = mkdtempSync(join(tmpdir(), 'pi-suite-launch-config-'));
   const user = join(root, 'user'), project = join(root, 'project');
   mkdirSync(user); mkdirSync(join(project, '.pi'), { recursive: true });
   const userConfig = {
-    jobs: { agents: { pi: { command: '/opt/custom pi', args: ['--verbose'] }, local: { command: 'local-cli' } },
-      launchPolicy: [{ command: 'echo exact', decision: 'allow' }, { command: 'echo exact', decision: 'deny' }, { command: 'echo ok', decision: 'allow' }] },
+    jobs: { agents: { pi: { command: '/opt/custom pi', args: ['--verbose'] }, local: { command: 'local-cli' } } },
   };
   writeFileSync(join(user, 'pi-suite.json'), JSON.stringify(userConfig));
   writeFileSync(join(project, '.pi', 'pi-suite.json'), JSON.stringify({ jobs: { agents: { pi: { args: ['--no-extensions'] } } } }));
@@ -35,12 +34,6 @@ test('preset field merging and exact policy matching keep user-only rules and de
   assert.deepEqual(config.jobs.agents.pi, { command: '/opt/custom pi', args: ['--no-extensions'] });
   assert.deepEqual(config.jobs.agents.local, { command: 'local-cli', args: [] });
   assert.equal(config.jobs.agents.cursor.command, 'agent');
-  assert.equal(config.jobs.launchPolicy('echo exact'), 'deny');
-  assert.equal(config.jobs.launchPolicy('echo ok'), 'allow');
-  assert.equal(config.jobs.launchPolicy(' echo ok'), 'ask');
-  assert.equal(config.jobs.launchPolicy('echo ok; echo extra'), 'ask');
-  writeFileSync(join(project, '.pi', 'pi-suite.json'), JSON.stringify({ jobs: { launchPolicy: [] } }));
-  assert.throws(() => loadConfig(project, user), /user-only/);
   writeFileSync(join(project, '.pi', 'pi-suite.json'), JSON.stringify({ jobs: { agents: { missing: { args: [] } } } }));
   assert.throws(() => loadConfig(project, user), /missing needs command/);
   writeFileSync(join(project, '.pi', 'pi-suite.json'), JSON.stringify({ jobs: { agents: { invalid: { command: ' ' } } } }));
@@ -97,10 +90,9 @@ export default pi => {
   // A real matching file would expose any accidental native @file interpretation. Windows
   // forbids `"` and newlines in names; there the verbatim received prompt is the check.
   if (process.platform !== 'win32') writeFileSync(join(root, prompt.slice(1)), 'ATTACHMENT_SENTINEL');
-  const pipeCommand = agentCommand({preset: 'pi', prompt}, {pi: base});
   writeFileSync(join(root, 'pi-suite.json'), JSON.stringify({
     modules: {ask: false, tasks: false, goal: false, agents: false},
-    jobs: {agents: {pi: base}, launchPolicy: [{command: pipeCommand, decision: 'allow'}]},
+    jobs: {agents: {pi: base}},
   }));
   for (const mode of [['--mode', 'rpc'], ['--mode=rpc']]) {
     assert.throws(() => agentCommand({preset: 'pi', prompt}, {pi: {...base, args: [...base.args, ...mode]}}), /RPC mode/);
@@ -131,7 +123,7 @@ export default pi => {
     assert.ok(forkEntries.some(entry => entry.type === 'session' && entry.id !== ctx.sessionManager.getSessionId()));
     assert.equal(existsSync(join(root, 'INJECTED')), false);
 
-    // Exercise the actual model tool's default pipe and exact final-command policy.
+    // Exercise the actual model tool's default pipe without a confirmation dialog.
     let pipeId = '';
     h.faux.setResponses([
       () => fauxAssistantMessage(fauxToolCall('job_start', {agent: {preset: 'pi', prompt}})),
@@ -176,10 +168,10 @@ function lastText(context: TranscriptContext): string {
 }
 const idFrom = (context: TranscriptContext) => /job_[a-f0-9]{8}/.exec(lastText(context))![0];
 
-test('job_start launches a configured CLI preset after one explicit ask and reads its literal prompt', { timeout: 30000 }, async () => {
+test('job_start launches a configured CLI preset without an ask and reads its literal prompt', { timeout: 30000 }, async () => {
   const root = agentDir(), output = 'process.stdout.write(process.argv[1])';
   writeFileSync(join(root, 'pi-suite.json'), JSON.stringify({ jobs: { agents: { local: { command: process.execPath, args: ['-e', output] } } } }));
-  const h = await host({ root, tools: ['job_start', 'wait', 'job_read'] });
+  const h = await host({ root, tools: ['job_start', 'wait', 'job_read'], answer: 'cancel' });
   let id = '';
   try {
     h.faux.setResponses([
@@ -193,53 +185,14 @@ test('job_start launches a configured CLI preset after one explicit ask and read
   } finally { await h.dispose(); }
 });
 
-test('policy denial and cancelled launch questions create no job or process and cancel goal continuation', { timeout: 30000 }, async () => {
-  for (const denied of [true, false]) {
-    const root = agentDir(), command = 'echo forbidden > MUST_NOT_EXIST';
-    if (denied) writeFileSync(join(root, 'pi-suite.json'), JSON.stringify({ jobs: { launchPolicy: [{ command, decision: 'deny' }] } }));
-    const h = await host({ root, tools: ['job_start'], answer: 'cancel' });
-    try {
-      h.faux.setResponses([
-        () => fauxAssistantMessage(fauxToolCall('job_start', { command })),
-        context => { assert.match(lastText(context), /LAUNCH_DENIED/); return fauxAssistantMessage('denied'); },
-      ]);
-      await h.session.prompt(denied ? 'Try the denied command' : '/goal Start only if the user confirms'); await h.idle();
-      assert.equal(h.faux.state.callCount, denied ? 2 : 1);
-      assert.equal(existsSync(join(root, 'MUST_NOT_EXIST')), false);
-      assert.equal(existsSync(join(root, 'pi-suite', 'jobs')), false);
-      if (!denied) assert.equal(h.goal()?.automatic, false);
-    } finally { await h.dispose(); }
-  }
-});
-
-test('launch policy authorizes generated monitor commands and a detector before allocating the job', { timeout: 10000 }, async () => {
-  const jobs = manager(), cwd = mkdtempSync(join(tmpdir(), 'pi-suite-launch-monitor-'));
-  try {
-    await assert.rejects(jobs.start({ ...owner, cwd, command: 'echo ready', monitor: {
-      strategy: 'poll-diff', poll: { intervalMs: 250 }, triggers: [{ id: 'up', literal: 'ready' }], detector: { command: 'echo true' },
-    } }, testShell(), undefined, async command => {
-      if (command === 'echo true') throw new Error('detector denied');
-    }), /detector denied/);
-    assert.deepEqual(jobs.activeIds(owner.ownerSessionId), []);
-    await assert.rejects(jobs.start({ ...owner, cwd, monitor: { strategy: 'file-watch', fileWatch: { path: cwd }, triggers: [{ id: 'change', literal: 'CHANGE' }] } },
-      testShell(), undefined, async () => { throw new Error('watch denied'); }), /watch denied/);
-    assert.deepEqual(jobs.activeIds(owner.ownerSessionId), []);
-  } finally { await jobs.shutdown(Date.now() + 5000); }
-});
-
-test('noninteractive launch needs an exact allow rule; argument conflicts still fail before launch', { timeout: 30000 }, async () => {
+test('noninteractive launch runs directly; argument conflicts still fail before launch', { timeout: 30000 }, async () => {
   const root = agentDir();
-  writeFileSync(join(root, 'pi-suite.json'), JSON.stringify({ jobs: { launchPolicy: [{ command: 'echo allowed', decision: 'allow' }] } }));
   const h = await host({ root, tools: ['job_start', 'wait'] });
   try {
     await h.session.bindExtensions({ mode: 'rpc' });
     let id = '';
     h.faux.setResponses([
-      () => fauxAssistantMessage(fauxToolCall('job_start', { command: 'echo unmatched' })),
-      context => {
-        assert.match(lastText(context), /LAUNCH_CONFIRMATION_REQUIRED/);
-        return fauxAssistantMessage(fauxToolCall('job_start', { command: 'echo allowed', agent: { preset: 'pi', prompt: 'task' } }));
-      },
+      () => fauxAssistantMessage(fauxToolCall('job_start', { command: 'echo allowed', agent: { preset: 'pi', prompt: 'task' } })),
       context => {
         assert.match(lastText(context), /INVALID_ARGS: Give command or agent/);
         return fauxAssistantMessage(fauxToolCall('job_start', { command: 'echo allowed' }));
@@ -247,7 +200,7 @@ test('noninteractive launch needs an exact allow rule; argument conflicts still 
       context => { id = idFrom(context); return fauxAssistantMessage(fauxToolCall('wait', { ids: [id] })); },
       () => fauxAssistantMessage('done'),
     ]);
-    await h.session.prompt('Apply user launch rules'); await h.idle();
-    assert.equal(h.faux.state.callCount, 5);
+    await h.session.prompt('Launch directly through RPC'); await h.idle();
+    assert.equal(h.faux.state.callCount, 4);
   } finally { await h.dispose(); }
 });

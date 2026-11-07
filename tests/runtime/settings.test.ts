@@ -53,7 +53,6 @@ test('configuration edits share locks, preserve other fields and enforce layer/s
     assert.equal(loadConfig(project, root).commands.exit, true);
     await writeConfigFields(project, [{path: ['commands', 'exit'], value: undefined, layer: 'project'}], root);
     assert.equal(loadConfig(project, root).commands.exit, false);
-    await assert.rejects(writeConfigFields(project, [{path: ['jobs', 'launchPolicy'], value: [], layer: 'project'}], root), /user-only/);
     await assert.rejects(writeConfigFields(project, [{path: ['ask', 'timeout'], value: -1}], root), /Invalid/);
   } finally {rmSync(root, {recursive: true, force: true});}
 });

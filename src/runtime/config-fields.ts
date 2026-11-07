@@ -52,7 +52,6 @@ export async function writeConfigFields(cwd: string, changes: ConfigChange[], ag
   const edits: Record<ConfigLayer, ConfigChange[]> = { user: [], project: [] };
   for (const change of changes) {
     const layer = change.layer ?? (configField(data.project, change.path) === undefined ? 'user' : 'project');
-    if (layer === 'project' && change.path[0] === 'jobs' && change.path[1] === 'launchPolicy') throw new Error('jobs.launchPolicy is user-only');
     if (change.value === undefined && configField(data[layer], change.path) === undefined) continue;
     edits[layer].push(change);
   }

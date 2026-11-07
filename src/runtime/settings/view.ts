@@ -6,7 +6,7 @@ import { configField, configPaths, writeConfigFields, type ConfigLayer } from '.
 import { selectValue } from '../../ui/select.ts';
 import type { Dock } from '../../ui/dock.ts';
 
-const describe = (value: unknown): string => value === undefined ? 'inherit' : JSON.stringify(typeof value === 'function' ? [] : value);
+const describe = (value: unknown): string => value === undefined ? 'inherit' : JSON.stringify(value);
 type FieldSchema = TSchema & { type?: string; enum?: string[] };
 type Field = { path: string[]; schema: FieldSchema };
 const fields: Field[] = Object.entries(configSchema.properties).flatMap(([section, schema]) =>
@@ -32,15 +32,14 @@ export async function showSuiteSettings(ctx: ExtensionCommandContext, dock: Dock
   types?: () => Promise<void>): Promise<void> {
   if (ctx.mode !== 'tui') {
     const saved = loadConfig(ctx.cwd);
-    ctx.ui.notify(JSON.stringify({ ...saved, jobs: { ...saved.jobs, launchPolicy: readConfig(configPaths(ctx.cwd).user).jobs?.launchPolicy ?? [] } }, null, 2));
+    ctx.ui.notify(JSON.stringify(saved, null, 2));
     return;
   }
   let initial: string | undefined;
   for (;;) {
     const saved = loadConfig(ctx.cwd), paths = configPaths(ctx.cwd);
     const layers = { user: readConfig(paths.user), project: readConfig(paths.project) };
-    const effective = (field: Field) => field.path.join('.') === 'jobs.launchPolicy'
-      ? layers.user.jobs?.launchPolicy ?? [] : configField(saved, field.path);
+    const effective = (field: Field) => configField(saved, field.path);
     const items = fields.map(field => {
       const source = configField(layers.project, field.path) !== undefined ? 'project'
         : configField(layers.user, field.path) !== undefined ? 'user' : 'default';
@@ -61,9 +60,8 @@ export async function showSuiteSettings(ctx: ExtensionCommandContext, dock: Dock
     if (selected === undefined) return;
     initial = selected;
     const field = fields.find(field => field.path.join('.') === selected)!;
-    const userOnly = selected === 'jobs.launchPolicy';
-    const actions = [{ value: 'edit:user', label: 'Edit user value' }, ...userOnly ? [] : [{ value: 'edit:project', label: 'Edit project value' }],
-      { value: 'clear:user', label: 'Restore user inheritance' }, ...userOnly ? [] : [{ value: 'clear:project', label: 'Restore project inheritance' }],
+    const actions = [{ value: 'edit:user', label: 'Edit user value' }, { value: 'edit:project', label: 'Edit project value' },
+      { value: 'clear:user', label: 'Restore user inheritance' }, { value: 'clear:project', label: 'Restore project inheritance' },
       ...selected === 'agents.types' && types ? [{ value: 'types', label: 'Agent types · models / thinking' }] : []];
     const source = configField(layers.project, field.path) === undefined ? 'user' : 'project';
     const action = await selectValue(ctx, `${selected} · saved ${describe(effective(field))}`, actions, `edit:${source}`);
@@ -75,7 +73,7 @@ export async function showSuiteSettings(ctx: ExtensionCommandContext, dock: Dock
       if (!change) continue;
       await writeConfigFields(ctx.cwd, [{ ...change, path: field.path, layer }]);
       const value = configField(loadConfig(ctx.cwd), field.path);
-      ctx.ui.notify(`${selected} saved to ${paths[layer]} · effective ${describe(typeof value === 'function' ? readConfig(paths.user).jobs?.launchPolicy ?? [] : value)} · /reload to apply`);
+      ctx.ui.notify(`${selected} saved to ${paths[layer]} · effective ${describe(value)} · /reload to apply`);
     } catch (error) { ctx.ui.notify(error instanceof Error ? error.message : String(error), 'error'); }
   }
 }

@@ -36,7 +36,7 @@ export function childSuite(pi: ExtensionAPI, run: Execution, manager: AgentManag
   if (tasks) { registerTaskTools(pi, tasks); tasks.registerReminders(pi, () => config); }
   if (jobs) {
     const viewer = { jobs, dock, notifications: notices, keys: () => config.jobs };
-    registerJobTools(pi, jobs, viewer, { ask, config: () => config, tasks, parentQuestions: true,
+    registerJobTools(pi, jobs, viewer, { config: () => config, tasks,
       creator: { agentId: run.record.id, runId: run.record.runId,
         ancestors: [...run.record.ancestors, ...run.record.workflowId ? [run.record.workflowId] : []] } });
     waits.register(jobs);

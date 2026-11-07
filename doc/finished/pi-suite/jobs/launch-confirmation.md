@@ -1,14 +1,14 @@
 # 删除 job 启动确认
 
-状态：用户已决定删除，未实施。
+状态：已完成。普通命令、CLI 预设与 monitor 直接启动，启动确认链路及配置入口已删除。
 
 ## 原始需求
 
-- [ ] 1. job_start 不再弹出启动确认，与 Pi 内置命令执行保持一致。
+- [x] 1. job_start 不再弹出启动确认，与 Pi 内置命令执行保持一致。
 
-## 现状与原因
+## 实施前原因
 
-- 来源：[CLI 预设与启动授权基础阶段](../../finished/pi-suite/jobs/cli-launch-core.md) 从 pi-interactive-shell 0.18.0 导入了精确命令匹配规则 `jobs.launchPolicy`（allow/ask/deny）。`src/jobs/launch/config.ts` 第 43 行对未匹配的命令返回 `'ask'`，规则为空时也一样，所以默认每次 job_start 都询问用户。
+- 来源：[CLI 预设与启动授权基础阶段](cli-launch-core.md) 从 pi-interactive-shell 0.18.0 导入了精确命令匹配规则 `jobs.launchPolicy`（allow/ask/deny）。`src/jobs/launch/config.ts` 第 43 行对未匹配的命令返回 `'ask'`，规则为空时也一样，所以默认每次 job_start 都询问用户。
 - Pi 自身不这样做：Pi 1.5.0 的 `docs/security.md` 写明 Pi “does not ask for approval before every tool call”，内置 bash 直接执行；需要确认的用户可以安装权限扩展，在 `tool_call` 事件里拦截（`docs/extensions.md` 的 permission-gate 示例）。
 - 结果是同一条命令走 bash 不需要确认，走 job_start 却要确认，只增加打断；确认超时或取消时还会 terminate 并结束本轮。
 
@@ -33,17 +33,19 @@
 - 本机用户与项目的 `pi-suite.json` 当前都不存在，没有需要迁移的配置。
 - monitor 的 detector 命令随 job 一起启动，不再单独确认。
 
-## 测试调整
+## 测试调整与验收结论
 
 - 删除 `tests/jobs/launch.test.ts` 中 launchPolicy 合并/优先级（30–43 行）、deny/cancel 启动确认（198–207 行起）与非交互 `LAUNCH_CONFIRMATION_REQUIRED`（231–245 行起）的用例，保留预设与 RPC 参数检查。
 - `tests/agents/progress.test.ts`、`tests/agents/runtime.test.ts`、`tests/ask/coordination.test.ts`、`tests/jobs/launch.test.ts` 第 103 行、`tests/jobs/visibility.test.ts` 为绕过确认写入的 `launchPolicy` allow 配置全部删除。
 - `tests/agents/models.test.ts` 79 行与 `tests/runtime/settings.test.ts` 56 行的 user-only 断言删除；models 测试的无效配置样例改用其他未知字段。
 
+类型检查与全量 167 项检查通过，无失败、跳过或取消项，日常耗时在 5 分钟内。Linux 实际 Pi 1.5.0 CLI 的 PTY 验收核对普通 command、CLI 预设与带 detector 的 monitor 直接启动及实际输出，`/suite` 字段搜索与自然 quit 通过；未新增永久测试。Windows 的此项变更未重复进行实际 CLI 验收。稳定启动行为见 [当前文档](../../../current/jobs/launch.md)。
+
 ## 验收
 
-- [ ] 全量测试与类型检查通过。
-- [ ] 实际 Pi CLI 中模型调用 job_start（command、agent 预设、带 detector 的 monitor）直接启动，不出现询问。
-- [ ] `/suite` 不再出现 jobs.launchPolicy。
-- [ ] 完成后更新 `doc/current/jobs/launch.md`（删除“启动策略”一节及第 21 行授权说明）、`doc/current/jobs/index.md` 第 103 行、`doc/current/runtime/index.md` 第 28 行、`doc/current/runtime/settings.md` 第 5 行。
+- [x] 全量测试与类型检查通过。
+- [x] 实际 Pi CLI 中模型调用 job_start（command、agent 预设、带 detector 的 monitor）直接启动，不出现询问。
+- [x] `/suite` 不再出现 jobs.launchPolicy。
+- [x] 完成后更新 `doc/current/jobs/launch.md`（删除“启动策略”一节及第 21 行授权说明）、`doc/current/jobs/index.md` 第 103 行、`doc/current/runtime/index.md` 第 28 行、`doc/current/runtime/settings.md` 第 5 行。
 
-[返回 Pi Suite 待办](index.md)
+[返回已完成专项](../../index.md)

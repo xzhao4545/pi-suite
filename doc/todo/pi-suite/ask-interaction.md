@@ -20,9 +20,9 @@
 | 3 | 选项列表焦点下 ←/→ 没有任何分支处理；切题只能 Tab 进入操作栏 → ←/→ 选 Previous/Next question → Enter（`act()` 118–120），每次切题后操作栏索引归零 |
 | 4 | Esc 本身没有触发 Pi 的 `session.abort()`：询问打开时焦点在 AskView，宿主的中断处理 `defaultEditor.onEscape` 收不到按键。真正原因是 `src/ask/index.ts` 第 69–71 行对非 answered 结果返回 `terminate: true`；Pi 1.5.0 的 `shouldTerminateToolBatch` 在整批工具都 terminate 时结束本轮循环，模型拿不到下一轮。同时 `AskManager.onResult(false)` 调用 `GoalManager.askResult`（`src/goal/manager.ts` 204–207），把目标置为 waiting_user 并关闭 automatic |
 
-相关的同类问题：
+相关的同类问题与边界：
 
-- `src/jobs/launch/authorize.ts` 第 19 行把启动确认的非 answered 结果转成 `LAUNCH_NOT_CONFIRMED`，`src/jobs/tools.ts` 第 71–73 行随后返回 `terminate: true`，所以在 job 启动确认上按 Esc 同样会结束本轮。用户已决定删除 job 启动确认，见 [删除 job 启动确认](jobs-launch-confirmation.md)，本方案不再处理该路径。
+- job 启动确认曾把非 answered 结果转成 `LAUNCH_NOT_CONFIRMED` 并返回 `terminate: true`，Esc 因此结束本轮。这条授权与确认链路已删除，普通 command、CLI 预设与 monitor 直接启动；实现与验收见 [删除 job 启动确认](../../finished/pi-suite/jobs/launch-confirmation.md)，本方案只处理 ask_user 路径。
 - 嵌套状态下 Esc 需要连按多次才能关闭询问（搜索/评论/操作栏 → 选项，自由输入 → 选项，最后才取消），用户连按时最后一次 Esc 可能落到宿主输入框。[INFERENCE] 宿主仍在 streaming 时这次 Esc 会调用 `session.abort()`，未实际观察到。
 
 ## OMP 参考结论

@@ -94,7 +94,7 @@ test('SDK model content exposes bounded parallel activity, queued state, live us
 });
 
 test('agent progress uses all execution roots for active descendant jobs and bounds recent run text without losing query failures', { timeout: 15000 }, async () => {
-  const h = await setup({ jobs: { launchPolicy: [{ command: 'echo CHILD_JOB; read line', decision: 'allow' }, { command: 'echo NESTED_JOB; read line', decision: 'allow' }] } });
+  const h = await setup();
   file(join(h.root, 'agents', 'delegator.md'), '---\nname: delegator\nallowed_subagents: all\nextensions: false\nskills: false\n---\nDelegate.');
   mkdirSync(join(h.root, 'target'));
   let observed: string | undefined, target = '';

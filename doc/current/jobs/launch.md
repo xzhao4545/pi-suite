@@ -1,4 +1,4 @@
-# CLI 预设与启动授权
+# CLI 预设与直接启动
 
 job_start 的 agent 用结构化配置代替 command。预设解析与参数构造位于 src/jobs/launch，启动仍进入同一 JobManager，输入、日志、退出、停止与通知使用现有 job 接口。
 
@@ -18,7 +18,7 @@ jobs.agents 按内置、用户、项目顺序，逐键、逐字段合并。每�
 
 Pi 预设支持以 `@` 开头的原文任务，调用方仍直接填写 agent.prompt，无需添加前缀或转义。Pi 1.5.0 会把前导 `@` 位置参数解析为附件，即使位于 `--` 之后；本包通过原生输入桥传递正文，预设中已有的 `@file` 附件及图片保持 Pi 原生语义。正常文本中的 `@` 与以 `--` 开头的文本沿用位置参数约定。
 
-前导 `@` 命令显式加载本包规范入口，并用单个 `--suite-prompt=<原文>` 参数承载正文，位置参数只传启动触发文本。src/runtime/cli-prompt.ts 在入口最先注册原生 string flag 和 input transform；仅 startup 保存待消费正文，在原生初始输入中替换触发后缀，保留之前的附件文本与图片。正文消费一次，reload/new/UI fork 不重放；CLI --fork 的新启动正常消费。恢复后的正文继续走普通 input 处理：启用 @handle 时，TUI 已知类型/handle 沿用提及分派，路径与未知 handle 透传；print/JSON 的提及处理继续放行，不强制绕过共享输入链。预设复用 Pi 公共 parseArgs 判断实际选项边界，区分 `-e`/`--` 选项与其他选项的字面值，并保留 `node cli.js` 包装前缀；显式入口与自动发现由 Pi 规范化去重。生成后的完整命令仍交给现有 launchPolicy 授权。
+前导 `@` 命令显式加载本包规范入口，并用单个 `--suite-prompt=<原文>` 参数承载正文，位置参数只传启动触发文本。src/runtime/cli-prompt.ts 在入口最先注册原生 string flag 和 input transform；仅 startup 保存待消费正文，在原生初始输入中替换触发后缀，保留之前的附件文本与图片。正文消费一次，reload/new/UI fork 不重放；CLI --fork 的新启动正常消费。恢复后的正文继续走普通 input 处理：启用 @handle 时，TUI 已知类型/handle 沿用提及分派，路径与未知 handle 透传；print/JSON 的提及处理继续放行，不强制绕过共享输入链。预设复用 Pi 公共 parseArgs 判断实际选项边界，区分 `-e`/`--` 选项与其他选项的字面值，并保留 `node cli.js` 包装前缀；显式入口与自动发现由 Pi 规范化去重。生成后的完整命令直接进入 JobManager。
 
 Pi agent 请求使用默认 pipe 时，在启动后通过现有 closeInput 关闭 stdin，让 Pi 收到 EOF 后执行初始任务并自然退出；需要后续输入时指定 mode=pty，PTY 保持交互输入。Pi RPC 模式不执行初始 CLI prompt，pi 预设配置为 RPC 时在启动前返回 INVALID_ARGS；RPC 客户端应使用相应消息协议。
 
@@ -28,7 +28,7 @@ Pi agent 请求使用默认 pipe 时，在启动后通过现有 closeInput 关�
 
 ## 实际 CLI 支持范围
 
-Pi 原文桥在 Linux 实际 Pi 1.5.0 通过 print、JSON、默认 pipe、fork 与 PTY 组合验收：前导 `@` 复杂正文逐字进入模型，同名文件存在也不读取；原生附件与 JSON 事件保留；fork 创建新会话且源上下文/文件字节不变。实际 job_start 默认 pipe 与精确 allow、PTY 后续用户/模型输入、reload/new 不重放与自然 quit 均通过，范围见 [原文初始任务阶段](../../finished/pi-suite/jobs/literal-prompt.md)。
+Pi 原文桥在 Linux 实际 Pi 1.5.0 通过 print、JSON、默认 pipe、fork 与 PTY 组合验收：前导 `@` 复杂正文逐字进入模型，同名文件存在也不读取；原生附件与 JSON 事件保留；fork 创建新会话且源上下文/文件字节不变。实际 job_start 默认 pipe、PTY 后续用户/模型输入、reload/new 不重放与自然 quit 均通过，范围见 [原文初始任务阶段](../../finished/pi-suite/jobs/literal-prompt.md)。
 
 Linux 上的 Pi 1.5.0、Codex 0.166.0 与 Claude Code 2.1.153 已通过实际 CLI 的 PTY 文本交互检查。三者均使用现有预设合并、命令构造与 JobManager；初始位置 prompt 保留以 `--` 开头的中文、引号、美元表达式、反引号和换行。用户接管期间模型写入返回 USER_CONTROL，交还后可继续模型输入，停止取得 managed_scope_confirmed 清理证据。
 
@@ -38,26 +38,18 @@ Codex 使用隔离配置、本地 Responses SSE 服务和 `--no-daemon`；Claude
 
 Linux 工具执行另通过本地受控服务验收：Codex 实际 exec_command 创建文件并回传输出/退出码，Ctrl+D 后自然退出；长工具另起进程组时，由现有 Linux 后端捕获身份并确认停止，另一独立 job 保持运行。该环境的 workspace-write 被 bwrap 权限限制阻断，成功执行使用隔离临时 danger-full-access 配置。Claude bare 模式显式开放 Bash/Read，默认权限界面只确认本次临时命令，真实文件与 tool_result 一致，`/exit` 自然退出，再次 stop 不改写结果。当前屏幕与线性日志各按 [屏幕范围](../../finished/pi-suite/jobs/screen-range.md) 读取；本结论仅覆盖上述工具和 Linux，完整范围见 [工具执行阶段](../../finished/pi-suite/jobs/cli-tools.md)。
 
-## 启动策略
+## 启动行为
 
-jobs.launchPolicy 只允许写入用户文件 `<getAgentDir()>/pi-suite.json`；项目 `.pi/pi-suite.json` 出现该字段即报错，包括空数组。配置在会话绑定时读取，修改后使用 /reload 或重新绑定会话生效。
+job_start 在参数与任务引用检查通过后直接启动，与 Pi 内置命令一致。普通 command、CLI 预设、monitor 生成的命令与 detector 命令均使用同一 JobManager；TUI、print/JSON 与 RPC 的非附加启动遵循同一规则。`attach: true` 仍要求 PTY 与交互终端。
+
+CLI 预设配置支持用户和项目逐字段覆盖，配置修改后使用 /reload 或重新绑定会话生效：
 
 ```json
 {
   "jobs": {
-    "agents": { "local": { "command": "local-cli", "args": ["--verbose"] } },
-    "launchPolicy": [
-      { "command": "echo allowed", "decision": "allow" },
-      { "command": "echo denied", "decision": "deny" }
-    ]
+    "agents": { "local": { "command": "local-cli", "args": ["--verbose"] } }
   }
 }
 ```
-
-每条规则含 command 与 decision（allow/ask/deny），按最终完整命令字符串精确匹配。没有规则或未命中时默认 ask；不裁剪空白，不解析 shell，不支持通配符或仅按可执行文件匹配。同一命令多条规则按 deny > ask > allow 决定。规则最多 1000 条，command 最长 32768 字符。
-
-策略用于全部 job_start：原始 command、拼装后的 CLI 命令、poll-diff 循环和生成的 file-watch 命令。detector.command 作为另一个待执行命令，在 job 启动前单独授权；两者都允许后才分配 job ID、创建日志并启动进程。调用的临时授权回调不留在长期 manager 中。
-
-allow 直接启动；deny 返回 LAUNCH_DENIED；ask 复用共享 ask 队列，显示精确命令与 cwd，明确确认后只启动本次。超时、取消或绑定撤销返回未确认并结束本轮，不创建进程或历史；非交互模式的 ask 返回 LAUNCH_CONFIRMATION_REQUIRED，需配置精确 allow 规则。完整按键见 [执行任务操作](index.md#用户操作)。
 
 [返回执行任务](index.md)

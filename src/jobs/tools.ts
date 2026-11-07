@@ -13,11 +13,9 @@ import { jobDetail, readJobLog } from './query.ts';
 import type { ViewerDeps } from './viewer.ts';
 import { monitorSchema } from './monitors/compile.ts';
 import { handsFreeSchema } from './monitors/hands-free.ts';
-import type { Creator, InputRecord, JobSummary, Stream } from './types.ts';
-import type { AskManager } from '../ask/index.ts';
+import type { Creator, InputRecord, Stream } from './types.ts';
 import type { SuiteConfig } from '../runtime/config.ts';
 import { agentSchema, agentCommand } from './launch/presets.ts';
-import { authorizeLaunch } from './launch/authorize.ts';
 import type { TasksModule } from '../tasks/index.ts';
 import { taskId as taskIdSchema } from '../tasks/types.ts';
 
@@ -26,14 +24,14 @@ const listSchema = Type.Object(listFields(['active', 'finished', 'all'] as const
 const getSchema = Type.Object({ id, detail: Type.Optional(Type.Boolean()) }, { additionalProperties: false });
 const queryHint = 'List: job_list({"state":"all"}); one job: job_get({"id":"job_3fa1c2d0"}).';
 
-export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: ViewerDeps, launch: { ask: Pick<AskManager, 'ask'>; config: () => SuiteConfig; tasks?: TasksModule; creator?: Creator; parentQuestions?: boolean }): void {
+export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: ViewerDeps, launch: { config: () => SuiteConfig; tasks?: TasksModule; creator?: Creator }): void {
   pi.registerTool({
     name: 'job_start', label: 'Start Job',
     description: 'Start a command as a background job and return at once. mode=pipe (default) records stdout/stderr for builds, tests and batch work; mode=pty runs it in a terminal for REPLs and interactive programs. ' +
       'The job keeps running across turns, compaction and reload; when it settles one notice is sent to this session. Read output with job_read, send input with job_write, wait with wait. Do not background commands yourself with & or nohup. ' +
       'monitor wakes you when output matches a trigger (stream: each line; poll-diff: rerun command and compare; file-watch: watch a path, no command); events are read with job_read stream events. ' +
       'handsFree (pty only) sends bounded progress updates; handsFree.mode=dispatch sends only a result and requests termination after startup grace and output silence. Quiet termination is stopped, never proof of success. User control pauses updates and quiet termination. ' +
-      'Instead of command, agent supplies a CLI preset and literal prompt (pi/codex/claude/cursor or configured key); pi can fork a persisted session. User launchPolicy matches the final command exactly; unmatched commands ask for one-time confirmation before start.',
+      'Instead of command, agent supplies a CLI preset and literal prompt (pi/codex/claude/cursor or configured key); pi can fork a persisted session.',
     parameters: Type.Object({
       command: Type.Optional(Type.String({ minLength: 1, maxLength: 32768, description: 'Give command or agent, except for file-watch which generates its own command' })),
       agent: Type.Optional(agentSchema),
@@ -60,19 +58,9 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: Vie
       const cwd = resolve(ctx.cwd, params.cwd ?? '.');
       const command = agent ? agentCommand(agent, config.jobs.agents, ctx.sessionManager.getSessionFile()) : params.command;
       const taskStore = params.taskId && launch.tasks ? await launch.tasks.executionTask(ctx, params.taskId) : undefined;
-      let job: JobSummary;
-      try {
-        // Pi waits for piped stdin EOF before its initial prompt; PTY keeps interactive input.
-        job = await manager.start({ ...request, command, cwd, ...owner, creator: launch.creator,
-          closeInput: agent?.preset === 'pi' && params.mode !== 'pty' }, shell, signal,
-          finalCommand => authorizeLaunch(finalCommand, cwd, ctx, config, launch.ask, signal, launch.parentQuestions));
-      } catch (error) {
-        // Timeout/cancellation is an unanswered question, so end this model run as ask_user does.
-        if (error instanceof ToolError && error.code === 'LAUNCH_NOT_CONFIRMED') return {
-          ...text([error.message], { started: false, reason: error.code }), terminate: true,
-        };
-        throw error;
-      }
+      // Pi waits for piped stdin EOF before its initial prompt; PTY keeps interactive input.
+      const job = await manager.start({ ...request, command, cwd, ...owner, creator: launch.creator,
+        closeInput: agent?.preset === 'pi' && params.mode !== 'pty' }, shell, signal);
       if (taskStore && params.taskId) {
         try { await taskStore.link(params.taskId, { jobId: job.id }); }
         catch (error) { throw new ToolError('TASK_LINK_FAILED', `${job.id} started but task #${params.taskId} could not be linked: ${String(error)}; inspect with job_get`, job.id); }
