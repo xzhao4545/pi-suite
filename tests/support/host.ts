@@ -61,7 +61,7 @@ export async function host(options: {
         view.render(40);
         if (options.answer === "cancel") view.handleInput?.("\x1b");
         else {
-          // A selection needs both choosing the focused option and confirming it in actions.
+          // Enter selects and confirms in the default single-question fixtures.
           view.handleInput?.("\r"); view.handleInput?.("\t"); view.handleInput?.("\r");
         }
       });

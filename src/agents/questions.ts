@@ -1,4 +1,4 @@
-import { normalize, type AskParams, type AskResult, type Question } from '../ask/schema.ts';
+import { normalize, type AskParams, type AskResult, type Question, type Response } from '../ask/schema.ts';
 import { ToolError } from '../runtime/errors.ts';
 import type { Execution } from './types.ts';
 
@@ -7,7 +7,7 @@ export function questionText(run: Execution): string {
     ...run.question!.questions.flatMap(question => [question.question, question.context ?? '', ...question.options.map(option => `${option.id}: ${option.title}`)]),
     `answer: agent_send({"id":"${run.record.id}","message":"…"})`].filter(Boolean).join('\n');
 }
-export async function askParent(run: Execution, params: AskParams, timeoutMs: number, changed: () => void, signal?: AbortSignal) {
+export async function askParent(run: Execution, params: AskParams, timeoutMs: number, changed: () => void, signal?: AbortSignal): Promise<{ result: AskResult; questions: Question[] }> {
   const questions = normalize(params), done = Promise.withResolvers<AskResult>();
   if (run.controller.signal.aborted || signal?.aborted) return { result: { status: 'cancelled' as const, responses: [] }, questions };
   const previous = run.record.state;
@@ -36,7 +36,7 @@ export async function askParent(run: Execution, params: AskParams, timeoutMs: nu
     changed();
   }
 }
-function answer(question: Question, text: string | string[]): AskResult['responses'][number] {
+function answer(question: Question, text: string | string[]): Response {
   if (Array.isArray(text) && !question.allowMultiple) throw new ToolError('INVALID_ANSWER', 'This question accepts a single selection');
   const inputs = Array.isArray(text) ? text : [text];
   const selected = inputs.map(input => question.options.filter(option => option.id === input || option.title === input));

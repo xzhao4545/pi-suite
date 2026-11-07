@@ -14,7 +14,7 @@
 
 ## 实现来源与更新
 
-ask_user 以 pi-ask-user 0.17.2 的参数与 response/details 契约为来源，交互在 src/ask 与共享 src/ui 中重构；保留其 [完整 MIT 许可证](./licenses/pi-ask-user.txt)。没有串联加载其独立 UI、设置或旧作用域兼容逻辑。
+ask_user 以 pi-ask-user 0.17.2 的参数与 response/details 契约为来源，交互在 src/ask 与共享 src/ui 中重构；保留其 [完整 MIT 许可证](./licenses/pi-ask-user.txt)。没有串联加载其独立 UI、设置或旧作用域兼容逻辑。src/ask/schema.ts 与 form.ts 区分 skipped、系统 cancelled 和带 autoSelected 的空闲结算，keys.ts/render.ts 共用题型标记与循环页签；view.ts 复用 Pi Editor.disableSubmit 保留编辑草稿与光标。空闲计时、题型符号和 Review 采用已确认的 OMP 参考方案，取消语义按本包需求保持模型继续。
 
 goal 参考 @narumitw/pi-goal 0.54.15 的目标工具契约与控制语义；src/goal 重构持久目标、运行归属和宿主最终结算，继续请求、状态与详情复用公共 runtime/ui，保留其 [完整 MIT 许可证](./licenses/pi-goal.txt)。自动限制只使用用户明确配置的预算。
 

@@ -12,8 +12,10 @@
 | 手动 compact | 保留 active；压缩成功后恢复自动工作，等待宿主 idle；已有用户/job 等待继续保留 |
 | 自动阈值/溢出 compact | 保留 active；willRetry 时由宿主恢复响应，否则由统一协调器调度 |
 | compact 取消或失败 | 保留 active 与等待原因，保存可用错误，停止自动工作 |
-| Esc | active、idle，停止自动续跑；新用户输入或 /goal resume 可恢复 |
-| ask_user 未回答 | active、waiting_user，结束宿主循环，停止自动工作 |
+| 宿主输入框 Esc | active、idle，停止自动续跑；新用户输入或 /goal resume 可恢复 |
+| ask_user skipped | active，保持自动许可并继续本轮；无答案，不作为同意 |
+| ask_user timed_out | active、running，自动答案作为推荐方案继续，不作为授权 |
+| ask_user cancelled | active、waiting_user，结束宿主循环，停止自动工作 |
 | goal_wait | active、waiting_jobs；外部唤醒或单次期限恢复工作 |
 | 显式暂停/完成/预算耗尽 | 对应目标状态，取消继续请求与等待期限 |
 | reload/new/resume/fork/tree | 撤销旧绑定，按当前分支记录重建目标与摘要 |
@@ -22,6 +24,6 @@
 
 运行耗时使用 performance.now 单调时钟累计有效 running 片段；实时摘要加上当前片段，离开 running 时冻结。用户等待、后台等待、宿主恢复、暂停及应用离线时间不计入，恢复后接续累计。可见 TUI 运行时每秒通过同一 StatusPublisher 刷新，tick 不写会话、不发模型请求；离开 running 或撤销绑定时取消 interval。对已归属当前目标的进行中运行，resume 幂等保留 running，不排队新响应。宿主忙于其他响应、取消结算、压缩或重试时保存恢复意图，并在可用边界安排一次继续。自动继续使用 goal:<ID> 稳定请求 ID；与其他通知合并，已有宿主继续和待处理消息优先。界面详情不发起模型请求。
 
-期限与完成反馈定时器在撤销绑定时取消，回调检查绑定代次和目标 ID。修改目标文本取消原目标的 job 等待；用户未回答保留明确恢复要求。完成反馈 5 秒后清除摘要，持久目标及完成证据继续保留。
+期限与完成反馈定时器在撤销绑定时取消，回调检查绑定代次和目标 ID。修改目标文本取消原目标的 job 等待；询问系统取消保留明确恢复要求。完成反馈 5 秒后清除摘要，持久目标及完成证据继续保留。
 
 [返回目标管理](./index.md)

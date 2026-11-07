@@ -38,7 +38,7 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
   if (tasks) { taskApi![1].registerTaskTools(pi, tasks); taskApi![2].registerTasksCommand(pi, tasks, dock, notifications); tasks.registerReminders(pi, () => config); }
   const waits = new WaitRegistry();
   const goal = config.modules.goal ? new goalApi![0].GoalManager(pi, binding, notifications, status, waits) : undefined;
-  const ask = config.modules.ask ? new AskManager(binding, notifications, dock, (answered, ctx) => goal?.askResult(answered, ctx)) : undefined;
+  const ask = config.modules.ask ? new AskManager(binding, notifications, dock, (status, ctx) => goal?.askResult(status, ctx)) : undefined;
   if (ask) registerAsk(pi, ask, () => config);
   const creatorRoots = () => {
     const ctx = binding.current?.ctx;

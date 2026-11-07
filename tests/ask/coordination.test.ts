@@ -28,8 +28,8 @@ function waitFor(subscribe: (listener: () => void) => () => void, condition: () 
 }
 function answer(view: AskView) { view.handleInput('\r'); }
 
-test('native asks hold real child questions and job completion; nonanswers require user input and each wake merges once', { timeout: 15000 }, async () => {
-  for (const outcome of ['answered', 'timed_out', 'cancelled'] as const) {
+test('native asks hold real child questions and job completion; only system cancellation requires user input and each wake merges once', { timeout: 15000 }, async () => {
+  for (const outcome of ['answered', 'skipped', 'timed_out', 'cancelled'] as const) {
     const root = agentDir(), command = 'read line; echo COORDINATED_DONE';
     let ctx!: ExtensionContext, dock!: Dock;
     const h = await host({ root, tools: ['job_start', 'job_read', 'job_write', 'agent_send', 'agent_read'],
@@ -101,8 +101,10 @@ test('native asks hold real child questions and job completion; nonanswers requi
       assert.match(dock.render(40)[0], /waiting\(parent\)/, 'pending child questions replace ordinary activity during a native ask');
       const gate = forms.get('gate')!;
       if (outcome === 'answered') answer(gate);
+      else if (outcome === 'skipped') gate.handleInput('\x1b');
+      else if (outcome === 'timed_out') gate.render(80);
       else {
-        if (outcome === 'timed_out') gate.render(80); else gate.cancel();
+        gate.cancel();
         await h.idle();
         assert.equal(h.goal()?.waiting, 'user'); assert.equal(h.goal()?.automatic, false);
         assert.equal(rootCalls, 2); assert.equal(notices().length, 1);
@@ -110,6 +112,7 @@ test('native asks hold real child questions and job completion; nonanswers requi
         resumed = h.session.prompt('Continue with my explicit answer');
       }
       await childReady.promise;
+      assert.equal(h.goal()?.automatic, true); assert.equal(h.goal()?.waiting, undefined);
       assert.match(gateResult, new RegExp(`"status":"${outcome}"`));
       assert.ok(wake.includes(`${jobId} completed`));
       for (const run of runs) assert.ok(wake.includes(run.record.id) && wake.includes(run.record.prompt));

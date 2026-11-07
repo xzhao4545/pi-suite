@@ -68,7 +68,7 @@ export interface SuiteConfig {
 export const defaults: SuiteConfig = {
   commands: { exit: true },
   modules: { ask: true, tasks: true, jobs: true, goal: true, agents: true },
-  ui: { maxRows: 6 }, ask: { timeout: 120000, historyKey: "ctrl+h" },
+  ui: { maxRows: 6 }, ask: { timeout: 600000, historyKey: "ctrl+h" },
   goal: { display: "status" }, agents: { display: "status", maxConcurrent: 10, maxConcurrentForeground: 0,
     maxDepth: 3, persistSessions: true, types: {}, mentions: true, scheduling: true, workflows: true },
   tasks: { reminders: true },

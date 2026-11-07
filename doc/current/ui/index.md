@@ -24,6 +24,8 @@ pi-starship 的 `git_status` 使用 Git 上游跟踪分支的缓存差异：默�
 
 Transcript 复用 Pi 的 UserMessageComponent、AssistantMessageComponent、ToolExecutionComponent、CustomMessageComponent 和压缩/分支摘要组件。已知内置工具采用 Pi 提供的 renderers；child 提供其实际渲染定义，使用其实际 cwd，缺少定义的扩展工具使用原生通用工具呈现。稳定消息保留组件与宽度缓存，调用方按每条 entry 的身份检测变化，并只更新变化的流式消息或工具结果。工具调用与部分/最终结果按 toolCallId 配对，不执行工具。thinking 与工具详情可切换展开，输出默认不传输终端图片。
 
+AskView 持有询问状态、焦点与空闲计时，ask/keys.ts 分派选项及页签按键，ask/render.ts 统一题型标记、页签、Review 与空闲时间显示。Pi Editor 的 disableSubmit 让 Ask 确认时保留原生文字、光标和撤销状态，文本编辑不占用页签方向键。
+
 ScrollView 为历史与每个选项详情分别保存滚动位置及搜索内容，支持按行、按页、Home/End、搜索和下一匹配。终端支持的鼠标滚轮通过 Pi 的标准事件增强阅读。尺寸改变不初始化回答草稿或勾选集合。
 
 Windows Pi 1.5.0 实际 CLI 组合验收覆盖三种标准尺寸、27/28 行预算阈值及 ui.maxRows=1 的最低回答行例外；原生键盘焦点、历史与说明的鼠标滚动、阅读位置往返和缩放后草稿/筛选外勾选保持均通过。范围与离线模型控制边界见 [Windows 询问组合](../../finished/pi-suite/ask/windows-combination.md)。

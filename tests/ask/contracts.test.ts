@@ -3,7 +3,12 @@ import assert from "node:assert/strict";
 import { Value } from "typebox/value";
 import { normalize, askSchema } from "../../src/ask/schema.ts";
 import { AskForm } from "../../src/ask/form.ts";
+import { askDetails } from "../../src/ask/index.ts";
 import { AskQueue } from "../../src/ask/queue.ts";
+import { host } from "../support/host.ts";
+import { terminal } from "../support/terminal.ts";
+import type { ExtensionContext, ExtensionUIContext } from "@earendil-works/pi-coding-agent";
+import type { AskView } from "../../src/ask/view.ts";
 
 test("default initialization preserves explicit deselection, edits and raw option identity", () => {
   const form = new AskForm(normalize({ questions: [
@@ -15,10 +20,42 @@ test("default initialization preserves explicit deselection, edits and raw optio
   assert.deepEqual(form.response(), { kind: "selection", selections: ["Tests"], optionIds: ["tests"] });
   assert.deepEqual(form.response(1), { kind: "freeform", text: "feature/edited" });
   assert.equal(form.complete, true);
+  const expired = form.expire();
+  const details = askDetails({ questions: [{ question: "A" }, { question: "B" }] }, form.questions, expired);
+  assert.equal(details.cancelled, false);
+  const missing = new AskForm(normalize({ questions: [{ question: "A" }, { question: "B", defaultAnswer: "draft" }] }));
+  const missingDetails = askDetails({ questions: [{ question: "A" }, { question: "B" }] }, missing.questions, missing.expire());
+  assert.ok("answers" in missingDetails);
+  assert.deepEqual(missingDetails.answers,
+    [{ status: "unanswered" }, { status: "answered", response: { kind: "freeform", text: "draft", autoSelected: true } }]);
   const recommended = new AskForm(normalize({ question: "Database", options: [{ id: "pg", title: "Postgres", recommended: true }] }));
   assert.equal(recommended.response(), undefined);
   recommended.choose("pg");
   assert.deepEqual(recommended.response(), { kind: "selection", selections: ["Postgres"], optionIds: ["pg"] });
+});
+
+test("native ask results terminate only system cancellation and preserve automatic-answer provenance", async () => {
+  for (const status of ["answered", "skipped", "timed_out", "cancelled"] as const) {
+    let ctx!: ExtensionContext;
+    const h = await host({ extend: pi => { pi.on("session_start", (_event, context) => { ctx = context; }); },
+      ui: ui => ({ ...ui, custom: (async factory => new Promise(resolve => {
+        Promise.resolve(factory(terminal(), ui.theme, {} as never, resolve)).then(component => {
+          const view = component as AskView; view.render(40);
+          if (status === "answered") view.handleInput("\r");
+          else if (status === "skipped") view.handleInput("\x1b");
+          else if (status === "cancelled") view.cancel();
+        });
+      })) as ExtensionUIContext["custom"] }) });
+    try {
+      const result = await h.session.getToolDefinition("ask_user")!.execute("ask-contract", {
+        question: "Q", defaultAnswer: "draft", timeoutMs: status === "timed_out" ? 1 : 0,
+      }, new AbortController().signal, undefined, ctx as never);
+      assert.equal(result.terminate, status === "cancelled");
+      const details = result.details as { status: string; cancelled: boolean; response: { autoSelected?: true } | null };
+      assert.equal(details.status, status); assert.equal(details.cancelled, status === "skipped" || status === "cancelled");
+      if (status === "timed_out") assert.equal(details.response?.autoSelected, true);
+    } finally { await h.dispose(); }
+  }
 });
 
 test("external schemas and semantic normalization reject conflicting defaults and batch settings", () => {

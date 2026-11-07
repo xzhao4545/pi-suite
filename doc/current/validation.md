@@ -25,7 +25,7 @@ pnpm test
 
 模块准入的 1 项 Linux（Node 24.22.2）真实 SDK 聚合检查通过，覆盖与 process.cwd 不同的 ctx.cwd 项目配置、工具/命令注册和手动 active-tool 选择、首次 mentions 补全、new/resume/fork/tree 重绑与 reload 重新准入、child 配置根与实际工具目录分离。goal 模块未实际创建时，startup/重绑/reload/quit 保留其他 provider 的 goal 状态；活动摘要与必要详情未变时不重复写入或请求 Dock 重绘。全禁用模块的 reload 保留既有 job、SDK child 和 workflow Worker，quit 通过既有 owner 注册等待 child/session、Worker、job/gate 的真实结算与清理，不创建新的运行时。
 
-Node 内置测试运行器使用 experimental-transform-types 加载 TypeScript。检查包括外部参数契约、混合批量最终确认、预选/推荐身份、排队及超时竞态、配置覆盖、会话撤销、通知合并、状态去重和原生消息呈现；相同 goal 摘要不重复写状态；等数量的活动 ID 变化更新集合，必要详情相同时不请求 Dock 重绘，问题/清理/选择变化则单独刷新详情。实际 Pi SDK 通过原生工具包装器验证注册及结果；TUI 组件检查 40×24、60×30、120×40 的询问高度和可见宽度。目标检查使用 SDK 自带 faux provider，通过真实宿主核对正常继续、重试成功/耗尽、手动与阈值/溢出压缩、压缩取消、Esc、未回答询问、预算、reload、新建/恢复/fork、树切换和期限恢复；压缩摘要由公共 hook 提供。原生 footer 核对 40、60、120 列的状态行与宽度。
+Node 内置测试运行器使用 experimental-transform-types 加载 TypeScript。检查包括外部参数契约、混合批量最终确认、预选/推荐身份、排队及空闲重置/结算竞态、配置覆盖、会话撤销、通知合并、状态去重和原生消息呈现；相同 goal 摘要不重复写状态；等数量的活动 ID 变化更新集合，必要详情相同时不请求 Dock 重绘，问题/清理/选择变化则单独刷新详情。实际 Pi SDK 通过原生工具包装器验证注册及结果；TUI 组件检查 40×24、60×30、120×40 的询问高度和可见宽度。目标检查使用 SDK 自带 faux provider，通过真实宿主核对正常继续、重试成功/耗尽、手动与阈值/溢出压缩、压缩取消、Esc、未回答询问、预算、reload、新建/恢复/fork、树切换和期限恢复；压缩摘要由公共 hook 提供。原生 footer 核对 40、60、120 列的状态行与宽度。
 
 Linux 独立工具进程组的 1 项真实进程聚合覆盖 pipe/PTY 异步 stop、pipe 同步退出、忽略 TERM 的工具后代、原根组内已重新挂到 PID 1 的成员及另一独立 job 保持运行。真实 Codex 0.166.0 exec_command 和 Claude Code 2.1.153 Bash/Read 另通过临时本地 SSE 验收：文件内容与实际工具结果一致，公共日志/当前屏幕各按已有边界读取，自然退出与停止通过。Codex 长工具的独立进程组后代实际消失且列入身份 scope，另一 job 未被波及；本机 workspace-write 被 bwrap 限制阻断，成功执行仅使用隔离临时 danger-full-access 配置。临时 CLI 验收未增加永久条目，Windows及其他工具范围见 [工具执行阶段](../finished/pi-suite/jobs/cli-tools.md)。
 
@@ -35,7 +35,9 @@ Linux Pi 1.5.0 实际发布 CLI 另通过临时终端缩放验收：真实 job_s
 
 共享 wait 用内存来源核对其他对象结算、未在 ids 中的 child 提问、等待中与等待前的用户插话、超时，以及 mode all 的部分结算不返回；真实宿主核对等待一个 job 时另一 job 结算提前返回且不再通知、用户 steer 结束等待且不停止 job。goal_wait 的 waitFor 通过真实宿主核对其他 job 结算不结束等待、恢复时合并送达，以及已结算 ID 不进入等待。终端视图在真实 PTY job 上核对用户按键接管后模型写入返回 USER_CONTROL、Ctrl+G 交还、Ctrl+T 带回含用户与模型输入结果的屏幕、Ctrl+B 离开后 job 仍在运行。monitor 用真实进程核对 literal 与阈值 trigger、同行去重、冷却、detector 丢弃与改名，poll-diff 在样本变化时触发，file-watch 不带 command 运行并在文件事件时触发；真实宿主核对 monitor 事件使等待其自身 job 的 wait 提前返回、events 通道读取，以及已返回事件不再唤醒。
 
-询问协调的 1 项 Linux（Node 24.22.2）真实 SDK 聚合检查通过，使用公共 UI 包装器与 AskView 键盘输入核对 answered、timed_out、cancelled；两个真实 child 的父级问题与实际 pipe job 完成在原生询问期间暂存，恢复边界和 goal 请求合并为一条消息。超时或取消后目标等待新的用户 prompt；父级原生询问依次展示，排队不启动第二题期限，回答后两个 child 实际完成，已消费消息不再次唤醒。child 问题的父级协议期限独立管理。该检查通过受控 UI 上下文驱动实际组件和定时器，Windows 原生组合见 [询问验收](../finished/pi-suite/ask/windows-combination.md)。
+询问协调的 1 项 Linux（Node 24.22.2）真实 SDK 聚合检查通过，使用公共 UI 包装器与 AskView 键盘输入核对 answered、skipped、timed_out、cancelled；两个真实 child 的父级问题与实际 pipe job 完成在原生询问期间暂存，恢复边界和 goal 请求合并为一条消息。系统取消后目标等待新的用户 prompt，skipped/timed_out 保持自动许可并继续；父级原生询问依次展示，排队不启动第二题期限，回答后两个 child 实际完成，已消费消息不再次唤醒。child 问题的父级协议期限独立管理。该检查通过受控 UI 上下文驱动实际组件和定时器，Windows 原生组合见 [询问验收](../finished/pi-suite/ask/windows-combination.md)。
+
+Ask 的 9 项契约/组件/协调检查覆盖默认与草稿、批量最终确认、四种结果状态与只有 cancelled 终止、空闲操作重置、自动答案的优先级及未回答位置。Linux 实际 Pi 1.5.0 CLI 在 40×24、60×30、120×40 的 PTY 中通过题型标记/配色、循环页签及鼠标切题、筛选外勾选与文本光标保留、Review 提交、按键/滚轮重置空闲期限、到期自动答案与模型继续，以及顶层 Esc 跳过后继续和再次 Esc 中断。自由输入行、Esc 保留文字/勾选草稿和超时提交文字，以及 Review 未回答时拒绝提交、补齐后整批提交，另在 40×24 核对。该受控离线模型验收使用真实 SDK、TUI 与终端；本次交互变更的实际 CLI 范围为 Linux，专项见 [Ask 交互](../finished/pi-suite/ask/interaction.md)。
 
 hands-free 的 4 项检查覆盖静默/定时增量更新、单次与总输出预算、暂停与释放、真实 PTY 的宽限期与用户接管、静默终止的进程组清理证据、总运行超时与自行退出，以及 wait 返回更新后去重和 reload 后 goal_wait 恢复。该范围在 Linux（Node 24.22.2）通过，Windows 实际 CLI 监督见 [监督与输出验收](../finished/pi-suite/jobs/windows-supervision-output.md)。
 
@@ -101,7 +103,7 @@ Workflow 宿主的 5 项 Linux（Node 24.22.2）真实 SDK/faux 与进程检查�
 
 真实 MCP 的 1 项 Linux stdio 聚合验证原生传输与 discovery、mcp__ 服务器名单和显式资源 helper 并存、禁用与非选择服务器不执行，以及 child 结束后全部服务进程退出。受控真实服务另核对原生 codemode/tool_search、晚注册工具在下一请求执行、隔离与不可信项目不连接；跨 cwd RPC 只加载用户 MCP，不加载父项目或目标项目 MCP。服务为本机协议夹具，传输范围见 [MCP 阶段](../finished/pi-suite/agents/mcp-transport.md)；Windows 实际外部服务见 [Context7 验收](../finished/pi-suite/agents/windows-context7.md)，不推及 OAuth 或其他服务。
 
-当前 Linux（Node 24.22.2）检查集共 167 项，全量检查与类型检查通过，无失败、跳过或取消项；日常检查耗时在 5 分钟内。检查覆盖询问、目标、任务、执行、子代理、workflow 和共享组件的当前契约。平台适用范围按上述各专项结论区分。
+当前 Linux（Node 24.22.2）检查集共 168 项，全量检查与类型检查通过，无失败、跳过或取消项；日常检查耗时在 5 分钟内。检查覆盖询问、目标、任务、执行、子代理、workflow 和共享组件的当前契约。平台适用范围按上述各专项结论区分。
 
 完整 Starship 的 1 项 Linux SDK 聚合从开发依赖加载 0.65.2 实际发布入口，核对 goal_wait、tasks、运行 child、两个 job 与主询问在 40×24、60×30、120×40 并存，实际 emoji/24 位样式、max_statuses 插入顺序、disabled/缺失 extension_status、整体换行和显式 Dock 显示。询问期间实际 job 结算不增加模型调用。终端尺寸由受控 fixture 驱动；当前布局满足本包预算，任意用户 footer format 无可靠公共高度反馈，Windows 原生 footer 见 [CLI/footer 验收](../finished/pi-suite/jobs/windows-cli-ui.md)，预算与焦点/鼠标/草稿见 [询问组合](../finished/pi-suite/ask/windows-combination.md)。
 

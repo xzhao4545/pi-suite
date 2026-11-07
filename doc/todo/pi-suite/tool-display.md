@@ -1,6 +1,6 @@
 # 工具调用显示精简
 
-状态：方案已确认，未实施。tasks 工具的具体摘要规则见 [Tasks 编号、状态样式与紧凑反馈](tasks-display.md) 第 4 节，实施时改为使用本方案的公共框架；ask 界面本身见 [Ask 交互](ask-interaction.md)。
+状态：方案已确认，未实施。tasks 工具的具体摘要规则见 [Tasks 编号、状态样式与紧凑反馈](tasks-display.md) 第 4 节，实施时改为使用本方案的公共框架；ask 界面与结果语义已完成，见 [Ask 交互](../../finished/pi-suite/ask/interaction.md)。
 
 ## 原始需求
 
@@ -88,7 +88,7 @@ export function toolRenderers<A, D>(view: ToolView<A, D>): Pick<ToolDefinition, 
 | 折叠 answered | 单题：`✔ Ask · <题干 40 列> → <答案>`，答案为选中标题（多选以 `, ` 连接）或输入文字首行；多题：`✔ Ask · 3 answered` |
 | 折叠 timed_out | 与 answered 同格式，图标为 `⏱`，meta `auto-selected`；有 unanswered 题时 meta 追加 `1 unanswered` |
 | 折叠 skipped / cancelled | `⊘ Ask · skipped`、`⊘ Ask · cancelled` |
-| 展开 | 每题：题干、context，选项用 [Ask 交互](ask-interaction.md) 第 3 节的标记显示（已选 success），自由输入文字与评论 |
+| 展开 | 每题：题干、context，选项用 [Ask 交互](../../finished/pi-suite/ask/interaction.md) 第 3 节的标记显示（已选 success），自由输入文字与评论 |
 
 - 子代理的 ask_user（`src/agents/child.ts`）标题为 `Ask parent`，其余相同。
 - 模型可见的 JSON 正文不变。

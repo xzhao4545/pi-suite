@@ -1,7 +1,9 @@
-import type { Question, Response } from "./schema.ts";
+import type { AskResult, Question, Response } from "./schema.ts";
 
 export interface Draft {
-  text: string; selected: Set<string>; freeform: boolean; cursor: number; query: string; comment: string;
+  // Editing is focus state; freeform is the answer mode. Esc may leave the editor
+  // without discarding a text answer or its retained selection draft.
+  text: string; selected: Set<string>; freeform: boolean; editing: boolean; cursor: number; query: string; comment: string;
 }
 export class AskForm {
   readonly drafts: Draft[];
@@ -13,7 +15,8 @@ export class AskForm {
     this.drafts = questions.map(question => ({
       text: question.defaultAnswer ?? "", comment: "",
       selected: new Set(question.defaultOptionIds ?? (question.defaultOptionId ? [question.defaultOptionId] : [])),
-      freeform: !question.options.length || question.defaultAnswer !== undefined, cursor: 0, query: "",
+      freeform: !question.options.length || question.defaultAnswer !== undefined,
+      editing: !question.options.length || question.defaultAnswer !== undefined, cursor: 0, query: "",
     }));
   }
   get question(): Question { return this.questions[this.index]; }
@@ -21,19 +24,35 @@ export class AskForm {
 
   choose(id: string): void {
     const draft = this.draft;
-    draft.freeform = false;
+    draft.freeform = false; draft.editing = false;
     if (this.question.allowMultiple) {
       if (draft.selected.has(id)) draft.selected.delete(id); else draft.selected.add(id);
     } else { draft.selected.clear(); draft.selected.add(id); }
   }
-  response(index = this.index): Response | undefined {
+  response(index = this.index, automatic = false): Response | undefined {
     const question = this.questions[index], draft = this.drafts[index];
-    if (draft.freeform) return draft.text.trim() ? { kind: "freeform", text: draft.text } : undefined;
-    if (!draft.selected.size) return undefined;
-    const selected = question.options.filter(option => draft.selected.has(option.id));
+    const comment = draft.comment ? { comment: draft.comment } : {};
+    if (draft.freeform && draft.text.trim()) return { kind: "freeform", text: draft.text, ...comment };
+    if (draft.freeform && !automatic) return undefined;
+    let selected = question.options.filter(option => draft.selected.has(option.id));
+    if (!selected.length && automatic) {
+      const recommended = question.options.filter(option => option.recommended);
+      selected = recommended.length ? question.allowMultiple ? recommended : recommended.slice(0, 1) : question.options.slice(0, 1);
+    }
+    if (!selected.length) return undefined;
     return { kind: "selection", selections: selected.map(o => o.title), optionIds: selected.map(o => o.id),
-      ...(draft.comment ? { comment: draft.comment } : {}) };
+      ...comment };
   }
-  get complete(): boolean { return this.questions.every((_, index) => this.response(index)); }
+  answered(index: number): boolean { return this.response(index) !== undefined; }
+  get complete(): boolean { return this.questions.every((_, index) => this.answered(index)); }
   responses(): Response[] { return this.questions.map((_, index) => this.response(index)!); }
+  expire(): AskResult {
+    // Keep question positions even when a text question has no draft: dropping a slot
+    // would incorrectly attribute the next answer to the unanswered question.
+    const responses = this.questions.map((_, index) => {
+      const response = this.response(index, true);
+      return response ? { ...response, autoSelected: true as const } : undefined;
+    });
+    return { status: "timed_out", responses: responses.length === 1 && !responses[0] ? [] : responses };
+  }
 }

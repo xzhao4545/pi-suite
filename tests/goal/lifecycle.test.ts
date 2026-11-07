@@ -67,15 +67,22 @@ test("Esc preserves the goal, foreign work cannot resume it, and explicit resume
   } finally { release.resolve(); await h.dispose(); }
 });
 
-test("unanswered native ask terminates without consent; new user input resumes goal work", { timeout: 15000 }, async () => {
+test("Esc skips a native ask without consent and the same goal turn continues", { timeout: 15000 }, async () => {
   const h = await host({ answer: "cancel" });
   try {
-    h.faux.setResponses([() => fauxAssistantMessage(fauxToolCall("ask_user", { question: "Approve action?", timeoutMs: 0 }))]);
-    await h.session.prompt("/goal Ask before acting"); await h.idle();
-    assert.equal(h.faux.state.callCount, 1); assert.equal(h.goal()?.status, "active");
-    assert.equal(h.goal()?.waiting, "user"); assert.match(h.statuses.get("goal") ?? "", /^⏳ goal \d+:\d{2}(?::\d{2})?$/);
-    h.faux.setResponses([complete]); await h.session.prompt("Continue with my explicit instructions"); await h.idle();
-    assert.equal(h.goal()?.status, "completed"); assert.equal(h.faux.state.callCount, 2);
+    h.faux.setResponses([
+      () => fauxAssistantMessage(fauxToolCall("ask_user", { question: "Approve action?", timeoutMs: 0 })),
+      context => {
+        const message = context.messages.findLast(message => message.role === "toolResult");
+        assert.ok(message?.role === "toolResult");
+        const result = JSON.parse(message.content.map(part => part.type === "text" ? part.text : "").join(""));
+        assert.equal(result.status, "skipped"); assert.equal(result.response, null);
+        return complete(context);
+      },
+    ]);
+    await h.session.prompt("/goal Verify skipped questions keep execution alive"); await h.idle();
+    assert.equal(h.faux.state.callCount, 2); assert.equal(h.goal()?.status, "completed");
+    assert.equal(h.goal()?.waiting, undefined);
   } finally { await h.dispose(); }
 });
 

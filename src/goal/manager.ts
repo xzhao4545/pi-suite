@@ -3,6 +3,7 @@ import type { AgentBeforeSettleEvent, ExtensionAPI, ExtensionContext, MessageEnd
 import type { SessionBinding, Binding } from "../runtime/binding.ts";
 import { isQuestion, type Notifications } from "../runtime/notifications.ts";
 import type { StatusPublisher } from "../ui/status.ts";
+import type { AskResult } from "../ask/schema.ts";
 import type { WaitRegistry } from "../runtime/wait.ts";
 import { ToolError } from "../runtime/errors.ts";
 import { GOAL_ENTRY, goalContract, goalSummary, restoreGoal, type Goal, type GoalStatus, type Schedule } from "./state.ts";
@@ -201,10 +202,12 @@ export class GoalManager {
     if (!this.owned || this.goal?.status !== "active") return;
     this.transition(start ? "waiting_user" : this.goal.waiting === "user" ? "waiting_user" : "running");
   }
-  askResult(answered: boolean, ctx: ExtensionContext): void {
+  askResult(status: AskResult["status"], ctx: ExtensionContext): void {
     if (!this.owned || this.goal?.status !== "active" || ctx.sessionManager.getSessionId() !== this.binding.current?.sessionId) return;
-    if (answered) this.transition("running");
-    else { this.goal.waiting = "user"; this.goal.automatic = false; this.cancelRequest(); this.transition("waiting_user"); this.save(); }
+    if (status === "answered" || status === "timed_out") this.transition("running");
+    // Skipping preserves automatic permission; only a system cancellation requires
+    // explicit recovery. Consent remains a separate part of the ask result contract.
+    else if (status === "cancelled") { this.goal.waiting = "user"; this.goal.automatic = false; this.cancelRequest(); this.transition("waiting_user"); this.save(); }
   }
   beforeCompact(): void { if (this.goal?.status === "active") this.transition("waiting_host"); }
   compacted(willRetry: boolean): void {

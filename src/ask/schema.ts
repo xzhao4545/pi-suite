@@ -15,7 +15,7 @@ export const askSchema = Type.Object({
   questions: Type.Optional(Type.Array(Type.Object({ question: Type.String({ minLength: 1 }), ...fields }), { minItems: 2, maxItems: 4 })),
   allowComment: Type.Optional(Type.Boolean()),
   timeoutMs: Type.Optional(Type.Integer({ minimum: 0, maximum: 2147483647,
-    description: "Milliseconds from display. Omit for configured default; 0 disables expiry. Expiry never submits defaults." })),
+    description: "Milliseconds of user inactivity before expiry. Omit for configured default (600000); 0 disables expiry. On expiry each question submits the user's current draft, else recommended options, else the first option." })),
 }, { additionalProperties: false });
 export type AskParams = Static<typeof askSchema>;
 export type QuestionInput = NonNullable<AskParams["questions"]>[number];
@@ -24,10 +24,14 @@ export interface Option { id: string; title: string; description?: string; recom
 export interface Question extends Omit<QuestionInput, "options" | "allowMultiple" | "allowFreeform"> {
   options: Option[]; allowMultiple: boolean; allowFreeform: boolean;
 }
-export type Response =
+export type Response = (
   | { kind: "selection"; selections: string[]; optionIds: string[]; comment?: string }
-  | { kind: "freeform"; text: string };
-export interface AskResult { status: "answered" | "timed_out" | "cancelled"; responses: Response[] }
+  | { kind: "freeform"; text: string; comment?: string }
+) & { autoSelected?: true };
+export type AskResult =
+  | { status: "answered"; responses: Response[] }
+  | { status: "timed_out"; responses: (Response | undefined)[] }
+  | { status: "skipped" | "cancelled"; responses: [] };
 
 export function normalize(params: AskParams): Question[] {
   if (!params.questions && !params.question?.trim()) throw new Error("question or questions is required");
