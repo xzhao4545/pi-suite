@@ -1,6 +1,6 @@
 # 工具调用显示精简
 
-状态：方案待确认，未实施。tasks 工具的具体摘要规则见 [Tasks 编号、状态样式与紧凑反馈](tasks-display.md) 第 4 节，实施时改为使用本方案的公共框架；ask 界面本身见 [Ask 交互](ask-interaction.md)。
+状态：方案已确认，未实施。tasks 工具的具体摘要规则见 [Tasks 编号、状态样式与紧凑反馈](tasks-display.md) 第 4 节，实施时改为使用本方案的公共框架；ask 界面本身见 [Ask 交互](ask-interaction.md)。
 
 ## 原始需求
 
