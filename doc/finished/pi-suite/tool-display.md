@@ -1,11 +1,11 @@
 # 工具调用显示精简
 
-状态：方案已确认，未实施。tasks 工具的具体摘要规则见 [Tasks 编号、状态样式与紧凑反馈](tasks-display.md) 第 4 节，实施时改为使用本方案的公共框架；ask 界面与结果语义已完成，见 [Ask 交互](../../finished/pi-suite/ask/interaction.md)。
+状态：已完成。tasks 工具的具体摘要规则见 [Tasks 编号、状态样式与紧凑反馈](tasks-display.md) 第 4 节，实施时改为使用本方案的公共框架；ask 界面与结果语义已完成，见 [Ask 交互](ask/interaction.md)。
 
 ## 原始需求
 
-- [ ] 1. ask_user 调用后的显示精简，不铺开全部 JSON。
-- [ ] 2. jobs（job_*）、子代理（agent_*）等其他工具按需完善调用显示：默认简短，展开后查看明细。
+- [x] 1. ask_user 调用后的显示精简，不铺开全部 JSON。
+- [x] 2. jobs（job_*）、子代理（agent_*）等其他工具按需完善调用显示：默认简短，展开后查看明细。
 
 ## 当前原因
 
@@ -43,17 +43,17 @@ Suite 注册的 20 个工具（job_* 6 个、agent_* 6 个、agent_workflow、as
 
 ```ts
 type Tone = 'accent' | 'success' | 'warning' | 'error' | 'dim';
-interface ToolLine { icon: string; tone?: Tone; title: string; summary?: string; meta?: string[] }
+interface ToolLine { icon: string; tone?: Tone; title: string; summary?: string; meta?: (string | { text: string; tone: Tone })[]; strike?: boolean; indent?: number }
 interface ToolView<A, D> {
   call(args: A): ToolLine;                       // 调用进行中的一行
-  collapsed(details: D, args: A): ToolLine;       // 结果折叠：一行
-  expanded?(details: D, args: A, text: string): string[]; // 结果展开：省略时显示工具正文全文
+  collapsed(details: D, args: A, text: string): ToolLine;       // 结果折叠：一行
+  expanded?(details: D, args: A, text: string, theme: Theme): string[]; // 结果展开：省略时显示工具正文全文
 }
 export function toolRenderers<A, D>(view: ToolView<A, D>): Pick<ToolDefinition, 'renderCall' | 'renderResult' | 'renderShell'>;
 ```
 
 - `toolLine(theme, line)`：输出 `<icon> <title> · <summary> · meta·meta`，图标与标题按 tone 着色，summary 默认色，meta dim；所有字段先经 `sanitizeText` 并把换行压成空格，整行按宽度截断。
-- `renderShell: 'self'`；调用块在 `ctx.state.finished` 为 true 后返回空数组，完成后只剩结果行（沿用 `src/tasks/tools.ts` 的现有做法，并补上当前缺少的 `outputPad` 处理）。
+- `renderShell: 'self'`；调用块在任一结果（含 partial）设置 `ctx.state.finished` 后返回空数组，完成后只剩结果行（沿用 `src/tasks/tools.ts` 的现有做法，并补上当前缺少的 `outputPad` 处理）。
 - 错误结果（`ctx.isError`）：第一行 `✘ <title>` error 色，下面始终显示完整错误正文，不受折叠影响。
 - `isPartial` 的进度更新同样走 `collapsed`，所以运行中与完成后只有一行。
 - `expanded` 省略时显示工具返回给模型的正文全文，保证展开后能看到模型拿到的全部信息。
@@ -73,7 +73,7 @@ export function toolRenderers<A, D>(view: ToolView<A, D>): Pick<ToolDefinition, 
 
 #### renderer 查找
 
-- `src/runtime/tools.ts` 新增模块内的 renderer 表：Suite 所有工具注册统一经过一个入口（现有 `registerBoundTool` 扩展为同时记录 `name → renderers`；jobs、agents、ask、goal、tasks、wait 中直接调用 `pi.registerTool` 的注册全部改为经过该入口）。
+- `src/runtime/tools.ts` 新增按 ExtensionAPI 隔离的 WeakMap renderer 表：Suite 所有工具注册统一经过一个入口（现有 `registerBoundTool` 扩展为同时记录 `name → renderers`；jobs、agents、ask、goal、tasks、wait 中直接调用 `pi.registerTool` 的注册全部改为经过该入口）。
 - `src/ask/index.ts` 创建 `Transcript` 时传入该表的查找函数，询问期间的历史视图与主界面显示一致。子代理查看器继续使用 `run.renderers`（`src/agents/runner.ts` 40–43），子会话注册的 Suite 工具同样带上这些 renderer。
 
 ### 2. 各工具显示
@@ -88,7 +88,7 @@ export function toolRenderers<A, D>(view: ToolView<A, D>): Pick<ToolDefinition, 
 | 折叠 answered | 单题：`✔ Ask · <题干 40 列> → <答案>`，答案为选中标题（多选以 `, ` 连接）或输入文字首行；多题：`✔ Ask · 3 answered` |
 | 折叠 timed_out | 与 answered 同格式，图标为 `⏱`，meta `auto-selected`；有 unanswered 题时 meta 追加 `1 unanswered` |
 | 折叠 skipped / cancelled | `⊘ Ask · skipped`、`⊘ Ask · cancelled` |
-| 展开 | 每题：题干、context，选项用 [Ask 交互](../../finished/pi-suite/ask/interaction.md) 第 3 节的标记显示（已选 success），自由输入文字与评论 |
+| 展开 | 每题：题干、context，选项用 [Ask 交互](ask/interaction.md) 第 3 节的标记显示（已选 success），自由输入文字与评论 |
 
 - 子代理的 ask_user（`src/agents/child.ts`）标题为 `Ask parent`，其余相同。
 - 模型可见的 JSON 正文不变。
@@ -153,10 +153,14 @@ task_list、task_get、task_edit 按 [tasks-display.md](tasks-display.md) 第 4 
 
 ## 验收
 
-- [ ] 实际 Pi CLI PTY 40/60/120 列逐个调用上述工具：折叠均为一行；点击单个结果展开该项；ctrl+o 切换全部；错误显示完整正文。
-- [ ] job_write 使用 `sensitive:true` 时调用与展开均不显示输入内容。
-- [ ] ask_user 询问期间打开历史，Suite 工具与主界面显示一致。
-- [ ] 子代理查看器中的 Suite 工具使用相同显示。
-- [ ] 完成后在 `doc/current/runtime/tools.md` 记录公共显示框架与状态图标，在 ask、jobs、agents、goal、tasks 的 current 文档中更新工具显示说明，并在 `doc/current/ui/index.md` 登记 `tool-render.ts`。
+- [x] 实际 Pi CLI PTY 40/60/120 列逐个调用上述工具：折叠均为一行；点击单个结果展开该项；ctrl+o 切换全部；错误显示完整正文。
+- [x] job_write 使用 `sensitive:true` 时调用与展开均不显示输入内容。
+- [x] ask_user 询问期间打开历史，Suite 工具与主界面显示一致。
+- [x] 子代理查看器中的 Suite 工具使用相同显示。
+- [x] 完成后在 `doc/current/runtime/tools.md` 记录公共显示框架与状态图标，在 ask、jobs、agents、goal、tasks 的 current 文档中更新工具显示说明，并在 `doc/current/ui/index.md` 登记 `tool-render.ts`。
 
-[返回 Pi Suite 待办](index.md)
+## 验收结论
+
+Linux Node 24.22.2 / Pi 1.5.0 的实际 CLI PTY 在 40×24、60×30、120×40 通过本专项范围。全部 Suite 工具的一行折叠与完整展开、单项鼠标/宿主 Ctrl+O、错误全文、sensitive 隐藏，以及 Ask History 和实际 child Transcript 的公共 renderer 接入通过；旧 version 2 任务文件读取后仍保留原文件，首次编辑发布 version 3，编号/样式、默认 All 与当前父子两行及可编辑答案通过。类型与全量检查通过；此专项结论限定 Linux 当前版本，不扩展为 Windows 新显示规则的实际 CLI 验收。
+
+[返回已完成专项](../index.md)

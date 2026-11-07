@@ -52,7 +52,7 @@ job_list 的 session 范围、/jobs 默认列表与状态数量共用 JobsModule
 
 | 工具 | 参数与行为 |
 | --- | --- |
-| job_start | command 或 agent、mode?（pipe 默认、pty）、name?、cwd?、timeoutMs?（省略不限时）、taskId?、attach?、monitor?、handsFree?；检查参数后直接启动并返回 ID。tasks 启用时 taskId 须对应当前清单的子任务，job ID 写回其执行引用；任务与 job 状态分别管理。agent 指定 preset、prompt、fork?，见 [CLI 预设与直接启动](launch.md)。attach 只用于需要用户直接操作程序的 PTY job（登录、交互提示），立即打开终端视图，用户离开视图后返回；非 PTY 或非交互界面在启动前返回 INVALID_ARGS。monitor 见下节；file-watch 不传 command 或 agent；handsFree 仅用于 PTY，见 [监督与委派](hands-free.md) |
+| job_start | command 或 agent、mode?（pipe 默认、pty）、name?、cwd?、timeoutMs?（省略不限时）、taskId?、attach?、monitor?、handsFree?；检查参数后直接启动并返回 ID。taskId 使用 `1.2` 形式，tasks 启用时须对应当前清单的子任务，job ID 写回其执行引用；任务与 job 状态分别管理。agent 指定 preset、prompt、fork?，见 [CLI 预设与直接启动](launch.md)。attach 只用于需要用户直接操作程序的 PTY job（登录、交互提示），立即打开终端视图，用户离开视图后返回；非 PTY 或非交互界面在启动前返回 INVALID_ARGS。monitor 见下节；file-watch 不传 command 或 agent；handsFree 仅用于 PTY，见 [监督与委派](hands-free.md) |
 | job_list | state?（active 默认、finished、all）、scope?（session 默认、workspace）、cursor?、limit?（默认 10，最大 100）；同时使用约 4 KiB 预算按记录分页，长名称明确缩略；历史只读和错误保持可见，其他或已崩溃 Pi 进程未结算记录只在 all 中显示为 unsettled |
 | job_get | id、detail?；默认状态、名称、短命令、任务和清理结果，长命令提供 full 入口；detail:true 返回完整命令、cwd、时间、归属和监督信息。没有本进程控制句柄时标明 read-only history |
 | job_read | id、stream?、offset?、limitBytes?、search?、context?；pipe 为 stdout（默认）、stderr、input，PTY 为 output（默认）、input，带 monitor 的 job 另有 events，其他组合返回 UNSUPPORTED_STREAM；PTY 输出转为可见文本，偏移仍指原始字节 |
@@ -61,6 +61,8 @@ job_list 的 session 范围、/jobs 默认列表与状态数量共用 JobsModule
 | wait | ids（job_/agent_/wf_ 前缀，1–50）、mode?（all 默认、any）、timeoutMs?（默认 300000，最大 3600000）；超时或取消只结束等待，不停止对象。除 ids 按 mode 满足外，当前会话可见的其他对象结算（列在 also 下并撤销其通知）、monitor 事件与 hands-free 更新（包括被等待 job 自身的）、直接 child 提问、用户插话（steer）也提前返回；details.reason 为 condition、question、event、other、user 或 timeout |
 
 结果首行格式为 `job_3fa1c2d0 completed · exit 0 · 12.4s · pipe`，清理未确认时附 cleanup 状态。启动回执保留真实状态、mode、运行期限和错误；写入仅报告已发送字节/关闭输入，不回显正文；停止保留 requested 与实际清理结果。固定操作指南放在工具描述，失败、截断或交接保留具体后续入口。
+
+工具显示共用公共 renderer：启动/单项显示 ID、名称与状态，列表只显示数量/范围，读取只显示流与字节区间，写入只显示已发送字节与 stdin 关闭状态，停止显示真实结算与清理结论。展开显示完整命令、cwd、任务引用、页面正文与续读信息。job_write 调用行不显示输入，sensitive:true 的展开内容显示 `[sensitive]`。鼠标单项展开、默认 Ctrl+O 全部展开，错误全文始终可见。
 
 ## 输出读取
 

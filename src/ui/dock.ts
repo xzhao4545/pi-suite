@@ -37,7 +37,9 @@ export class Dock implements Component {
   askBudget(rows: number): number { return Math.max(1, this.budget(rows) - this.dockAllowance(rows)); }
 
   private dockAllowance(rows: number): number {
-    return this.ask ? Number(this.budget(rows) > 1 && [...this.sources.values()].some(source => source(true).length)) : this.budget(rows);
+    if (!this.ask) return this.budget(rows);
+    // Parent + current child remain visible; the answer editor still gets at least one row.
+    return this.budget(rows) > 1 ? Math.min(2, Math.max(0, ...[...this.sources.values()].map(source => source(true).length))) : 0;
   }
 
   render(width: number): string[] {

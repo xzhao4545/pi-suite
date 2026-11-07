@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, ToolRenderers } from "@earendil-works/pi-coding-agent";
 import type { SuiteConfig } from "../runtime/config.ts";
 import type { SessionBinding } from "../runtime/binding.ts";
 import type { Notifications } from "../runtime/notifications.ts";
@@ -6,6 +6,9 @@ import type { Dock } from "../ui/dock.ts";
 import type { AskView } from "./view.ts";
 import { AskQueue, cancelled } from "./queue.ts";
 import { askSchema, normalize, type AskParams, type AskResult, type Question } from "./schema.ts";
+
+import { registerBoundTool, toolRenderer } from '../runtime/tools.ts';
+import { askRenderers } from './tool-render.ts';
 
 export function askDetails(params: AskParams, questions: Question[], result: AskResult) {
   // Expired answers are recommendations, while skipped/cancelled contain no user answer.
@@ -19,8 +22,10 @@ export function askDetails(params: AskParams, questions: Question[], result: Ask
 export class AskManager {
   private queue = new AskQueue();
   private active?: AskView;
+  private rendererLookup?: (name: string) => ToolRenderers | undefined;
   constructor(private binding: SessionBinding, private notifications: Notifications, private dock: Dock,
     private onResult?: (status: AskResult["status"], ctx: ExtensionContext) => void) {}
+  setRendererLookup(lookup: (name: string) => ToolRenderers | undefined): void { this.rendererLookup = lookup; }
   cancel(): void { this.active?.cancel(); }
 
   async ask(params: AskParams, ctx: ExtensionContext, config: SuiteConfig, signal?: AbortSignal, requester = "main"): Promise<{ result: AskResult; questions: Question[] }> {
@@ -39,7 +44,7 @@ export class AskManager {
       this.dock.setAsk(true);
       try {
         return await ctx.ui.custom<AskResult>((tui, theme, _keys, done) => {
-          const transcript = new Transcript(tui, ctx.cwd);
+          const transcript = new Transcript(tui, ctx.cwd, this.rendererLookup);
           transcript.setEntries(ctx.sessionManager.getBranch());
           this.active = new AskView(new AskForm(questions), tui, theme, this.dock, config, transcript,
             done, params.timeoutMs ?? config.ask.timeout, signal, params.allowComment, requester, params.questions ? params.question : undefined);
@@ -57,7 +62,9 @@ export class AskManager {
 }
 
 export function registerAsk(pi: ExtensionAPI, manager: AskManager, getConfig: () => SuiteConfig): void {
-  pi.registerTool({
+  manager.setRendererLookup(name => toolRenderer(pi, name));
+  registerBoundTool(pi, {
+    ...askRenderers(),
     name: "ask_user", label: "Ask user",
     description: "Ask one focused question or 2–4 independent questions. User input resets the idle timeout (default 10 minutes). Expiry submits drafts, else recommended options, else the first option; timed_out answers are auto-selected, never consent. Esc skips without stopping your response.",
     promptGuidelines: ["Put batch settings inside each questions entry. Recommended options are separate from defaultOptionId/defaultOptionIds.",
@@ -70,5 +77,5 @@ export function registerAsk(pi: ExtensionAPI, manager: AskManager, getConfig: ()
       return { content: [{ type: "text", text: JSON.stringify(record) }], details: record,
         terminate: result.status === "cancelled" };
     },
-  });
+  }, 'initial');
 }

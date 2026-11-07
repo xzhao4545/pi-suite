@@ -31,7 +31,7 @@ test('two SDK children edit their owner list concurrently without losing changes
     await invoke('task_edit', {op: 'batch', changes: [{op: 'add', title: 'parallel work', children: ['first', 'second']}]});
     const path = taskPath(root, ctx.sessionManager.getSessionId()), store = taskStore(path, path);
     const response = async (context: TranscriptContext) => {
-      const id = JSON.stringify(context.messages.find(message => message.role === 'user')).includes('first child') ? '2' : '3';
+      const id = JSON.stringify(context.messages.find(message => message.role === 'user')).includes('first child') ? '1.1' : '1.2';
       const result = lastTool(context);
       if (!result) return fauxAssistantMessage(fauxToolCall('task_get', {id}));
       if (result.toolName === 'task_get') {
@@ -44,7 +44,7 @@ test('two SDK children edit their owner list concurrently without losing changes
       return fauxAssistantMessage(`child ${id} finished`);
     };
     h.faux.setResponses(Array(6).fill(response));
-    const calls = ['first child', 'second child'].map(prompt => invoke('agent_start', {prompt, taskId: prompt === 'first child' ? '2' : '3', background: false}));
+    const calls = ['first child', 'second child'].map(prompt => invoke('agent_start', {prompt, taskId: prompt === 'first child' ? '1.1' : '1.2', background: false}));
     await Promise.all(calls);
     assert.equal(arrived, 2);
     const runs = [...manager.runs.values()]; assert.equal(runs.length, 2);
@@ -80,12 +80,12 @@ test('SDK child retains its owner store across parent reload and fork; historica
     const originalFile = first.session.sessionFile!, originalId = ctx.sessionManager.getSessionId();
     const originalPath = taskPath(root, originalId), originalStore = taskStore(originalPath, originalPath);
     await first.session.getToolDefinition('task_edit')!.execute('tasks-lifecycle', {op: 'batch', changes: [{op: 'add', title: 'owned work', children: ['execution']},
-      {op: 'update', id: '2', status: 'doing'}]}, new AbortController().signal, undefined, ctx as never);
+      {op: 'update', id: '1.1', status: 'doing'}]}, new AbortController().signal, undefined, ctx as never);
     first.faux.setResponses([async () => {
       entered.resolve(); await continueChild.promise;
-      return fauxAssistantMessage(fauxToolCall('task_edit', {op: 'batch', changes: [{op: 'update', id: '2', description: 'original child after fork'}]}));
+      return fauxAssistantMessage(fauxToolCall('task_edit', {op: 'batch', changes: [{op: 'update', id: '1.1', description: 'original child after fork'}]}));
     }, context => { lastTool(context); return fauxAssistantMessage('original child completed'); }]);
-    const run = await manager.start({prompt: 'continue owner task', taskId: '2', background: false}, {ctx, taskStore: originalStore}, loadConfig(root, root));
+    const run = await manager.start({prompt: 'continue owner task', taskId: '1.1', background: false}, {ctx, taskStore: originalStore}, loadConfig(root, root));
     await entered.promise;
     await first.session.reload();
     assert.strictEqual(agentRuntime(), manager); assert.strictEqual(run.parent.taskStore, originalStore);
@@ -93,19 +93,19 @@ test('SDK child retains its owner store across parent reload and fork; historica
     const forkId = ctx.sessionManager.getSessionId(); assert.notEqual(forkId, originalId);
     const forkPath = taskPath(root, forkId), forkStore = taskStore(forkPath, forkPath);
     const forkSeed = await forkStore.snapshot();
-    assert.equal(forkSeed.tasks.find(task => task.id === '2')?.owner, run.record.id);
+    assert.equal(forkSeed.tasks.find(task => task.id === '1.1')?.owner, run.record.id);
     continueChild.resolve();
     assert.equal((await run.done.promise).state, 'completed', run.record.error);
     assert.equal(run.record.ownerSessionId, originalId); assert.strictEqual(run.parent.taskStore, originalStore);
-    assert.equal((await originalStore.snapshot()).tasks.find(task => task.id === '2')?.description, 'original child after fork');
-    assert.equal((await originalStore.snapshot()).tasks.find(task => task.id === '2')?.status, 'doing');
+    assert.equal((await originalStore.snapshot()).tasks.find(task => task.id === '1.1')?.description, 'original child after fork');
+    assert.equal((await originalStore.snapshot()).tasks.find(task => task.id === '1.1')?.status, 'doing');
     assert.deepEqual(await forkStore.snapshot(), forkSeed, 'the original child cannot edit the fork copy');
 
     manager.sweep(Date.now() + 10 * 60_000 + 1);
     assert.equal(manager.get(run.record.id).run, undefined);
     await runtime.switchSession(originalFile);
     assert.equal(ctx.sessionManager.getSessionId(), originalId);
-    current.faux.setResponses([fauxAssistantMessage(fauxToolCall('task_edit', {op: 'batch', changes: [{op: 'update', id: '2', description: 'resumed child progress'}]})),
+    current.faux.setResponses([fauxAssistantMessage(fauxToolCall('task_edit', {op: 'batch', changes: [{op: 'update', id: '1.1', description: 'resumed child progress'}]})),
       async context => { lastTool(context); resumedEntered.resolve(); await finishResume.promise; return fauxAssistantMessage('resume interrupted'); }]);
     const resumed = await current.session.getToolDefinition('agent_send')!.execute('tasks-resume', {id: run.record.id, message: 'resume owner task'},
       new AbortController().signal, undefined, ctx as never);
@@ -113,11 +113,11 @@ test('SDK child retains its owner store across parent reload and fork; historica
     const next = manager.get(run.record.id).run!;
     await resumedEntered.promise;
     assert.equal(next.record.id, run.record.id); assert.notEqual(next.record.runId, run.record.runId);
-    assert.equal(next.record.taskId, '2'); assert.equal(next.record.ownerSessionId, originalId);
+    assert.equal(next.record.taskId, '1.1'); assert.equal(next.record.ownerSessionId, originalId);
     assert.strictEqual(next.parent.taskStore, originalStore);
     const stopping = manager.stop(next.record.id, next.record.runId); finishResume.resolve();
     await stopping; assert.equal((await next.done.promise).state, 'stopped');
-    const task = (await originalStore.snapshot()).tasks.find(task => task.id === '2')!;
+    const task = (await originalStore.snapshot()).tasks.find(task => task.id === '1.1')!;
     assert.equal(task.owner, run.record.id); assert.equal(task.description, 'resumed child progress'); assert.equal(task.status, 'doing');
     assert.deepEqual(await forkStore.snapshot(), forkSeed);
   } finally { continueChild.resolve(); finishResume.resolve(); await runtime.dispose(); rmSync(root, {recursive: true, force: true}); }

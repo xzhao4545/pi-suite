@@ -1,7 +1,6 @@
 import { join } from 'node:path';
 import { getAgentDir, type ExtensionAPI, type ExtensionContext, type ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
-import { Text } from '@earendil-works/pi-tui';
 import { readConfig, type SuiteConfig } from '../../runtime/config.ts';
 import { ToolError } from '../../runtime/errors.ts';
 import { textResult, registerBoundTool } from '../../runtime/tools.ts';
@@ -11,7 +10,9 @@ import { fullWorkflowToolDescription } from './tool-description.ts';
 import { workflowSummary, type WorkflowsModule } from './index.ts';
 import { decideWorkflowCollision } from './collisions.ts';
 import { WORKFLOW_ENTRY_TYPE, decodeWorkflowEntry, taskFromEntry } from './entry.ts';
-import { WorkflowProgress } from './ui/progress.ts';
+import { sanitizeText } from '../../runtime/text.ts';
+import { toolRenderers, stateLine } from '../../ui/tool-render.ts';
+import { WorkflowProgress, workflowLine, workflowLines } from './ui/progress.ts';
 import type { AgentType } from '../types.ts';
 
 const schema = Type.Object({script: Type.Optional(Type.String({minLength: 1})), scriptPath: Type.Optional(Type.String({minLength: 1})),
@@ -29,18 +30,23 @@ export function registerWorkflowTool(pi: ExtensionAPI, workflows: WorkflowsModul
       return textResult([workflowSummary(task), task.logs.at(-1), `resultPath: ${task.resultPath}`],
       {id: task.id, status: task.status, scriptPath: task.scriptPath, resultPath: task.resultPath, resumedFrom: task.resumedFrom});
     },
-    renderCall(args) { return new Text(`Workflow · ${args.name ?? args.scriptPath ?? 'inline script'}`, 0, 0); },
-    renderResult(result, options) {
-      const id = (result.details as {id?: string} | undefined)?.id;
-      const task = id && workflows.manager.tasks.get(id);
-      return task ? new WorkflowProgress(task, options.expanded)
-        : new Text(result.content.filter(item => item.type === 'text').map(item => item.text).join('\n'), 0, 0);
-    }};
-  pi.registerEntryRenderer(WORKFLOW_ENTRY_TYPE, entry => {
+    ...toolRenderers<{ name?: string; scriptPath?: string }, { id: string; status: string }>({
+      call: args => ({ icon: '⟳', tone: 'accent', title: 'Workflow', summary: args.name ?? args.scriptPath ?? 'inline script' }),
+      collapsed: details => {
+        // Historical results can outlive the runtime task cache.
+        const task = workflows.manager.tasks.get(details.id);
+        return task ? workflowLine(task) : { ...stateLine(details.status), title: 'Workflow', summary: `${details.id} · ${details.status}` };
+      },
+      expanded: (details, _args, text) => {
+        const task = workflows.manager.tasks.get(details.id);
+        return task ? workflowLines(task).map(sanitizeText) : [text];
+      },
+    }) };
+  pi.registerEntryRenderer(WORKFLOW_ENTRY_TYPE, (entry, _options, theme) => {
     const data = decodeWorkflowEntry(entry.data);
-    return new WorkflowProgress(workflows.manager.tasks.get(data.id) ?? taskFromEntry(data), false);
+    return new WorkflowProgress(workflows.manager.tasks.get(data.id) ?? taskFromEntry(data), false, theme);
   });
-  if (enabled) { pi.registerTool(tool); registered = true; }
+  if (enabled) { registerBoundTool(pi, tool, 'initial'); registered = true; }
   const refreshTypes = (ctx: ExtensionContext) => {
     if (!registered) return;
     const types = catalog ? catalog(ctx) : agentTypes(ctx.cwd, getAgentDir(), {

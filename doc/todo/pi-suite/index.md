@@ -1,7 +1,6 @@
 # Pi Suite 待办索引
 
-- [Tasks 编号、状态样式与紧凑反馈](tasks-display.md) — 两级 `1.1` ID（删除跨组移动、version 2 自动转换）、行首图标、待办/完成配色、询问期间父子两行、/tasks 显示完成项、工具调用一行摘要；方案已确认，未实施。
-- [工具调用显示精简](tool-display.md) — 公共 `tool-render.ts` 框架、ask/jobs/agents/wait/goal 工具一行折叠与展开明细、询问历史视图使用 Suite renderer；方案已确认，未实施。
+当前无活跃专项。Tasks 编号与紧凑反馈、公共工具显示已完成，完整方案与验收见 [Tasks 显示](../../finished/pi-suite/tasks-display.md) 和 [工具显示](../../finished/pi-suite/tool-display.md)。
 
 Ask 交互已完成，方案与验收见 [交互专项](../../finished/pi-suite/ask/interaction.md)。
 

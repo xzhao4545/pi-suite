@@ -1,6 +1,6 @@
 # Tasks 编号、状态样式与紧凑反馈
 
-状态：方案已确认，未实施。上一轮 [Tasks 交互](../../finished/pi-suite/tasks-goal-interaction.md) 的 `#ID 标题` 左置、状态图标右置方案已被用户否决，本专项替换其显示规则。
+状态：已完成。上一轮 [Tasks 交互](tasks-goal-interaction.md) 的 `#ID 标题` 左置、状态图标右置方案已被用户否决，本专项替换其显示规则。
 
 已确认决策：
 
@@ -11,13 +11,13 @@
 
 ## 原始需求
 
-- [ ] 1. 任务行去掉 `#` 前缀。
-- [ ] 2. 状态图标放在行首，不放在右侧。
-- [ ] 3. 子任务不与父任务共用全局编号，子任务编号为 `1.1`、`1.2`。
-- [ ] 4. 紧凑显示（询问打开时）不能只剩一行汇总，至少显示当前父任务与其实际子任务两行。
-- [ ] 5. 未完成任务不能使用灰色；只有已完成任务使用灰色。
-- [ ] 6. `/tasks` 能看到已完成任务。
-- [ ] 7. 任务工具调用默认只显示一行摘要，例如创建时只显示创建了几项，不铺开全部内容。
+- [x] 1. 任务行去掉 `#` 前缀。
+- [x] 2. 状态图标放在行首，不放在右侧。
+- [x] 3. 子任务不与父任务共用全局编号，子任务编号为 `1.1`、`1.2`。
+- [x] 4. 紧凑显示（询问打开时）不能只剩一行汇总，至少显示当前父任务与其实际子任务两行。
+- [x] 5. 未完成任务不能使用灰色；只有已完成任务使用灰色。
+- [x] 6. `/tasks` 能看到已完成任务。
+- [x] 7. 任务工具调用默认只显示一行摘要，例如创建时只显示创建了几项，不铺开全部内容。
 
 ## 当前原因
 
@@ -208,14 +208,14 @@
 
 ## 实施步骤
 
-- [ ] 1. types/schema：三个 ID schema、version 3、`nextChild`、删除 update.parentId；jobs/agents/schedules 改用共享 schema。
-- [ ] 2. model/store：两级 ID 分配、`validateHierarchy`、version 2 转换、`currentChild`、删除移动逻辑，错误文本去 `#`。
-- [ ] 3. presentation/query：`taskRow`、新图标与配色、所有文本去 `#`。
-- [ ] 4. Dock 与 `TasksModule.rows`：当前子任务附带、紧凑两行、`dockAllowance` 封顶 2。
-- [ ] 5. tools：task_edit/task_list 一行折叠、task_get 新 renderer、分页键、hint 与描述。
-- [ ] 6. viewer/命令：默认 All、`/tasks [组 ID]`、行首图标。
-- [ ] 7. 测试：按下节修改既有用例并运行全量检查。
-- [ ] 8. 实际 Pi CLI PTY 验收后更新 current 文档与上游登记，移到 doc/finished。
+- [x] 1. types/schema：三个 ID schema、version 3、`nextChild`、删除 update.parentId；jobs/agents/schedules 改用共享 schema。
+- [x] 2. model/store：两级 ID 分配、`validateHierarchy`、version 2 转换、`currentChild`、删除移动逻辑，错误文本去 `#`。
+- [x] 3. presentation/query：`taskRow`、新图标与配色、所有文本去 `#`。
+- [x] 4. Dock 与 `TasksModule.rows`：当前子任务附带、紧凑两行、`dockAllowance` 封顶 2。
+- [x] 5. tools：task_edit/task_list 一行折叠、task_get 新 renderer、分页键、hint 与描述。
+- [x] 6. viewer/命令：默认 All、`/tasks [组 ID]`、行首图标。
+- [x] 7. 测试：按下节修改既有用例并运行全量检查。
+- [x] 8. 实际 Pi CLI PTY 验收后更新 current 文档与上游登记，移到 doc/finished。
 
 ## 测试调整
 
@@ -231,12 +231,12 @@
 
 ## 验收
 
-- [ ] 全量测试与类型检查通过，日常耗时仍在 5 分钟内。
-- [ ] 实际 Pi CLI PTY 在 40/60/120 列：行首图标、无 `#`、`1.1` 编号、待办为默认色、完成为灰色删除线。
-- [ ] 打开询问时 Dock 显示父任务与当前子任务两行，询问输入仍可用；24 行终端核对总高度。
-- [ ] task_edit 创建、单项完成、混合批次各显示一行；点击单个结果只展开该项，ctrl+o 切换全部，展开后明细完整；失败显示完整错误。task_list、task_get 折叠为一行。
-- [ ] `/tasks` 默认可见已完成项，State 筛选正常。
-- [ ] 使用一份 version 2 任务文件启动会话，清单转换后显示与编辑正常。
+- [x] 全量测试与类型检查通过，日常耗时仍在 5 分钟内。
+- [x] 实际 Pi CLI PTY 在 40/60/120 列：行首图标、无 `#`、`1.1` 编号、待办为默认色、完成为灰色删除线。
+- [x] 打开询问时 Dock 显示父任务与当前子任务两行，询问输入仍可用；24 行终端核对总高度。
+- [x] task_edit 创建、单项完成、混合批次各显示一行；点击单个结果只展开该项，ctrl+o 切换全部，展开后明细完整；失败显示完整错误。task_list、task_get 折叠为一行。
+- [x] `/tasks` 默认可见已完成项，State 筛选正常。
+- [x] 使用一份 version 2 任务文件启动会话，清单转换后显示与编辑正常。
 
 ## 完成后需更新的文档
 
@@ -248,4 +248,8 @@
 - `doc/current/validation.md`：tasks 段落的检查范围。
 - `third-party/UPSTREAM.md`：`src/tasks/model.ts`、`types.ts` 行的改造说明。
 
-[返回 Pi Suite 待办](index.md)
+## 验收结论
+
+Linux Node 24.22.2 / Pi 1.5.0 的实际 CLI PTY 在 40×24、60×30、120×40 通过本专项范围。全部 Suite 工具的一行折叠与完整展开、单项鼠标/宿主 Ctrl+O、错误全文、sensitive 隐藏，以及 Ask History 和实际 child Transcript 的公共 renderer 接入通过；旧 version 2 任务文件读取后仍保留原文件，首次编辑发布 version 3，编号/样式、默认 All 与当前父子两行及可编辑答案通过。类型与全量检查通过；此专项结论限定 Linux 当前版本，不扩展为 Windows 新显示规则的实际 CLI 验收。
+
+[返回已完成专项](../index.md)

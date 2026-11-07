@@ -6,12 +6,12 @@ import type { Notifications } from '../runtime/notifications.ts';
 import type { TasksModule } from './index.ts';
 import { queryTasks, taskDetails, type TaskFilter } from './query.ts';
 import { taskViews } from './model.ts';
-import { taskDisplay, taskIcon, taskStyle } from './presentation.ts';
+import { taskRow, taskStyle } from './presentation.ts';
 import type { TaskData, TaskView } from './types.ts';
 
 /** Selection and readers belong to stable task IDs; data stays in the shared store. */
 export class TaskBrowserView extends BrowserView {
-  constructor(tui: TUI, data: () => TaskData, done: (value?: string) => void, groupId?: string, state: TaskFilter = 'unfinished',
+  constructor(tui: TUI, data: () => TaskData, done: (value?: string) => void, groupId?: string, state: TaskFilter = 'all',
     subscribe?: (refresh: () => void) => () => void, theme?: Theme) {
     const groups = () => taskViews(data()).filter(task => !task.parentId);
     let views = new Map<string, TaskView>();
@@ -19,7 +19,7 @@ export class TaskBrowserView extends BrowserView {
       layout: { truncatePrimary: ({item, text, maxWidth}) => taskStyle(views.get(item.value)!, truncateToWidth(text, maxWidth, ''), theme) },
       controls: [
         { label: 'Group', selected: () => groupId ?? 'all', items: () => [{ value: 'all', label: 'All' },
-          ...groups().map(group => ({ value: group.id, label: `#${group.id}` }))], select: value => { groupId = value === 'all' ? undefined : value; } },
+          ...groups().map(group => ({ value: group.id, label: `${group.id}` }))], select: value => { groupId = value === 'all' ? undefined : value; } },
         { label: 'State', selected: () => state, items: () => [
           { value: 'unfinished', label: 'Unfinished' }, { value: 'doing', label: 'Running' }, { value: 'blocked', label: 'Blocked' },
           { value: 'done', label: 'Completed' }, { value: 'all', label: 'All' }], select: value => { state = value as TaskFilter; } },
@@ -27,9 +27,9 @@ export class TaskBrowserView extends BrowserView {
         if (groupId && !groups().some(group => group.id === groupId)) groupId = undefined;
         const current = data(); views = new Map(taskViews(current).map(task => [task.id, task]));
         return queryTasks(current, { parentId: groupId, state }).map(task => ({ value: task.id,
-          label: `${task.parentId ? '  ' : ''}${taskDisplay(task)}`,
-          description: `${taskIcon(task.status)}${task.progress ? ` ${task.progress.done}/${task.progress.total}` : ''}`,
-          search: `#${task.id} ${task.title} ${task.description ?? ''} ${task.blockedReason ?? ''} ${task.status}`,
+          label: taskRow(task),
+          description: task.progress ? `${task.progress.done}/${task.progress.total}` : '',
+          search: `${task.id} ${task.title} ${task.description ?? ''} ${task.blockedReason ?? ''} ${task.status}`,
           details: () => taskDetails(task, views).join('\n') }));
       } }, done);
   }
@@ -37,11 +37,11 @@ export class TaskBrowserView extends BrowserView {
 
 export function registerTasksCommand(pi: ExtensionAPI, tasks: TasksModule, dock: Dock, notifications: Notifications): void {
   pi.registerCommand('tasks', {
-    description: 'Browse tasks: [all] [group ID]; filter group/state, search and read live details',
+    description: 'Browse tasks: [group ID]; filter group/state, search and read live details',
     handler: async (args, ctx) => {
       const words = args.trim().split(/\s+/).filter(Boolean);
-      if (words.some(word => word !== 'all' && !/^[1-9][0-9]*$/.test(word)) || words.filter(word => word !== 'all').length > 1) throw new Error('Use /tasks [all] [group ID]');
-      const groupId = words.find(word => word !== 'all'), state = words.includes('all') ? 'all' : 'unfinished';
+      if (words.length > 1 || words.some(word => !/^[1-9][0-9]*$/.test(word))) throw new Error('Use /tasks [group ID]');
+      const groupId = words[0], state = 'all';
       const { data, rows } = await tasks.list(ctx, { parentId: groupId, state });
       tasks.selectGroup(groupId);
       if (ctx.mode !== 'tui') {

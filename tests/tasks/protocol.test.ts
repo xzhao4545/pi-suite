@@ -21,12 +21,12 @@ test('registered object schemas survive Provider conversion; query repair, group
       assert.ok(!('anyOf' in definition.parameters), 'top-level parameters must remain an object');
     }
     for (const [name, args] of [
-      ['task_list', {groupId: '1', state: 'all'}], ['task_get', {id: '2'}], ['task_edit', {op: 'done', id: '2'}],
+      ['task_list', {groupId: '1', state: 'all'}], ['task_get', {id: '1.1'}], ['task_edit', {op: 'done', id: '1.1'}],
       ['job_list', {state: 'finished'}], ['job_get', {id: 'job_12345678'}], ['agent_list', {agentId: 'agent_12345678', state: 'all'}],
       ['agent_get', {id: 'agent_12345678', runId: 'run_87654321', detail: true}],
     ] as const) assert.equal(Value.Check(tool(name).parameters, args), true);
     assert.throws(() => tool('task_list').prepareArguments!({detail: true, id: '1', includeDone: true, parentId: '1'}), /task_list.*groupId.*task_get/);
-    assert.throws(() => editArguments({op: 'done', id: '2', changes: [{op: 'start', id: '3'}]}), /No changes committed/);
+    assert.throws(() => editArguments({op: 'done', id: '1.1', changes: [{op: 'start', id: '1.2'}]}), /No changes committed/);
     const created = await invoke('task_edit', {op: 'add', title: '组', children: Array.from({length: 30}, (_, i) => `${i} 标题`.repeat(30))});
     assert.equal((created.details as {changes: unknown[]}).changes.length, 31);
     const found: string[] = []; let cursor: string | undefined;
@@ -40,28 +40,28 @@ test('registered object schemas survive Provider conversion; query repair, group
       if (cursor) assert.match(text, /"groupId":"1","state":"all"/);
     } while (cursor);
     assert.equal(new Set(found).size, 30); assert.equal(found.length, 30);
-    const done = await invoke('task_edit', {op: 'done', id: '2'});
-    assert.match(JSON.stringify(done.content), /done #2/);
-    const repeated = await invoke('task_edit', {op: 'done', id: '2'});
-    assert.match(JSON.stringify(repeated.content), /unchanged #2/);
+    const done = await invoke('task_edit', {op: 'done', id: '1.1'});
+    assert.match(JSON.stringify(done.content), /done 1\.1/);
+    const repeated = await invoke('task_edit', {op: 'done', id: '1.1'});
+    assert.match(JSON.stringify(repeated.content), /unchanged 1\.1/);
   } finally { await h.dispose(); }
 });
 
 test('short task operations preserve concurrent work, derived blockers and atomic failures', async () => {
   const store = new TaskStore(); await store.edit([{op: 'add', title: 'group', children: ['one', 'two', 'three']}]);
-  await store.edit([{op: 'start', id: '2'}, {op: 'start', id: '3'}, {op: 'update', id: '4', blockedBy: ['2']}]);
+  await store.edit([{op: 'start', id: '1.1'}, {op: 'start', id: '1.2'}, {op: 'update', id: '1.3', blockedBy: ['1.1']}]);
   assert.equal(taskViews(await store.snapshot()).filter(task => task.parentId && task.status === 'doing').length, 2);
-  await store.edit([{op: 'block', id: '3', reason: 'server unavailable'}, {op: 'block', id: '4', reason: 'manual'}]);
-  await store.edit([{op: 'unblock', id: '4'}]);
-  assert.equal(taskViews(await store.snapshot()).find(task => task.id === '4')!.status, 'blocked', 'unblock cannot erase open dependencies');
+  await store.edit([{op: 'block', id: '1.2', reason: 'server unavailable'}, {op: 'block', id: '1.3', reason: 'manual'}]);
+  await store.edit([{op: 'unblock', id: '1.3'}]);
+  assert.equal(taskViews(await store.snapshot()).find(task => task.id === '1.3')!.status, 'blocked', 'unblock cannot erase open dependencies');
   const before = await store.snapshot();
-  await assert.rejects(store.edit([{op: 'done', id: '2'}, {op: 'block', id: '1'}]), /no changes committed/);
+  await assert.rejects(store.edit([{op: 'done', id: '1.1'}, {op: 'block', id: '1'}]), /no changes committed/);
   assert.deepEqual(await store.snapshot(), before);
-  await store.edit([{op: 'done', id: '3'}, {op: 'block', id: '3', reason: 'should not reopen'}]);
-  assert.equal(store.current.tasks.find(task => task.id === '3')!.status, 'done');
-  assert.equal(store.current.tasks.find(task => task.id === '3')!.blockedReason, undefined);
-  await store.edit([{op: 'add', title: 'dependent group'}, {op: 'update', id: '4', parentId: '5'}]);
-  const unlocked = await store.edit([{op: 'done', id: '2'}]);
-  assert.deepEqual(unlocked.derived.map(change => [change.id, change.before, change.status]), [['4', 'blocked', 'todo']]);
-  assert.ok(unlocked.progress.some(group => group.id === '5' && group.status === 'todo'), 'cross-group dependency changes enter the same receipt');
+  await store.edit([{op: 'done', id: '1.2'}, {op: 'block', id: '1.2', reason: 'should not reopen'}]);
+  assert.equal(store.current.tasks.find(task => task.id === '1.2')!.status, 'done');
+  assert.equal(store.current.tasks.find(task => task.id === '1.2')!.blockedReason, undefined);
+  await store.edit([{op: 'add', title: 'dependent group'}, {op: 'add', title: 'dependent child', parentId: '2', blockedBy: ['1.1']}]);
+  const unlocked = await store.edit([{op: 'done', id: '1.1'}]);
+  assert.deepEqual(unlocked.derived.map(change => [change.id, change.before, change.status]), [['1.3', 'blocked', 'todo'], ['2.1', 'blocked', 'todo']]);
+  assert.ok(unlocked.progress.some(group => group.id === '2' && group.status === 'todo'), 'cross-group dependency changes enter the same receipt');
 });

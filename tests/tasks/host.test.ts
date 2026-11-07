@@ -29,21 +29,21 @@ async function call(h: Awaited<ReturnType<typeof host>>, name: string, params: P
 test('native task tools link jobs to execution tasks; deletion keeps the job running and memory reload retains the list', { timeout: 20000 }, async () => {
   const root = agentDir(), h = await host({ root, tools: TOOLS });
   try {
-    assert.match(await call(h, 'task_edit', { op: 'batch', changes: [{ op: 'add', title: 'work', children: ['run job', 'acceptance'] }] }), /add #1.*add #2.*group #1.*add #3.*group #1/s);
+    assert.match(await call(h, 'task_edit', { op: 'batch', changes: [{ op: 'add', title: 'work', children: ['run job', 'acceptance'] }] }), /add 1.*add 1\.1.*group 1.*add 1\.2.*group 1/s);
     assert.equal(existsSync(join(root, '.pi', 'tasks')), false, 'no-session lists never write files');
     await h.session.reload();
-    assert.match(await call(h, 'task_list', {}), /#1 work · 0\/2 · todo/);
-    assert.match(await call(h, 'task_list', { id: '2', parentId: '1' }), /INVALID_ARGS/);
-    assert.match(await call(h, 'job_start', { command: 'echo should-not-start', taskId: '1' }), /No execution task/);
-    const started = await call(h, 'job_start', { command: 'echo linked; read line', taskId: '2' });
+    assert.match(await call(h, 'task_list', {}), /1 work · 0\/2 · todo/);
+    assert.match(await call(h, 'task_list', { id: '1.1', parentId: '1' }), /INVALID_ARGS/);
+    assert.match(await call(h, 'job_start', { command: 'echo should-not-start', taskId: '1' }), /expected to match/);
+    const started = await call(h, 'job_start', { command: 'echo linked; read line', taskId: '1.1' });
     const id = /job_[a-f0-9]{8}/.exec(started)![0];
-    assert.match(await call(h, 'task_get', { id: '2' }), new RegExp(`jobs: ${id}`));
-    await call(h, 'task_edit', { op: 'batch', changes: [{ op: 'delete', id: '2' }] });
+    assert.match(await call(h, 'task_get', { id: '1.1' }), new RegExp(`jobs: ${id}`));
+    await call(h, 'task_edit', { op: 'batch', changes: [{ op: 'delete', id: '1.1' }] });
     const runtime = acquireRuntime(root); if (runtime.mode !== 'active') throw new Error('jobs unavailable');
     assert.equal(runtime.manager.peek(id).state, 'running');
-    assert.equal(runtime.manager.peek(id).taskId, '2');
+    assert.equal(runtime.manager.peek(id).taskId, '1.1');
     await call(h, 'job_stop', { id });
-    assert.match(await call(h, 'task_get', { id: '3' }), /todo/);
+    assert.match(await call(h, 'task_get', { id: '1.2' }), /todo/);
   } finally { await h.dispose(); rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -58,20 +58,20 @@ test('real runtime new/resume/fork and reload preserve independent versioned lis
     await call(current, 'task_edit', { op: 'batch', changes: [{ op: 'add', title: 'original', children: ['child'] }] });
     const original = current.session.sessionFile!, originalId = current.session.sessionManager.getSessionId();
     const originalStore = taskStore(taskPath(root, originalId), taskPath(root, originalId));
-    assert.equal((await originalStore.snapshot()).version, 2);
+    assert.equal((await originalStore.snapshot()).version, 3);
     await runtime.newSession();
     assert.match(await call(current, 'task_list', { state: 'all' }), /^tasks 0\/0/);
     await runtime.switchSession(original);
     assert.match(await call(current, 'task_list', {}), /original/);
     await runtime.fork(current.session.sessionManager.getLeafId()!, { position: 'at' });
     assert.notEqual(current.session.sessionManager.getSessionId(), originalId);
-    assert.match(await call(current, 'task_list', {}), /#1 original/);
-    await call(current, 'task_edit', { op: 'batch', changes: [{ op: 'update', id: '2', status: 'done' }, { op: 'add', title: 'fork group' }] });
+    assert.match(await call(current, 'task_list', {}), /1 original/);
+    await call(current, 'task_edit', { op: 'batch', changes: [{ op: 'update', id: '1.1', status: 'done' }, { op: 'add', title: 'fork group' }] });
     await current.session.reload();
-    assert.match(await call(current, 'task_list', { state: 'all' }), /#1 original · 1\/1 · done.*#3 fork group/s);
+    assert.match(await call(current, 'task_list', { state: 'all' }), /1 original · 1\/1 · done.*2 fork group/s);
     await runtime.switchSession(original);
-    assert.match(await call(current, 'task_list', { state: 'all' }), /#1 original · 0\/1 · todo/);
-    assert.equal((await originalStore.snapshot()).nextId, 3);
+    assert.match(await call(current, 'task_list', { state: 'all' }), /1 original · 0\/1 · todo/);
+    assert.equal((await originalStore.snapshot()).nextId, 2);
   } finally { await runtime.dispose(); rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -86,7 +86,7 @@ test('task reminders use request context only, shorten for doing children, reset
     await call(h, 'task_edit', { op: 'batch', changes: [{ op: 'add', title: 'group', children: ['child'] }] });
     await ask(); await ask(); await ask(); await ask();
     assert.deepEqual(shown, [false, false, true, false], 'todo interval is four turns from the task call');
-    await call(h, 'task_edit', { op: 'batch', changes: [{ op: 'update', id: '2', status: 'doing' }] });
+    await call(h, 'task_edit', { op: 'batch', changes: [{ op: 'update', id: '1.1', status: 'doing' }] });
     shown.length = 0; await ask(); await ask(); await ask();
     assert.deepEqual(shown, [true, false, false], 'doing interval is two turns, injected once until task usage resets it');
     assert.ok(!JSON.stringify(h.session.sessionManager.getEntries()).includes('Task reminder:'), 'reminders never persist in the transcript');

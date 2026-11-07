@@ -5,6 +5,7 @@ import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
 import { JsonStore } from '../../runtime/json-store.ts';
 import { ToolError } from '../../runtime/errors.ts';
+import { taskId } from '../../tasks/types.ts';
 import { thinkingSchema } from '../schema.ts';
 import { parseSchedule, nextOccurrence } from './parse.ts';
 
@@ -15,7 +16,7 @@ export const scheduleSchema = Type.Object({
   intervalMs: Type.Optional(Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER })),
   request: Type.Object({ prompt: Type.String({ minLength: 1 }), type: Type.String({ minLength: 1 }), name: Type.Optional(Type.String({ maxLength: 80 })),
     model: Type.Optional(Type.String({ minLength: 1 })), thinking: Type.Optional(thinkingSchema),
-    maxTurns: Type.Optional(Type.Integer({ minimum: 0 })), isolated: Type.Optional(Type.Boolean()), taskId: Type.Optional(Type.String({ pattern: '^[1-9][0-9]*$' })) }, { additionalProperties: false }),
+    maxTurns: Type.Optional(Type.Integer({ minimum: 0 })), isolated: Type.Optional(Type.Boolean()), taskId: Type.Optional(taskId) }, { additionalProperties: false }),
   enabled: Type.Boolean(), createdAt: iso, nextRun: Type.Optional(iso), runCount: Type.Integer({ minimum: 0 }),
   lastRun: Type.Optional(iso), lastStatus: Type.Optional(Type.Union([Type.Literal('running'), Type.Literal('success'), Type.Literal('error')])),
   lastError: Type.Optional(Type.String()), lastAgentId: Type.Optional(Type.String()), lastRunId: Type.Optional(Type.String()),

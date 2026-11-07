@@ -1,13 +1,16 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { WAIT_ID_PATTERN } from '../runtime/tools.ts';
+import { WAIT_ID_PATTERN, registerBoundTool } from '../runtime/tools.ts';
 import { ToolError } from '../runtime/errors.ts';
 import type { GoalManager } from "./manager.ts";
 
+import { completeRenderers, blockedRenderers, waitRenderers } from './render.ts';
+
 const goalId = Type.String({ minLength: 1, description: "The exact goalId in the current active goal contract" });
 export function registerGoalTools(pi: ExtensionAPI, manager: GoalManager): void {
-  pi.registerTool({
-    name: "goal_complete", label: "Goal Complete", executionMode: "sequential",
+  registerBoundTool(pi, {
+    name: "goal_complete",
+    ...completeRenderers, label: "Goal Complete", executionMode: "sequential",
     description: "Complete the active goal only after verifying every original requirement. Include the completion evidence in summary; partial or unverified work stays active.",
     parameters: Type.Object({ goalId, summary: Type.String({ minLength: 1, maxLength: 4000 }) }),
     async execute(_id, params, _signal, _update, ctx) {
@@ -16,9 +19,10 @@ export function registerGoalTools(pi: ExtensionAPI, manager: GoalManager): void 
       return { content: [{ type: "text", text: `Goal complete: ${params.summary}` }],
         details: { goalId: params.goalId, summary: params.summary }, terminate: true };
     },
-  });
-  pi.registerTool({
-    name: "goal_blocked", label: "Goal Blocked", executionMode: "sequential",
+  }, 'initial');
+  registerBoundTool(pi, {
+    name: "goal_blocked",
+    ...blockedRenderers, label: "Goal Blocked", executionMode: "sequential",
     description: "Stop only for the same evidenced external blocker repeated for at least three consecutive goal turns. Incomplete work and ordinary clarification are not blockers.",
     parameters: Type.Object({ goalId, reason: Type.String({ minLength: 1, maxLength: 1000 }),
       evidence: Type.String({ minLength: 1, maxLength: 4000 }), repeatedTurns: Type.Integer({ minimum: 3 }) }),
@@ -27,9 +31,10 @@ export function registerGoalTools(pi: ExtensionAPI, manager: GoalManager): void 
       manager.block(params.goalId, params.reason, params.evidence, ctx);
       return { content: [{ type: "text", text: `Goal blocked: ${params.reason}` }], details: params, terminate: true };
     },
-  });
-  pi.registerTool({
-    name: "goal_wait", label: "Goal Wait", executionMode: "sequential",
+  }, 'initial');
+  registerBoundTool(pi, {
+    name: "goal_wait",
+    ...waitRenderers, label: "Goal Wait", executionMode: "sequential",
     description: "Wait for an arranged external job/agent/event, with an optional single wake deadline. waitFor lists job_/agent_ IDs: the goal resumes only when all of them settle (or one asks a question) or the deadline passes; other notices do not end the wait. " +
       "Without waitFor any external wake resumes it. Call alone; ordinary unfinished work should continue instead.",
     parameters: Type.Object({ goalId, reason: Type.String({ minLength: 1, maxLength: 1000 }),
@@ -46,5 +51,5 @@ export function registerGoalTools(pi: ExtensionAPI, manager: GoalManager): void 
       return { content: [{ type: "text", text: [`Goal waiting: ${params.reason}`, note].filter(Boolean).join("\n") }],
         details: { ...params, waiting, settled }, terminate: true };
     },
-  });
+  }, 'initial');
 }

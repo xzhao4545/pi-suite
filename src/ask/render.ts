@@ -8,7 +8,7 @@ const oneLine = (text: string) => sanitizeText(text).replace(/\s*\n\s*/g, " ");
 export const answerText = (response?: Response) => response?.kind === "freeform" ? response.text : response?.selections.join(", ");
 
 /** Shared markers keep the full list and the one-line phone layout consistent. */
-export function optionRow(theme: Theme, question: Question, draft: Draft, option: Option | undefined, focused: boolean): string {
+export function optionRow(theme: Theme, question: Question, draft: Pick<Draft, 'selected' | 'text'>, option: Option | undefined, focused: boolean): string {
   const selected = option ? draft.selected.has(option.id) : Boolean(draft.text.trim());
   const marker = option ? question.allowMultiple ? selected ? "☑" : "☐" : selected ? "◉" : "○" : "✎";
   const title = option?.title ?? `Type your own answer${draft.text.trim() ? `: ${draft.text}` : ""}`;

@@ -9,6 +9,8 @@ import { registerTaskTools } from '../tasks/tools.ts';
 import { JobsModule } from '../jobs/index.ts';
 import { registerJobTools } from '../jobs/tools.ts';
 import { askSchema, type AskParams } from '../ask/schema.ts';
+import { registerBoundTool } from '../runtime/tools.ts';
+import { askRenderers } from '../ask/tool-render.ts';
 import { askDetails } from '../ask/index.ts';
 import { askParent } from './questions.ts';
 import { AgentsModule } from './index.ts';
@@ -26,13 +28,13 @@ export function childSuite(pi: ExtensionAPI, run: Execution, manager: AgentManag
   const creatorRoots = () => binding.current ? agents.visibleRunIds(binding.current.ctx) : [];
   const jobs = config.modules.jobs ? new JobsModule(pi, binding, notices, status, creatorRoots) : undefined;
   const ask = { ask: (params: AskParams, _ctx: unknown, _config: unknown, signal?: AbortSignal) => askParent(run, params, config.ask.timeout, manager.changed, signal) };
-  pi.registerTool({ name: 'ask_user', label: 'Ask parent', parameters: askSchema, executionMode: 'sequential',
+  registerBoundTool(pi, { ...askRenderers('Ask parent'), name: 'ask_user', label: 'Ask parent', parameters: askSchema, executionMode: 'sequential',
     description: 'Ask your direct parent for information; wait for its explicit answer. timed_out/cancelled never means consent.',
     async execute(_id, params, signal) {
       const { result, questions } = await ask.ask(params, undefined, undefined, signal);
       const details = { ...askDetails(params, questions, result), source: 'parent' };
       return { content: [{ type: 'text', text: JSON.stringify(details) }], details, terminate: result.status !== 'answered' };
-    } });
+    } }, 'initial');
   if (tasks) { registerTaskTools(pi, tasks); tasks.registerReminders(pi, () => config); }
   if (jobs) {
     const viewer = { jobs, dock, notifications: notices, keys: () => config.jobs };

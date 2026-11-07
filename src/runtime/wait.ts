@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
 import { ToolError } from './errors.ts';
-import { WAIT_ID_PATTERN } from './tools.ts';
+import { WAIT_ID_PATTERN, registerBoundTool } from './tools.ts';
 
 /**
  * One wait over jobs and agents. Each module registers a Waitable for its ID prefix; wait
@@ -109,6 +109,8 @@ export class WaitRegistry {
   }
 }
 
+import { toolRenderers } from '../ui/tool-render.ts';
+
 const HEADLINE: Record<WaitReason, string> = {
   condition: '', timeout: ' · timed out', other: ' · returned early: another job, agent run or workflow settled',
   question: ' · returned early: an agent asked a question', event: ' · returned early: a monitor event fired',
@@ -116,7 +118,16 @@ const HEADLINE: Record<WaitReason, string> = {
 };
 
 export function registerWait(pi: ExtensionAPI, registry: WaitRegistry): void {
-  pi.registerTool({
+  registerBoundTool(pi, {
+    ...toolRenderers<{ ids: string[] }, WaitResult>({
+      call: args => ({ icon: '⟳', tone: 'accent', title: 'Wait', summary: `${args.ids?.length ?? 0} objects` }),
+      collapsed: data => {
+        const failed = [...data.results, ...data.others].filter(item => item.state === 'failed').length;
+        return { icon: failed ? '✘' : '', tone: failed ? 'error' : undefined, title: 'Wait',
+          summary: `${data.results.filter(item => item.settled).length}/${data.results.length} settled`,
+          meta: [...failed ? [`${failed} failed`] : [], ...data.reason !== 'condition' ? [`returned early: ${data.reason}`] : []] };
+      },
+    }),
     name: 'wait', label: 'Wait',
     description: 'Wait for jobs, agents or workflows (job_… / agent_… / wf_…) to settle. mode=all (default) or any. ' +
       'Also returns early when any other job, agent run or workflow of this session settles (including earlier runs of a waited agent), a monitor event or hands-free update arrives (including on a waited job), a child agent asks a question, or the user sends a message; ' +
@@ -138,5 +149,5 @@ export function registerWait(pi: ExtensionAPI, registry: WaitRegistry): void {
       ].filter(line => line !== undefined).join('\n');
       return { content: [{ type: 'text', text }], details: value };
     },
-  });
+  }, 'initial');
 }

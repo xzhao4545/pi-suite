@@ -36,16 +36,29 @@ export function taskViews(data: TaskData): TaskView[] {
   });
 }
 
+/** Pick actual execution work, independent of the group's derived status. */
+export function currentChild(group: TaskView, views: TaskView[]): TaskView | undefined {
+  const children = views.filter(task => task.parentId === group.id);
+  return children.reduce<TaskView | undefined>((latest, task) => task.status === 'doing' && (!latest || task.updatedAt > latest.updatedAt) ? task : latest, undefined)
+    ?? children.find(task => task.status === 'blocked') ?? children.find(task => task.status === 'todo');
+}
+
 /** Relational storage invariants are checked once at the file boundary, before replacing data. */
 export function validateHierarchy(data: TaskData): void {
+  if (!Number.isSafeInteger(data.nextId) || data.nextId < 1) throw new Error('Invalid nextId');
   const tasks = new Map(data.tasks.map(task => [task.id, task]));
-  if (tasks.size !== data.tasks.length || data.tasks.some(task => Number(task.id) >= data.nextId || !Number.isSafeInteger(Number(task.id)))) {
-    throw new Error('Duplicate task IDs or invalid nextId');
-  }
+  if (tasks.size !== data.tasks.length) throw new Error('Duplicate task IDs');
   for (const task of data.tasks) {
-    if (!task.title.trim() || task.blockedReason !== undefined && task.status !== 'blocked'
-      || (task.parentId ? !task.status || !tasks.has(task.parentId) || tasks.get(task.parentId)!.parentId : task.status !== undefined)) {
-      throw new Error(`Invalid two-level task structure at #${task.id}`);
+    const parent = task.parentId ? tasks.get(task.parentId) : undefined;
+    const [prefix, ordinal] = task.id.split('.');
+    const valid = task.parentId
+      ? /^[1-9][0-9]*\.[1-9][0-9]*$/.test(task.id) && prefix === task.parentId && !!task.status
+        && task.nextChild === undefined && parent && !parent.parentId && parent.nextChild !== undefined
+        && Number.isSafeInteger(Number(ordinal)) && Number(ordinal) < parent.nextChild
+      : /^[1-9][0-9]*$/.test(task.id) && Number.isSafeInteger(Number(task.id)) && Number(task.id) < data.nextId
+        && task.nextChild !== undefined && Number.isSafeInteger(task.nextChild) && task.nextChild >= 1 && task.status === undefined;
+    if (!valid || !task.title.trim() || task.blockedReason !== undefined && task.status !== 'blocked') {
+      throw new Error(`Invalid two-level task structure at ${task.id}`);
     }
   }
 }
@@ -53,12 +66,14 @@ export function validateHierarchy(data: TaskData): void {
 export function applyChanges(data: TaskData, changes: TaskChange[]): EditResult {
   const receipts: EditReceipt[] = [], warnings: string[] = [], affected = new Set<string>();
   const previous = new Map(taskViews(data).map(task => [task.id, task.status]));
-  const find = (id: string) => { const task = data.tasks.find(task => task.id === id); if (!task) throw new Error(`No task #${id}`); return task; };
-  const group = (id: string) => { const task = find(id); if (task.parentId) throw new Error(`#${id} is a child, not a group`); return task; };
+  const find = (id: string) => { const task = data.tasks.find(task => task.id === id); if (!task) throw new Error(`No task ${id}`); return task; };
+  const group = (id: string) => { const task = find(id); if (task.parentId) throw new Error(`${id} is a child, not a group`); return task; };
   const create = (title: string, description?: string, parentId?: string): Task => {
     if (!title.trim()) throw new Error('title must contain text');
-    const task: Task = { id: String(data.nextId++), title: title.trim(), ...(description ? { description } : {}),
-      ...(parentId ? { parentId, status: 'todo' } : {}), blockedBy: [], jobIds: [], createdAt: Date.now(), updatedAt: Date.now() };
+    const parent = parentId ? group(parentId) : undefined;
+    const id = parent ? `${parent.id}.${parent.nextChild!++}` : String(data.nextId++);
+    const task: Task = { id, title: title.trim(), ...(description ? { description } : {}),
+      ...(parentId ? { parentId, status: 'todo' } : { nextChild: 1 }), blockedBy: [], jobIds: [], createdAt: Date.now(), updatedAt: Date.now() };
     data.tasks.push(task); affected.add(parentId ?? task.id);
     receipts.push({ op: 'add', id: task.id, title: task.title, ...(parentId ? { parentId } : {}), fields: { title: task.title } }); return task;
   };
@@ -93,16 +108,12 @@ export function applyChanges(data: TaskData, changes: TaskChange[]): EditResult 
         for (const title of change.children ?? []) create(title, undefined, task.id);
       } else {
         task = find(change.id); affected.add(task.parentId ?? task.id);
-        if (change.parentId) {
-          if (!task.parentId) throw new Error('Only children can move between groups');
-          group(change.parentId);
-        }
         if (change.status !== undefined && !task.parentId) throw new Error('Group status is derived from its children');
         if (change.blockedReason !== undefined && (change.status ?? task.status) !== 'blocked') throw new Error('blockedReason requires a blocked child');
         if (change.title !== undefined && !change.title.trim()) throw new Error('title must contain text');
       }
       const fields: Record<string, unknown> = {};
-      for (const key of ['title', 'description', 'parentId', 'status', 'blockedBy', 'blockedReason'] as const) {
+      for (const key of ['title', 'description', 'status', 'blockedBy', 'blockedReason'] as const) {
         if (key === 'blockedReason' && change.op === 'add') continue;
         const value = key === 'title' ? change.title?.trim() : key === 'blockedReason' ? change.op === 'update' ? change.blockedReason : undefined : change[key];
         if (value === undefined || JSON.stringify(value) === JSON.stringify(task[key])) continue;
@@ -116,13 +127,13 @@ export function applyChanges(data: TaskData, changes: TaskChange[]): EditResult 
       else Object.assign(receipts.find(item => item.id === task.id)!.fields!, fields);
       for (const id of change.blockedBy ?? []) {
         const blocker = data.tasks.find(item => item.id === id);
-        if (id === task.id) warnings.push(`changes[${index}]: #${task.id} blocks itself`);
-        else if (!blocker) warnings.push(`changes[${index}]: #${id} does not exist`);
-        else if (blocker.blockedBy.includes(task.id)) warnings.push(`changes[${index}]: #${task.id} and #${id} block each other`);
+        if (id === task.id) warnings.push(`changes[${index}]: ${task.id} blocks itself`);
+        else if (!blocker) warnings.push(`changes[${index}]: ${id} does not exist`);
+        else if (blocker.blockedBy.includes(task.id)) warnings.push(`changes[${index}]: ${task.id} and ${id} block each other`);
       }
       if (change.status === 'doing' || change.status === 'done') {
         const views = taskViews(data), open = task.blockedBy.filter(id => views.find(item => item.id === id)?.status !== 'done');
-        if (open.length) warnings.push(`changes[${index}]: #${task.id} set to ${change.status} with open blockers: ${open.map(id => `#${id}`).join(', ')}`);
+        if (open.length) warnings.push(`changes[${index}]: ${task.id} set to ${change.status} with open blockers: ${open.map(id => `${id}`).join(', ')}`);
       }
     } catch (error) { throw new ToolError('INVALID_ARGS', `changes[${index}]: ${error instanceof Error ? error.message : String(error)}; no changes committed`); }
   });

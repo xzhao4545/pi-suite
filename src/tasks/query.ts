@@ -8,7 +8,7 @@ export type TaskQuery = { id?: string; parentId?: string; includeDone?: boolean;
 export function queryTasks(data: TaskData, query: TaskQuery): TaskView[] {
   if (query.id !== undefined && query.parentId !== undefined) throw new ToolError('INVALID_ARGS', 'id and parentId are exclusive');
   const views = taskViews(data);
-  const find = (id: string) => { const task = views.find(task => task.id === id); if (!task) throw new ToolError('NOT_FOUND', `No task #${id}; discover with task_list({"state":"all"})`); return task; };
+  const find = (id: string) => { const task = views.find(task => task.id === id); if (!task) throw new ToolError('NOT_FOUND', `No task ${id}; discover with task_list({"state":"all"})`); return task; };
   if (query.id) return [find(query.id)];
   const includeDone = query.includeDone || query.state === 'all' || query.state === 'done';
   const match = (task: TaskView) => !query.state || query.state === 'unfinished' ? task.status !== 'done' || includeDone
@@ -21,14 +21,14 @@ export function queryTasks(data: TaskData, query: TaskQuery): TaskView[] {
 }
 /** Terminal text is data: preserve one summary line even when titles contain control bytes. */
 export function taskLabel(task: TaskView): string {
-  return `#${task.id} ${taskTitle(task)} · ${task.progress ? `${task.progress.done}/${task.progress.total} · ` : ''}${task.status}`;
+  return `${task.id} ${taskTitle(task)} · ${task.progress ? `${task.progress.done}/${task.progress.total} · ` : ''}${task.status}`;
 }
-export const taskTitle = (task: TaskView) => sanitizeText(task.title).replace(/[\r\n\t]/g, ' ').trim();
+export const taskTitle = (task: Pick<TaskView, 'title'>) => sanitizeText(task.title).replace(/[\r\n\t]/g, ' ').trim();
 export const openBlockers = (task: TaskView, views: Map<string, TaskView>) => task.blockedBy.filter(id => views.get(id)?.status !== 'done');
 export function taskDetails(task: TaskView, views: Map<string, TaskView>): string[] {
   const open = openBlockers(task, views);
-  return [taskLabel(task), ...task.parentId ? [`parent #${task.parentId}`] : [],
-    ...task.description ? [task.description] : [], ...task.blockedReason ? [`blocked: ${task.blockedReason}`] : [], ...open.length ? [`blockedBy: ${open.map(id => `#${id}`).join(', ')}`] : [],
-    ...task.blocks.length ? [`blocks: ${task.blocks.map(id => `#${id}`).join(', ')}`] : [],
+  return [taskLabel(task), ...task.parentId ? [`parent ${task.parentId}`] : [],
+    ...task.description ? [task.description] : [], ...task.blockedReason ? [`blocked: ${task.blockedReason}`] : [], ...open.length ? [`blockedBy: ${open.map(id => `${id}`).join(', ')}`] : [],
+    ...task.blocks.length ? [`blocks: ${task.blocks.map(id => `${id}`).join(', ')}`] : [],
     ...task.owner ? [`agent: ${task.owner}`] : [], ...task.jobIds.length ? [`jobs: ${task.jobIds.join(', ')}`] : []];
 }

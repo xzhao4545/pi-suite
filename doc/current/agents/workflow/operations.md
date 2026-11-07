@@ -2,6 +2,8 @@
 
 agent_workflow 仅由主会话使用，参数为 script、scriptPath 或 name 三选一，args?、resumeFromRunId?。工具始终后台启动，初始文件写入后返回 wf_ ID、真实状态、必要日志和 resultPath；本地 details 保留 scriptPath 与恢复来源。使用前提是用户明确要求编排、调用要求编排的技能或指定保存的 workflow；工具描述保留完整脚本、并发、结构化结果与恢复指引。
 
+Workflow 工具折叠为一行，名称/统计、副标题与 tokens/tools/replayed 用量共用公共 toolLine；展开保留阶段、child、尝试、日志与结果全文。调用在结果到达后隐藏，错误完整显示。
+
 `wait({"ids":["wf_…"]})` 使用公共 any/all 等待，问题、其他对象结算、monitor/hands-free 更新和用户插话仍可提前返回。结束后可通过返回的 resultPath 使用 read 读取完整输出。
 
 ## /subagents workflows

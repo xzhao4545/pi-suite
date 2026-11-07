@@ -83,11 +83,11 @@ test('pending cleanup closes resume admission after task I/O and old-run stop pr
   try {
     await tasks.edit([{op: 'add', title: 'group', children: ['execution']}]);
     const scope = {ctx: h.ctx, taskStore: tasks};
-    const first = await manager.start({prompt: 'first', background: false, taskId: '2'}, scope, h.config);
+    const first = await manager.start({prompt: 'first', background: false, taskId: '1.1'}, scope, h.config);
     const finished = await first.done.promise; assert.equal(finished.state, 'completed');
     const snapshot = tasks.snapshot.bind(tasks);
     tasks.snapshot = async () => { admissionEntered.resolve(); await admission.promise; return snapshot(); };
-    const resume = manager.start({prompt: 'second', background: false, taskId: '2'}, scope, h.config, finished);
+    const resume = manager.start({prompt: 'second', background: false, taskId: '1.1'}, scope, h.config, finished);
     const rejected = assert.rejects(resume, /still stopping or cleaning up/);
     await admissionEntered.promise;
     const stopping = manager.stop(finished.id); admission.resolve(); await rejected;

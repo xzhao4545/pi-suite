@@ -14,10 +14,10 @@ test('real concurrent processes reread under file locks; lock retries yield the 
   const script = `import { TaskStore } from ${JSON.stringify(storeUrl)}; const store = new TaskStore(process.argv[1]); for(let i=0;i<10;i++)await store.edit([{op:'add',title:process.pid+'-'+i,children:['child']}]);`;
   try {
     // The reader races both writers; Windows read handles must not break atomic replacement.
-    const reader = `import assert from 'node:assert/strict'; import { TaskStore } from ${JSON.stringify(storeUrl)}; const store = new TaskStore(process.argv[1]); let count=0; for(let i=0;i<60;i++){const data=await store.snapshot(); assert.ok(data.tasks.length>=count); assert.equal(data.nextId,data.tasks.length+1); count=data.tasks.length;}`;
+    const reader = `import assert from 'node:assert/strict'; import { TaskStore } from ${JSON.stringify(storeUrl)}; const store = new TaskStore(process.argv[1]); let count=0; for(let i=0;i<60;i++){const data=await store.snapshot(); assert.ok(data.tasks.length>=count); assert.equal(data.nextId,data.tasks.filter(task=>!task.parentId).length+1); count=data.tasks.length;}`;
     await Promise.all([reader, script, script].map(source => promisify(execFile)(process.execPath, ['--experimental-transform-types', '--input-type=module', '-e', source, path])));
     const data = await store.snapshot(); validateHierarchy(data);
-    assert.equal(data.nextId, 41); assert.equal(new Set(data.tasks.map(task => task.id)).size, 40);
+    assert.equal(data.nextId, 21); assert.equal(new Set(data.tasks.map(task => task.id)).size, 40);
     const lock = `${path}.lock`; writeFileSync(lock, `${process.pid}:holder`);
     let timerRan = false;
     const timer = setTimeout(() => { timerRan = true; unlinkSync(lock); }, 30);
@@ -25,21 +25,21 @@ test('real concurrent processes reread under file locks; lock retries yield the 
     assert.equal(timerRan, true, 'the blocked writer yields so its lock holder can release');
     writeFileSync(lock, '0:stale');
     await new TaskStore(path).edit([{ op: 'add', title: 'after stale lock' }]);
-    assert.equal((await store.snapshot()).nextId, 43); assert.equal(existsSync(lock), false);
+    assert.equal((await store.snapshot()).nextId, 23); assert.equal(existsSync(lock), false);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test('invalid files and aborted edits never overwrite valid cached data or partially commit a batch', async () => {
   const root = mkdtempSync(join(tmpdir(), 'pi-suite-tasks-data-')), path = join(root, 'nested', 'tasks.json'), store = new TaskStore(path);
   try {
-    assert.deepEqual(await store.snapshot(), {version: 2, nextId: 1, tasks: []});
+    assert.deepEqual(await store.snapshot(), {version: 3, nextId: 1, tasks: []});
     assert.equal(existsSync(join(root, 'nested')), false, 'reading an unused store creates no directory or lock');
     await store.edit([{ op: 'add', title: 'keep', children: ['child'] }]);
     const good = readFileSync(path, 'utf8'), data = await store.snapshot();
     const abort = new AbortController(); abort.abort(new Error('cancelled'));
     await assert.rejects(store.edit([{ op: 'add', title: 'not committed' }], abort.signal), /cancelled/);
     assert.equal(readFileSync(path, 'utf8'), good);
-    await assert.rejects(store.edit([{ op: 'update', id: '2', status: 'done' }, { op: 'update', id: '1', status: 'done' }]), /changes\[1\]/);
+    await assert.rejects(store.edit([{ op: 'update', id: '1.1', status: 'done' }, { op: 'update', id: '1', status: 'done' }]), /changes\[1\]/);
     assert.equal(readFileSync(path, 'utf8'), good);
     for (const broken of ['{', JSON.stringify({ version: 1, tasks: [] }), JSON.stringify({ ...data, nextId: 1 }), JSON.stringify({ ...data, tasks: [...data.tasks, data.tasks[0]] })]) {
       writeFileSync(path, broken);
@@ -48,7 +48,7 @@ test('invalid files and aborted edits never overwrite valid cached data or parti
       assert.deepEqual(store.current, data); assert.equal(readFileSync(path, 'utf8'), broken);
     }
     writeFileSync(path, good);
-    await Promise.all([store.edit([{ op: 'update', id: '2', status: 'done' }]), store.snapshot(), store.edit([{ op: 'add', title: 'survives snapshot' }])]);
+    await Promise.all([store.edit([{ op: 'update', id: '1.1', status: 'done' }]), store.snapshot(), store.edit([{ op: 'add', title: 'survives snapshot' }])]);
     assert.equal((await store.snapshot()).tasks.length, 3);
     assert.equal((await store.snapshot()).tasks[1].status, 'done');
   } finally { rmSync(root, { recursive: true, force: true }); }
@@ -65,11 +65,32 @@ test('shared JSON subscriptions observe external atomic writes and report invali
     await changed.promise;
     assert.equal(store.current.tasks.length, 2, 'UI current state changes without explicitly reading a snapshot');
     changed = Promise.withResolvers<void>();
-    await writer.edit([{op: 'done', id: '2'}]); await changed.promise;
+    await writer.edit([{op: 'done', id: '1.1'}]); await changed.promise;
     assert.equal(store.current.tasks[1].status, 'done');
     const good = structuredClone(store.current);
     writeFileSync(path, '{invalid');
     assert.match(String(await failed.promise), /TASK_STORE_INVALID/);
     assert.deepEqual(store.current, good);
   } finally { off(); clearTimeout(timeout); rmSync(root, {recursive: true, force: true}); }
+});
+
+test('version 2 migrates child ordinals and dependency edges in memory, then publishes version 3 on edit', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'pi-suite-task-migration-')), path = join(root, 'tasks.json');
+  const task = (id: string, createdAt: number, parentId?: string, blockedBy: string[] = []) => ({ id, title: `task ${id}`,
+    createdAt, updatedAt: createdAt, blockedBy, jobIds: [], ...parentId ? { parentId, status: 'todo' } : {} });
+  const legacy = { version: 2, nextId: 10, tasks: [task('1', 0), task('3', 2, '1', ['7']), task('2', 2, '1'),
+    task('6', 0, undefined, ['3']), task('7', 1, '6', ['2', '1'])] };
+  try {
+    writeFileSync(path, JSON.stringify(legacy));
+    const store = new TaskStore(path), data = await store.snapshot();
+    assert.equal(data.version, 3); assert.equal(data.nextId, 10);
+    assert.deepEqual(data.tasks.map(task => task.id), ['1', '1.1', '1.2', '6', '6.1']);
+    assert.deepEqual(data.tasks.map(task => task.blockedBy), [[], [], ['6.1'], ['1.2'], ['1.1', '1']]);
+    assert.deepEqual(data.tasks.filter(task => !task.parentId).map(task => task.nextChild), [3, 2]);
+    assert.deepEqual(JSON.parse(readFileSync(path, 'utf8')), legacy, 'reading does not rewrite history');
+    await store.edit([{op: 'delete', id: '1.1'}, {op: 'add', parentId: '1', title: 'next'}, {op: 'add', title: 'group'}]);
+    const saved = JSON.parse(readFileSync(path, 'utf8'));
+    assert.equal(saved.version, 3); assert.ok(saved.tasks.some((task: {id: string}) => task.id === '1.3'));
+    assert.ok(saved.tasks.some((task: {id: string}) => task.id === '10')); validateHierarchy(saved);
+  } finally { rmSync(root, {recursive: true, force: true}); }
 });

@@ -6,7 +6,7 @@ import { readBounded, readContinuation, textSource } from '../runtime/read.ts';
 import { sanitizeText } from '../runtime/text.ts';
 import { checkedArguments, LIST_LIMITS, listFields, objectId, paginate, readFields, registerBoundTool, rejectContextWithoutSearch, textResult as text } from '../runtime/tools.ts';
 import type { WaitRegistry } from '../runtime/wait.ts';
-import { taskId } from '../tasks/types.ts';
+import { childId } from '../tasks/types.ts';
 import { thinkingSchema } from './schema.ts';
 import { questionText } from './questions.ts';
 import { AgentsModule, agentSummary, summaryLine, usageText } from './index.ts';
@@ -17,6 +17,8 @@ import type { JobsModule } from '../jobs/index.ts';
 import type { JobSummary } from '../jobs/types.ts';
 import { isActive as jobActive } from '../jobs/state.ts';
 
+import { startRenderers, listRenderers, getRenderers, readRenderers, sendRenderers, stopRenderers } from './render.ts';
+
 const id = objectId('agent', 'agent_3fa1c2d0'), runId = objectId('run', 'run_3fa1c2d0');
 const listSchema = Type.Object({ agentId: Type.Optional(id), ...listFields(['active', 'queued', 'finished', 'all'] as const) }, { additionalProperties: false });
 const getSchema = Type.Object({ id, runId: Type.Optional(runId), detail: Type.Optional(Type.Boolean()) }, { additionalProperties: false });
@@ -26,7 +28,7 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
   const startFields = { prompt: Type.String({ minLength: 1 }), type: Type.Optional(Type.String({ minLength: 1 })),
     name: Type.Optional(Type.String({ maxLength: 80 })), background: Type.Optional(Type.Boolean()),
     model: Type.Optional(Type.String({ minLength: 1 })), thinking: Type.Optional(thinkingSchema),
-    maxTurns: Type.Optional(Type.Integer({ minimum: 0 })), taskId: Type.Optional(taskId),
+    maxTurns: Type.Optional(Type.Integer({ minimum: 0 })), taskId: Type.Optional(childId),
     inheritContext: Type.Optional(Type.Boolean()), isolated: Type.Optional(Type.Boolean()), schedule: Type.Optional(Type.String({ minLength: 1 })) };
   const buildStartSchema = () => {
     const fields = { ...startFields };
@@ -37,7 +39,7 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
   const description = 'Start a same-process Pi child session. background=true (default) returns an ID immediately; false waits and returns early on any direct child question. ' +
     'Types: general-purpose, Explore, Plan or a configured agent markdown file. Read with agent_read, answer/steer/resume with agent_send, stop its subtree with agent_stop, wait with wait.';
   const scheduleDescription = ' schedule registers a future job instead of starting now: six-field cron, interval 5m/1h, or one-shot +10m/ISO. Do not combine with background:false or inheritContext. Manage via /subagents schedules.';
-  const startTool: ToolDefinition<typeof startSchema> = { name: 'agent_start', label: 'Start agent',
+  const startTool: ToolDefinition<typeof startSchema> = { name: 'agent_start', ...startRenderers, label: 'Start agent',
     description: description + (scheduling ? scheduleDescription : ''),
     parameters: startSchema,
     async execute(_id, params, signal, _update, ctx) {
@@ -80,8 +82,8 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
         signal?.removeEventListener('abort', abort);
       }
     } };
-  pi.registerTool(startTool);
-  pi.registerTool({ name: 'agent_list', label: 'List agents',
+  registerBoundTool(pi, startTool, 'initial');
+  registerBoundTool(pi, { name: 'agent_list', ...listRenderers, label: 'List agents',
     description: 'List child runs. state=active (default), queued, finished or all; session scope shows direct children, workspace discovers saved records. agentId filters history and combines with all list fields. One run uses agent_get({id,runId?}).',
     parameters: listSchema, prepareArguments: checkedArguments(listSchema, queryHint),
     async execute(_id, params, signal, _update, ctx) {
@@ -97,14 +99,14 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
         { budgetBytes: LIST_LIMITS.defaultBytes - 512, size: record => Buffer.byteLength(label(record)) + 1 });
       return text([`${page.length} ${state} agents (${params.scope ?? 'session'})`, ...page.map(label),
         nextCursor ? `more: agent_list(${JSON.stringify({ ...params, cursor: nextCursor })})` : undefined], { agents: page.map(agentSummary), nextCursor });
-    } });
-  pi.registerTool({ name: 'agent_get', label: 'Agent',
+    } }, 'initial');
+  registerBoundTool(pi, { name: 'agent_get', ...getRenderers, label: 'Agent',
     description: 'Get current or specified run status, progress, model/thinking and task reference. detail:true adds configuration sources, usage and owned active jobs. Discover previous runIds with agent_list({agentId,state:"all"}); results/transcript use agent_read.',
     parameters: getSchema, prepareArguments: checkedArguments(getSchema, queryHint),
     async execute(_id, params, signal, _update, ctx) {
       const scope = agents.scope(ctx), { record, run } = await agents.manager.lookup(params.id, scope, config(), params.runId, signal);
       const lines = [summaryLine(record) + (!agents.manager.visible(record, scope) ? ' · read-only' : ''),
-        `model: ${record.model} · thinking: ${record.thinking} · turns ${record.turns ?? 0} · tools ${record.toolUses ?? 0}${record.taskId ? ` · task #${record.taskId}` : ''}`,
+        `model: ${record.model} · thinking: ${record.thinking} · turns ${record.turns ?? 0} · tools ${record.toolUses ?? 0}${record.taskId ? ` · task ${record.taskId}` : ''}`,
         record.activity ? `activity: ${record.activity}` : undefined, record.error,
         run?.question ? questionText(run) : undefined];
       let created: JobSummary[] = [], jobsUnavailable: string | undefined;
@@ -123,8 +125,8 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
       }
       return text(lines, { agent: agentSummary(record), jobs: created, jobsUnavailable, question: run?.question?.params,
         waitingFor: run?.question ? 'parent' : undefined });
-    } });
-  pi.registerTool({ name: 'agent_read', label: 'Read agent',
+    } }, 'initial');
+  registerBoundTool(pi, { name: 'agent_read', ...readRenderers, label: 'Read agent',
     description: 'Read result (default when settled) or transcript (default while active). runId selects a previous execution of the same agent. Byte paging and regex search follow job_read; reading never resumes a model.',
     parameters: Type.Object({ id, runId: Type.Optional(runId), stream: Type.Optional(Type.Union([Type.Literal('result'), Type.Literal('transcript')])), ...readFields }, { additionalProperties: false }),
     async execute(_id, params, signal, _update, ctx) {
@@ -136,8 +138,8 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
       return text([`${summaryLine(record)} · ${stream} bytes ${page.offset}-${page.nextOffset} of ${page.totalBytes}`, page.text,
         page.truncated ? `full: agent_read(${JSON.stringify({ id: record.id, runId: record.runId, stream, ...readContinuation(params, 0) })})` : undefined,
         page.endOfStream ? undefined : `more: agent_read(${JSON.stringify({ id: record.id, runId: record.runId, stream, ...readContinuation(params, page.nextOffset) })})`], { ...page, stream, agent: agentSummary(record) });
-    } });
-  pi.registerTool({ name: 'agent_send', label: 'Send to agent',
+    } }, 'initial');
+  registerBoundTool(pi, { name: 'agent_send', ...sendRenderers, label: 'Send to agent',
     description: 'Answer a waiting child, steer an active child, queue during creation or resume a settled session as a new run. Answers match option IDs/titles or use freeform; batch answers are a JSON array of strings. Only the direct parent may send.',
     parameters: Type.Object({ id, message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
     async execute(_id, params, signal, _update, ctx) {
@@ -145,8 +147,8 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
       await agents.manager.lookup(params.id, scope, config(), undefined, signal);
       const result = await agents.manager.send(params.id, params.message, scope, config());
       return text([summaryLine(agents.manager.view(result.run)), `action: ${result.action}`], { agent: agentSummary(agents.manager.view(result.run)), action: result.action });
-    } });
-  pi.registerTool({ name: 'agent_stop', label: 'Stop agent',
+    } }, 'initial');
+  registerBoundTool(pi, { name: 'agent_stop', ...stopRenderers, label: 'Stop agent',
     description: 'Stop the child, its nested sessions and every job they created. Without runId includes jobs left by earlier runs; runId limits the subtree. Join repeated stops, await real abort/cleanup and retain transcript.',
     parameters: Type.Object({ id, runId: Type.Optional(runId) }, { additionalProperties: false }),
     async execute(_id, params, signal, _update, ctx) {
@@ -156,7 +158,7 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
       const outcome = await agents.manager.stop(params.id, params.runId);
       return text([`${params.id} ${outcome.state} · cleanup ${outcome.cleanup} · ${record.runId} · requested ${outcome.requested}`,
         ...outcome.affected.map(item => `${item.id} ${item.state}${item.cleanup ? ` · ${item.cleanup}` : ''}`)], { ...outcome, runId: record.runId });
-    } });
+    } }, 'initial');
   return Object.assign(startTool, { refreshSchema() {
     const next = Boolean(scheduler && config().agents.scheduling);
     if (next === scheduling) return;

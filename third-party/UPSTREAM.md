@@ -43,9 +43,9 @@ tasks 导入改造 @tintinweb/pi-tasks 0.9.1 的存储、依赖、会话与提�
 
 | 本包文件 | 来源 | 改动 |
 | --- | --- | --- |
-| src/tasks/store.ts、src/runtime/json-store.ts | src/task-store.ts | 保留 pid:uuid 锁、锁内重读、原子保存、快照与播种；锁等待改为异步，增加版本校验、同目标串行入口与复制后整批提交；Windows 已有快照共用跨进程锁以避免读取句柄阻止原子替换，删除中的锁文件按既有有界等待处理；文件协议供 TaskStore、ScheduleStore 与 WorkflowStore 共用 |
-| src/tasks/model.ts | src/task-store.ts 的 CRUD 与依赖规则 | 两级 parentId，父级进度与反向边派生，保留自引用/不存在/二元环及未完成阻塞项警告，删除清理依赖 |
-| src/tasks/types.ts | src/types.ts | 状态统一为 todo/doing/done，增加两级结构、版本化 schema 与批量 changes |
+| src/tasks/store.ts、src/runtime/json-store.ts | src/task-store.ts | 保留 pid:uuid 锁、锁内重读、原子保存、快照与播种；锁等待改为异步，增加 version 2 到 3 的内存编号/依赖转换、版本校验、同目标串行入口与复制后整批提交；Windows 已有快照共用跨进程锁以避免读取句柄阻止原子替换，删除中的锁文件按既有有界等待处理；文件协议供 TaskStore、ScheduleStore 与 WorkflowStore 共用 |
+| src/tasks/model.ts | src/task-store.ts 的 CRUD 与依赖规则 | 两级 `组.序号` 稳定 ID、组独立 nextChild、无跨组移动，父级进度与反向边派生，保留自引用/不存在/二元环及未完成阻塞项警告，删除清理依赖 |
+| src/tasks/types.ts | src/types.ts | 状态统一为 todo/doing/blocked/done，增加组/子/通用 ID schema、version 3 与 nextChild、批量 changes |
 | src/tasks/index.ts | src/index.ts、task-paths.ts、reminder-cadence.ts | 按 cwd/会话定位存储，保留 fork 清单与计数器继承、内存模式、临时提醒；显示和反馈接入统一 Dock，执行引用通过 TaskStore.link |
 
 agents 以 @tintinweb/pi-subagents 0.23.0 的源码与契约为来源，分别登记直接导入、按职责适配与公共框架重构，保留 [完整 MIT 许可证](./licenses/pi-subagents.txt)：

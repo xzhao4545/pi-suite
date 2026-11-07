@@ -13,6 +13,8 @@
 
 模型工具默认返回摘要，完整输入、thinking、工具调用和输出通过 agent_read 或原生 transcript 按需读取。workspace 列表发现当前配置工作区的持久历史并合并本进程记录；session 列表与状态数量使用同一直接子级和分支归属过滤。未知 ID 的 agent_get/read/send/stop 先发现并核对当前配置工作区，发送仍需直接父级与分支准入；分页 more 保留 scope。实际目录与引用范围、读取和合并规则见 [持久历史](history.md)。
 
+工具默认折叠为一行：start 区分后台状态、前台时长、转后台与调度，list 显示数量/范围，get 显示状态或待答问题，read 显示流与字节区间，send 显示真实 action，stop 显示结算/清理与级联数量。展开保留完整 prompt、model/thinking、用量、模型返回摘要、待答问题和本页正文。taskId 使用 `1.2` 形式的子任务 ID。所有结果使用公共 renderer，点击结果切换单项，默认 Ctrl+O 切换全部，错误完整显示；child Transcript 使用实际 run.renderers。
+
 ## /subagents
 
 `/subagents` 直接打开 Runs 的 Active 记录；也可使用 `/subagents all` 等直接指定筛选。顶部页面为 Runs、Types，以及启用时的 Schedules、Workflows。Runs 的 Scope 独立选择 This session 或 Workspace，State 独立选择 Active、Queued、Finished、All 并显示该范围内的数量；Active 包含 starting/running/waiting/stopping，Queued 单独计数。列表仅包含 run，不含导航或筛选菜单项。

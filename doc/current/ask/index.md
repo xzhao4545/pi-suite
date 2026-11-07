@@ -46,4 +46,6 @@ selection 响应保留 selections 原始标题和 optionIds；freeform 响应保
 
 询问期间公共通知协调器暂存 job 完成和 child 父级问题，直到原生询问结束并到达可投递边界，和 goal 继续请求合并为一条消息；只有系统取消进入 waiting_user 后须由新的用户输入或 /goal resume 恢复；跳过保持自动许可，空闲到期继续运行。child 提问交给直接父级的协议期限独立管理，父级实际调用的原生询问从展示开始计时，排队不消耗期限。草稿不会因查看历史而初始化，历史操作重置空闲倒计时。
 
+ask_user 调用中只显示题干摘要或题目数；结果折叠为“题干 → 答案”或批量 answered 数，timed_out 带 auto-selected 与 unanswered 数，skipped/cancelled 显示实际状态。展开保留每题题干、context、选项标记、自由文字和 comment；已选项使用 success。子代理标题为 Ask parent。询问期间的 History 与主界面使用同一 Suite renderer；鼠标点击单项或 Pi 默认 Ctrl+O 可展开工具，历史内 t 切换工具明细。
+
 [返回当前文档](../index.md)

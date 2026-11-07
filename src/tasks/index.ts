@@ -7,9 +7,9 @@ import type { Dock, DockRow } from '../ui/dock.ts';
 import type { SessionBinding } from '../runtime/binding.ts';
 import { ToolError } from '../runtime/errors.ts';
 import { taskStore, type TaskStore } from './store.ts';
-import { taskViews } from './model.ts';
+import { taskViews, currentChild } from './model.ts';
 import { queryTasks, taskLabel, type TaskQuery } from './query.ts';
-import { taskDisplay, taskIcon } from './presentation.ts';
+import { taskRow } from './presentation.ts';
 import type { TaskChange, TaskData, TaskView } from './types.ts';
 
 export const taskPath = (cwd: string, id: string) => join(resolve(cwd), '.pi', 'tasks', `tasks-${id}.json`);
@@ -90,17 +90,20 @@ export class TasksModule {
   rows(compact = false): DockRow[] {
     if (!this.binding.current) return [];
     const groups = this.views.filter(task => task.progress), completed = groups.filter(task => task.status === 'done').length;
-    const leaves = this.views.filter(task => task.parentId);
     const blocked = new Set(this.views.filter(task => task.status === 'blocked').map(task => task.id));
-    // Group rows are organization, so compact totals count execution tasks only.
-    if (compact) return groups.length ? [{id: 'tasks:summary', text: 'Tasks', priority: 30,
-      suffix: `${leaves.filter(task => task.status === 'done').length}/${leaves.length} · ⟳ ${leaves.filter(task => task.status === 'doing').length} · ⚠ ${leaves.filter(task => blocked.has(task.id)).length}`}] : [];
+    const completedIds = new Set(groups.filter(group => group.status === 'done').map(group => `task:${group.id}`));
     const rows: DockRow[] = [];
     const children = new Map<string, TaskView[]>();
+    const grouped = new Map<string, TaskView[]>();
+    for (const task of this.views) if (task.parentId) {
+      const list = grouped.get(task.parentId) ?? []; list.push(task); grouped.set(task.parentId, list);
+    }
+    const currents = new Map(groups.map(group => [group.id, currentChild(group, grouped.get(group.id) ?? [])]));
     const recent = new Map(groups.map(group => [group.id, group.updatedAt]));
     for (const task of this.views) if (task.parentId) {
       recent.set(task.parentId, Math.max(recent.get(task.parentId)!, task.updatedAt));
-      if (task.status === 'doing' || blocked.has(task.id) || this.feedback.has(task.id)) {
+      if (task.status === 'doing' || blocked.has(task.id) || this.feedback.has(task.id)
+        || currents.get(task.parentId)?.id === task.id) {
         const list = children.get(task.parentId) ?? []; list.push(task); children.set(task.parentId, list);
       }
     }
@@ -111,15 +114,27 @@ export class TasksModule {
       const blockedCount = Number(blocked.has(group.id)) + (children.get(group.id) ?? []).filter(task => blocked.has(task.id)).length;
       const priority = (selected ? 50 : group.status === 'doing' ? 40 : blockedCount ? 38 : this.feedback.has(group.id) ? 35 : 30)
         + (groups.length - index) / (groups.length + 1) * 0.25;
-      rows.push({ id: `task:${group.id}`, text: `${selected ? '› ' : ''}${taskDisplay(group, this.binding.current?.ctx.ui.theme)}`,
-        suffix: `${taskIcon(group.status)} ${group.progress!.done}/${group.progress!.total}`, priority });
-      for (const task of children.get(group.id) ?? []) {
+      rows.push({ id: `task:${group.id}`, text: taskRow(group, this.binding.current.ctx.ui.theme),
+        suffix: `${group.progress!.done}/${group.progress!.total}`, priority });
+      const visible = children.get(group.id) ?? [], current = currents.get(group.id);
+      // The phone budget may fit only one child; show current work before older activity.
+      for (const task of current ? [current, ...visible.filter(task => task.id !== current.id)] : visible) {
         rows.push({ id: `task:${task.id}`, parentId: `task:${group.id}`,
-          text: `  ${taskDisplay(task, this.binding.current?.ctx.ui.theme)}`, suffix: taskIcon(task.status),
+          text: taskRow(task, this.binding.current.ctx.ui.theme),
           priority: priority + 0.5 });
       }
     }
-    if (completed) rows.push({ id: 'tasks:finished', text: `Tasks · completed ${completed} groups`, priority: 10 });
+    if (completed) rows.push({ id: 'tasks:finished', text: this.binding.current.ctx.ui.theme.fg('dim', `☑ 已完成 ${completed} 组`), priority: 10 });
+    if (compact) {
+      const unfinished = rows.filter(row => !row.parentId && row.id !== 'tasks:finished'
+        && !completedIds.has(row.id)).sort((a, b) => b.priority - a.priority);
+      const first = unfinished[0];
+      if (!first) return rows.filter(row => row.id === 'tasks:finished');
+      const group = groups.find(group => `task:${group.id}` === first.id)!;
+      const child = currents.get(group.id);
+      return [{ ...first, suffix: first.suffix + (unfinished.length > 1 ? ` · +${unfinished.length - 1} 组` : '') },
+        ...child ? rows.filter(row => row.id === `task:${child.id}`) : []];
+    }
     return rows;
   }
   selectGroup(id?: string): void { this.selectedGroup = id; this.dock.invalidate(); }
@@ -140,7 +155,7 @@ export class TasksModule {
   }
   async executionTask(ctx: ExtensionContext, id: string): Promise<TaskStore> {
     const store = this.scope(ctx), task = (await store.snapshot()).tasks.find(task => task.id === id);
-    if (!task?.parentId) throw new ToolError('NOT_FOUND', `No execution task #${id}`);
+    if (!task?.parentId) throw new ToolError('NOT_FOUND', `No execution task ${id}`);
     return store;
   }
 }

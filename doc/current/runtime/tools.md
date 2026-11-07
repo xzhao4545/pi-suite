@@ -8,7 +8,7 @@ runtime/tools.ts 提供 objectId、listFields、paginate、readFields、WAIT_ID_
 
 | 契约 | 当前规则 |
 | --- | --- |
-| 对象 ID | job_/agent_/run_ 后接 8 位小写十六进制，wf_ 后接 12 位；task 为清单内递增数字字符串，goal 使用当前目标契约的精确 goalId |
+| 对象 ID | job_/agent_/run_ 后接 8 位小写十六进制，wf_ 后接 12 位；task 组为递增数字字符串、子任务为 `组.序号`（如 `1.2`），执行工具只接受子任务 ID，goal 使用当前目标契约的精确 goalId |
 | 单项与列表 | task/job/agent 使用 list 与 get 独立入口；列表没有单项 id，agent_list.agentId 可与历史筛选组合。tasks 默认 unfinished，jobs/agents 默认 active/session，agent 另有 queued |
 | 分页 | limit 默认 10、最大 100；同时限制约 4 KiB 页面正文，按记录边界返回 nextCursor。jobs/agents 按创建时间与 ID 倒序；tasks 按组创建时间、组/子 ID 正序，中间页补充组上下文 |
 | 字节读取 | limitBytes 默认 4096、最大 65536；offset 为原始字节位置，处理 UTF-8 边界；返回 text/stream/offset/nextOffset/totalBytes/endOfStream 及截断或搜索信息 |
@@ -25,6 +25,14 @@ runtime/read.ts 的 readContinuation 共用 offset/search/context/limitBytes 续
 agent 工具使用稳定 ID，runId 按需选择历史执行；handle/alias 的发送与补全属于 TUI 提及入口，见 [agents 操作](../agents/operations.md)。jobs 与 agents 共用生命周期语义，领域终态分别包含 timed_out 与 limited；活动判断还核对真实清理边界。
 
 ask_user.timeoutMs 只控制询问期限；wait.timeoutMs 只控制等待调用；job_start.timeoutMs 控制 job 的运行期限并实际停止超时进程。相同单位不表示相同作用范围。
+
+## 公共工具显示
+
+ui/tool-render.ts 的 ToolView 提供 call、collapsed 与可选 expanded；统一构造 renderShell=self、renderCall/renderResult。toolLine 清理所有字段并压平换行，整行按可见宽度截断；图标与标题按 tone 着色，summary 使用默认色，meta 使用 dim，警告计数可指定 warning，任务完成标题支持删除线。outputPad 由组件应用。有 partial 或最终结果后隐藏调用行，折叠结果固定一行；未提供 expanded 时显示模型正文全文。错误始终显示 error 标题和完整正文。
+
+状态图标为 ⟳ 进行中、⧗ 排队、? 等待、✔ 完成、✘ 失败、⊘ 停止/跳过/取消、⏱ 超时/受限；tasks 使用自己的 ☐/⟳/⚠/☑ 语义。单项鼠标展开与 app.tools.expand（默认 Ctrl+O）由 Pi 宿主管理，折叠行不追加操作提示。
+
+runtime/tools.ts 的 registerBoundTool 同时登记 renderer；首次加载只注册工具，运行时刷新保留活动工具选择，显式启用时加入该工具。renderer lookup 按 ExtensionAPI 隔离，主会话与 child 的 ask_user 可使用不同标题。Ask Transcript 使用同一查找，child 查看器使用实际 run.renderers；历史结果重新绘制，不改写 content/details 或会话。wait 折叠只显示结算比例、失败计数与提前返回原因，展开保留逐项摘要、others 与 pending。
 
 ## 错误边界
 

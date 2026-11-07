@@ -92,10 +92,10 @@ test('child asks its parent through native tools; frontend wait returns, answer 
     h.faux.setResponses([
       fauxAssistantMessage(fauxToolCall('ask_user', { question: 'Which target?', options: [{ id: 'a', title: 'Alpha' }], timeoutMs: 0 })),
       fauxAssistantMessage('Parent saw question'),
-      context => { assert.match(JSON.stringify(context.messages), /"optionIds":\["a"\]/); return fauxAssistantMessage(fauxToolCall('task_edit', { op: 'batch', changes: [{ op: 'update', id: '2', status: 'doing' }] })); },
+      context => { assert.match(JSON.stringify(context.messages), /"optionIds":\["a"\]/); return fauxAssistantMessage(fauxToolCall('task_edit', { op: 'batch', changes: [{ op: 'update', id: '1.1', status: 'doing' }] })); },
       fauxAssistantMessage('child finished'),
     ]);
-    run = await h.manager.start({ prompt: 'ask then work', taskId: '2', background: false }, { ctx: h.ctx, taskStore: store }, h.config);
+    run = await h.manager.start({ prompt: 'ask then work', taskId: '1.1', background: false }, { ctx: h.ctx, taskStore: store }, h.config);
     await until(h.manager, () => Boolean(run.question));
     assert.equal(run.record.state, 'waiting');
     await h.idle();
@@ -104,8 +104,8 @@ test('child asks its parent through native tools; frontend wait returns, answer 
     const result = await run.done.promise;
     assert.equal(result.state, 'completed', result.error);
     const data = await store.snapshot();
-    assert.equal(data.tasks.find(task => task.id === '2')?.status, 'doing');
-    assert.equal(data.tasks.find(task => task.id === '2')?.owner, run.record.id);
+    assert.equal(data.tasks.find(task => task.id === '1.1')?.status, 'doing');
+    assert.equal(data.tasks.find(task => task.id === '1.1')?.owner, run.record.id);
   } finally { await h.cleanup(); }
 });
 

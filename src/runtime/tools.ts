@@ -1,6 +1,6 @@
 import { Type, type TSchema, type Static } from 'typebox';
 import { Value } from 'typebox/value';
-import type { ExtensionAPI, ToolDefinition } from '@earendil-works/pi-coding-agent';
+import type { ExtensionAPI, ToolDefinition, ToolRenderers } from '@earendil-works/pi-coding-agent';
 import { READ_LIMITS } from './read.ts';
 import { ToolError } from './errors.ts';
 
@@ -14,8 +14,16 @@ export const objectId = (prefix: 'job' | 'agent' | 'run' | 'wf', example: string
   Type.String({ pattern: `^${prefix}_[a-f0-9]{${prefix === 'wf' ? 12 : 8}}$`, description: `${prefix} ID, e.g. ${example}` });
 export const WAIT_ID_PATTERN = '^(?:(?:job|agent)_[a-f0-9]{8}|wf_[a-f0-9]{12})$';
 
-/** Pi late registration refreshes all extension tools; preserve the user's active selection. */
-export function registerBoundTool<P extends TSchema>(pi: ExtensionAPI, tool: ToolDefinition<P>, activate = false): void {
+// Child and main sessions may give ask_user different renderers; scope lookup to their API.
+const renderers = new WeakMap<ExtensionAPI, Map<string, ToolRenderers>>();
+export const toolRenderer = (pi: ExtensionAPI, name: string): ToolRenderers | undefined => renderers.get(pi)?.get(name);
+/** Initial load has no runtime API yet; late refreshes preserve the active selection. */
+export function registerBoundTool<P extends TSchema>(pi: ExtensionAPI, tool: ToolDefinition<P>, activate: boolean | 'initial' = false): void {
+  let lookup = renderers.get(pi);
+  if (!lookup) { lookup = new Map(); renderers.set(pi, lookup); }
+  // Lookup erases the parameter schema; the host supplies this tool's own arguments.
+  lookup.set(tool.name, tool as unknown as ToolRenderers);
+  if (activate === 'initial') { pi.registerTool(tool); return; }
   const active = pi.getActiveTools();
   pi.registerTool(tool);
   pi.setActiveTools(activate ? [...new Set([...active, tool.name])] : active);

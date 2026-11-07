@@ -143,7 +143,7 @@ export class AgentManager {
     const taskStore = scope.taskStore;
     if (request.taskId && taskStore) {
       const task = (await taskStore.snapshot()).tasks.find(task => task.id === request.taskId);
-      if (!task?.parentId) throw new ToolError('NOT_FOUND', `No execution task #${request.taskId}`);
+      if (!task?.parentId) throw new ToolError('NOT_FOUND', `No execution task ${request.taskId}`);
     }
     // Recheck after task I/O: stop closes subtree admission before awaiting any abort/job cleanup.
     options.signal?.throwIfAborted();
@@ -199,7 +199,7 @@ export class AgentManager {
     }
     if (request.taskId && taskStore) {
       try { await taskStore.link(request.taskId, { agentId: id }); }
-      catch (error) { throw new ToolError('TASK_LINK_FAILED', `${id} started but task #${request.taskId} could not be linked: ${String(error)}`, id); }
+      catch (error) { throw new ToolError('TASK_LINK_FAILED', `${id} started but task ${request.taskId} could not be linked: ${String(error)}`, id); }
     }
     return run;
   }
