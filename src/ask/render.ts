@@ -5,13 +5,16 @@ import type { Option, Question, Response } from "./schema.ts";
 import { sanitizeText } from "../runtime/text.ts";
 
 const oneLine = (text: string) => sanitizeText(text).replace(/\s*\n\s*/g, " ");
-export const answerText = (response?: Response) => response?.kind === "freeform" ? response.text : response?.selections.join(", ");
+export const answerText = (response?: Response) => response ? [
+  ...response.kind === 'selection' ? response.selections : [], ...response.text ? [`✎ ${response.text}`] : [],
+].join(', ') : undefined;
 
 /** Shared markers keep the full list and the one-line phone layout consistent. */
-export function optionRow(theme: Theme, question: Question, draft: Pick<Draft, 'selected' | 'text'>, option: Option | undefined, focused: boolean): string {
-  const selected = option ? draft.selected.has(option.id) : Boolean(draft.text.trim());
-  const marker = option ? question.allowMultiple ? selected ? "☑" : "☐" : selected ? "◉" : "○" : "✎";
-  const title = option?.title ?? `Type your own answer${draft.text.trim() ? `: ${draft.text}` : ""}`;
+export function optionRow(theme: Theme, question: Question, draft: Pick<Draft, 'selected' | 'text' | 'customSelected'>, option: Option | undefined, focused: boolean): string {
+  const selected = option ? draft.selected.has(option.id) : draft.customSelected && Boolean(draft.text.trim());
+  const choice = question.allowMultiple ? selected ? "☑" : "☐" : selected ? "◉" : "○";
+  const marker = option ? choice : `${question.options.length ? choice + ' ' : ''}✎`;
+  const title = option?.title ?? (draft.text.trim() ? draft.text : 'Type your own answer');
   return (focused ? theme.fg("accent", "❯ ") : "  ") + theme.fg(selected ? "success" : "dim", marker) + " " +
     (focused ? theme.fg("accent", oneLine(title)) : oneLine(title)) + (option?.recommended ? theme.fg("accent", " (Recommended)") : "");
 }

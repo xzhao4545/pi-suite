@@ -144,6 +144,7 @@ export class AskView implements Component {
     const option = this.form.reviewing || this.form.draft.editing ? undefined : this.options()[this.form.draft.cursor];
     const response = this.form.reviewing ? this.form.response(index) : undefined;
     const text = [this.requester, this.heading, question.question, question.context, option?.title, option?.description,
+      ...!this.form.reviewing && !option && this.form.draft.text ? [`✎ ${this.form.draft.text}`] : [],
       response ? answerText(response) : undefined, response?.comment].filter(Boolean).join("\n\n");
     this.detailKey = `details:${index}:${option?.id ?? 'question'}`;
     let reader = this.descriptions.get(this.detailKey);
@@ -171,7 +172,9 @@ export class AskView implements Component {
     else if (action === "Back") this.closeReader();
   }
   private openSearch(): void { this.focus = "search"; this.search.setValue(this.form.draft.query); }
-  private editText(): void { this.form.draft.freeform = true; this.form.draft.editing = true; this.focus = "answer"; }
+  private editText(): void {
+    this.form.editText(); this.form.draft.cursor = this.options().length; this.focus = "answer";
+  }
   private toggleExpanded(): void { this.expanded = !this.expanded; this.measured = ''; }
   private pageKey(data: string): void {
     if (this.expanded && (matchesKey(data, Key.pageUp) || matchesKey(data, Key.pageDown))) {
@@ -316,8 +319,8 @@ export class AskView implements Component {
     const wide = this.tui.terminal.columns >= 100, listWidth = wide ? Math.floor(geometry.width * 0.5) : geometry.width;
     const heights = this.form.questions.map((question, index) => {
       const header = questionLines(question, this.theme, geometry.width, headerCap, this.expanded).length;
-      const options = question.options.reduce((height, option) => height + choiceLines(this.theme, question, this.form.drafts[index], option,
-        false, listWidth, this.expanded, wide).length, 1);
+      const options = [...question.options, undefined].reduce((height, option) => height + choiceLines(this.theme, question, this.form.drafts[index], option,
+        false, listWidth, this.expanded, wide).length, 0);
       const preview = wide ? Math.max(0, ...question.options.map(option => this.previewForMeasure(option, geometry.width - listWidth - 3))) : 0;
       return chrome + header + Math.max(1, options, preview);
     });
@@ -332,7 +335,7 @@ export class AskView implements Component {
     const question = this.form.question;
     const full = questionLines(question, this.theme, width, Number.MAX_SAFE_INTEGER, true);
     const wide = this.tui.terminal.columns >= 100, listWidth = wide ? Math.floor(width * 0.5) : width;
-    return full.length > headerCap || question.options.some(option =>
+    return full.length > headerCap || [...question.options, undefined].some(option =>
       choiceLines(this.theme, question, this.form.draft, option, false, listWidth, true, false).length >
       choiceLines(this.theme, question, this.form.draft, option, false, listWidth, false, wide).length) ||
       visibleWidth(`${this.requester} ${this.heading ?? ''}`) > width - 30;
@@ -402,7 +405,8 @@ export class AskView implements Component {
     if (geometry.separators) lines.push('\0separator');
     const status = this.notice ? this.theme.fg('warning', this.notice) + ` · ${this.escapeHint}` : this.renderActions(geometry.width);
     lines.push(truncateToWidth((!geometry.inset && scrolling ? `${cursor + 1}/${count} · ` : '') + status, geometry.width));
-    const kind = !this.form.question.options.length ? '✎' : this.form.question.allowMultiple ? `☐${this.form.draft.selected.size}` : '○';
+    const kind = !this.form.question.options.length ? '✎' : this.form.question.allowMultiple
+      ? `☐${this.form.draft.selected.size + Number(this.form.draft.customSelected && Boolean(this.form.draft.text.trim()))}` : '○';
     const page = this.form.reviewing ? 'Review' : `Q${this.form.index + 1}/${this.form.questions.length} ${kind}`;
     return frameLines(this.theme, geometry, width, topBorder(this.theme, width, this.requester, this.heading, page, time), lines, markers)
       .map(line => truncateToWidth(line, width));

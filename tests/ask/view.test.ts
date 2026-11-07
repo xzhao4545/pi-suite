@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { stripVTControlCharacters } from 'node:util';
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { initTheme, type Theme } from "@earendil-works/pi-coding-agent";
 import { defaults } from "../../src/runtime/config.ts";
@@ -94,8 +95,16 @@ test("idle expiry keeps draft/recommended/first choices and unanswered slots; ac
   const multi = new AskForm(normalize({ question: "Multi", allowMultiple: true,
     options: [{ id: "a", title: "A", recommended: true }, { id: "b", title: "B", recommended: true }] }));
   assert.deepEqual(multi.expire().responses[0], { kind: "selection", selections: ["A", "B"], optionIds: ["a", "b"], autoSelected: true });
-  multi.draft.freeform = true; multi.draft.text = "draft"; multi.draft.comment = "reason";
+  multi.draft.customSelected = true; multi.draft.text = "draft"; multi.draft.comment = "reason";
   assert.deepEqual(multi.expire().responses[0], { kind: "freeform", text: "draft", comment: "reason", autoSelected: true });
+  multi.choose('a');
+  assert.deepEqual(multi.expire().responses[0], { kind: 'selection', selections: ['A'], optionIds: ['a'],
+    text: 'draft', comment: 'reason', autoSelected: true });
+  multi.choose();
+  assert.deepEqual(multi.expire().responses[0], { kind: 'selection', selections: ['A'], optionIds: ['a'],
+    comment: 'reason', autoSelected: true });
+  multi.choose('a'); assert.equal(multi.skip().responses[0], undefined, 'deselected text is retained but not submitted');
+  assert.equal(multi.draft.text, 'draft');
   assert.deepEqual(new AskForm(normalize({ question: "Empty" })).expire(), { status: "timed_out", responses: [] });
   const answered = fixture({ question: "Q", defaultAnswer: "yes", timeoutMs: 15 });
   answered.view.render(40); answered.view.handleInput("\r"); answered.view.handleInput("\r"); t.mock.timers.tick(25);
@@ -146,10 +155,24 @@ test("every choice permits text and text pages navigate outside explicit editing
       { question: 'Choice', options: ['A', 'B'], allowMultiple }, { question: 'Text' },
     ], timeoutMs: 0 });
     assert.match(view.render(40).join('\n'), /Type your own answer/);
+    view.handleInput(' ');
     view.handleInput('\x1b[B'); view.handleInput('\x1b[B'); view.handleInput('\r');
     assert.equal(form.draft.editing, true);
     view.handleInput('custom'); view.handleInput('\x1b');
     assert.equal(form.draft.editing, false); assert.equal(form.draft.text, 'custom');
+    const rendered = () => view.render(40).map(stripVTControlCharacters).join('\n');
+    assert.match(rendered(), allowMultiple ? /☑ ✎ custom/ : /◉ ✎ custom/);
+    assert.doesNotMatch(rendered(), /Type your own answer/);
+    if (allowMultiple) {
+      view.handleInput(' '); assert.match(rendered(), /☐ ✎ custom/);
+      assert.deepEqual(form.response(), { kind: 'selection', selections: ['A'], optionIds: ['option-1'] });
+      view.handleInput(' '); assert.match(rendered(), /☑ ✎ custom/);
+    } else {
+      view.handleInput('\x1b[A'); view.handleInput(' ');
+      assert.deepEqual(form.response(), { kind: 'selection', selections: ['B'], optionIds: ['option-2'] });
+      view.handleInput('\x1b[B'); assert.match(rendered(), /○ ✎ custom/);
+      view.handleInput(' '); assert.match(rendered(), /◉ ✎ custom/);
+    }
     view.handleInput('\x1b[C'); assert.equal(form.index, 1); assert.equal(form.draft.editing, false);
     view.handleInput('\x1b[D'); assert.equal(form.index, 0);
     view.handleInput('\x1b[C'); view.handleInput('\r'); view.handleInput('kept');
@@ -162,7 +185,16 @@ test("every choice permits text and text pages navigate outside explicit editing
     assert.equal(form.reviewing, true); assert.equal(form.draft.editing, false);
     view.handleInput('\r');
     assert.deepEqual(results, [{ status: 'answered', responses: [
-      { kind: 'freeform', text: 'custom' }, { kind: 'freeform', text: 'kept text' },
+      allowMultiple ? { kind: 'selection', selections: ['A'], optionIds: ['option-1'], text: 'custom' }
+        : { kind: 'freeform', text: 'custom' },
+      { kind: 'freeform', text: 'kept text' },
     ] }]);
   }
+  const long = fixture({ question: 'Custom', options: ['A'], defaultAnswer: 'Long custom '.repeat(15) + 'CUSTOM_END', timeoutMs: 0 }, 40, 80);
+  assert.match(long.view.render(80).join('\n'), /e 展开/);
+  long.view.handleInput('e');
+  assert.match(long.view.render(80).join('\n'), /CUSTOM_END/);
+  long.view.handleInput('d'); long.view.render(80); long.view.handleInput('\x1b[F');
+  assert.match(long.view.render(80).join('\n'), /CUSTOM_END/);
+  long.view.dispose();
 });

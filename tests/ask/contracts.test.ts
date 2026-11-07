@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { stripVTControlCharacters } from 'node:util';
+import { ToolExecutionComponent } from '@earendil-works/pi-coding-agent';
 import { Value } from "typebox/value";
 import { normalize, askSchema } from "../../src/ask/schema.ts";
 import { AskForm } from "../../src/ask/form.ts";
@@ -74,7 +76,7 @@ test("external schemas and semantic normalization reject conflicting defaults an
   ]) assert.throws(() => normalize(params));
 });
 
-test("native skip returns selected options, text and unanswered positions to the model and details", async () => {
+test("native skip and history retain preset and custom selections together and keep unanswered positions", async () => {
   let ctx!: ExtensionContext;
   const h = await host({ extend: pi => { pi.on('session_start', (_event, context) => { ctx = context; }); },
     ui: ui => ({ ...ui, custom: (async factory => new Promise(resolve => {
@@ -82,26 +84,34 @@ test("native skip returns selected options, text and unanswered positions to the
         const view = component as AskView; view.render(80);
         view.handleInput(' '); view.handleInput('\x1b[C'); view.handleInput('\x1b[C');
         view.handleInput(' '); view.handleInput('\x1b[B'); view.handleInput(' ');
+        view.handleInput('f'); view.handleInput('multi text'); view.handleInput('\x1b');
         view.handleInput('\x1b[C'); view.handleInput('\r'); view.handleInput('partial');
         view.handleInput('\x1b'); view.handleInput('\x1b');
       });
     })) as ExtensionUIContext['custom'] }) });
   try {
-    const result = await h.session.getToolDefinition('ask_user')!.execute('partial', { questions: [
+    const params = { questions: [
       { question: 'Single', options: ['A', 'B'] }, { question: 'Unanswered', options: ['X'] },
       { question: 'Multi', options: ['C', 'D'], allowMultiple: true }, { question: 'Text' },
-    ], timeoutMs: 0 }, new AbortController().signal, undefined, ctx as never);
+    ], timeoutMs: 0 };
+    const tool = h.session.getToolDefinition('ask_user')!;
+    const result = await tool.execute('partial', params, new AbortController().signal, undefined, ctx as never);
     const expected = { status: 'skipped', cancelled: true, kind: 'batch',
       answers: [
         { status: 'answered', response: { kind: 'selection', selections: ['A'], optionIds: ['option-1'] } },
         { status: 'unanswered' },
-        { status: 'answered', response: { kind: 'selection', selections: ['C', 'D'], optionIds: ['option-1', 'option-2'] } },
+        { status: 'answered', response: { kind: 'selection', selections: ['C', 'D'], optionIds: ['option-1', 'option-2'], text: 'multi text' } },
         { status: 'answered', response: { kind: 'freeform', text: 'partial' } },
       ] };
     assert.equal(result.terminate, false);
     assert.ok(result.content[0].type === 'text');
     assert.partialDeepStrictEqual(JSON.parse(result.content[0].text), expected);
     assert.partialDeepStrictEqual(result.details, expected);
+    const history = new ToolExecutionComponent('ask_user', 'partial', params, { outputPad: 0 }, tool, terminal(), process.cwd());
+    history.updateResult({ ...result, isError: false }); history.setExpanded(true);
+    const text = history.render(120).map(stripVTControlCharacters).join('\n');
+    assert.match(text, /☑ C/); assert.match(text, /☑ D/); assert.match(text, /☑ ✎ multi text/);
+    assert.doesNotMatch(text, /Type your own answer/);
   } finally { await h.dispose(); }
 });
 

@@ -21,8 +21,8 @@ export function askKey(data: string, form: AskForm, options: Option[], height: n
   else if (data === "f") return "text";
   else if (matchesKey(data, Key.enter) || data === " ") {
     const option = options[draft.cursor];
-    if (!option) return "text";
-    if (data === " ") { if (option) form.choose(option.id); }
+    if (!option && (data !== " " || !draft.text.trim())) return "text";
+    if (data === " ") form.choose(option?.id);
     else {
       // Enter confirms multi-select without toggling its focused item off.
       if (option && !form.question.allowMultiple) form.choose(option.id);

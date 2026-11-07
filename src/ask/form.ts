@@ -1,9 +1,8 @@
 import type { AskResult, Question, Response } from "./schema.ts";
 
 export interface Draft {
-  // Editing is focus state; freeform is the answer mode. Esc may leave the editor
-  // without discarding a text answer or its retained selection draft.
-  text: string; selected: Set<string>; freeform: boolean; editing: boolean; cursor: number; query: string; comment: string;
+  // Text survives deselection; editing is focus, independent of the option's selection.
+  text: string; selected: Set<string>; customSelected: boolean; editing: boolean; cursor: number; query: string; comment: string;
 }
 export class AskForm {
   readonly drafts: Draft[];
@@ -15,7 +14,7 @@ export class AskForm {
     this.drafts = questions.map(question => ({
       text: question.defaultAnswer ?? "", comment: "",
       selected: new Set(question.defaultOptionIds ?? (question.defaultOptionId ? [question.defaultOptionId] : [])),
-      freeform: !question.options.length || question.defaultAnswer !== undefined,
+      customSelected: !question.options.length || question.defaultAnswer !== undefined,
       // Page navigation owns focus until the user explicitly enters the editor.
       editing: false, cursor: question.defaultAnswer !== undefined ? question.options.length : 0, query: "",
     }));
@@ -23,26 +22,30 @@ export class AskForm {
   get question(): Question { return this.questions[this.index]; }
   get draft(): Draft { return this.drafts[this.index]; }
 
-  choose(id: string): void {
+  choose(id?: string): void {
     const draft = this.draft;
-    draft.freeform = false; draft.editing = false;
-    if (this.question.allowMultiple) {
-      if (draft.selected.has(id)) draft.selected.delete(id); else draft.selected.add(id);
-    } else { draft.selected.clear(); draft.selected.add(id); }
+    draft.editing = false;
+    if (!this.question.allowMultiple) { draft.selected.clear(); draft.customSelected = false; }
+    // The custom option has no model-provided ID, so it cannot collide with a preset ID.
+    if (id === undefined) draft.customSelected = !draft.customSelected;
+    else if (draft.selected.has(id)) draft.selected.delete(id); else draft.selected.add(id);
+  }
+  editText(): void {
+    if (!this.question.allowMultiple) this.draft.selected.clear();
+    this.draft.customSelected = true; this.draft.editing = true;
   }
   response(index = this.index, automatic = false): Response | undefined {
     const question = this.questions[index], draft = this.drafts[index];
     const comment = draft.comment ? { comment: draft.comment } : {};
-    if (draft.freeform && draft.text.trim()) return { kind: "freeform", text: draft.text, ...comment };
-    if (draft.freeform && !automatic) return undefined;
+    const text = draft.customSelected && draft.text.trim() ? draft.text : undefined;
     let selected = question.options.filter(option => draft.selected.has(option.id));
-    if (!selected.length && automatic) {
+    if (!selected.length && !text && automatic) {
       const recommended = question.options.filter(option => option.recommended);
       selected = recommended.length ? question.allowMultiple ? recommended : recommended.slice(0, 1) : question.options.slice(0, 1);
     }
-    if (!selected.length) return undefined;
+    if (!selected.length) return text ? { kind: "freeform", text, ...comment } : undefined;
     return { kind: "selection", selections: selected.map(o => o.title), optionIds: selected.map(o => o.id),
-      ...comment };
+      ...text !== undefined ? { text } : {}, ...comment };
   }
   answered(index: number): boolean { return this.response(index) !== undefined; }
   get complete(): boolean { return this.questions.every((_, index) => this.answered(index)); }

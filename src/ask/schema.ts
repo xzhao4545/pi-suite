@@ -25,7 +25,8 @@ export interface Question extends Omit<QuestionInput, "options" | "allowMultiple
   options: Option[]; allowMultiple: boolean;
 }
 export type Response = (
-  | { kind: "selection"; selections: string[]; optionIds: string[]; comment?: string }
+  // Custom text has no preset ID; mixed multi-select answers keep it in its own field.
+  | { kind: "selection"; selections: string[]; optionIds: string[]; text?: string; comment?: string }
   | { kind: "freeform"; text: string; comment?: string }
 ) & { autoSelected?: true };
 export type AskResult =

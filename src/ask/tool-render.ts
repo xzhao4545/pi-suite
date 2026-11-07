@@ -28,11 +28,11 @@ export function askRenderers(title = 'Ask') {
           const response = responses[index];
           // Use the live form's markers; the transcript has no editing focus.
           const selected = new Set(response?.kind === 'selection' ? response.optionIds : []);
-          const draft = { selected, text: response?.kind === 'freeform' ? response.text : '' };
+          const draft = { selected, text: response?.text ?? '', customSelected: Boolean(response?.text) };
           return [sanitizeText(question.question), ...question.context ? [sanitizeText(question.context)] : [],
             ...question.options.flatMap(option => [optionRow(theme, question, draft, option, false),
               ...option.description ? [`    ${sanitizeText(option.description)}`] : []]),
-            ...response?.kind === 'freeform' ? [`✎ ${sanitizeText(response.text)}`] : [],
+            ...response?.text ? [optionRow(theme, question, draft, undefined, false)] : [],
             ...response?.comment ? [`comment: ${sanitizeText(response.comment)}`] : [],
             ...response?.autoSelected ? ['auto-selected'] : [], ...response ? [] : ['unanswered']];
         })];
