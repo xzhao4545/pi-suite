@@ -11,7 +11,7 @@ import { workflowSummary, type WorkflowsModule } from './index.ts';
 import { decideWorkflowCollision } from './collisions.ts';
 import { WORKFLOW_ENTRY_TYPE, decodeWorkflowEntry, taskFromEntry } from './entry.ts';
 import { sanitizeText } from '../../runtime/text.ts';
-import { toolRenderers, stateLine } from '../../ui/tool-render.ts';
+import { workflowRenderers } from './render.ts';
 import { WorkflowProgress, workflowLine, workflowLines } from './ui/progress.ts';
 import type { AgentType } from '../types.ts';
 
@@ -30,16 +30,15 @@ export function registerWorkflowTool(pi: ExtensionAPI, workflows: WorkflowsModul
       return textResult([workflowSummary(task), task.logs.at(-1), `resultPath: ${task.resultPath}`],
       {id: task.id, status: task.status, scriptPath: task.scriptPath, resultPath: task.resultPath, resumedFrom: task.resumedFrom});
     },
-    ...toolRenderers<{ name?: string; scriptPath?: string }, { id: string; status: string }>({
-      call: args => ({ icon: '⟳', tone: 'accent', title: 'Workflow', summary: args.name ?? args.scriptPath ?? 'inline script' }),
-      collapsed: details => {
+    ...workflowRenderers({
+      line: id => {
         // Historical results can outlive the runtime task cache.
-        const task = workflows.manager.tasks.get(details.id);
-        return task ? workflowLine(task) : { ...stateLine(details.status), title: 'Workflow', summary: `${details.id} · ${details.status}` };
+        const task = workflows.manager.tasks.get(id);
+        return task ? workflowLine(task) : undefined;
       },
-      expanded: (details, _args, text) => {
-        const task = workflows.manager.tasks.get(details.id);
-        return task ? workflowLines(task).map(sanitizeText) : [text];
+      lines: id => {
+        const task = workflows.manager.tasks.get(id);
+        return task ? workflowLines(task).map(sanitizeText) : undefined;
       },
     }) };
   pi.registerEntryRenderer(WORKFLOW_ENTRY_TYPE, (entry, _options, theme) => {

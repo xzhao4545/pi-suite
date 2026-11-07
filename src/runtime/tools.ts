@@ -17,6 +17,13 @@ export const WAIT_ID_PATTERN = '^(?:(?:job|agent)_[a-f0-9]{8}|wf_[a-f0-9]{12})$'
 // Child and main sessions may give ask_user different renderers; scope lookup to their API.
 const renderers = new WeakMap<ExtensionAPI, Map<string, ToolRenderers>>();
 export const toolRenderer = (pi: ExtensionAPI, name: string): ToolRenderers | undefined => renderers.get(pi)?.get(name);
+/** History is rebuilt before session_start; rendering must not wait for module admission. */
+export function registerToolRenderers(pi: ExtensionAPI, defaults: Record<string, ToolRenderers>): void {
+  const lookup = new Map(Object.entries(defaults));
+  renderers.set(pi, lookup);
+  // A registered tool or another extension's resolver owns its live definition.
+  pi.registerToolRenderer((name, next) => next() ?? lookup.get(name));
+}
 /** Initial load has no runtime API yet; late refreshes preserve the active selection. */
 export function registerBoundTool<P extends TSchema>(pi: ExtensionAPI, tool: ToolDefinition<P>, activate: boolean | 'initial' = false): void {
   let lookup = renderers.get(pi);

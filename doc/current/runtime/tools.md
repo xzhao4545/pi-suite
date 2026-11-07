@@ -32,7 +32,9 @@ ui/tool-render.ts 的 ToolView 提供 call、collapsed 与可选 expanded；统�
 
 状态图标为 ⟳ 进行中、⧗ 排队、? 等待、✔ 完成、✘ 失败、⊘ 停止/跳过/取消、⏱ 超时/受限；tasks 使用自己的 ☐/⟳/⚠/☑ 语义。单项鼠标展开与 app.tools.expand（默认 Ctrl+O）由 Pi 宿主管理，折叠行不追加操作提示。
 
-runtime/tools.ts 的 registerBoundTool 同时登记 renderer；首次加载只注册工具，运行时刷新保留活动工具选择，显式启用时加入该工具。renderer lookup 按 ExtensionAPI 隔离，主会话与 child 的 ask_user 可使用不同标题。Ask Transcript 使用同一查找，child 查看器使用实际 run.renderers；历史结果重新绘制，不改写 content/details 或会话。wait 折叠只显示结算比例、失败计数与提前返回原因，展开保留逐项摘要、others 与 pending。
+扩展工厂通过 runtime/renderers.ts 与 Pi registerToolRenderer 在加载阶段登记所有 Suite 工具的纯展示定义；历史组件在 session_start 之前重建时即可使用，reload、resume 与重启沿用相同的摘要、展开和错误显示。展示注册不启用模型工具、不创建执行模块；模块关闭或当前工具选择未包含某工具时，其历史记录仍可阅读。已注册工具或其他扩展提供的 renderer 优先于历史展示定义。
+
+runtime/tools.ts 的 registerBoundTool 同时登记运行时 renderer；首次加载只注册工具，运行时刷新保留活动工具选择，显式启用时加入该工具。renderer lookup 按 ExtensionAPI 隔离，主会话与 child 的 ask_user 可使用不同标题。Ask Transcript 使用同一查找，child 查看器使用实际 run.renderers；历史结果使用持久化 content/details 重新绘制，不改写记录、不重新执行工具或请求模型。wait 折叠只显示结算比例、失败计数与提前返回原因，展开保留逐项摘要、others 与 pending。
 
 ## 错误边界
 
