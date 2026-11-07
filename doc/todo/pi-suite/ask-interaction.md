@@ -1,0 +1,126 @@
+# Ask 空闲计时、题型标记、多题切换与跳过语义
+
+状态：方案待确认，未实施。ask_user 的工具调用显示（renderCall/renderResult）归入 [工具调用显示](tool-display.md)，本文件只处理询问界面与结果语义。
+
+## 原始需求
+
+- [ ] 1. 用户在询问界面操作时重置计时；只有用户持续一段时间不操作才超时。
+- [ ] 2. 单选、多选、输入三种题型的选项标记一眼可区分。
+- [ ] 3. 多个问题时能用左右方向键切换上一个、下一个问题。
+- [ ] 4. Esc 跳过回答时不能同时停止模型回答。
+
+## 当前原因
+
+| 需求 | 根因位置 |
+| --- | --- |
+| 1 | `src/ask/view.ts` 第 206–216 行只在首次 render 设置一次 `deadline` 与 `setTimeout`；`handleInput`（134–183）与 `handleMouse`（184–189）都不触碰计时。`doc/current/ask/index.md` 的“超时与结果”明确写着查阅历史或说明不重置期限、整批共用一个期限 |
+| 2 | 列表行（`view.ts` 244–251）与单行 `answerLine`（195–205）对单选和多选都画 `[x]`/`[ ]`，光标是无颜色的 `>`；自由输入没有任何标记，只在操作栏有 Freeform 或按 `f` 进入；推荐标记 `(Recommended)` 无颜色 |
+| 3 | 选项列表焦点下 ←/→ 没有任何分支处理；切题只能 Tab 进入操作栏 → ←/→ 选 Previous/Next question → Enter（`act()` 118–120），每次切题后操作栏索引归零 |
+| 4 | Esc 本身没有触发 Pi 的 `session.abort()`：询问打开时焦点在 AskView，宿主的中断处理 `defaultEditor.onEscape` 收不到按键。真正原因是 `src/ask/index.ts` 第 69–71 行对非 answered 结果返回 `terminate: true`；Pi 1.5.0 的 `shouldTerminateToolBatch` 在整批工具都 terminate 时结束本轮循环，模型拿不到下一轮。同时 `AskManager.onResult(false)` 调用 `GoalManager.askResult`（`src/goal/manager.ts` 204–207），把目标置为 waiting_user 并关闭 automatic |
+
+相关的同类问题：
+
+- `src/jobs/launch/authorize.ts` 第 19 行把启动确认的非 answered 结果转成 `LAUNCH_NOT_CONFIRMED`，`src/jobs/tools.ts` 第 71–73 行随后返回 `terminate: true`，所以在 job 启动确认上按 Esc 同样会结束本轮。
+- 嵌套状态下 Esc 需要连按多次才能关闭询问（搜索/评论/操作栏 → 选项，自由输入 → 选项，最后才取消），用户连按时最后一次 Esc 可能落到宿主输入框。[INFERENCE] 宿主仍在 streaming 时这次 Esc 会调用 `session.abort()`，未实际观察到。
+
+## OMP 参考结论
+
+阅读 [can1357/oh-my-pi](https://github.com/can1357/oh-my-pi) 提交 `f2b795ba747b23d42052184d822b41e3d01357cc`：
+
+| 位置 | 设计 | 本方案处置 |
+| --- | --- | --- |
+| `packages/tui/src/chrome/countdown-timer.ts`、`packages/tui/src/overlays/ask-dialog.ts` 700–704 | 空闲计时：任何按键、页签/行点击、Enter、备注都调用 `CountdownTimer.reset()`，重新开始完整时长；编辑自定义回答时到期延后到编辑结束 | 采用空闲计时；输入框中的每次按键本身就是操作，会重置计时，不需要额外的延后逻辑 |
+| `packages/coding-agent/src/modes/settings.ts` 1430–1458 | `ask.timeout` 默认 0（关闭），单位秒；到期自动选择推荐项并提交 | 不采用自动选择：Suite 的契约是超时不等于同意，默认值和推荐项不提交 |
+| `packages/tui/src/tools/ask.ts` 208–211 `optionMarker` | 单选 `○`/`◉`，多选 `☐`/`☑`，光标 `❯`；勾选标记为 success 色、未勾选为 dim，光标行 accent | 采用同一组符号与配色；自由输入另加 `✎`，OMP 的 “Other” 行沿用题型标记，无法区分输入 |
+| `ask-dialog.ts` 1277–1281、1483–1486，`packages/tui/src/chrome/selector-helpers.ts` `handleTabSwitchKey` | 多题时顶部页签栏（每题一个 + Submit 页），Tab/→ 下一题，Shift+Tab/← 上一题，循环切换；单选 Enter 选中即进入下一题，最后进入 Submit 页 | 采用页签栏、←/→ 切题与 Review 页；Tab 保留给操作栏，不循环切换 |
+| `packages/coding-agent/src/tools/ask.ts` 772–776 `cancelAsk` | 取消时 `context.abort()` 并抛出 `ToolAbortError`，测试 “aborts the turn when the user cancels selection” 固定该行为 | 不采用：用户明确要求 Esc 跳过时模型继续，改为返回正常的 skipped 结果 |
+
+## 方案
+
+### 1. 结果状态与 Esc 跳过
+
+`AskResult.status` 由 `answered | timed_out | cancelled` 改为 `answered | skipped | timed_out | cancelled`：
+
+| 状态 | 触发 | terminate | goal | 模型可见含义 |
+| --- | --- | --- | --- | --- |
+| answered | 用户提交 | 否 | 转为 running（现状） | 返回答案 |
+| skipped | 顶层 Esc、操作栏 Skip | 否 | 不改变状态，不设置 waiting_user | 用户未回答就跳过；不得视为同意，继续不依赖该答案的工作，或之后再问 |
+| timed_out | 空闲超过期限 | 是（现状） | waiting_user（现状） | 用户离开；等待新输入或 /goal resume |
+| cancelled | signal 中止、会话切换/reload、队列中被撤销 | 是（现状） | waiting_user（现状） | 系统取消 |
+
+- `src/ask/view.ts`：`abort` 只用于 signal；新增 `skip = () => this.finish({ status: "skipped", responses: [] })`，顶层 Esc 与 Skip 动作调用它。操作栏 `Cancel` 改名 `Skip`。
+- `src/ask/index.ts`：`terminate` 改为 `result.status === "timed_out" || result.status === "cancelled"`；`askDetails` 的兼容字段 `cancelled` 保持为 `status !== "answered"`。工具描述与 promptGuidelines 增加 skipped 的处理要求。
+- `AskManager` 的 `onResult` 回调改为传入 status；`GoalManager.askResult` 只在 timed_out/cancelled 时进入 waiting_user，skipped 不改变目标状态。
+- 子代理向父级提问的 `src/agents/child.ts` 与 `src/agents/questions.ts` 由父级模型回答，不经过用户 Esc，保持现状。
+- `src/jobs/launch/authorize.ts`：skipped 时抛出新的 `LAUNCH_SKIPPED`，`src/jobs/tools.ts` 返回 `started:false` 且不 terminate；timed_out/cancelled 仍为 `LAUNCH_NOT_CONFIRMED` + terminate。
+- Esc 分层不变：搜索、评论、操作栏、详情、历史、带选项题的文字输入各退一层；只有回到题目的选项列表（或无选项题的输入框）时 Esc 才跳过整个询问。底部提示行显示 `Esc skip`，用户能预知下一次 Esc 的效果。
+- 跳过后焦点回到宿主输入框，模型继续生成；此时再按 Esc 是 Pi 原生的中断，这是用户主动停止模型的入口，写入 current 文档。
+
+### 2. 空闲计时
+
+- `AskView` 新增 `touch()`：已开始计时且未结束时，把 `deadline` 设为 `Date.now() + timeout`，清除并重新设置 `setTimeout`。
+- 调用点：`handleInput` 通过 closed 检查后的每次输入（含粘贴、搜索、阅读历史与详情）；`handleMouse` 实际处理的滚轮与点击。终端缩放不算操作。
+- 首次 render 时开始计时、排队期间不计时、整批共用一个计时器、`timeoutMs: 0` 不计时，均保持现状。
+- 倒计时显示改为 `idle 95s`，提示这是剩余空闲时间；每次操作后回到完整时长。
+- `src/ask/schema.ts` 的 `timeoutMs` 描述改为 “Milliseconds of user inactivity before expiry. Omit for configured default; 0 disables expiry. Expiry never submits defaults.”；`ask.timeout` 配置含义同步改为空闲时长，默认值 120000 不变。
+
+### 3. 题型标记
+
+`src/ask/view.ts` 列表行改为 `<光标> <标记> <标题>[ (Recommended)]`，单行 `answerLine` 使用同一函数：
+
+| 元素 | 未选 | 已选 | 颜色 |
+| --- | --- | --- | --- |
+| 单选 | `○` | `◉` | 已选 success，未选 dim |
+| 多选 | `☐` | `☑` | 已选 success，未选 dim |
+| 自由输入行 | `✎` | `✎`（已有文字时在行尾显示文字预览） | 有文字时 success，否则 dim |
+| 光标 | `❯ `（非光标行为两个空格） | | accent，光标行标题同为 accent |
+| 推荐 | ` (Recommended)` | | accent |
+
+- 题目标题行带题型标签：`○ Single choice`、`☐ Multiple choice · 2 selected`、`✎ Text`，同一行显示 `Q2/3` 与空闲倒计时。
+- 有选项且 `allowFreeform` 为 true 时，列表末尾固定一行 `✎ Type your own answer`；Enter 进入文字输入，Esc 退回列表并保留文字。`f` 快捷键保留，操作栏的 Freeform 动作删除。无选项题直接显示输入框，输入框左侧加 `✎ ` 前缀。
+- 所有符号经 pi-tui `visibleWidth` 计为 1 列（`○ ◉ ☐ ☑ ✎ ❯` 已核对），截断与对齐沿用现有 `truncateToWidth`。
+
+### 4. 按键与多题切换
+
+| 按键 | 单选 | 多选 | 文字输入 |
+| --- | --- | --- | --- |
+| ↑/↓、PageUp/PageDown | 移动光标 | 移动光标 | 编辑器内移动 |
+| Space | 选中 | 勾选/取消 | 输入空格 |
+| Enter | 选中并确认本题 | 确认本题（至少勾选一项，否则提示 `Space to select`） | 确认本题 |
+| ←/→ | 上一题/下一题 | 上一题/下一题 | 移动光标（编辑器原生） |
+| Tab | 进入/离开操作栏（现状） | 同左 | 同左 |
+| Esc | 跳过询问 | 跳过询问 | 有选项时退回列表；无选项题跳过询问 |
+
+- “确认本题”：单题询问直接提交；多题询问进入下一题，最后一题之后进入 Review 页。这是对现状的修改：当前 Enter/Space 只选择、不前进，需要 Tab → Confirm。
+- 多题询问在题目上方显示页签栏：`Q1 ✓  Q2  Q3  Review`。当前页签 accent；已有回答的页签加 success 色 `✓`，未回答为默认色。鼠标点击页签切换到该题。
+- ←/→ 在第一题/Review 页停止，不循环。切题保留各题草稿、光标、筛选与文字（`AskForm.drafts` 现有能力）。
+- 文字输入中 ←/→ 必须留给编辑器移动光标（pi-tui 的 Ctrl/Alt+←/→ 也已被单词移动占用），所以输入中切题使用 Enter 确认并前进，或 Esc 退回列表后再按 ←/→。
+- Review 页列出 `1. 问题摘要: 答案`，未回答项为 warning 色 `Unanswered`；全部回答后 Enter 提交，否则提示未回答数量并停留。←/→ 返回各题。
+- 操作栏删除 Confirm、Previous question、Next question、Freeform，保留 Submit（Review 页）、View details、History、Search、Comment（allowComment 时）、Skip。
+- 历史与详情阅读器内的按键（现有 ←/→ 选择阅读器动作）不变。
+
+## 影响范围
+
+- `src/ask/view.ts`（276 行，改动后预计超过 300 行）：按职责拆出 `src/ask/render.ts`（标记、行、页签栏、Review 页渲染）与 `src/ask/keys.ts`（按键分派），`view.ts` 保留状态、计时与焦点。
+- `src/ask/form.ts`：增加 `answered(index)` 供页签与 Review 页使用（复用 `response(index)`）。
+- `src/ask/index.ts`、`src/ask/schema.ts`：skipped、terminate 条件、描述文本。
+- `src/goal/manager.ts`：`askResult` 按状态分支。
+- `src/jobs/launch/authorize.ts`、`src/jobs/tools.ts`：启动确认的 skipped 分支。
+
+## 测试调整
+
+- `tests/ask/view.test.ts`：现有 “timeout starts at first render” 用例改为验证空闲计时：操作后期限后移，停止操作满期限后只结算一次 timed_out，且不提交默认值。
+- `tests/ask/contracts.test.ts`：status 增加 skipped；断言 skipped 不 terminate、timed_out/cancelled 仍 terminate。
+- `tests/ask/coordination.test.ts`：goal 在 skipped 时保持 running，timed_out 时进入 waiting_user。
+- 题型标记、页签外观等显示细节不新增永久测试，在实际 CLI 中验收。
+
+## 验收
+
+- [ ] 实际 Pi CLI PTY 40/60/120 列：单选、多选、输入三种题型标记可区分；推荐、光标、已选颜色正确。
+- [ ] 持续按键或滚动时倒计时不断回到完整时长；停止操作后按期限超时，结果为 timed_out，目标进入 waiting_user。
+- [ ] 3 题询问：←/→ 切题、页签状态、草稿保留、Review 页提交；文字输入中 ←/→ 只移动光标。
+- [ ] 模型生成中调用 ask_user，按 Esc 跳过后模型继续本轮并收到 skipped；再按 Esc 才中断模型。
+- [ ] job 启动确认按 Esc 后返回未启动结果，模型继续。
+- [ ] 完成后更新 `doc/current/ask/index.md`（超时、结果状态、操作）、`doc/current/jobs/launch.md`（启动确认跳过）与 goal 操作文档中 waiting_user 的触发条件。
+
+[返回 Pi Suite 待办](index.md)

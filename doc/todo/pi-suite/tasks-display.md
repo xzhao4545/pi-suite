@@ -166,7 +166,7 @@
 
 ### 4. 工具调用紧凑显示
 
-工具结果正文（模型可见内容）只去掉 `#` 并使用新 ID，结构不变；以下只改 renderer。所有 renderer 的失败结果保持显示完整错误正文。
+工具结果正文（模型可见内容）只去掉 `#` 并使用新 ID，结构不变；以下只改 renderer。所有 renderer 的失败结果保持显示完整错误正文。renderer 使用 [工具调用显示](tool-display.md) 的公共框架 `src/ui/tool-render.ts` 构造（调用块隐藏、错误、宽度截断与 outputPad 统一处理），本节只定义 tasks 的摘要内容。
 
 展开方式沿用 Pi 1.5.0 宿主能力，renderer 只按 `options.expanded` 输出折叠或展开内容，不自行注册按键或鼠标处理：
 
