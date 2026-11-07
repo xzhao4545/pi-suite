@@ -24,6 +24,10 @@ Pi 直接加载 TypeScript 扩展，因此当前不需要构建产物。
 
 运行时使用 /suite 搜索、修改和保存配置，通用设置保存后 /reload 生效；/subagents 查看子代理，默认启用的 /exit 使用原生退出清理，询问操作和配置说明见 [ask](./doc/current/ask/index.md) 与 [公共运行时](./doc/current/runtime/index.md)。启用 ask_user 时从实际加载列表移除原版 pi-ask-user，以免同名工具重复注册。
 
+## 主题
+
+内置 `oh-my-pi` 深色主题，参考 Oh My Pi Titanium 的电蓝与蓝灰配色。将本包作为 Pi package 安装后执行 `/reload`，通过 `/settings` → **Theme** → `oh-my-pi` 选择。开发预览使用 `pi -e . --use-theme oh-my-pi`；主题加载、单独安装及终端背景边界见 [主题说明](./doc/current/ui/themes.md)。
+
 ## 目录
 
 ```text
@@ -36,6 +40,8 @@ src/
   jobs/backends/    后台执行与平台后端
   goal/             目标与续跑
   agents/           subagent 管理与查看
+themes/
+  oh-my-pi.json     Oh My Pi 参考深色主题
 doc/
   current/          当前实现与开发方式
   todo/             设计、需求与实施计划

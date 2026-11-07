@@ -81,5 +81,18 @@
       "type": "git",
       "directory": "packages/pi-starship"
     }
+  },
+  {
+    "name": "oh-my-pi (Titanium theme)",
+    "license": "MIT",
+    "gitHead": "602aaee4cd3101c14e6c821a41a200f311896146",
+    "repository": {
+      "url": "https://github.com/can1357/oh-my-pi.git",
+      "type": "git"
+    },
+    "files": [
+      "packages/tui/src/theme/defaults.json",
+      "LICENSE"
+    ]
   }
 ]
