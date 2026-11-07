@@ -24,7 +24,9 @@ Windows 读取已有快照时也取得同一文件锁，使读取句柄在写入
 - cwd 改变时重新定位存储，不把另一工作区的清单写入当前文件。
 - 会话撤销时解除订阅并清除显示计时器；已经捕获的执行关联仍指向原清单，不能随会话切换转移到另一任务。
 
-agents 的 child 与嵌套 child 捕获父级 TaskStore，多个执行通过同一串行入口更新清单；主会话 reload 或 fork 时，存活 child 继续使用原 owner 清单，fork 清单独立。回到原 owner 后，稳定 agent ID 的恢复继续沿用 taskId 与原清单；任务 owner 引用保持不变。TaskStore 注册表按目标键复用存储，不按 child sessionId 另建清单，也不额外建立执行重新关联系统。
+agents 的 child 与嵌套 child 按各自实际 cwd、child 会话 ID 与持久化设置取得私有 TaskStore。持久 child 使用同一 `tasks-<childSessionId>.json` 文件协议；非持久 child 使用 `memory:<绝对cwd>:<childSessionId>` 目标键。持久化设置由执行准入确定，不因 SDK 首次会话文件发布时机改变存储目标。TaskStore 注册表仅在目标键相同时复用存储与串行入口，空私有清单不创建文件；私有清单的订阅与提醒归属 child，不进入主会话 Dock。
+
+带 taskId 的 child 另行捕获直接父级的私有清单（顶级 child 则为主会话清单），仅通过 scope:assigned 读取或更新被分配任务的进度；默认 scope:local 不触及父级。主会话 reload 或 fork 时，存活 child 的分配任务引用仍指向原父级清单，fork 清单独立。回到原 owner 后，稳定 agent ID 的恢复复用原 child 会话 ID、私有清单和 taskId，并校验分配任务仍存在；清单没有执行重新关联系统或额外存储副本。
 
 任务完成、折叠和查询不会删除文件或清单。任务清理由明确 task_edit 删除操作执行，nextId 和各组 nextChild 保持递增。
 

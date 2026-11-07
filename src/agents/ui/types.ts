@@ -18,8 +18,12 @@ export async function showAgentTypes(ctx: ExtensionContext, dock: Dock, config: 
       let model = 'unavailable', thinking = 'unavailable', settings: string;
       try {
         const resolved = resolveSettings(ctx, type, { prompt: '' }, current);
-        model = `${resolved.model.provider}/${resolved.model.id}`; thinking = clampThinkingLevel(resolved.model, resolved.thinking);
-        settings = `Model: ${model} (${resolved.modelSource})\nThinking: ${thinking} (${resolved.thinkingSource})`;
+        // Inheritance is a runtime choice, not a type default; never preview the parent's live value as a pin.
+        model = resolved.modelSource === 'inherited' ? 'not configured' : `${resolved.model.provider}/${resolved.model.id}`;
+        thinking = resolved.thinkingSource === 'inherited' ? 'not configured' : clampThinkingLevel(resolved.model, resolved.thinking);
+        settings = [`Model: ${model} (${resolved.modelSource})`, `Thinking: ${thinking} (${resolved.thinkingSource})`,
+          ...resolved.modelSource === 'inherited' ? ["At runtime, uses the parent session's current model when the run starts."] : [],
+          ...resolved.thinkingSource === 'inherited' ? ["At runtime, uses the parent session's current thinking level when the run starts, clamped to the model's capabilities."] : []].join('\n');
       } catch (error) {
         // Invalid model pins remain visible and editable; report the exact failure in details.
         settings = `Configuration error: ${error instanceof Error ? error.message : String(error)}`;
@@ -40,11 +44,20 @@ export async function showAgentTypes(ctx: ExtensionContext, dock: Dock, config: 
           '', type.systemPrompt].join('\n') };
     });
     let action = 'model';
-    const selected = await browse(ctx, dock, { title: 'Subagents · ● enabled / ○ disabled', state: page.state, controls: [page.navigation], items: () => items,
+    const selected = await browse(ctx, dock, { title: 'Subagents', state: page.state, pages: page.pages, items: () => items,
+      selection: item => ({ name: item.value }),
       layout: { truncatePrimary: ({item, maxWidth}) => {
         const row = items.find(row => row.value === item.value)!;
-        const name = truncateToWidth(sanitizeText(row.value).replace(/[\r\n\t]/g, ' '), Math.max(1, Math.min(16, Math.floor(maxWidth * 0.35))));
+        const title = sanitizeText(row.value).replace(/[\r\n\t]/g, ' ');
+        if (maxWidth < 48 && row.modelId === 'not configured' && row.thinking === 'not configured') {
+          // Two identical markers would erase every type name on a phone. M/H explicitly names both fields.
+          const suffix = ` ${row.enabled ? '●' : '○'} M/H not configured`;
+          return truncateToWidth(title, Math.max(1, maxWidth - visibleWidth(suffix)), '…') + suffix;
+        }
         const tail = ` · ${row.thinking}`;
+        // Reserve the literal unconfigured markers as well as state; neither field can imply a parent pin.
+        const nameRoom = Math.max(1, Math.min(16, Math.floor(maxWidth * 0.35), maxWidth - visibleWidth(tail) - 3 - (row.modelId === 'not configured' ? 14 : 1)));
+        const name = truncateToWidth(title, nameRoom, '…');
         // Reserve thinking and enabled state; long model IDs cannot push them out of a row.
         const model = truncateToWidth(sanitizeText(row.modelId).replace(/[\r\n\t]/g, ' '), Math.max(0, maxWidth - visibleWidth(name) - visibleWidth(tail) - 3));
         return `${name} ${row.enabled ? '●' : '○'} ${model}${tail}`;
@@ -52,9 +65,9 @@ export async function showAgentTypes(ctx: ExtensionContext, dock: Dock, config: 
       actions: (item, done) => {
         const type = types.find(type => type.name === item.value)!;
         const run = (value: string) => () => { action = value; done(item.value); };
-        return [{ label: 'Model / thinking', run: run('model') },
-          { label: type.enabled === false ? 'Enable' : 'Disable', run: run(type.enabled === false ? 'enable' : 'disable') },
-          { label: 'Use definition', available: () => current.agents.types[type.name]?.enabled !== undefined, run: run('definition') }];
+        return [{ key: 'c', label: 'Model / thinking', run: run('model') },
+          { key: 'd', label: type.enabled === false ? 'Enable' : 'Disable', run: run(type.enabled === false ? 'enable' : 'disable') },
+          { key: 'u', label: 'Use definition', available: () => current.agents.types[type.name]?.enabled !== undefined, run: run('definition') }];
       },
     });
     if (selected === undefined) return;

@@ -83,7 +83,7 @@ test('shared two-pool queue bypasses a saturated head, keeps charging stable and
   } finally { await h.cleanup(); }
 });
 
-test('child asks its parent through native tools; frontend wait returns, answer continues and shared tasks remain on owner list', { timeout: 15000 }, async () => {
+test('child asks its parent through native tools; frontend wait returns, answer continues and assigned progress stays on owner list', { timeout: 15000 }, async () => {
   const h = await setup();
   const store = taskStore(`test:${h.root}`);
   await store.edit([{ op: 'add', title: 'group', children: ['child'] }]);
@@ -92,7 +92,12 @@ test('child asks its parent through native tools; frontend wait returns, answer 
     h.faux.setResponses([
       fauxAssistantMessage(fauxToolCall('ask_user', { question: 'Which target?', options: [{ id: 'a', title: 'Alpha' }], timeoutMs: 0 })),
       fauxAssistantMessage('Parent saw question'),
-      context => { assert.match(JSON.stringify(context.messages), /"optionIds":\["a"\]/); return fauxAssistantMessage(fauxToolCall('task_edit', { op: 'batch', changes: [{ op: 'update', id: '1.1', status: 'doing' }] })); },
+      context => {
+        const result = context.messages.findLast(message => message.role === 'toolResult');
+        assert.ok(result?.role === 'toolResult');
+        assert.equal(result.content.map(part => part.type === 'text' ? part.text : '').join('\n'), 'answered: Alpha (a)\nsource: parent');
+        return fauxAssistantMessage(fauxToolCall('task_edit', { scope: 'assigned', op: 'start', id: '1.1' }));
+      },
       fauxAssistantMessage('child finished'),
     ]);
     run = await h.manager.start({ prompt: 'ask then work', taskId: '1.1', background: false }, { ctx: h.ctx, taskStore: store }, h.config);
@@ -166,23 +171,33 @@ test('native foreground start returns a question, parent answers and shared wait
   } finally { await h.cleanup(); }
 });
 
-test('nested child bypasses an occupied pool and stops with the actual parent run', { timeout: 15000 }, async () => {
+test('nested child delegates only from its direct parent’s private list, bypasses the pool and keeps a separate private target', { timeout: 15000 }, async () => {
   const h = await setup();
   try {
     mkdirSync(join(h.root, '.pi', 'agents'), { recursive: true });
     writeFileSync(join(h.root, '.pi', 'agents', 'nested.md'), '---\nname: nested\nallowed_subagents: all\n---\nDelegate the task.');
+    const rootStore = taskStore(`test:nested:${h.root}`);
+    await rootStore.edit([{op: 'add', title: 'main work', children: ['not delegated', 'top-level assignment']}]);
     h.faux.setResponses([
-      fauxAssistantMessage(fauxToolCall('agent_start', { prompt: 'grandchild task', background: false })),
+      fauxAssistantMessage(fauxToolCall('task_edit', {op: 'add', title: 'parent private', children: ['nested assignment']})),
+      fauxAssistantMessage(fauxToolCall('agent_start', { prompt: 'grandchild task', taskId: '1.1', background: false })),
+      fauxAssistantMessage(fauxToolCall('task_edit', {op: 'add', title: 'nested private', children: ['own work']})),
+      fauxAssistantMessage(fauxToolCall('task_edit', {scope: 'assigned', op: 'done', id: '1.1'})),
       fauxAssistantMessage('nested result'),
       fauxAssistantMessage('parent result'),
     ]);
     const config = { ...h.config, agents: { ...h.config.agents, maxConcurrent: 1, maxConcurrentForeground: 1 } };
-    const parent = await h.manager.start({ type: 'nested', prompt: 'parent task', background: false }, { ctx: h.ctx }, config);
+    const parent = await h.manager.start({ type: 'nested', prompt: 'parent task', taskId: '1.2', background: false }, { ctx: h.ctx, taskStore: rootStore }, config);
     const done = await parent.done.promise;
     assert.equal(done.state, 'completed', done.error);
     const nested = [...h.manager.runs.values()].find(run => run.record.parentRunId === parent.record.runId);
     assert.ok(nested); assert.equal(nested.record.state, 'completed'); assert.equal(nested.chargedPool, undefined);
     assert.deepEqual(nested.record.ancestors, [parent.record.runId]); assert.equal(nested.record.persisted, false);
+    assert.strictEqual(nested.parent.taskStore, parent.taskStore);
+    assert.notStrictEqual(nested.taskStore, parent.taskStore); assert.notStrictEqual(parent.taskStore, rootStore);
+    assert.equal(parent.taskStore!.current.tasks.find(task => task.id === '1.1')?.status, 'done');
+    assert.equal(nested.taskStore!.current.tasks.find(task => task.id === '1.1')?.status, 'todo');
+    assert.ok(rootStore.current.tasks.filter(task => task.parentId).every(task => task.status === 'todo'));
   } finally { await h.cleanup(); }
 });
 
@@ -216,6 +231,6 @@ test('actual SDK abort cancels a parent question and timeout never submits its d
     const expired = await h.manager.start({ prompt: 'ask and expire', background: false }, { ctx: h.ctx }, h.config);
     const result = await expired.done.promise;
     assert.equal(result.state, 'stopped', result.error);
-    assert.match(transcriptText(transcript(result, expired)), /timed_out.*"response":null/s);
+    assert.match(transcriptText(transcript(result, expired)), /timed_out \(not consent\): unanswered\nsource: parent/);
   } finally { await h.cleanup(); }
 });

@@ -25,7 +25,9 @@ timeoutMs 单位为毫秒，表示用户持续不操作的空闲时长；省略�
 
 到期优先保留用户当前选中答案（含预选/预填）；多选的预设项与已选非空自定义项一并保留。没有已选答案时，单选取第一项推荐，多选取全部推荐；没有推荐时取第一个选项。未选中的文字草稿不参与答案；无选项文本题无草稿时保持未回答，不编造文字。非空评论随选择或文字提交，不受 allowComment 是否展示输入入口影响。
 
-保留单题 question/context/options/response/cancelled 和批量 kind/heading/questions/answers/cancelled 字段；cancelled 兼容标记仅在 skipped/cancelled 时为 true。批量到期与跳过的答案按题目原顺序返回，未答题为 {status: "unanswered"}；单题无答案时 response 为 null。跳过只收集已有答案，不自动选择推荐或首项，也不添加 autoSelected 标记。
+content 为共用格式化函数生成的文本：单题只含状态与答案，不重复题目、context 和选项说明；预设答案使用 `标题 (optionId)`，多选自定义文字追加 ` + custom: …`，仅自由文字使用 `answered (custom): …`。批量首行为状态与作答计数，逐题按原顺序输出编号、最多 60 个 Unicode 字符的题干摘要与答案，未答题为 `unanswered`。comment 放在对应答案下的 `comment: …` 行，child 追加 `source: parent`。timed_out 明示 `not consent`，有自动答案时加 `auto-selected`；skipped 的已有答案与批量首行带 `not consent`，单题无答案为 `skipped: unanswered`；取消为 `cancelled`。答案与评论不因回执预算截断。
+
+details 保留 status、单题 question/context/options/response/cancelled 和批量 kind/heading/questions/answers/cancelled 字段，供本地渲染与历史展开；child 另带 source: parent。cancelled 标记仅在 skipped/cancelled 时为 true。批量到期与跳过的答案按题目原顺序返回，未答题为 {status: "unanswered"}；单题无答案时 response 为 null。跳过只收集已有答案，不自动选择推荐或首项，也不添加 autoSelected 标记。
 
 selection 响应保留 selections 原始预设标题和 optionIds，多选同时选中自定义项时以独立 text 字段保存原始文字；仅提交自定义项时返回 freeform 与原始 text。两者可带 comment 与自动作答的 autoSelected 标记。Review、工具摘要与历史展示保留预设选择及带 ✎ 的文字。人工多题回答需要 Review 整批确认。回答、跳过、超时和取消只结算一次。
 

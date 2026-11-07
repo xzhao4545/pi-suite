@@ -27,6 +27,6 @@ goal_complete、goal_blocked、goal_wait 使用公共一行 renderer，结果到
 
 完成判定仍需模型依据原目标逐项审计；运行归属与参数校验不能代替事实验收。普通未完成工作不能用 blocked 或 wait 替代推进。
 
-详情通过 Markdown 与独立阅读位置呈现。↑/↓、PageUp/PageDown、Home/End 阅读，/ 搜索，n/N 查找下一/上一匹配；←/→ 选择 Previous page、Next page、Back，Enter 执行，Esc 关闭。关闭详情恢复 dock，不改变目标。
+详情通过 Markdown 与独立阅读位置在共用阅读 overlay 中呈现。↑/↓、PageUp/PageDown、Home/End 阅读，/ 搜索，n/N 查找下一/上一匹配，Esc 关闭。关闭详情恢复 dock，不改变目标。
 
 [返回目标管理](./index.md)

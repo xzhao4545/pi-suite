@@ -120,7 +120,9 @@ export class AgentManager {
   }
   async start(request: StartAgent, scope: ParentScope, config: SuiteConfig, previous?: AgentRecord,
     options: StartOptions = {}, continuation?: Execution): Promise<Execution> {
-    scope = captureParent(scope);
+    // Nested admission must use the child's own list. A facade without task tools may
+    // carry an ancestor store; that must never turn into permission to delegate its tasks.
+    scope = captureParent({ ...scope, taskStore: scope.run ? scope.run.taskStore : scope.taskStore });
     options.signal?.throwIfAborted();
     if (this.closing || scope.run && (!active(scope.run.record.state) || this.closedRuns.has(scope.run.record.runId))) {
       throw new ToolError('NOT_RUNNING', 'Parent run no longer admits children');
@@ -140,10 +142,11 @@ export class AgentManager {
     const settings = continuation ? { model: continuation.model, modelSource: continuation.record.modelSource,
       thinking: continuation.record.thinking, thinkingSource: continuation.record.thinkingSource }
       : resolveSettings(scope.ctx, type, request, config, previous?.individual);
-    const taskStore = scope.taskStore;
-    if (request.taskId && taskStore) {
-      const task = (await taskStore.snapshot()).tasks.find(task => task.id === request.taskId);
-      if (!task?.parentId) throw new ToolError('NOT_FOUND', `No execution task ${request.taskId}`);
+    const taskStore = scope.taskStore, taskId = previous?.taskId ?? request.taskId;
+    if (taskId) {
+      if (!taskStore) throw new ToolError('TASK_SCOPE', 'taskId requires the direct parent’s task list to be enabled');
+      const task = (await taskStore.snapshot()).tasks.find(task => task.id === taskId);
+      if (!task?.parentId) throw new ToolError('NOT_FOUND', `No execution task ${taskId}`);
     }
     // Recheck after task I/O: stop closes subtree admission before awaiting any abort/job cleanup.
     options.signal?.throwIfAborted();
@@ -170,7 +173,7 @@ export class AgentManager {
       model: `${settings.model.provider}/${settings.model.id}`, modelSource: settings.modelSource,
       thinking: settings.thinking, thinkingSource: settings.thinkingSource,
       persisted: previous?.persisted ?? type.persistSession ?? (!scope.run && config.agents.persistSessions), sessionFile: previous?.sessionFile,
-      taskId: request.taskId ?? previous?.taskId, individual: previous?.individual, toolUses: 0, turns: 0 };
+      taskId, individual: previous?.individual, toolUses: 0, turns: 0 };
     const run: Execution = { record, type, model: settings.model, parent: scope, controller: new AbortController(),
       done: Promise.withResolvers(), pendingMessages: [], consumed: false, notifyResult: options.detached, maxTurns: type.maxTurns ?? request.maxTurns, request, config,
       isolated: type.isolated ?? request.isolated, bypassQueue: options.bypassQueue, configCwd, configTrusted, options,
@@ -197,9 +200,9 @@ export class AgentManager {
       try { options.onQueued?.(id, this.queue.filter(item => item.record.background === record.background).indexOf(run)); }
       catch (error) { await this.stop(id, record.runId); throw error; }
     }
-    if (request.taskId && taskStore) {
-      try { await taskStore.link(request.taskId, { agentId: id }); }
-      catch (error) { throw new ToolError('TASK_LINK_FAILED', `${id} started but task ${request.taskId} could not be linked: ${String(error)}`, id); }
+    if (taskId && taskStore) {
+      try { await taskStore.link(taskId, { agentId: id }); }
+      catch (error) { throw new ToolError('TASK_LINK_FAILED', `${id} started but task ${taskId} could not be linked: ${String(error)}`, id); }
     }
     return run;
   }

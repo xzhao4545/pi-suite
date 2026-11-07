@@ -71,7 +71,7 @@ agents 以 @tintinweb/pi-subagents 0.23.0 的源码与契约为来源，分别�
 | src/agents/workflow/progress/types.ts、model.ts、format.ts、index.ts | src/workflow/progress.ts | 按类型、数据派生与格式拆分，保留追加日志、按 index 折叠、阶段组与显示状态；删除 worktree 字段 |
 | src/agents/workflow/meta.ts | src/workflow/meta.ts | 直接导入后增加纯字面量语法验证，保留 metadata 扫描、JavaScript 字符串/注释、100 ms VM 解析与调用名称缓存 |
 | src/agents/workflow/journal.ts | src/workflow/journal.ts | 直接导入后删除 worktree key，schema 使用固定槽位；文件读写失败、中间损坏和重复 index 报错，仅未完成末行返回显式 truncated 标记 |
-| src/agents/workflow/task.ts、entry.ts、tool-description.ts | src/workflow/task.ts、entry.ts、tool-description.ts | 直接导入后删除独立通知，暂停记录拒绝 journal 恢复；entry 类型改为 pi-suite:workflow-record，扩展归属、版本、消费与 SDK child 引用快照；描述保留完整编排指引及明确使用前提，工具名、cwd gate、并发下界按本包范围局部调整 |
+| src/agents/workflow/task.ts、entry.ts、tool-description.ts；skills/pi-suite-workflow/SKILL.md | src/workflow/task.ts、entry.ts、tool-description.ts | 直接导入后删除独立通知，暂停记录拒绝 journal 恢复；entry 类型改为 pi-suite:workflow-record，扩展归属、版本、消费与 SDK child 引用快照；短描述保留明确使用前提、参数与后台通知语义，完整编排指引在 workflow skill 按需读取并保留措辞对齐说明；工具名、cwd gate、并发下界按本包范围局部调整 |
 | src/agents/workflow/host.ts | src/workflow/host.ts | 按职责适配到共享 AgentManager 与 JobManager；保留实际 model/thinking 与早期 record ID、固定 child resume 契约，gate 在 cwd 使用 pipe、关闭 stdin、默认 10 分钟；停止与 quit 等待真实 child/job 清理 |
 | src/agents/workflow/saved.ts、collisions.ts | src/workflow/saved.ts、collisions.ts | 适配保存脚本、命名与冲突规则；项目信任和包 roots 复用 packageResources，script/scriptPath/name 三选一，读取错误可见；工具名与嵌套配置示例按本包规范调整 |
 | src/agents/workflow/manager.ts | src/index.ts 的后台 workflow 生命周期 | 按机制适配为无 ExtensionAPI 的进程级 owner；准入前持久化脚本/journal/快照，终态等待实际清理与保存，父级记录恢复按 owner/branch 和 SDK 引用；通知与绑定由公共框架处理 |

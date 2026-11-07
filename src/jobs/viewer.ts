@@ -60,18 +60,25 @@ async function pickJob(pi: ExtensionAPI, ctx: ExtensionCommandContext, deps: Vie
     const { rows, errors } = await deps.jobs.list(workspace, { state: 'all', scope, limit: Number.MAX_SAFE_INTEGER }, ctx);
     for (const error of errors) ctx.ui.notify(`history error: ${error}`, 'warning');
     const current = () => deps.jobs.browseRows(rows, { state, scope }, ctx);
-    const choice = await browse(ctx, deps.dock, { title: `Jobs · ${state} · ${scope}`, state: viewState,
+    let changed = false;
+    const choice = await browse(ctx, deps.dock, { title: 'Jobs', state: viewState,
+      controls: [
+        {key: 'w', label: 'Scope', selected: () => scope, items: () => [{value: 'session', label: 'This session'}, {value: 'workspace', label: 'Workspace'}],
+          select: (value, done) => {scope = value as ListScope; changed = true; done();}},
+        {key: 's', label: 'State', selected: () => state, items: () => STATES.map(value => ({value, label: value[0].toUpperCase() + value.slice(1)})),
+          select: value => {state = value as ListState;}},
+      ],
+      total: () => deps.jobs.browseRows(rows, {state: 'all', scope}, ctx).length,
+      selection: item => ({name: displayName(current().find(row => row.job.id === item.value)!.job), id: item.value}),
       subscribe: refresh => deps.jobs.control().subscribe(refresh), ticking: () => current().some(row => isActive(row.job)),
-      items: () => [...current().map(({ job, live, unsettled }) => ({ value: job.id,
+      items: () => current().map(({ job, live, unsettled }) => ({ value: job.id,
         label: `${summaryLine(job)} · ${displayName(job)}${unsettled ? ' · unsettled history' : ''}`,
         search: `${job.id} ${displayName(job)} ${job.state} ${job.command} ${job.cwd}`,
         details: () => [`ID: ${job.id}`, ...jobDetail(job, true), ...live ? [] : ['history only: not controlled by this Pi process']].join('\n'),
-      })), ...STATES.filter(item => item !== state).map(value => ({ value: `state:${value}`, label: `Show ${value}`, pinned: true })),
-        { value: 'scope', label: scope === 'session' ? 'Show whole workspace' : 'Show this session only', pinned: true }],
+      })),
     });
+    if (changed) continue;
     if (choice === undefined) return;
-    if (choice === 'scope') { scope = scope === 'session' ? 'workspace' : 'session'; continue; }
-    if (choice.startsWith('state:')) { state = choice.slice(6) as ListState; continue; }
     const job = current().find(row => row.job.id === choice)?.job;
     if (job) await jobActions(pi, ctx, deps, job.id, false, job.cwd);
   }

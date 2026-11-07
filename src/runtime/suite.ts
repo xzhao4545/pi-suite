@@ -87,10 +87,35 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
     goalApi![1].registerGoalTools(pi, goal); goalApi![2].registerGoalCommand(pi, goal, dock, notifications); goalApi![3].registerGoalLifecycle(pi, goal);
   }
 
+  if (agents) dock.setOpen('agents', async (rowId, ctx) => {
+    const current = binding.current!;
+    const { showAgent } = await import('../agents/viewer.ts');
+    if (!binding.isCurrent(current)) return;
+    const runId = rowId.slice('agent:'.length), record = agents.manager.records().find(record => record.runId === runId)!;
+    const release = notifications.hold();
+    try { await showAgent(ctx, agents, dock, record.id, runId, () => config, false, agentJobViewer); }
+    finally { release(); }
+  });
+  if (workflows && agents) dock.setOpen('workflows', async (id, ctx) => {
+    const current = binding.current!;
+    const { showWorkflow } = await import('../agents/workflow/ui/menu.ts');
+    if (!binding.isCurrent(current)) return;
+    const release = notifications.hold();
+    try { await showWorkflow(ctx, { workflows, agents, dock, config: () => config, jobs: agentJobViewer }, workflows.manager.get(id)); }
+    finally { release(); }
+  });
+  if (jobs) dock.setOpen('jobs', async (id, ctx) => {
+    const current = binding.current!;
+    const { jobActions } = await import('../jobs/viewer.ts');
+    if (!binding.isCurrent(current)) return;
+    await jobActions(pi, ctx, jobViewer!, id, false, jobs.control().peek(id).cwd);
+  });
+
   let firstBinding = true;
   const bindSession = async (ctx: Parameters<SessionBinding["bind"]>[0], reason: "startup" | "reload" | "new" | "resume" | "fork", previousSessionFile?: string) => {
     // Tree navigation has no shutdown event. Revoke the old readers and timers before
     // rebinding, without appending their state into the branch the host just selected.
+    dock.detach(binding.current?.ctx);
     schedules?.stop(); ask?.cancel(); goal?.detach(); jobs?.detach(); workflows?.detach(); agents?.detach(); notifications.detach();
     if (!firstBinding) config = loadConfig(ctx.cwd);
     firstBinding = false; cachedTypes = undefined;

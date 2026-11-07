@@ -71,8 +71,8 @@ export class TaskStore extends JsonStore<TaskData> {
   }
 }
 
-// All child consumers in this Pi process share one store/queue per target. Memory-only
-// sessions also retain their list across /reload; files still lock against external writers.
+// Consumers share one store/queue only when their session target keys match. Memory-only
+// sessions retain their list across /reload; files still lock against external writers.
 const key = Symbol.for('pi-suite.tasks.stores.v3');
 const globals = globalThis as typeof globalThis & { [key]?: Map<string, TaskStore> };
 export function taskStore(target: string, path?: string): TaskStore {

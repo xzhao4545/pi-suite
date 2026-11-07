@@ -61,11 +61,11 @@ test('viewer answers workflow questions, preserves search through input and requ
     await until(h.manager, () => Boolean(run.question));
     let reader: DetailsView['reader'];
     const steps = [(view: DetailsView) => {
-      reader = view.reader; view.handleInput('x'); assert.ok(view.render(40).some(line => line.includes('再按 x 停止')));
-      view.handleInput('\x1b[A'); assert.ok(view.render(40).every(line => !line.includes('再按 x 停止')));
+      reader = view.reader; view.handleInput('x'); assert.ok(view.render(40).some(line => line.includes('Press x again to stop')));
+      view.handleInput('\x1b[A'); assert.ok(view.render(40).every(line => !line.includes('Press x again to stop')));
       view.handleInput('x'); view.handleInput('/'); view.handleInput('x'); view.handleInput('b');
       assert.equal(run.controller.signal.aborted, false); view.handleInput('\r'); assert.equal(reader.query, 'xb');
-      view.handleInput('\r');
+      view.handleInput('m');
     }, async (view: DetailsView) => {
       await entered.promise;
       assert.strictEqual(view.reader, reader); assert.equal(view.reader.query, 'xb');
@@ -117,10 +117,10 @@ test('viewer refreshes every streaming identity in child cwd and refuses late in
       renderResult: result => new Text(result.content.map(part => part.type === 'text' ? part.text : '').join('\n'), 0, 0)});
     let resumed: Awaited<ReturnType<AgentManager['send']>>;
     const steps = [(view: DetailsView) => {
-      view.actions.find(action => action.label === 'Tools')!.run();
+      view.handleInput('o');
       run.liveResults!.set('call1', result('call1', 'changed middle')); h.manager.changed(); assert.match(text(view), /changed middle/);
       run.streamingEntry = assistant('changed assistant'); h.manager.changed(); assert.match(text(view), /changed assistant/);
-      assert.match(text(view), /unchanged last/); view.handleInput('\r');
+      assert.match(text(view), /unchanged last/); view.handleInput('m');
     }, (view: DetailsView) => {
       assert.ok(!visibleActions(view).includes('Message')); assert.ok(!visibleActions(view).includes('Stop subtree'));
       view.handleInput('x'); view.handleInput('x'); assert.equal(resumed.run.controller.signal.aborted, false); view.handleInput('\x1b');

@@ -201,7 +201,11 @@ test('saved workflow precedence/trust/packages, malformed journals and persisten
     file(join(h.root, '.pi', 'agents', 'visible-special.md'), '---\nname: visible-special\ndescription: VISIBLE_DESCRIPTION\n---\nRead');
     await configure({agents: {workflows: true}});
     assert.deepEqual(h.pi.getActiveTools(), ['wait', 'agent_workflow']);
-    assert.match(h.session.agent.state.tools.find(tool => tool.name === 'agent_workflow')!.description, /VISIBLE_DESCRIPTION/);
+    const description = h.session.agent.state.tools.find(tool => tool.name === 'agent_workflow')!.description;
+    assert.match(description, /Enabled agentType values:.*visible-special/);
+    assert.doesNotMatch(description, /VISIBLE_DESCRIPTION|Script body hooks/);
+    assert.match(description, /Before writing or editing a script, read the pi-suite-workflow skill/);
+    assert.ok(Buffer.byteLength(description) < 1200, 'the model sees routing and parameters, not the full guide');
     h.pi.setActiveTools(['wait']);
     await configure({agents: {workflows: false}}); await configure({agents: {workflows: true}});
     assert.deepEqual(h.pi.getActiveTools(), ['wait'], 'the controller restores only its own withdrawal');
@@ -233,13 +237,13 @@ test('native workflow UI wraps phones, keeps exact phases and retains reader/sea
       frame.render(40); frames++;
       if (frames === 1) {
         const available = () => frame.actions.filter((action: {available?: () => boolean}) => action.available?.() !== false).map((action: {label: string}) => action.label);
-        assert.deepEqual(available(), ['Children / gates', 'Pause', 'Stop', 'Back']);
+        assert.deepEqual(available(), ['Open children / gates', 'Pause', 'Stop']);
         // Settlement can occur with the same detail frame open; its action set follows it.
         task.status = 'completed';
-        assert.deepEqual(available(), ['Children / gates', 'Replay journal', 'Back']);
+        assert.deepEqual(available(), ['Open children / gates', 'Replay journal']);
         task.status = 'running';
         reader = frame.reader; frame.reader.scroll(3); frame.reader.query = 'literal';
-        frame.handleInput('\x1b[D'); frame.handleInput('\x1b[D'); frame.handleInput('\r');
+        frame.handleInput('p');
       } else { assert.strictEqual(frame.reader, reader); assert.equal(frame.reader.query, 'literal'); frame.handleInput('\x1b'); }
     })}} as unknown as ExtensionContext;
     await showWorkflow(context, {workflows: {manager: h.manager} as never, agents: {} as never, dock: new Dock(), config: () => loadConfig(h.root)}, task);
@@ -255,14 +259,14 @@ test('native workflow UI wraps phones, keeps exact phases and retains reader/sea
         for (const width of [40, 60, 120]) assert.ok(frame.render(width).every(line => visibleWidth(line) <= width));
         if (browserPhase++ === 1) { assert.ok(frame instanceof DetailsView); frame.handleInput('\x1b'); return; }
         assert.ok(frame instanceof BrowserView);
-        if (browserPhase === 1) { frame.handleInput('Host'); frame.handleInput('\r'); }
-        else if (browserPhase === 3) { focusBrowser(frame, 'Workflows'); frame.handleInput('\x1b[C'); frame.handleInput('\r'); }
+        if (browserPhase === 1) { frame.handleInput('/'); frame.handleInput('Host'); frame.handleInput('\r'); frame.handleInput('\r'); }
+        else if (browserPhase === 3) frame.handleInput('s');
         else if (browserPhase === 4) {
           focusBrowser(frame, 'Filter'); frame.handleInput('browser'); assert.match(frame.render(120).join('\n'), /SAVED_SOURCE_MARKER/);
-          focusBrowser(frame, 'Pages'); frame.handleInput('\x1b[D'); frame.handleInput('\x1b[D'); frame.handleInput('\r');
+          frame.handleInput('\r'); frame.handleInput('2');
         } else if (browserPhase === 5) {
-          assert.match(frame.render(120).join('\n'), /\[Types\]/);
-          focusBrowser(frame, 'Pages'); frame.handleInput('\x1b[C'); frame.handleInput('\x1b[C'); frame.handleInput('\r');
+          assert.match(frame.render(120).join('\n'), /\[2 Types\]/);
+          frame.handleInput('4');
         } else {
           assert.equal(browserPhase, 6); assert.match(frame.render(120).join('\n'), /\[Saved\]/);
           assert.equal(frame.getSelectedItem()?.value, 'browser'); assert.match(frame.render(120).join('\n'), /SAVED_SOURCE_MARKER/);

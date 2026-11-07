@@ -16,7 +16,7 @@ runtime/tools.ts 提供 objectId、listFields、paginate、readFields、WAIT_ID_
 | 等待 | wait.ids 为 1–50 个 job/agent/workflow ID，mode 默认 all；timeoutMs 默认 300000、最大 3600000，只结束此次调用，不停止对象 |
 | 停止 | requested/state/cleanup/affected，affected 列出真实受影响对象；清理尚未确认时不报告全部停止 |
 
-单对象操作首行显示对象摘要，列表与 wait 显示集合摘要，goal 显示目标动作；其后提供实际变化、失败、问题与必要读取入口，固定操作说明位于工具描述。普通回执目标 1–3 行、约 512 B；批量新 ID、完整问题/选项、真实错误与清理结果优先于预算。details 保存同一结果的结构化字段，用于本地显示和控制，Provider 的模型正文使用 content。完整输出与日志通过 read 按需读取，规则见 [jobs 读取与操作](../jobs/index.md)。
+单对象操作首行显示对象摘要，列表与 wait 显示集合摘要，goal 显示目标动作；其后提供实际变化、失败、问题与必要读取入口，固定操作说明位于工具描述。普通回执目标 1–3 行、约 512 B；批量新 ID、父级待答问题/选项、真实答案与评论、错误与清理结果优先于预算。details 保存同一结果的结构化字段，用于本地显示和控制，Provider 的模型正文使用 content。ask_user 主会话与 child 共用文本结果格式：单题只含状态与答案，批量含作答计数、编号、截断题干与逐题答案；context、完整 questions/options 和响应结构只保存在 details。timed_out 与 skipped 的答案不得视为同意，正文通过 not consent 或 unanswered 明确标记；child 追加 source: parent。完整输出与日志通过 read 按需读取，规则见 [jobs 读取与操作](../jobs/index.md)。
 
 runtime/read.ts 的 readContinuation 共用 offset/search/context/limitBytes 续读字段，job_read 与 agent_read 的 more 提示保留当前读取方式。默认截断的 keys 数组记录所选匹配行及上下文原始范围；正文明确标注遗漏，full 提示使用 offset:0 进入连续读取；搜索正文、上下文和标注共同计入字节预算，超长返回行显式截断，boundedText 也供结算预览复用。
 
@@ -30,11 +30,15 @@ ask_user.timeoutMs 只控制询问期限；wait.timeoutMs 只控制等待调用�
 
 ui/tool-render.ts 的 ToolView 提供 call、collapsed 与可选 expanded；统一构造 renderShell=self、renderCall/renderResult。toolLine 清理所有字段并压平换行，整行按可见宽度截断；图标与标题按 tone 着色，summary 使用默认色，meta 使用 dim，警告计数可指定 warning，任务完成标题支持删除线。outputPad 由组件应用。有 partial 或最终结果后隐藏调用行，折叠结果固定一行；未提供 expanded 时显示模型正文全文。错误始终显示 error 标题和完整正文。
 
+普通 subagent 的 agent_start/list/get/read/send/stop 以 AgentRecord.name 为主标识，ID 仅在展开正文或 dim 元信息中出现；集合折叠行保留数量/范围。启动调用以 name 或类型名显示；只有 ID 的调用通过 agents/runtime.ts 的 agentDisplayName 查询已有进程级 Manager 内存记录，可带 runId 选择执行，找不到时显示 ID，不创建运行时、不发现或读取磁盘历史。stop 的 details 保存名称，历史结果可直接显示。
+
 状态图标为 ⟳ 进行中、⧗ 排队、? 等待、✔ 完成、✘ 失败、⊘ 停止/跳过/取消、⏱ 超时/受限；tasks 使用自己的 ☐/⟳/⚠/☑ 语义。单项鼠标展开与 app.tools.expand（默认 Ctrl+O）由 Pi 宿主管理，折叠行不追加操作提示。
 
 扩展工厂通过 runtime/renderers.ts 与 Pi registerToolRenderer 在加载阶段登记所有 Suite 工具的纯展示定义；历史组件在 session_start 之前重建时即可使用，reload、resume 与重启沿用相同的摘要、展开和错误显示。展示注册不启用模型工具、不创建执行模块；模块关闭或当前工具选择未包含某工具时，其历史记录仍可阅读。已注册工具或其他扩展提供的 renderer 优先于历史展示定义。
 
-runtime/tools.ts 的 registerBoundTool 同时登记运行时 renderer；首次加载只注册工具，运行时刷新保留活动工具选择，显式启用时加入该工具。renderer lookup 按 ExtensionAPI 隔离，主会话与 child 的 ask_user 可使用不同标题。Ask Transcript 使用同一查找，child 查看器使用实际 run.renderers；历史结果使用持久化 content/details 重新绘制，不改写记录、不重新执行工具或请求模型。wait 折叠只显示结算比例、失败计数与提前返回原因，展开保留逐项摘要、others 与 pending。
+runtime/tools.ts 的 registerBoundTool 同时登记运行时 renderer；首次加载只注册工具，运行时刷新保留活动工具选择，显式启用时加入该工具。renderer lookup 按 ExtensionAPI 隔离，主会话与 child 的 ask_user 可使用不同标题。Ask Transcript 使用同一查找，child 查看器使用实际 run.renderers；历史结果使用持久化 content/details 重新绘制，不改写记录、不重新执行工具或请求模型。wait 折叠只显示结算比例、失败计数与提前返回原因，展开保留逐项摘要、others 与 pending；普通 agent 的逐项主标识与 pending 按现有内存记录显示名称，无记录时保留 ID，job/workflow 显示不变。替换仅在渲染层进行，content、summaryLine、通知文本及展开正文中的 read/send 参数保持原始 ID 契约。
+
+pi-suite:notification 使用 Pi 默认消息显示，标题为 `[pi-suite:notification]`，正文保留通知中的 agent_/run_ ID；Suite 不注册专用消息 renderer。
 
 ## 错误边界
 

@@ -54,12 +54,16 @@ Enter 打开 · m 消息 · j Jobs · c 模型/思考 · b 后台 · x 停止 ·
 - 类型默认值：Types 页（`/subagents types` 或按 2）选中类型后 Enter 或 `c`，写入类型配置，对之后新建的执行生效。
 - 单个 run：Runs 页选中记录或在其 transcript 视图按 `c`，修改该 run 的覆盖值，从它的下一次请求生效；Read only 记录不提供。
 
+### Types 未配置显示
+
+Types 列表与详情当前按默认启动设置解析，类型配置、frontmatter 与 agents.defaultModel 都未设置时显示父级主会话当前模型（inherited），容易误认为已配置。改为：模型来源为 inherited 时列表与详情显示 `not configured`，详情说明运行时将使用启动时父级会话的当前模型；thinking 来源为 inherited 时同样显示 `not configured`。运行时解析顺序不变。
+
 ## 影响范围
 
 - src/ui/browser.ts、src/ui/actions.ts（框架层焦点、按键、状态行）
 - src/agents/ui/*、src/agents/viewer.ts、src/agents/schedules/menu.ts、src/agents/workflow/ui/menu.ts
 - src/tasks/viewer.ts、src/jobs/viewer.ts、src/agents/viewer.ts 中的 Jobs 子视图
-- 相关 current 文档：[agents 操作](../current/agents/operations.md)、[Workflow 操作](../current/agents/workflow/operations.md)、[tasks 操作](../current/tasks/operations.md)、[jobs](../current/jobs/index.md)、[ui](../current/ui/index.md)
+- 相关 current 文档：[agents 操作](../../../current/agents/operations.md)、[Workflow 操作](../../../current/agents/workflow/operations.md)、[tasks 操作](../../../current/tasks/operations.md)、[jobs](../../../current/jobs/index.md)、[ui](../../../current/ui/index.md)
 
 ## 约束
 
@@ -76,8 +80,14 @@ Enter 打开 · m 消息 · j Jobs · c 模型/思考 · b 后台 · x 停止 ·
 
 ## 任务
 
-- [ ] BrowserView：页面标签栏、控件按键、三态焦点、`/` 过滤、状态行与按键说明
-- [ ] ActionBar 改为按键驱动，DetailAction.key 必填，统一确认提示语言
-- [ ] 迁移 Subagents 的 Runs、Types、Schedules、Workflows 页与 transcript 视图
-- [ ] 迁移 Tasks、Jobs 视图与 run 所属 Jobs 子视图
-- [ ] 更新 agents/workflow/tasks/jobs/ui 当前文档中的操作说明
+- [x] BrowserView：页面标签栏、控件按键、三态焦点、`/` 过滤、状态行与按键说明
+- [x] ActionBar 改为按键驱动，DetailAction.key 必填，统一确认提示语言
+- [x] 迁移 Subagents 的 Runs、Types、Schedules、Workflows 页与 transcript 视图
+- [x] 迁移 Tasks、Jobs 视图与 run 所属 Jobs 子视图
+- [x] Types 未配置模型/thinking 显示 not configured，不显示主会话继承值
+- [x] 更新 agents/workflow/tasks/jobs/ui 当前文档中的操作说明
+
+
+## 验收结论
+
+Linux（Node 24）`pnpm typecheck` 通过，全量 `pnpm test` 181/181 通过，约 45 秒。界面渲染通过组件脚本在 40/120 列核对；实际 Pi CLI 交互未在本专项中单独验收。

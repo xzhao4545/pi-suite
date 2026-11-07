@@ -49,7 +49,7 @@ function nativePicker(ctx: ExtensionContext, choices: (string | undefined)[], in
   const custom: ExtensionUIContext['custom'] = async factory => new Promise((resolve, reject) => {
     Promise.resolve(factory(terminal(), ctx.ui.theme, {} as never, resolve)).then(view => {
       for (const width of [40, 120]) assert.ok(view.render(width).every(line => visibleWidth(line) <= width));
-      if (view instanceof DetailsView) { inspect?.(view); view.actions.at(-1)!.run(); return; }
+      if (view instanceof DetailsView) { inspect?.(view); view.handleInput('\x1b'); return; }
       const choice = choices.shift();
       if (choice === undefined) { inspect?.(view); view.handleInput?.('\x1b'); return; }
       for (let i = 0; i < 200; i++) {
@@ -106,10 +106,10 @@ test('unknown saved IDs retain send ownership and workspace cleanup while foreig
       frames++;
       if (frames === 1) {
         const rows = view.render(400).map(stripVTControlCharacters).slice(1).join('\n');
-        assert.match(rows, /Transcript/); assert.doesNotMatch(rows, /Model \/ thinking|Stop child/);
+        assert.match(rows, /Enter Open/); assert.doesNotMatch(rows, /Model \/ thinking|Stop child/);
       }
       if (view instanceof DetailsView) {
-        assert.deepEqual(view.actions.filter(action => action.available?.() !== false).map(action => action.label), ['Tools', 'Thinking', 'Jobs', 'Back']);
+        assert.deepEqual(view.actions.filter(action => action.available?.() !== false).map(action => action.label), ['Tools', 'Thinking', 'Jobs']);
         assert.match(view.render(400).map(stripVTControlCharacters).join('\n'), /first saved/);
       }
     });

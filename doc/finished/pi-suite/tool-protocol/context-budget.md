@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-- jobs、agents、tasks、wait、goal、workflow 的结果已通过 runtime/tools.ts 的 textResult 返回文本行，符合 [模型工具契约](../current/runtime/tools.md) 的 1–3 行、约 512 B 回执目标。
+- jobs、agents、tasks、wait、goal、workflow 的结果已通过 runtime/tools.ts 的 textResult 返回文本行，符合 [模型工具契约](../../../current/runtime/tools.md) 的 1–3 行、约 512 B 回执目标。
 - ask_user（src/ask/index.ts 与 child 版本 src/agents/child.ts）把 askDetails 记录整体 JSON.stringify 后作为 content，回传模型自己刚提交的 options（含 description/recommended）、context，批量还包含完整 questions（含 defaultOptionId(s)、allowMultiple），以及可由 status 推出的 cancelled。
 - agent_workflow 的工具描述约 19.5 KB（约 5k token），并拼接全部已启用 agent type 说明；描述本身要求仅在用户明确选择多 agent 编排时调用，但在 agents.workflows 启用时始终位于每次请求的工具列表中。
 - job_start、agent_start、task_edit 等描述各约 0.5–1 KB，tasks 提醒每 2–4 轮最多注入 10 行，当前体积可接受。
@@ -31,19 +31,19 @@ cancelled
 批量首行为状态与作答计数，逐题保留截断后的题目（约 60 字）用于对应，未答题标记 unanswered：
 
 ```
-skipped · 2/3 answered
+skipped (not consent) · 2/3 answered
 1. 数据库选型 → PostgreSQL (option-1)
 2. 是否加缓存 → custom: 先不加
 3. 部署方式 → unanswered
 ```
 
-comment 作为对应答案下的 `comment: …` 行；child 版本追加 `source: parent`。主会话与 child 共用一个格式化函数，不各写一份。
+comment 作为对应答案下的 `comment: …` 行；child 版本追加 `source: parent`。主会话与 child 共用一个格式化函数，不各写一份。skipped 保留的草稿或批量答案显式标记 `not consent`；child 协议到期没有自动答案时输出 `timed_out (not consent): unanswered`，不附加 `auto-selected`。
 
 ### agent_workflow 描述按需加载
 
-推荐方案（待用户确认）：工具描述缩短到约 1 KB，只保留调用前提（用户明确选择多 agent 编排）、参数、返回与后台通知语义，并指明编写脚本前读取 workflow skill；完整编排指南移入随包发布的 skill（与 skills/pi-suite-jobs 同一机制），保持原有与 Claude Code 对齐的措辞。skill 在系统提示中只占名称与说明，正文仅在实际使用时读取。
+采用方案：工具描述缩短到约 1 KB，只保留调用前提（用户明确选择多 agent 编排）、参数、返回与后台通知语义，并指明编写脚本前读取 workflow skill；完整编排指南移入随包发布的 skill（与 skills/pi-suite-jobs 同一机制），保持原有与 Claude Code 对齐的措辞。skill 在系统提示中只占名称与说明，正文仅在实际使用时读取。
 
-备选方案：保留完整描述，默认不激活 agent_workflow，由 `/subagents workflows` 或明确命令为当前会话激活。缺点是用户说“用 workflow”时模型无法直接调用，需要先手动激活。
+未采用的备选方案：保留完整描述，默认不激活 agent_workflow，由 `/subagents workflows` 或明确命令为当前会话激活。缺点是用户说“用 workflow”时模型无法直接调用，需要先手动激活。
 
 两种方案都复用现有 registerBoundTool 与 skills 机制，不新建工具注册或文档加载系统。
 
@@ -51,7 +51,7 @@ comment 作为对应答案下的 `comment: …` 行；child 版本追加 `source
 
 - src/ask/index.ts、src/agents/child.ts（共用结果文本格式化）
 - src/agents/workflow/tool-description.ts、src/agents/workflow/tools.ts、skills/ 下新增 workflow skill 与包声明
-- 相关 current 文档：[ask](../current/ask/index.md)、[模型工具契约](../current/runtime/tools.md)、[Workflow 操作](../current/agents/workflow/operations.md)
+- 相关 current 文档：[ask](../../../current/ask/index.md)、[模型工具契约](../../../current/runtime/tools.md)、[Workflow 操作](../../../current/agents/workflow/operations.md)
 
 ## 约束
 
@@ -67,7 +67,12 @@ comment 作为对应答案下的 `comment: …` 行；child 版本追加 `source
 
 ## 任务
 
-- [ ] ask_user 主会话与 child 结果改为共用的文本格式
-- [ ] 更新 doc/current/ask/index.md 结果字段说明与 runtime/tools.md 中 ask 相关描述
-- [ ] 确认 agent_workflow 方案（短描述 + skill / 按需激活）
-- [ ] 按确认方案实现 agent_workflow 描述精简并更新 workflow 操作文档
+- [x] ask_user 主会话与 child 结果改为共用的文本格式
+- [x] 更新 doc/current/ask/index.md 结果字段说明与 runtime/tools.md 中 ask 相关描述
+- [x] 确认 agent_workflow 方案（短描述 + skill / 按需激活）
+- [x] 按确认方案实现 agent_workflow 描述精简并更新 workflow 操作文档
+
+
+## 验收结论
+
+Linux（Node 24）`pnpm typecheck` 通过，全量 `pnpm test` 181/181 通过，约 45 秒。界面渲染通过组件脚本在 40/120 列核对；实际 Pi CLI 交互未在本专项中单独验收。

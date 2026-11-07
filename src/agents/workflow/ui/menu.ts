@@ -3,6 +3,7 @@ import { getAgentDir, type ExtensionContext } from '@earendil-works/pi-coding-ag
 import type { SuiteConfig } from '../../../runtime/config.ts';
 import type { Dock } from '../../../ui/dock.ts';
 import { DetailsView, showDetails } from '../../../ui/details.ts';
+import { openReading } from '../../../ui/reading.ts';
 import { selectValue } from '../../../ui/select.ts';
 import type { ScrollView } from '../../../ui/scroll.ts';
 import { showJobLog } from '../../../jobs/log-viewer.ts';
@@ -19,10 +20,10 @@ import { browse, browseState, type BrowsePage, type BrowseState } from '../../..
 
 type Deps = {workflows: WorkflowsModule; agents: AgentsModule; dock: Dock; config: () => SuiteConfig; jobs?: AgentJobViewer};
 const workflowControls = (task: OwnedWorkflowTask) => [
-  {label: 'Pause', available: () => workflowActive(task) && task.status !== 'paused'},
-  {label: 'Resume', available: () => task.status === 'paused'},
-  {label: 'Stop', available: () => workflowActive(task)},
-  {label: 'Replay journal', available: () => !workflowActive(task) && Boolean(task.journalPath)},
+  {key: 'p' as const, label: 'Pause', available: () => workflowActive(task) && task.status !== 'paused'},
+  {key: 'p' as const, label: 'Resume', available: () => task.status === 'paused'},
+  {key: 'x' as const, label: 'Stop', confirm: true, available: () => workflowActive(task)},
+  {key: 'r' as const, label: 'Replay journal', available: () => !workflowActive(task) && Boolean(task.journalPath)},
 ];
 async function controlWorkflow(action: string, ctx: ExtensionContext, deps: Deps, task: OwnedWorkflowTask): Promise<void> {
   const manager = deps.workflows.manager;
@@ -41,16 +42,15 @@ export async function showWorkflow(ctx: ExtensionContext, deps: Deps, task: Owne
     let action = '';
     deps.dock.setDetail(true);
     try {
-      await ctx.ui.custom<void>((tui, theme, _keys, done) => {
+      await openReading<void>(ctx, (tui, theme, _keys, done) => {
         // A workflow may settle while this detail remains open. Keep availability live,
         // so completion exposes replay and removes controls without a close/reopen cycle.
         const actions = [
-          {label: 'Children / gates'},
+          {key: 'enter' as const, label: 'Open children / gates'},
           ...workflowControls(task),
         ];
-        const view = new DetailsView(tui, () => workflowSummary(task), content, done,
-          actions.map(item => ({...item, ...item.label === 'Stop' ? {key: 'x' as const, confirm: '再按 x 停止 workflow'} : {},
-            run: () => { action = item.label; done(); }})), reader, undefined, theme);
+        const view = new DetailsView(tui, () => `Subagents ▸ Workflow · ${workflowSummary(task)}`, content, done,
+          actions.map(item => ({...item, run: () => { action = item.label; done(); }})), reader, theme);
         view.reader.setContent(content, false); reader = view.reader;
         const off = deps.workflows.manager.subscribe(() => { content.invalidate(); tui.requestRender(); });
         const timer = setInterval(() => { if (workflowActive(task)) tui.requestRender(); }, 1000); timer.unref();
@@ -99,8 +99,9 @@ export async function showWorkflows(ctx: ExtensionContext, deps: Deps, page: Wor
     const sources = new Map(names.map(name => [name, readSavedWorkflow(name, ctx.cwd, resources)]));
     const progress = new Map(runs.map(task => [task.id, new WorkflowProgress(task)]));
     let action = saved ? 'View script' : 'Open workflow', changed = false;
-    const selected = await browse(ctx, deps.dock, { title: 'Subagents', state: states[Number(saved)],
-      controls: [page.navigation, { label: 'Workflows', selected: () => saved ? 'saved' : 'runs',
+    const selected = await browse(ctx, deps.dock, { title: 'Subagents', state: states[Number(saved)], pages: page.pages,
+      selection: item => saved ? {name: item.value} : {name: deps.workflows.manager.get(item.value).meta?.name ?? 'Workflow', id: item.value},
+      controls: [{ key: 's', label: 'View', selected: () => saved ? 'saved' : 'runs',
         items: () => [{value: 'runs', label: 'Runs'}, {value: 'saved', label: 'Saved'}],
         select: (value, done) => { const previous = states[Number(saved)]; saved = value === 'saved'; page.saved = saved;
           states[Number(saved)].focus = previous.focus; changed = true; done(); } }],
@@ -114,10 +115,9 @@ export async function showWorkflows(ctx: ExtensionContext, deps: Deps, page: Wor
       }})),
       actions: (item, done) => {
         const run = (label: string) => () => { action = label; done(item.value); };
-        if (saved) return [{label: 'View script', run: run('View script')}, {label: 'Start', run: run('Start')}];
+        if (saved) return [{key: 'n', label: 'Start', run: run('Start')}];
         const task = deps.workflows.manager.get(item.value);
-        return [{label: 'Open workflow', run: run('Open workflow')}, ...workflowControls(task).map(control => ({...control,
-          ...control.label === 'Stop' ? {key: 'x' as const, confirm: '再按 x 停止 workflow'} : {}, run: run(control.label)}))];
+        return workflowControls(task).map(control => ({...control, run: run(control.label)}));
       },
     });
     if (changed) continue;

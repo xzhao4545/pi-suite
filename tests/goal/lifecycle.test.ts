@@ -75,8 +75,7 @@ test("Esc skips a native ask without consent and the same goal turn continues", 
       context => {
         const message = context.messages.findLast(message => message.role === "toolResult");
         assert.ok(message?.role === "toolResult");
-        const result = JSON.parse(message.content.map(part => part.type === "text" ? part.text : "").join(""));
-        assert.equal(result.status, "skipped"); assert.equal(result.response, null);
+        assert.equal(message.content.map(part => part.type === "text" ? part.text : "").join(""), "skipped: unanswered");
         return complete(context);
       },
     ]);

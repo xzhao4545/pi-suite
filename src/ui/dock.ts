@@ -1,16 +1,24 @@
 import type { Component, TUI } from "@earendil-works/pi-tui";
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { isKeyRelease, matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 
-export interface DockRow { id: string; text: string; priority: number; suffix?: string; parentId?: string }
+export interface DockRow {
+  id: string; text: string; priority: number; suffix?: string; parentId?: string; selectable?: boolean;
+  /** Less detailed suffixes, in domain-defined omission order; never change the object's identity. */
+  compactSuffixes?: string[];
+}
 export interface DockSource {
   title: string;
   rows: () => DockRow[];
   summary?: () => string;
   subtitle?: () => string;
+  aside?: () => string;
   footer?: () => string;
   progress?: () => number;
+  open?: (rowId: string, ctx: ExtensionContext) => void | Promise<void>;
 }
+type Section = { id: string; source: DockSource; rows: DockRow[] };
+type Choice = { section: Section; row: DockRow };
 export function heightBudget(rows: number, maxRows = 12, statusRow = false): number {
   // Native layout adds a blank widget row, a three-row editor and a 2–3 row footer.
   return Math.max(0, Math.min(maxRows, Math.floor(rows / 2) - 1 - 3 - 2 - Number(statusRow)));
@@ -24,24 +32,103 @@ export class Dock implements Component {
   private statusRow = false;
   private ask = false;
   private detail = false;
+  private context?: ExtensionContext;
+  private unsubscribe?: () => void;
+  private active = false;
+  private selection?: { sourceId: string; rowId: string; index: number };
 
   bind(ctx: ExtensionContext, maxRows: number): void {
+    this.detach();
     this.maxRows = maxRows;
     if (ctx.mode !== "tui") return;
+    this.context = ctx;
     ctx.ui.setWidget("pi-suite:dock", (tui, theme) => { this.tui = tui; this.theme = theme; return this; });
+    this.unsubscribe = ctx.ui.onTerminalInput(data => this.handleKey(data, ctx));
   }
-  detach(ctx?: ExtensionContext): void { this.tui = undefined; ctx?.ui.setWidget("pi-suite:dock", undefined); }
+  detach(ctx = this.context): void {
+    this.unsubscribe?.(); this.unsubscribe = undefined;
+    this.context = undefined; this.tui = undefined; this.theme = undefined;
+    this.active = false; this.selection = undefined;
+    ctx?.ui.setWidget("pi-suite:dock", undefined);
+  }
   register(id: string, source: DockSource): void { this.sources.set(id, source); this.invalidate(); }
+  setOpen(id: string, open: NonNullable<DockSource['open']>): void { this.sources.get(id)!.open = open; this.invalidate(); }
   setStatusRow(value: boolean): void { this.statusRow = value; this.invalidate(); }
-  setAsk(value: boolean): void { this.ask = value; this.invalidate(); }
-  setDetail(value: boolean): void { this.detail = value; this.invalidate(); }
+  setAsk(value: boolean): void { this.ask = value; if (value) this.active = false; this.invalidate(); }
+  setDetail(value: boolean): void { this.detail = value; if (value) this.active = false; this.invalidate(); }
   budget(rows = this.tui?.terminal.rows ?? 24): number { return heightBudget(rows, this.maxRows, this.statusRow); }
   askBudget(rows: number): number { return Math.max(1, Math.floor(rows * 0.7) - 1 - 2 - Number(this.statusRow)); }
 
+  private sections(): Section[] {
+    return [...this.sources].map(([id, source]) => ({ id, source, rows: source.rows() })).filter(item => item.rows.length)
+      .sort((a, b) => Math.max(...b.rows.map(row => row.priority)) - Math.max(...a.rows.map(row => row.priority)));
+  }
+  private choices(sections: Section[]): Choice[] {
+    return sections.flatMap(section => section.source.open ? section.rows.filter(row => row.selectable !== false)
+      .map(row => ({ section, row })) : []);
+  }
+  private reconcile(choices: Choice[]): Choice | undefined {
+    if (!choices.length) { this.active = false; return; }
+    const found = choices.findIndex(item => item.section.id === this.selection?.sourceId && item.row.id === this.selection?.rowId);
+    const index = found < 0 ? Math.min(this.selection?.index ?? 0, choices.length - 1) : found;
+    const choice = choices[index];
+    // Keep identity through reordering; if it disappears, its next neighbour takes the slot.
+    this.selection = { sourceId: choice.section.id, rowId: choice.row.id, index };
+    return choice;
+  }
+  private deactivate(): void { if (this.active) { this.active = false; this.invalidate(); } }
+  private editorHasFocus(): boolean {
+    // Pi's pluggable editor need not inherit Editor. focusedComponent has no public
+    // accessor, so use the upstream structural contract rather than an instanceof check.
+    const focused = (this.tui as unknown as { focusedComponent?: { getText?: unknown; setText?: unknown; capturesViewportInput?: boolean } })?.focusedComponent;
+    // The native editor exposes this flag while autocomplete owns its navigation.
+    return focused == null || typeof focused.getText === 'function' && typeof focused.setText === 'function' && !focused.capturesViewportInput;
+  }
+  private handleKey(data: string, ctx: ExtensionContext): { consume: true } | undefined {
+    if (this.context !== ctx) return;
+    if (this.ask || this.detail || !this.editorHasFocus() || ctx.ui.getEditorText() !== '' || this.budget() === 0) {
+      this.deactivate(); return;
+    }
+    // Kitty releases also match matchesKey; held-key repeats remain useful navigation.
+    if (isKeyRelease(data)) return;
+    if (!this.active && !matchesKey(data, 'left')) return;
+    const choices = this.choices(this.sections()), choice = this.reconcile(choices);
+    if (!choice) return;
+    if (!this.active) { this.active = true; this.invalidate(); return { consume: true }; }
+    if (matchesKey(data, 'up') || matchesKey(data, 'down')) {
+      const index = Math.max(0, Math.min(choices.length - 1, this.selection!.index + (matchesKey(data, 'up') ? -1 : 1)));
+      const next = choices[index]; this.selection = { sourceId: next.section.id, rowId: next.row.id, index };
+      this.invalidate(); return { consume: true };
+    }
+    if (matchesKey(data, 'enter')) {
+      this.deactivate();
+      // Input listeners cannot await a reader. Report failures at this user boundary,
+      // and fence late imports/readers against a replaced SessionBinding context.
+      void Promise.resolve().then(() => this.context === ctx ? choice.section.source.open!(choice.row.id, ctx) : undefined)
+        .catch(error => { if (this.context === ctx) ctx.ui.notify(error instanceof Error ? error.message : String(error), 'error'); });
+      return { consume: true };
+    }
+    const back = matchesKey(data, 'escape') || matchesKey(data, 'right');
+    this.deactivate();
+    return back ? { consume: true } : undefined;
+  }
+  private highlight(text: string): string { return this.theme?.bold(this.color('accent', text)) ?? text; }
+  private header(source: DockSource, width: number, selecting = false): string {
+    const aside = source.aside?.() ?? '', space = Math.max(0, width - visibleWidth(aside) - Number(!!aside));
+    const fullHint = '← select · Enter open · Esc back';
+    const hint = selecting ? (!aside || visibleWidth(source.title) + 2 + visibleWidth(fullHint) <= space ? fullHint : '← Enter Esc') : '';
+    const title = hint ? truncateToWidth(this.title(source), Math.max(0, space - visibleWidth(hint) - 2), '…') : this.title(source);
+    return this.row({id: 'header', priority: 0, text: title + (hint ? '  ' + this.color('dim', hint)
+      : source.subtitle ? '  ' + this.color('dim', source.subtitle()) : ''), suffix: aside ? this.color('dim', aside) : undefined}, width);
+  }
   private color(kind: 'accent' | 'dim' | 'muted' | 'borderMuted', text: string): string { return this.theme?.fg(kind, text) ?? text; }
   private title(source: DockSource): string { return this.theme?.bold(this.color('accent', source.title)) ?? source.title; }
   private row(row: DockRow, width: number): string {
-    const suffix = truncateToWidth(row.suffix ?? '', width);
+    const suffixes = [row.suffix ?? '', ...row.compactSuffixes ?? []];
+    // Keep a recognizable name before dropping lower-value metrics. The domain
+    // supplies the omission order, while Dock owns the terminal-width decision.
+    const nameSpace = row.compactSuffixes ? Math.min(8, visibleWidth(row.text)) + 1 : 0;
+    const suffix = truncateToWidth(suffixes.find(text => visibleWidth(text) <= width - nameSpace) ?? suffixes.at(-1)!, width);
     if (!suffix) return truncateToWidth(row.text, width);
     const titleWidth = Math.max(0, width - visibleWidth(suffix) - 1);
     const text = truncateToWidth(row.text, titleWidth, '…');
@@ -50,10 +137,21 @@ export class Dock implements Component {
   private summary(source: DockSource, rows: DockRow[], width: number): string {
     const first = [...rows].sort((a, b) => b.priority - a.priority)[0];
     const prefix = this.title(source) + ' · ';
-    const space = Math.max(0, width - visibleWidth(prefix));
-    return prefix + (source.summary ? truncateToWidth(source.summary(), space, '…') : this.row(first, space));
+    const aside = source.aside?.() ?? '';
+    const space = Math.max(0, width - visibleWidth(prefix) - (aside ? visibleWidth(aside) + 1 : 0));
+    const text = prefix + (source.summary ? truncateToWidth(source.summary(), space, '…') : this.row(first, space));
+    return aside ? this.row({id: 'summary', text, priority: 0, suffix: this.color('dim', aside)}, width) : text;
   }
-  private section(source: DockSource, rows: DockRow[], limit: number, width: number): string[] {
+  private section(source: DockSource, rows: DockRow[], limit: number, width: number, selectedId?: string): string[] {
+    const focus = rows.find(row => row.id === selectedId);
+    if (focus && (rows.length === 1 || limit <= 3)) {
+      // A compact section must show the selected object, not an unrelated aggregate.
+      // With only one budget row, shorten the hint instead of hiding the object.
+      const prefix = limit === 1 ? this.title(source) + ' Enter/Esc · > ' : '> ';
+      const line = this.highlight(prefix + this.row(focus, Math.max(0, width - visibleWidth(prefix))));
+      return limit === 1 ? [line] : [this.header(source, width, true), line];
+    }
+    if (!focus && rows.length === 1 && source.aside?.() && limit >= 2) return [this.header(source, width), this.row(rows[0], width)];
     if (rows.length === 1 || limit <= 2) return [this.summary(source, rows, width)];
     const ids = new Set<string>(), byId = new Map(rows.map(row => [row.id, row]));
     const roots = rows.filter(row => !row.parentId), children = new Map<string, DockRow[]>();
@@ -77,7 +175,7 @@ export class Dock implements Component {
       return result;
     };
     // Priority chooses membership only; source order remains the reading order.
-    for (const row of [...rows].sort((a, b) => b.priority - a.priority)) {
+    for (const row of [...rows].sort((a, b) => Number(b.id === selectedId) - Number(a.id === selectedId) || b.priority - a.priority)) {
       const parent = row.parentId ? byId.get(row.parentId) : undefined;
       if (row.parentId && !parent) continue;
       const added = [parent, row].filter((item): item is DockRow => !!item && !ids.has(item.id));
@@ -91,24 +189,30 @@ export class Dock implements Component {
     const tree = width >= 40;
     const ratio = source.progress?.() ?? 0;
     const branch = (text: string, index: number): string => this.color(index < Math.round((shown.length + 1) * ratio) ? 'accent' : 'borderMuted', text);
-    return [truncateToWidth(this.title(source) + (source.subtitle ? '  ' + this.color('dim', source.subtitle()) : ''), width),
+    return [this.header(source, width, !!focus),
       ...shown.map((row, index) => {
-        const prefix = tree ? branch(row.parentId ? '│    ' : '├─ ', index) : '';
-        return prefix + this.row(row, Math.max(0, width - visibleWidth(prefix)));
+        const selected = row.id === selectedId;
+        const prefix = selected ? '> ' : tree ? branch(row.parentId ? '│    ' : '├─ ', index) : '';
+        const line = prefix + this.row(row, Math.max(0, width - visibleWidth(prefix)));
+        return selected ? this.highlight(line) : line;
       }), truncateToWidth((tree ? branch('└─────', shown.length) : '') + (source.footer?.() ? ' ' + this.color('dim', source.footer!()) : ''), width)];
   }
   render(width: number): string[] {
     if (this.ask || this.detail) return [];
     const limit = this.budget();
-    const sources = [...this.sources.values()].map(source => ({ source, rows: source.rows() }))
-      .filter(item => item.rows.length).sort((a, b) => Math.max(...b.rows.map(row => row.priority)) - Math.max(...a.rows.map(row => row.priority)));
+    const sources = this.sections();
+    const choice = this.active ? this.reconcile(this.choices(sources)) : undefined;
+    // Pin only while selecting so keyboard navigation never opens an invisible row;
+    // idle priority and the height budget remain unchanged.
+    if (choice) sources.sort((a, b) => Number(b.id === choice.section.id) - Number(a.id === choice.section.id));
     const lines: string[] = [];
-    for (const [index, {source, rows}] of sources.entries()) {
+    for (const [index, {id, source, rows}] of sources.entries()) {
       const remaining = limit - lines.length;
       if (remaining <= 0) break;
       // Reserve one summary per lower-priority section while there is room.
-      const allowance = Math.max(1, remaining - (sources.length - index - 1));
-      lines.push(...this.section(source, rows, allowance, width));
+      const selectedId = choice?.section.id === id ? choice.row.id : undefined;
+      const allowance = Math.max(selectedId ? Math.min(2, remaining) : 1, remaining - (sources.length - index - 1));
+      lines.push(...this.section(source, rows, allowance, width, selectedId));
     }
     return lines;
   }

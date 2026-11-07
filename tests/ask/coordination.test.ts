@@ -18,7 +18,8 @@ function userText(context: TranscriptContext): string {
   const content = context.messages.findLast(message => message.role === 'user')?.content;
   return typeof content === 'string' ? content : content?.filter(block => block.type === 'text').map(block => block.text).join('\n') ?? '';
 }
-const toolText = (context: TranscriptContext) => JSON.stringify(context.messages.findLast(message => message.role === 'toolResult'));
+const toolText = (context: TranscriptContext) => context.messages.findLast(message => message.role === 'toolResult')?.content
+  .map(part => part.type === 'text' ? part.text : '').join('\n') ?? '';
 function waitFor(subscribe: (listener: () => void) => () => void, condition: () => boolean): Promise<void> {
   if (condition()) return Promise.resolve();
   return new Promise((resolve, reject) => {
@@ -113,7 +114,8 @@ test('native asks hold real child questions and job completion; only system canc
       }
       await childReady.promise;
       assert.equal(h.goal()?.automatic, true); assert.equal(h.goal()?.waiting, undefined);
-      assert.match(gateResult, new RegExp(`"status":"${outcome}"`));
+      assert.equal(gateResult, { answered: 'answered (custom): approved', skipped: 'skipped (custom, not consent): approved',
+        timed_out: 'timed_out (custom, auto-selected, not consent): approved', cancelled: 'cancelled' }[outcome]);
       assert.ok(wake.includes(`${jobId} completed`));
       for (const run of runs) assert.ok(wake.includes(run.record.id) && wake.includes(run.record.prompt));
       assert.ok(wake.indexOf('CHILD_A') < wake.indexOf('CHILD_B'));
@@ -127,7 +129,7 @@ test('native asks hold real child questions and job completion; only system canc
       answer(forms.get('child A')!); await resumed; await h.idle(); await Promise.all(runs.map(run => run.done.promise));
       assert.deepEqual(shown, ['gate', 'child A', 'child B']);
       assert.equal(h.goal()?.status, 'completed'); assert.equal(rootCalls, 7);
-      assert.equal(childResults.length, 2); for (const result of childResults) assert.match(result, /"status":"answered"/);
+      assert.equal(childResults.length, 2); for (const result of childResults) assert.equal(result, 'answered (custom): approved\nsource: parent');
       for (const run of runs) { assert.equal(run.record.state, 'completed'); await invoke('agent_read', { id: run.record.id }); }
       assert.equal(notices().length, 2); agents.changed(); await h.idle(); assert.equal(rootCalls, 7);
     } finally {

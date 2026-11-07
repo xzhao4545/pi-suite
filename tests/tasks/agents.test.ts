@@ -18,7 +18,7 @@ function lastTool(context: TranscriptContext) {
   return result;
 }
 
-test('two SDK children edit their owner list concurrently without losing changes or deriving completion from agent settlement', {timeout: 15000}, async () => {
+test('two SDK children update only their assigned progress concurrently without deriving completion from settlement', {timeout: 15000}, async () => {
   const root = agentDir(), barrier = Promise.withResolvers<void>();
   let ctx!: ExtensionContext, arrived = 0;
   const h = await host({root, persisted: true, tools: ['task_edit', 'agent_start'],
@@ -33,13 +33,13 @@ test('two SDK children edit their owner list concurrently without losing changes
     const response = async (context: TranscriptContext) => {
       const id = JSON.stringify(context.messages.find(message => message.role === 'user')).includes('first child') ? '1.1' : '1.2';
       const result = lastTool(context);
-      if (!result) return fauxAssistantMessage(fauxToolCall('task_get', {id}));
+      if (!result) return fauxAssistantMessage(fauxToolCall('task_get', {scope: 'assigned', id}));
       if (result.toolName === 'task_get') {
         assert.match(JSON.stringify(result.content), /parallel work|first|second/);
-        // Both children have read the same pre-edit list before either may issue its write.
+        // Both children read their assigned task before either issues a progress write.
         if (++arrived === 2) barrier.resolve();
         await barrier.promise;
-        return fauxAssistantMessage(fauxToolCall('task_edit', {op: 'batch', changes: [{op: 'update', id, status: 'doing', description: `child ${id} update`}]}));
+        return fauxAssistantMessage(fauxToolCall('task_edit', {scope: 'assigned', op: 'start', id}));
       }
       return fauxAssistantMessage(`child ${id} finished`);
     };
@@ -54,14 +54,15 @@ test('two SDK children edit their owner list concurrently without losing changes
       assert.equal(run.record.state, 'completed', run.record.error);
       const task = data.tasks.find(task => task.id === run.record.taskId)!;
       assert.equal(task.owner, run.record.id); assert.equal(task.status, 'doing');
-      assert.equal(task.description, `child ${task.id} update`);
+      assert.equal(task.description, undefined);
+      assert.notStrictEqual(run.taskStore, store); assert.equal(run.taskStore?.current.tasks.length, 0);
     }
     assert.deepEqual(taskViews(data).find(task => task.id === '1')?.progress, {done: 0, total: 2});
-    assert.deepEqual(readdirSync(join(root, '.pi', 'tasks')), [`tasks-${ctx.sessionManager.getSessionId()}.json`], 'child sessions share the owner file');
+    assert.deepEqual(readdirSync(join(root, '.pi', 'tasks')), [`tasks-${ctx.sessionManager.getSessionId()}.json`], 'empty child lists create no files');
   } finally { barrier.resolve(); await h.dispose(); rmSync(root, {recursive: true, force: true}); }
 });
 
-test('SDK child retains its owner store across parent reload and fork; historical resume keeps its stable task reference and stop leaves actual progress', {timeout: 20000}, async () => {
+test('SDK child retains private and assigned stores across parent reload/fork and historical resume; stop leaves actual progress', {timeout: 20000}, async () => {
   const root = agentDir(), entered = Promise.withResolvers<void>(), continueChild = Promise.withResolvers<void>();
   const resumedEntered = Promise.withResolvers<void>(), finishResume = Promise.withResolvers<void>();
   let ctx!: ExtensionContext;
@@ -83,8 +84,11 @@ test('SDK child retains its owner store across parent reload and fork; historica
       {op: 'update', id: '1.1', status: 'doing'}]}, new AbortController().signal, undefined, ctx as never);
     first.faux.setResponses([async () => {
       entered.resolve(); await continueChild.promise;
-      return fauxAssistantMessage(fauxToolCall('task_edit', {op: 'batch', changes: [{op: 'update', id: '1.1', description: 'original child after fork'}]}));
-    }, context => { lastTool(context); return fauxAssistantMessage('original child completed'); }]);
+      return fauxAssistantMessage(fauxToolCall('task_edit', {op: 'batch', changes: [
+        {op: 'add', title: 'private work', children: ['private execution']},
+        {op: 'update', id: '1.1', description: 'original child after fork'}]}));
+    }, context => { lastTool(context); return fauxAssistantMessage(fauxToolCall('task_edit', {scope: 'assigned', op: 'block', id: '1.1', reason: 'parent input needed'})); },
+    context => { lastTool(context); return fauxAssistantMessage('original child completed'); }]);
     const run = await manager.start({prompt: 'continue owner task', taskId: '1.1', background: false}, {ctx, taskStore: originalStore}, loadConfig(root, root));
     await entered.promise;
     await first.session.reload();
@@ -97,8 +101,10 @@ test('SDK child retains its owner store across parent reload and fork; historica
     continueChild.resolve();
     assert.equal((await run.done.promise).state, 'completed', run.record.error);
     assert.equal(run.record.ownerSessionId, originalId); assert.strictEqual(run.parent.taskStore, originalStore);
-    assert.equal((await originalStore.snapshot()).tasks.find(task => task.id === '1.1')?.description, 'original child after fork');
-    assert.equal((await originalStore.snapshot()).tasks.find(task => task.id === '1.1')?.status, 'doing');
+    assert.equal((await originalStore.snapshot()).tasks.find(task => task.id === '1.1')?.description, undefined);
+    assert.equal((await originalStore.snapshot()).tasks.find(task => task.id === '1.1')?.status, 'blocked');
+    const privateStore = run.taskStore!;
+    assert.equal((await privateStore.snapshot()).tasks.find(task => task.id === '1.1')?.description, 'original child after fork');
     assert.deepEqual(await forkStore.snapshot(), forkSeed, 'the original child cannot edit the fork copy');
 
     manager.sweep(Date.now() + 10 * 60_000 + 1);
@@ -114,11 +120,12 @@ test('SDK child retains its owner store across parent reload and fork; historica
     await resumedEntered.promise;
     assert.equal(next.record.id, run.record.id); assert.notEqual(next.record.runId, run.record.runId);
     assert.equal(next.record.taskId, '1.1'); assert.equal(next.record.ownerSessionId, originalId);
-    assert.strictEqual(next.parent.taskStore, originalStore);
+    assert.strictEqual(next.parent.taskStore, originalStore); assert.strictEqual(next.taskStore, privateStore);
     const stopping = manager.stop(next.record.id, next.record.runId); finishResume.resolve();
     await stopping; assert.equal((await next.done.promise).state, 'stopped');
     const task = (await originalStore.snapshot()).tasks.find(task => task.id === '1.1')!;
-    assert.equal(task.owner, run.record.id); assert.equal(task.description, 'resumed child progress'); assert.equal(task.status, 'doing');
+    assert.equal(task.owner, run.record.id); assert.equal(task.description, undefined); assert.equal(task.status, 'blocked');
+    assert.equal((await privateStore.snapshot()).tasks.find(task => task.id === '1.1')?.description, 'resumed child progress');
     assert.deepEqual(await forkStore.snapshot(), forkSeed);
   } finally { continueChild.resolve(); finishResume.resolve(); await runtime.dispose(); rmSync(root, {recursive: true, force: true}); }
 });

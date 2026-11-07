@@ -2,10 +2,10 @@ import { truncateToWidth } from '@earendil-works/pi-tui';
 import { toolRenderers, stateLine } from '../ui/tool-render.ts';
 import { answerText, optionRow } from './render.ts';
 import { normalize, type AskParams } from './schema.ts';
-import type { askDetails } from './index.ts';
+import type { AskDetails } from './result.ts';
 import { sanitizeText } from '../runtime/text.ts';
 
-type Details = ReturnType<typeof askDetails>;
+type Details = AskDetails;
 export function askRenderers(title = 'Ask') {
   return toolRenderers<AskParams, Details>({
     call: args => ({ icon: '?', tone: 'warning', title,

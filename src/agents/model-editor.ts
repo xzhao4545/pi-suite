@@ -49,8 +49,8 @@ export async function editTypeModel(ctx: ExtensionContext, config: SuiteConfig, 
   ctx.ui.notify(`${type.name}: model/thinking settings saved for new executions`);
 }
 
-export async function updateAgentModel(manager: AgentManager, ctx: ExtensionContext, id: string, changes: ModelOverrides): Promise<void> {
-  const { record, run } = manager.get(id);
+export async function updateAgentModel(manager: AgentManager, ctx: ExtensionContext, id: string, changes: ModelOverrides, runId?: string): Promise<void> {
+  const { record, run } = manager.get(id, runId);
   // Validate even an idle agent's planned model now, so unavailable selections fail at the edit.
   if (changes.model) resolveModel(ctx, changes.model, `${id} individual model`);
   if (run && active(record.state)) {
@@ -75,8 +75,8 @@ export async function updateAgentModel(manager: AgentManager, ctx: ExtensionCont
   manager.changed();
 }
 
-export async function editAgentModel(ctx: ExtensionContext, manager: AgentManager, id: string, config: SuiteConfig): Promise<void> {
-  const { record, run } = manager.get(id);
+export async function editAgentModel(ctx: ExtensionContext, manager: AgentManager, id: string, config: SuiteConfig, runId?: string): Promise<void> {
+  const { record, run } = manager.get(id, runId);
   const inherited = () => {
     // Historical records remain editable after disabling their type; admission is enforced
     // by Manager when a new execution starts, not while inspecting the existing contract.
@@ -84,8 +84,9 @@ export async function editAgentModel(ctx: ExtensionContext, manager: AgentManage
     if (!type) throw new ToolError('AGENT_TYPE', `Unknown agent type: ${record.type}`);
     return resolveSettings(run?.parent.ctx ?? ctx, type, run?.request ?? { prompt: '' }, run?.config ?? config).model;
   };
-  const changes = await chooseModelSettings(ctx, `${id} · next request`, record.individual ?? {}, inherited);
+  const changes = await chooseModelSettings(ctx, `${id} (${record.runId}) · next request`, record.individual ?? {}, inherited);
   if (!changes) return;
-  await updateAgentModel(manager, ctx, id, changes);
-  ctx.ui.notify(`${id}: model/thinking settings applied to its next request`);
+  // A selector may outlive a resume; bind the write to the run opened, never the agent's latest run.
+  await updateAgentModel(manager, ctx, id, changes, record.runId);
+  ctx.ui.notify(`${id} (${record.runId}): model/thinking settings applied to its next request`);
 }

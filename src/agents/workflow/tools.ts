@@ -6,7 +6,7 @@ import { ToolError } from '../../runtime/errors.ts';
 import { textResult, registerBoundTool } from '../../runtime/tools.ts';
 import type { AgentsModule } from '../index.ts';
 import { agentTypes } from '../catalog.ts';
-import { fullWorkflowToolDescription } from './tool-description.ts';
+import { workflowToolDescription } from './tool-description.ts';
 import { workflowSummary, type WorkflowsModule } from './index.ts';
 import { decideWorkflowCollision } from './collisions.ts';
 import { WORKFLOW_ENTRY_TYPE, decodeWorkflowEntry, taskFromEntry } from './entry.ts';
@@ -22,7 +22,7 @@ export function registerWorkflowTool(pi: ExtensionAPI, workflows: WorkflowsModul
   catalog?: (ctx: ExtensionContext) => AgentType[]) {
   let registered = false, enabled = config().agents.workflows, withdrawn = false;
   const tool: ToolDefinition<typeof schema> = {name: 'agent_workflow', label: 'Workflow', parameters: schema,
-    description: fullWorkflowToolDescription.replace('{{typeList}}', 'general-purpose, Explore, Plan and configured agent types.'),
+    description: workflowToolDescription.replace('{{typeList}}', 'general-purpose, Explore, Plan and configured agent types.'),
     async execute(id, params, signal, _update, ctx) {
       signal?.throwIfAborted();
       if (!enabled || !config().agents.workflows) throw new ToolError('INVALID_ARGS', 'Workflow launch is disabled for this session');
@@ -51,7 +51,7 @@ export function registerWorkflowTool(pi: ExtensionAPI, workflows: WorkflowsModul
     const types = catalog ? catalog(ctx) : agentTypes(ctx.cwd, getAgentDir(), {
       trusted: ctx.isProjectTrusted(), packageGate: config().agents.packageAgents, typeSettings: config().agents.types,
     });
-    const description = fullWorkflowToolDescription.replace('{{typeList}}', types.filter(type => type.enabled !== false).map(type => `${type.name}: ${type.description}`).join('\n'));
+    const description = workflowToolDescription.replace('{{typeList}}', types.filter(type => type.enabled !== false).map(type => type.name).join(', '));
     if (description !== tool.description) { tool.description = description; registerBoundTool(pi, tool); }
   };
   return {

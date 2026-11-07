@@ -33,6 +33,7 @@ export class AgentsModule implements Waitable {
   readonly prefix = 'agent_';
   readonly manager: AgentManager;
   private unsubscribe?: () => void;
+  private timer?: NodeJS.Timeout;
   private queued = new Set<string>();
   private saved = new Map<string, string>();
   private selectedRun?: string;
@@ -56,33 +57,54 @@ export class AgentsModule implements Waitable {
   }
   detach(): void {
     this.unsubscribe?.(); this.unsubscribe = undefined;
+    clearInterval(this.timer); this.timer = undefined;
     const current = this.binding.current;
     if (current) for (const request of this.queued) this.notifications.cancel(current.sessionId, request);
     this.queued.clear(); this.saved.clear(); this.selectedRun = undefined; this.status.setActivities('agents', []);
   }
   selectRun(runId: string): void { this.selectedRun = runId; this.refresh(); }
-  private rows(records: AgentRecord[], scope: ParentScope): DockRow[] {
+  private rows(records: AgentRecord[], scope: ParentScope): { rows: DockRow[]; aside: string; ticking: boolean } {
     // A consumed question is still awaiting its answer. Include workflow questions
     // visible to this parent without exposing unrelated runs or nested descendants.
     const visible = new Map(records.map(record => [record.runId, record]));
     for (const run of this.manager.runs.values()) if (run.question && this.manager.questionVisible(run.record, scope)) {
       visible.set(run.record.runId, this.manager.view(run));
     }
-    return [...visible.values()].flatMap(record => {
+    const counts = new Map<string, number>();
+    const rows = [...visible.values()].flatMap(record => {
       const run = this.manager.runs.get(record.runId), question = Boolean(run?.question), selected = record.runId === this.selectedRun;
       const failed = ['failed', 'limited'].includes(record.state) && run && !run.consumed;
       if (!active(record.state) && !failed) return [];
-      return [{ id: `agent:${record.runId}`, text: `${selected ? '> ' : ''}agent ${record.id.slice(-8)} ${sanitizeText(record.name).replace(/[\r\n\t]/g, ' ')}`,
-        suffix: question ? 'waiting(parent)' : record.state,
+      counts.set(record.state, (counts.get(record.state) ?? 0) + 1);
+      const state = question ? 'waiting(parent)' : record.state;
+      const basic = `${state} · ${((record.elapsedMs ?? 0) / 1000).toFixed(1)}s`, tools = `${record.toolUses ?? 0} tools`;
+      return [{ id: `agent:${record.runId}`, text: sanitizeText(record.name).replace(/[\r\n\t]/g, ' '),
+        suffix: `${basic} · ↑${record.usage?.tokens.input ?? 0} ↓${record.usage?.tokens.output ?? 0} · ${tools}`,
+        compactSuffixes: [`${basic} · ${tools}`, basic, state],
         priority: question ? 100 : failed ? 80 : record.state === 'stopping' ? 75 : selected ? 65 : record.state === 'queued' ? 15 : 25 }];
     });
+    const aside = ['starting', 'running', 'waiting', 'stopping', 'queued', 'failed', 'limited']
+      .filter(state => counts.has(state)).map(state => `${counts.get(state)} ${state}`).join(' · ');
+    return {rows, aside, ticking: [...visible.values()].some(record => active(record.state))};
+  }
+  private publishActivities(records: AgentRecord[], scope: ParentScope): void {
+    const {rows, aside, ticking} = this.rows(records, scope);
+    this.status.setActivities('agents', records.filter(record => executing(record.state)).map(record => record.id), rows, aside);
+    const tick = ticking && this.status.detailsVisible('agents');
+    // A quiet model request still accrues runtime. Tick only presentation, never
+    // refresh persistence/notifications or start a timer in print-mode children.
+    if (tick) this.timer ??= setInterval(() => {
+      const scope = this.scope(this.binding.current!.ctx);
+      this.publishActivities(this.manager.records().filter(record => this.manager.visible(record, scope)), scope);
+    }, 1000).unref();
+    else { clearInterval(this.timer); this.timer = undefined; }
   }
   private revision(record: AgentRecord): string { return `${record.state}:${record.background}:${record.sessionFile ?? ''}:${record.endedAt ?? ''}:${record.model}:${record.thinking}:${JSON.stringify(record.individual)}`; }
   private refresh(): void {
     const current = this.binding.current;
     if (!current) return;
     const scope = this.scope(current.ctx), records = this.manager.records().filter(record => this.manager.visible(record, scope));
-    this.status.setActivities('agents', records.filter(record => executing(record.state)).map(record => record.id), this.rows(records, scope));
+    this.publishActivities(records, scope);
     const unread = this.unread();
     for (const request of this.queued) if (!unread.some(item => this.request(item) === request)) {
       this.notifications.cancel(current.sessionId, request); this.queued.delete(request);

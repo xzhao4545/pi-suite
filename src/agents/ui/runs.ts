@@ -17,7 +17,7 @@ const matches = (record: AgentRecord, filter: RunFilter) => filter === 'all' || 
 const duration = (record: AgentRecord) => record.state === 'queued' ? `${Math.max(0, (Date.now() - Date.parse(record.createdAt)) / 1000).toFixed(1)}s wait`
   : record.elapsedMs === undefined ? 'not started' : `${(record.elapsedMs / 1000).toFixed(1)}s`;
 
-export async function showRuns(ctx: ExtensionContext, deps: SubagentsDeps, state: RunsState, navigation: BrowsePage['navigation']): Promise<void> {
+export async function showRuns(ctx: ExtensionContext, deps: SubagentsDeps, state: RunsState, navigation: BrowsePage['pages']): Promise<void> {
   const { agents, dock, config, jobs } = deps;
   let discovered = false;
   const change = (filter: RunFilter, workspace: boolean, done: () => void) => {
@@ -39,12 +39,13 @@ export async function showRuns(ctx: ExtensionContext, deps: SubagentsDeps, state
       return !agents.manager.visible(record, scope) && (!run || run.settled === true);
     };
     let action = 'transcript', changed = false, displayed = new Map<string, AgentRecord>();
-    const selected = await browse(ctx, dock, { title: 'Subagents', state: state.browser,
-      controls: [navigation,
-        { label: 'Scope', items: () => [{ value: 'session', label: 'This session' }, { value: 'workspace', label: 'Workspace' }],
+    const selected = await browse(ctx, dock, { title: 'Subagents', pages: navigation, state: state.browser,
+      total: () => records().length, selection: item => { const record = displayed.get(item.value)!; return { name: record.name, id: record.id }; },
+      controls: [
+        { key: 'w', label: 'Scope', items: () => [{ value: 'session', label: 'This session' }, { value: 'workspace', label: 'Workspace' }],
           selected: () => state.workspace ? 'workspace' : 'session', select: (value, done) => { changed = true; change(state.filter, value === 'workspace', done); } },
-        { label: 'State', items: () => { const visible = records(); return RUN_FILTERS.map(filter => ({ value: filter,
-          label: `${filter[0].toUpperCase()}${filter.slice(1)} ${visible.filter(record => matches(record, filter)).length}` })); },
+        { key: 's', label: 'State', items: () => { const visible = records(); return RUN_FILTERS.map(filter => ({ value: filter,
+          label: `${filter[0].toUpperCase()}${filter.slice(1)}`, description: String(visible.filter(record => matches(record, filter)).length) })); },
           selected: () => state.filter, select: (value, done) => { changed = true; change(value as RunFilter, state.workspace, done); } }],
       subscribe: refresh => agents.manager.subscribe(refresh), ticking: () => records().some(record => active(record.state)),
       layout: { truncatePrimary: ({item, text, maxWidth}) => {
@@ -67,13 +68,12 @@ export async function showRuns(ctx: ExtensionContext, deps: SubagentsDeps, state
         const run = (value: string) => () => { action = value; done(item.value); };
         const pending = record.state === 'queued';
         return [
-          { label: pending ? 'Task details' : 'Transcript', run: run(pending ? 'details' : 'transcript') },
-          { label: 'Message', available: controls.canMessage, run: run('message') },
-          ...jobs ? [{ label: 'Jobs', run: run('jobs') }] : [],
-          { label: 'Model / thinking', available: () => !readOnly, run: run('model') },
-          { label: 'Background', available: () => !readOnly && agents.manager.canSendToBackground(record.id, record.runId), run: run('background') },
-          { label: pending ? 'Cancel queued' : 'Stop subtree', key: 'x' as const, confirm: pending ? '再按 x 取消排队' : '再按 x 停止', available: controls.canStop, run: run('stop') },
-          { label: 'Cleanup jobs', key: 'x' as const, confirm: '再按 x 清理所属 jobs',
+          { key: 'm', label: 'Message', available: controls.canMessage, run: run('message') },
+          ...jobs ? [{ key: 'j' as const, label: 'Jobs', run: run('jobs') }] : [],
+          { key: 'c', label: 'Model / thinking', available: () => !readOnly, run: run('model') },
+          { key: 'b', label: 'Background', available: () => !readOnly && agents.manager.canSendToBackground(record.id, record.runId), run: run('background') },
+          { label: pending ? 'Cancel queued' : 'Stop subtree', key: 'x', confirm: true, available: controls.canStop, run: run('stop') },
+          { label: 'Cleanup jobs', key: 'x', confirm: true,
             available: () => !readOnly && !active(record.state) && Boolean(jobs?.viewer.jobs.createdBy([record.runId]).some(jobActive)), run: run('stop') },
         ];
       },

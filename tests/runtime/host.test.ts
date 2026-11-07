@@ -26,7 +26,7 @@ test("actual Pi SDK registers one ask_user and executes typed results through it
     const tui = terminal();
     const theme = globalThis[Symbol.for("@earendil-works/pi-coding-agent:theme") as unknown as keyof typeof globalThis] as unknown as Theme;
     const uiContext = {
-      theme, setStatus() {}, setWidget() {}, notify() {},
+      theme, setStatus() {}, setWidget() {}, notify() {}, onTerminalInput() { return () => {}; }, getEditorText: () => '',
       custom: async (factory: Parameters<ExtensionUIContext["custom"]>[0]) => new Promise(resolve => {
         Promise.resolve(factory(tui, theme, {} as never, resolve)).then(view => {
           view.render(40); view.handleInput?.("\r"); view.handleInput?.("\r");

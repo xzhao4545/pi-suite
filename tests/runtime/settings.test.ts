@@ -5,11 +5,13 @@ import {join, resolve} from 'node:path';
 import {DefaultResourceLoader, SettingsManager, SessionManager, createAgentSession,
   type ExtensionCommandContext, type ExtensionContext, type ExtensionUIContext} from '@earendil-works/pi-coding-agent';
 import {fauxProvider, fauxAssistantMessage, fauxToolCall} from '@earendil-works/pi-ai';
-import {visibleWidth} from '@earendil-works/pi-tui';
+import {Text, TuiAltScreen, visibleWidth} from '@earendil-works/pi-tui';
 import {configPaths, writeConfigFields} from '../../src/runtime/config-fields.ts';
 import {loadConfig, readConfig} from '../../src/runtime/config.ts';
 import {prepareClipboard} from '../../src/runtime/clipboard.ts';
 import {BrowserView, browseState} from '../../src/ui/browser.ts';
+import {DetailsView} from '../../src/ui/details.ts';
+import {openReading, readingRows} from '../../src/ui/reading.ts';
 import {terminal} from '../support/terminal.ts';
 import {agentDir} from '../support/jobs.ts';
 
@@ -18,13 +20,14 @@ test('browser searches full data, preserves identity and readers across resize/r
   let items = Array.from({length: 35}, (_, i) => ({value: `run:${i}`, label: 'Same name', search: `command-${i}`,
     details: () => `Run ${i}\n` + 'Long details\n'.repeat(40)}));
   let selected: string | undefined, released = 0;
-  const options = {title: 'Records', state, items: () => [...items, {value: 'scope', label: 'Scope', pinned: true}],
+  const options = {title: 'Records', state, items: () => items,
     subscribe: () => () => {released++;}};
   const view = new BrowserView(tui, options, value => {selected = value;});
-  view.handleInput('command-34');
+  view.handleInput('command-34'); assert.equal(state.query, '', 'plain text is not an implicit filter');
+  view.handleInput('/'); view.handleInput('command-34'); view.handleInput('\r');
   assert.equal(view.getSelectedItem()?.value, 'run:34');
   for (const width of [40, 60, 120]) assert.ok(view.render(width).every(line => visibleWidth(line) <= width));
-  view.handleInput('\t'); view.handleInput('\t'); view.handleInput('\x1b[6~');
+  view.handleInput('\t'); view.handleInput('\x1b[6~');
   const reader = state.readers.get('run:34')!; assert.ok(reader.offset > 0);
   view.handleInput('\x1b'); view.handleInput('\r'); assert.equal(selected, 'run:34'); view.dispose();
   const next = new BrowserView(tui, options, () => {}); next.render(120);
@@ -33,8 +36,36 @@ test('browser searches full data, preserves identity and readers across resize/r
   for (let i = 0; i < 5; i++) next.handleInput('\x1b[B');
   const before = next.getSelectedItem()!.value; items = items.filter(item => item.value !== before); next.render(120);
   assert.equal(next.getSelectedItem()?.value, `run:${Number(before.slice(4)) + 1}`);
-  next.handleInput('missing'); assert.match(next.render(120).join('\n'), /No matching records/);
+  next.handleInput('/'); next.handleInput('missing'); assert.match(next.render(120).join('\n'), /No matching records/);
   next.dispose(); assert.equal(released, 2);
+});
+
+test('reading overlays share the actual height ceiling and fullscreen viewport keys defer to readers and lists', async () => {
+  for (const fullscreen of [false, true]) {
+    const tui = fullscreen ? new TuiAltScreen(terminal(24, 120).terminal) : terminal(24, 120);
+    const custom: ExtensionUIContext['custom'] = async (factory, options) => new Promise((resolve, reject) => {
+      Promise.resolve(factory(tui, {} as never, {} as never, resolve)).then(view => {
+        const overlay = typeof options?.overlayOptions === 'function' ? options.overlayOptions() : options?.overlayOptions;
+        assert.equal(options?.overlay, true);
+        assert.deepEqual(overlay, fullscreen ? {anchor: 'top-left', width: '100%', maxHeight: '100%', margin: 0}
+          : {anchor: 'center', width: '90%', maxHeight: 16, margin: 0});
+        assert.ok(view instanceof DetailsView); assert.equal(view.capturesViewportInput, true);
+        assert.equal(view.render(120).length, readingRows(tui), 'footer is inside the same ceiling as the overlay');
+        tui.setFocus(view);
+        if (fullscreen) {
+          // Exercise Pi's real dispatch boundary, not a replacement viewport/router.
+          const input = tui as unknown as {handleViewportInput(data: string): unknown};
+          assert.equal(input.handleViewportInput('\x1b[6~'), undefined);
+          const list = new BrowserView(tui, {title: 'Records', state: browseState(), items: () => []}, () => {});
+          tui.setFocus(list); assert.equal(input.handleViewportInput('\x1b[6~'), undefined); list.dispose(); tui.setFocus(view);
+        }
+        view.handleInput('\x1b[6~'); assert.ok(view.reader.offset > 0);
+        view.handleInput('\x1b');
+      }).catch(reject);
+    });
+    await openReading<void>({ui: {custom}} as ExtensionContext, (tui, _theme, _keys, done) =>
+      new DetailsView(tui, () => 'Reader', new Text('line\n'.repeat(80), 0, 0), done));
+  }
 });
 
 test('configuration edits share locks, preserve other fields and enforce layer/schema contracts', async () => {
@@ -72,7 +103,7 @@ test('actual extension loader readies first commands/tools and suite edits apply
     settingsManager, sessionManager: SessionManager.inMemory(root), model: faux.getModel()});
   try {
     assert.deepEqual(extensionsResult.errors, []);
-    const ui = {setStatus() {}, setWidget() {}, notify() {}, addAutocompleteProvider() {},
+    const ui = {setStatus() {}, setWidget() {}, notify() {}, addAutocompleteProvider() {}, onTerminalInput() { return () => {}; }, getEditorText: () => '',
       custom: async (factory: Parameters<ExtensionUIContext['custom']>[0]) => new Promise((done, reject) => Promise.resolve(factory(terminal(), ctx.ui.theme, {} as never, done)).then(view => {
         view.render(120); view.handleInput?.('\x1b'); view.dispose?.();
       }).catch(reject))} as unknown as ExtensionUIContext;

@@ -176,6 +176,11 @@ test('individual model switches start at the next SDK request, restore launch ch
     restored.restore([saved]);
     await updateAgentModel(restored, h.ctx, done.id, { model: 'suite-model-test/plain', thinking: 'off' });
     assert.equal(restored.get(done.id).record.model, done.model, 'editing a settled record does not rewrite its actual historical model');
+    const successor = {...saved, runId: 'run_123456789abc', createdAt: new Date(Date.parse(saved.createdAt) + 1000).toISOString(), individual: undefined};
+    restored.restore([successor]);
+    await updateAgentModel(restored, h.ctx, done.id, {thinking: 'off'}, saved.runId);
+    assert.deepEqual(restored.get(done.id, saved.runId).record.individual, {thinking: 'off'});
+    assert.equal(restored.get(done.id).record.individual, undefined, 'editing an earlier run cannot spill into the latest run');
     const resumed = await h.manager.send(done.id, 'resume', { ctx: h.ctx }, h.config);
     assert.equal((await resumed.run.done.promise).state, 'completed'); assert.equal(resumed.run.record.modelSource, 'individual');
     assert.equal(h.session.model?.id, 'offline'); assert.equal(h.services.settingsManager.getDefaultModel(), undefined);
@@ -203,12 +208,12 @@ test('transcript model editing closes its UI first and preserves the native read
         if (phase++ === 0) {
           assert.ok(view instanceof DetailsView); reader = view.reader;
           reader.scroll(5); reader.query = 'reader'; offset = reader.offset;
-          view.actions.find(action => action.label === 'Model / thinking')!.run();
+          view.handleInput('c');
         } else if (phase === 2) view.handleInput?.('\x1b');
         else {
           assert.ok(view instanceof DetailsView); assert.equal(view.reader, reader);
           assert.equal(view.reader.offset, offset); assert.equal(view.reader.query, 'reader');
-          view.actions.at(-1)!.run();
+          view.handleInput('\x1b');
         }
       }).catch(reject);
     });

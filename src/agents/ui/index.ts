@@ -1,5 +1,5 @@
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { browseState, type BrowseControl } from '../../ui/browser.ts';
+import { browseState, type BrowseChoice } from '../../ui/browser.ts';
 import type { SubagentsDeps } from '../commands.ts';
 import { showSchedules } from '../schedules/menu.ts';
 import { showAgentTypes } from './types.ts';
@@ -17,10 +17,11 @@ export async function showSubagents(args: string, ctx: ExtensionContext, deps: S
   const runs = runsState((command === 'workspace' ? words[1] ?? 'all' : (RUN_FILTERS as readonly string[]).includes(command) ? command : 'active') as RunFilter, command === 'workspace');
   const states = new Map(pages.map(page => [page, page === 'runs' ? runs.browser : browseState()]));
   let next: string | undefined;
-  const navigation: BrowseControl = { label: '', selected: () => page,
+  // Every page shares one switcher; each keeps its own list state so returning restores its selection.
+  const navigation: BrowseChoice = { selected: () => page,
     items: () => pages.map(value => ({ value, label: `${value[0].toUpperCase()}${value.slice(1)}` })),
     select: (value, done) => { next = value; done(); } };
-  const frames = new Map(pages.map(page => [page, { state: states.get(page)!, navigation }]));
+  const frames = new Map(pages.map(page => [page, { state: states.get(page)!, pages: navigation }]));
   const release = deps.notices.hold();
   try { for (;;) {
     next = undefined;
@@ -30,6 +31,6 @@ export async function showSubagents(args: string, ctx: ExtensionContext, deps: S
     else if (page === 'schedules') await showSchedules(ctx, deps.scheduler!, deps.dock, frame);
     else await deps.workflows!.show(ctx, frame);
     if (!next) return;
-    page = next; states.get(page)!.focus = 'control:0';
+    page = next;
   } } finally { release(); }
 }

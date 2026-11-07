@@ -12,7 +12,7 @@ import { loadConfig } from '../../src/runtime/config.ts';
 import { host } from '../support/host.ts';
 import { agentDir } from '../support/jobs.ts';
 import { terminal } from '../support/terminal.ts';
-import { chooseBrowserAction, focusBrowser } from '../support/browser.ts';
+import { chooseBrowserAction } from '../support/browser.ts';
 
 test('subagents navigates pages and empty filters without menu rows or model work, and cancels only the selected queued run', {timeout: 15000}, async () => {
   const root = agentDir(), gate = Promise.withResolvers<void>(), entered = Promise.withResolvers<void>();
@@ -40,31 +40,33 @@ test('subagents navigates pages and empty filters without menu rows or model wor
           case 0:
             assert.match(text(), /\[Active 1\].*Queued 1/); assert.equal(view.getSelectedItem()?.value, running.record.runId);
             assert.ok(view.render(120).some(line => / · running · [\d.]+s/.test(line.split('│')[0])), 'long names retain state and runtime');
-            view.handleInput('probe'); focusBrowser(view, 'State'); view.handleInput('\x1b[C'); view.handleInput('\r'); break;
+            view.handleInput('/'); view.handleInput('probe'); view.handleInput('\r'); view.handleInput('s'); break;
           case 1:
             assert.equal(view.getSelectedItem()?.value, queued.record.runId); assert.match(text(), /Filter: probe/);
             assert.match(text(), /Cancel queued/); assert.doesNotMatch(text(), /Message|Background/);
-            focusBrowser(view, 'Pages'); view.handleInput('\x1b[C'); view.handleInput('\r'); break;
+            view.handleInput('2'); break;
           case 2:
-            assert.match(text(), /\[Types\]/); assert.match(text(), /Model settings:/);
-            assert.ok(view.render(120).some(line => { const left = line.split('│')[0]; return left.includes('offline') && left.includes(' · off'); }), 'type rows retain model and thinking');
-            focusBrowser(view, 'Pages'); view.handleInput('\x1b[D'); view.handleInput('\r'); break;
+            assert.match(text(), /Subagents ▸ Types.*\[2 Types\]/); assert.match(text(), /Model settings:/);
+            assert.ok(view.render(120).some(line => { const left = line.split('│')[0]; return left.includes('not configured · not configured'); }), 'inherited type fields are not configuration pins');
+            assert.match(text(), /Model: not configured \(inherited\)/); assert.match(text(), /Thinking: not configured \(inherited\)/);
+            assert.doesNotMatch(text().split('Model settings:')[0], /offline/);
+            view.handleInput('['); break;
           case 3:
             assert.equal(view.getSelectedItem()?.value, queued.record.runId); assert.match(text(), /Filter: probe/);
-            chooseBrowserAction(view, 'Cancel queued'); assert.match(text(), /再按 x 取消排队/);
+            chooseBrowserAction(view, 'Cancel queued'); assert.match(text(), /Press x again to cancel queued/);
             assert.equal(queued.controller.signal.aborted, false); view.handleInput('x'); break;
           case 4:
             assert.match(text(), /\[Queued 0\]/); assert.match(text(), /No matching records/);
-            assert.match(view.render(120).at(-2)!, /^Filter ·/, 'empty action sets return focus to filtering');
-            focusBrowser(view, 'State'); view.handleInput('\x1b[C'); view.handleInput('\r'); break;
+            assert.match(view.render(120).at(-2)!, /\/ filter.*Esc clear filter/, 'empty lists retain list commands');
+            view.handleInput('s'); break;
           case 5:
             assert.match(text(), /\[Finished 1\]/); assert.equal(view.getSelectedItem()?.value, queued.record.runId);
             assert.doesNotMatch(text(), /Cancel queued|Stop subtree/);
-            focusBrowser(view, 'Scope'); view.handleInput('\x1b[C'); view.handleInput('\r'); break;
+            view.handleInput('w'); break;
           case 6:
             assert.match(text(), /\[Workspace\]/); assert.match(text(), /\[Finished 1\]/); assert.match(text(), /Filter: probe/);
             assert.equal(view.getSelectedItem()?.value, queued.record.runId);
-            view.handleInput('\x1b[D'); view.handleInput('\r'); break;
+            view.handleInput('w'); break;
           case 7:
             assert.match(text(), /\[This session\]/); assert.equal(view.getSelectedItem()?.value, queued.record.runId);
             view.handleInput('\x1b'); view.handleInput('\x1b'); break;

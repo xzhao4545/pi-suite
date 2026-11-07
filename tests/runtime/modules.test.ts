@@ -66,7 +66,8 @@ test('SDK uses real project module admission, preserves child config and joins d
     assert.deepEqual(extensionsResult.errors, []);
     assert.equal(session.getToolDefinition('agent_start'), undefined, 'factory waits for the real session context');
     await session.bindExtensions({mode: 'tui', onError: error => errors.push(error.error),
-      uiContext: {setStatus(key: string, text?: string) { statuses.set(key, text); }, setWidget() {}, notify() {}, addAutocompleteProvider() { completions++; }} as unknown as ExtensionUIContext});
+      uiContext: {setStatus(key: string, text?: string) { statuses.set(key, text); }, setWidget() {}, notify() {},
+        onTerminalInput() { return () => {}; }, getEditorText: () => '', addAutocompleteProvider() { completions++; }} as unknown as ExtensionUIContext});
     assert.equal(ctx.cwd, project); admitted(initial);
     assert.equal(completions, 1, 'first startup initializes mentions despite the SDK handler snapshot');
 

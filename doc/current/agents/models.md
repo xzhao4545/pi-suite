@@ -1,8 +1,8 @@
 # 类型、模型与 thinking 配置
 
-`/subagents types` 或 `/subagents` 的 Types 页面配置启用状态、模型与 thinking；运行记录操作栏和 Transcript 的 Model / thinking 操作配置单个 agent。模型修改依次选择模型与 thinking，任一步 Esc 取消整次修改。
+`/subagents types` 或 `/subagents` 的 Types 页面配置启用状态、模型与 thinking；运行记录和 Transcript 的 `c Model / thinking` 操作配置单个 run。Types 页 Enter 或 `c` 配置类型默认值，对之后新建的执行生效；Runs 页与 Transcript 的 `c` 修改所选 run 的覆盖，从它下一次请求生效，Read only 记录不提供。模型修改依次选择模型与 thinking，任一步 Esc 取消整次修改。
 
-Types 按无调用参数、无 individual 覆盖的默认启动设置解析当前有效模型/思考强度，实际级别使用 Pi 的模型能力约束。列表显示类型、●/○ 启用状态、模型名称和实际 thinking，右侧显示完整 provider/modelId 及各字段来源；不可用模型在详情显示具体错误并允许进入修正，预览不创建 child 会话。Enter 直接打开模型选择，返回保留筛选、所选类型和阅读位置。
+Types 按无调用参数、无 individual 覆盖的默认启动设置解析来源，已配置 thinking 使用 Pi 的模型能力约束。模型来源为 inherited 时，列表与详情显示 `not configured`，而不是父级主会话当前模型；详情说明运行时使用启动时父级会话的当前模型。thinking 来源为 inherited 时同样显示 `not configured`，执行启动时继承父级当前思考强度并按实际模型能力收紧。此展示不改变运行时解析顺序。列表显示类型、●/○ 启用状态、模型名称和 thinking；窄列表中两个字段均未配置时合并为 `M/H not configured`（model/thinking），避免重复标记挤掉类型名，详情仍分别列出两个字段及来源。右侧显示配置的完整 provider/modelId 及各字段来源；不可用模型在详情显示具体错误并允许进入修正，预览不创建 child 会话。Enter 或 `c` 直接打开模型选择，返回保留筛选、所选类型和阅读位置。
 
 模型列表来自 Pi 的 `modelRegistry.getAvailable()`，包含全部已认证模型，不受父会话 scoped models 限制。共享选择器复用 Pi 原生 SelectList，显示 provider/modelId，长行按可见宽度截断，完整值保持独立；↑↓ 和 PageUp/PageDown 移动，Enter 提交。thinking 使用 pi-ai 的模型能力列表，非推理模型仅提供 No override 与 off。
 
@@ -32,7 +32,7 @@ No override 删除对应位置的字段；删除项目字段后，用户级对�
 
 ## 类型启用状态
 
-类型列表包含当前信任与包门控范围内的内置、包、项目和用户定义的全部类型，包括 disabled 类型。底部操作栏按启用状态显示 Enable 或 Disable，存在 enabled 配置覆盖时显示 Use definition，并提供 Model / thinking。Enable/Disable 写入 enabled：项目已经设置该字段时写项目配置，否则写用户配置；Use definition 删除用户和项目两层的 enabled，回到 frontmatter 的 enabled 或默认 true，不修改 model/thinking。
+类型列表包含当前信任与包门控范围内的内置、包、项目和用户定义的全部类型，包括 disabled 类型。底部 `d` 按启用状态执行 Enable 或 Disable，存在 enabled 配置覆盖时显示 `u Use definition`，并提供 `c Model / thinking`。Enable/Disable 写入 enabled：项目已经设置该字段时写项目配置，否则写用户配置；Use definition 删除用户和项目两层的 enabled，回到 frontmatter 的 enabled 或默认 true，不修改 model/thinking。
 
 启用状态按项目配置、用户配置、frontmatter、默认 true 解析，配置键使用 catalog 的规范类型名。普通新执行、普通会话恢复、嵌套、调度、workflow 新 child 和 RPC 共用 catalog 准入；已准入执行继续运行，workflow 的固定 child resume 沿用其原契约。
 
@@ -42,7 +42,7 @@ No override 删除对应位置的字段；删除项目字段后，用户级对�
 
 运行中通过 child 的 `setModel(..., {persist:false})` 与 `setThinkingLevel(..., {persist:false})` 修改下一次请求，当前请求不中断；不修改主会话、其他 agent 或 Pi 全局默认。尚未建立 child 会话的执行在第一请求前应用修改，thinking 由 Pi 按实际模型能力收紧。
 
-覆盖保存在既有 `pi-suite:agent-record` 的 individual 字段。已结束记录保持该次运行的实际模型与 thinking，编辑只改变之后恢复使用的覆盖。取消单独覆盖时，活动执行恢复其启动参数与启动配置；查看器打开选择器前关闭当前 custom UI，返回后保留原生 transcript 的滚动、搜索和展开状态。所选 run 的 retain 引用覆盖整次详情、输入与模型选择往返，直到最终退出阅读后释放。
+覆盖保存在既有 `pi-suite:agent-record` 的 individual 字段；查看器将选中 runId 贯穿选择与写入，即使选择期间 agent 恢复为新 run，也不会改写新 run。已结束记录保持该次运行的实际模型与 thinking，编辑只改变之后恢复使用的覆盖。取消单独覆盖时，活动执行恢复其启动参数与启动配置；查看器打开选择器前关闭当前 custom UI，返回后保留原生 transcript 的滚动、搜索和展开状态。所选 run 的 retain 引用覆盖整次详情、输入与模型选择往返，直到最终退出阅读后释放。
 
 workspace 发现的其他 owner 或当前分支之外的已结算记录只提供阅读；当前 owner/分支可见的结束记录仍可编辑 individual。历史合并保留本地编辑的新事实，不让较早保存记录覆盖，见 [持久历史](history.md)。
 ## 解析与来源

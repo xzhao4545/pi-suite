@@ -26,7 +26,7 @@ test('actual loader resolves historical renderers before binding, during reload 
     return session;
   };
   const bind = async (session: AgentSession) => session.bindExtensions({ mode: 'tui',
-    uiContext: { setStatus() {}, setWidget() {}, notify() {}, addAutocompleteProvider() {} } as unknown as ExtensionUIContext,
+    uiContext: { setStatus() {}, setWidget() {}, notify() {}, addAutocompleteProvider() {}, onTerminalInput() { return () => {}; } } as unknown as ExtensionUIContext,
     onError: error => errors.push(error) });
   const renderer = (session: AgentSession, name: string) => session.extensionRunner.resolveToolRenderers(name, () => session.getToolDefinition(name));
   const names = ['task_list', 'task_get', 'task_edit', 'job_start', 'job_list', 'job_get', 'job_read', 'job_write', 'job_stop',
@@ -42,15 +42,26 @@ test('actual loader resolves historical renderers before binding, during reload 
   };
   const replay = (session: AgentSession) => {
     const tools = new Map<string, ToolExecutionComponent>(), tui = terminal(30, 120);
+    let list!: ToolExecutionComponent;
     for (const entry of session.sessionManager.getBranch()) {
       if (entry.type !== 'message') continue;
       if (entry.message.role === 'assistant') for (const call of entry.message.content) {
-        if (call.type === 'toolCall') tools.set(call.id, new ToolExecutionComponent(call.name, call.id, call.arguments,
-          { outputPad: 2 }, renderer(session, call.name), tui, root));
+        if (call.type === 'toolCall') {
+          tools.set(call.id, new ToolExecutionComponent(call.name, call.id, call.arguments,
+            { outputPad: 2 }, renderer(session, call.name), tui, root));
+          if (call.name === 'task_list') list = tools.get(call.id)!;
+        }
       }
       else if (entry.message.role === 'toolResult') tools.get(entry.message.toolCallId)!.updateResult(entry.message);
     }
-    const list = [...tools.values()].at(-1)!;
+    for (const name of ['agent_get', 'agent_stop']) {
+      const agent = tools.get(`history-${name}`)!;
+      const collapsed = agent.render(120).map(stripVTControlCharacters).filter(line => line.trim());
+      assert.equal(collapsed.length, 1); assert.match(collapsed[0], /History reviewer/); assert.doesNotMatch(collapsed[0], /agent_/);
+      agent.setExpanded(true);
+      const expanded = agent.render(120).map(stripVTControlCharacters).filter(line => line.trim());
+      assert.match(expanded[0], /History reviewer/); assert.match(expanded.join('\n'), /agent_00000001/);
+    }
     const collapsed = list.render(120).map(stripVTControlCharacters).filter(line => line.trim());
     assert.equal(collapsed.length, 1); assert.match(collapsed[0], /任务.*1 组 2 项/);
     list.setExpanded(true);
@@ -68,6 +79,15 @@ test('actual loader resolves historical renderers before binding, during reload 
       fauxAssistantMessage(fauxToolCall('task_list', {})), fauxAssistantMessage('Recorded'),
     ]);
     await session.prompt('Record tasks for history');
+    // Persisted details carry identity even when rendering precedes binding or modules are disabled.
+    for (const name of ['agent_get', 'agent_stop']) {
+      const call = { ...fauxToolCall(name, { id: 'agent_00000001' }), id: `history-${name}` };
+      session.sessionManager.appendMessage(fauxAssistantMessage(call));
+      session.sessionManager.appendMessage({ role: 'toolResult', toolName: name, toolCallId: call.id, timestamp: Date.now(), isError: false,
+        content: [{ type: 'text', text: 'agent_00000001 completed · History reviewer · run_00000001' }],
+        details: name === 'agent_get' ? { agent: { id: 'agent_00000001', name: 'History reviewer', state: 'completed' } }
+          : { name: 'History reviewer', state: 'completed', cleanup: 'confirmed', affected: [] } });
+    }
     const expected = replay(session), sessionFile = session.sessionFile!;
     let beforeStart = false;
     await session.reload({ beforeSessionStart: () => {

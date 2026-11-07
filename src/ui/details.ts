@@ -2,34 +2,34 @@ import { getMarkdownTheme, type ExtensionContext, type Theme } from "@earendil-w
 import { Key, Markdown, matchesKey, truncateToWidth, type Component, type TUI, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { Dock } from "./dock.ts";
 import { ScrollView } from "./scroll.ts";
-import { ActionBar, type DetailAction } from './actions.ts';
+import { ActionBar, keyHelp, type DetailAction } from './actions.ts';
 export type { DetailAction } from './actions.ts';
 import { commandFrame } from './frame.ts';
+import { openReading, readingRows } from './reading.ts';
 
-/** Shared detail frame: static Markdown and live log windows use the same reader and controls. */
+/** Shared detail frame: static Markdown and live log windows use the same reader and key-driven actions. */
 export class DetailsView implements Component {
+  readonly capturesViewportInput = true;
   readonly reader: ScrollView;
   private bar: ActionBar;
-  private height = 1;
   private bodyRows = 0;
   readonly actions: DetailAction[];
-  constructor(private tui: TUI, private title: () => string, content: Component, done: () => void, actions?: DetailAction[], reader?: ScrollView, initialAction?: string, private theme?: Theme) {
+  constructor(private tui: TUI, private title: () => string, content: Component, private done: () => void, actions: DetailAction[] = [], reader?: ScrollView, private theme?: Theme) {
     this.reader = reader ?? new ScrollView(content);
-    this.actions = [...actions ?? [
-      { label: "Previous page", run: () => this.reader.scroll(-this.height) },
-      { label: "Next page", run: () => this.reader.scroll(this.height) },
-    ], { label: "Back", run: done }];
-    this.bar = new ActionBar(() => this.actions, initialAction ?? 'Back', 'Back');
+    this.actions = actions;
+    this.bar = new ActionBar(() => this.actions);
   }
   render(width: number): string[] {
-    const actions = this.bar.available(), shortcuts = actions.filter(action => action.key);
-    const hint = this.bar.hint ?? shortcuts.map(action => `${action.key} ${action.label}`).join(" · ");
-    this.height = Math.max(1, Math.floor(this.tui.terminal.rows * 0.8) - 5 - (hint ? 1 : 0));
-    const body = this.reader.viewport(width, this.height);
-    this.bodyRows = body.length;
-    return commandFrame(width, [truncateToWidth(`${this.title()} · ${this.reader.position}`, width), ...body,
-      ...(this.reader.searching ? this.reader.search.render(width)
-        : [...hint ? [truncateToWidth(hint, width)] : [], this.bar.render(width), truncateToWidth('←→ Enter · / search · Esc', width)])], this.theme);
+    const shortcuts = this.bar.render();
+    // The reader owns ↑↓/PgUp/PgDn, Home/End and / n N; actions only take the remaining keys.
+    const help = this.bar.hint ?? `${shortcuts ? `${shortcuts} · ` : ''}↑↓ PgUp PgDn Home/End · / search · n/N next · Esc back`;
+    const footer = this.reader.searching ? this.reader.search.render(width) : keyHelp(help, width);
+    const height = Math.max(1, readingRows(this.tui) - footer.length - 3);
+    const body = this.reader.viewport(width, height);
+    this.bodyRows = height;
+    // A full-window overlay must also cover unused rows, or the parent's transcript leaks through.
+    const viewport = Array.from({length: height}, (_, index) => body[index] ?? '');
+    return commandFrame(width, [truncateToWidth(`${this.title()} · ${this.reader.position}`, width), ...viewport, ...footer], this.theme);
   }
   invalidate(): void { this.reader.invalidate(); }
   handleMouse(event: TuiMouseEvent) {
@@ -39,7 +39,7 @@ export class DetailsView implements Component {
   handleInput(data: string): void {
     // Search owns all text, including action shortcuts and confirmation keys.
     if (this.reader.searching) { this.bar.disarm(); this.reader.handleInput(data); }
-    else if (matchesKey(data, Key.escape)) { this.bar.disarm(); this.actions.at(-1)!.run(); }
+    else if (matchesKey(data, Key.escape)) { this.bar.disarm(); this.done(); }
     else if (!this.bar.handleInput(data)) this.reader.handleInput(data);
     this.tui.requestRender();
   }
@@ -49,6 +49,6 @@ export async function showDetails(ctx: ExtensionContext, dock: Dock, title: stri
   if (ctx.mode !== "tui") { ctx.ui.notify(`${title}\n${text}`); return; }
   dock.setDetail(true);
   try {
-    await ctx.ui.custom<void>((tui, theme, _keys, done) => new DetailsView(tui, () => title, new Markdown(text, 0, 0, getMarkdownTheme()), done, undefined, undefined, undefined, theme));
+    await openReading<void>(ctx, (tui, theme, _keys, done) => new DetailsView(tui, () => title, new Markdown(text, 0, 0, getMarkdownTheme()), done, [], undefined, theme));
   } finally { dock.setDetail(false); }
 }

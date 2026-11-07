@@ -1,6 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { Dock } from '../ui/dock.ts';
 import { DetailsView } from '../ui/details.ts';
+import { openReading } from '../ui/reading.ts';
 import { Transcript } from '../ui/transcript.ts';
 import { active } from './types.ts';
 import { transcript } from './records.ts';
@@ -23,7 +24,8 @@ export async function showAgentJobs(ctx: ExtensionContext, deps: AgentJobViewer,
     // collected children. Task references and another run of this agent do not confer ownership.
     const current = () => deps.viewer.jobs.createdBy([runId]).filter(jobActive);
     if (!current().length) { ctx.ui.notify('No active jobs owned by this run'); return; }
-    const selected = await browse(ctx, deps.viewer.dock, { title: 'Jobs owned by this run and its descendants', state: viewState,
+    const selected = await browse(ctx, deps.viewer.dock, { title: 'Subagents', page: 'Jobs', scope: 'Run subtree', state: viewState,
+      selection: item => ({name: jobName(current().find(job => job.id === item.value)!), id: item.value}),
       subscribe: refresh => deps.viewer.jobs.control().subscribe(refresh), ticking: () => current().length > 0,
       items: () => current().map(job => ({ value: job.id, label: `${jobSummary(job)} · ${jobName(job)}`,
         search: `${job.id} ${jobName(job)} ${job.state} ${job.command} ${job.cwd}`, details: () => jobDetail(job, true).join('\n') })),
@@ -50,7 +52,7 @@ export async function performAgentAction(action: string, ctx: ExtensionContext, 
   id: string, runId: string, readonly: boolean, config: () => SuiteConfig, jobs?: AgentJobViewer): Promise<void> {
   const { get, canMessage } = agentControls(ctx, agents, id, runId, readonly);
   if (action === 'jobs') await showAgentJobs(ctx, jobs!, runId, readonly);
-  else if (action === 'model' && !readonly) await editAgentModel(ctx, agents.manager, id, config());
+  else if (action === 'model' && !readonly) await editAgentModel(ctx, agents.manager, id, config(), runId);
   else if (action === 'message') {
     const message = (await ctx.ui.input(get().run?.question ? 'Answer parent question' : 'Message agent'))?.trim();
     if (!message) return;
@@ -73,18 +75,18 @@ export async function showAgent(ctx: ExtensionContext, agents: Pick<AgentsModule
     dock.setDetail(true);
     let action: 'model' | 'message' | 'stop' | 'jobs' | undefined;
     try {
-      await ctx.ui.custom<void>((tui, theme, _keys, done) => {
+      await openReading<void>(ctx, (tui, theme, _keys, done) => {
         content ??= new Transcript(tui, get().record.cwd, name => get().run?.renderers?.get(name));
         content.setEntries(transcript(get().record, get().run));
-        const view = new DetailsView(tui, () => `${summaryLine(get().record)} · ${get().record.model} (${get().record.modelSource}) · thinking ${get().record.thinking} (${get().record.thinkingSource})`, content, done, [
-          { label: 'Message', available: canMessage, run: () => { action = 'message'; done(); } },
-          { label: 'Tools', run: () => { content!.toggleTools(); view.invalidate(); } },
-          { label: 'Thinking', run: () => { content!.toggleThinking(); view.invalidate(); } },
-          { label: 'Jobs', available: () => jobs !== undefined, run: () => { action = 'jobs'; done(); } },
-          { label: 'Model / thinking', available: () => !readonly, run: () => { action = 'model'; done(); } },
+        const view = new DetailsView(tui, () => `Subagents ▸ Transcript · ${summaryLine(get().record)} · ${get().record.model} (${get().record.modelSource}) · thinking ${get().record.thinking} (${get().record.thinkingSource})`, content, done, [
+          { key: 'm', label: 'Message', available: canMessage, run: () => { action = 'message'; done(); } },
+          { key: 'o', label: 'Tools', run: () => { content!.toggleTools(); view.invalidate(); } },
+          { key: 'h', label: 'Thinking', run: () => { content!.toggleThinking(); view.invalidate(); } },
+          { key: 'j', label: 'Jobs', available: () => jobs !== undefined, run: () => { action = 'jobs'; done(); } },
+          { key: 'c', label: 'Model / thinking', available: () => !readonly, run: () => { action = 'model'; done(); } },
           { label: 'Background', key: 'b', available: () => !readonly && agents.manager.canSendToBackground(id, runId), run: () => { agents.manager.sendToBackground(id, runId); } },
-          { label: 'Stop subtree', key: 'x', confirm: '再按 x 停止', available: canStop, run: () => { action = 'stop'; done(); } },
-        ], reader, canMessage() ? 'Message' : undefined, theme);
+          { label: 'Stop subtree', key: 'x', confirm: true, available: canStop, run: () => { action = 'stop'; done(); } },
+        ], reader, theme);
         view.reader.setContent(content, reader ? reader.atBottom : active(get().record.state));
         reader = view.reader;
         let revision = transcript(get().record, get().run);

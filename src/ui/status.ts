@@ -9,6 +9,7 @@ export class StatusPublisher {
   private agents = new Set<string>();
   private jobs = new Set<string>();
   private details: Record<'agents' | 'jobs', DockRow[]> = { agents: [], jobs: [] };
+  private asides: Record<'agents' | 'jobs', string> = { agents: '', jobs: '' };
   private ownsGoal = true;
   private modes: Record<"goal" | "agents" | "jobs", DisplayMode> = { goal: "status", agents: "status", jobs: "status" };
 
@@ -16,9 +17,10 @@ export class StatusPublisher {
     dock.register("goal", { title: "Goal", rows: () => this.modes.goal === "dock" && this.goal
       ? [{ id: "goal", text: this.goal, priority: 90 }] : [] });
     for (const key of ["agents", "jobs"] as const) dock.register(key, { title: key === 'agents' ? 'Agents' : 'Jobs', rows: () => [
-      ...(this.modes[key] === "dock" && this[key].size ? [{ id: key, text: `${this[key].size} active`, priority: 70 }] : []),
+      // Counts are summaries, not object identities that a viewer can open.
+      ...(this.modes[key] === "dock" && this[key].size && !this.asides[key] ? [{ id: key, text: `${this[key].size} active`, priority: 70, selectable: false }] : []),
       ...(this.modes[key] === 'hidden' ? [] : this.details[key]),
-    ] });
+    ], aside: () => this.asides[key] });
   }
 
   bind(ui: ExtensionUIContext, modes: typeof this.modes, ownsGoal = true): void {
@@ -29,7 +31,7 @@ export class StatusPublisher {
     this.ui?.setStatus("pi-suite:runtime", undefined);
     this.ui = undefined;
     this.goal = undefined; this.agents.clear(); this.jobs.clear();
-    this.details = { agents: [], jobs: [] };
+    this.details = { agents: [], jobs: [] }; this.asides = { agents: '', jobs: '' };
     this.dock.setStatusRow(false);
   }
   setGoal(text?: string): void {
@@ -37,13 +39,13 @@ export class StatusPublisher {
     this.goal = text; this.flush();
   }
   get goalVisible(): boolean { return Boolean(this.ui && this.modes.goal !== 'hidden'); }
-  setActivities(kind: "agents" | "jobs", ids: Iterable<string>, details: DockRow[] = []): void {
+  detailsVisible(kind: 'agents' | 'jobs'): boolean { return Boolean(this.ui && this.modes[kind] !== 'hidden'); }
+  setActivities(kind: "agents" | "jobs", ids: Iterable<string>, details: DockRow[] = [], aside = ''): void {
     const next = new Set(ids), previousSize = this[kind].size;
     this[kind] = next;
-    const changed = JSON.stringify(details) !== JSON.stringify(this.details[kind]);
-    this.details[kind] = details;
-    // Activity identity and token deltas need no redraw. A changed question or
-    // state does, even when the activity count stays the same.
+    const changed = JSON.stringify(details) !== JSON.stringify(this.details[kind]) || aside !== this.asides[kind];
+    this.details[kind] = details; this.asides[kind] = aside;
+    // Footer counts do not tick; live row metrics and state counts only redraw Dock.
     if (next.size !== previousSize) this.flush();
     else if (changed && this.modes[kind] !== 'hidden') this.dock.invalidate();
   }

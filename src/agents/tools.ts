@@ -157,7 +157,7 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
       if (scope.run && !agents.manager.visible(record, scope)) throw new ToolError('NOT_OWNER', `${params.id} is not a direct child of this run`);
       const outcome = await agents.manager.stop(params.id, params.runId);
       return text([`${params.id} ${outcome.state} · cleanup ${outcome.cleanup} · ${record.runId} · requested ${outcome.requested}`,
-        ...outcome.affected.map(item => `${item.id} ${item.state}${item.cleanup ? ` · ${item.cleanup}` : ''}`)], { ...outcome, runId: record.runId });
+        ...outcome.affected.map(item => `${item.id} ${item.state}${item.cleanup ? ` · ${item.cleanup}` : ''}`)], { ...outcome, runId: record.runId, name: record.name });
     } }, 'initial');
   return Object.assign(startTool, { refreshSchema() {
     const next = Boolean(scheduler && config().agents.scheduling);

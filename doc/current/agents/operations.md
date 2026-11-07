@@ -13,36 +13,42 @@
 
 模型工具默认返回摘要，完整输入、thinking、工具调用和输出通过 agent_read 或原生 transcript 按需读取。workspace 列表发现当前配置工作区的持久历史并合并本进程记录；session 列表与状态数量使用同一直接子级和分支归属过滤。未知 ID 的 agent_get/read/send/stop 先发现并核对当前配置工作区，发送仍需直接父级与分支准入；分页 more 保留 scope。实际目录与引用范围、读取和合并规则见 [持久历史](history.md)。
 
-工具默认折叠为一行：start 区分后台状态、前台时长、转后台与调度，list 显示数量/范围，get 显示状态或待答问题，read 显示流与字节区间，send 显示真实 action，stop 显示结算/清理与级联数量。展开保留完整 prompt、model/thinking、用量、模型返回摘要、待答问题和本页正文。taskId 使用 `1.2` 形式的子任务 ID。所有结果使用公共 renderer，点击结果切换单项，默认 Ctrl+O 切换全部，错误完整显示；child Transcript 使用实际 run.renderers。
+工具默认折叠为一行，普通 subagent 以名称为主标识（AgentRecord.name，默认类型 displayName/name），ID 只在展开或 dim 元信息中显示；只有 ID 的调用按进程级 Manager 内存记录查名，可带 runId，未找到时显示 ID，展示不读取磁盘或创建运行时。start 区分后台状态、前台时长、转后台与调度，list 显示数量/范围，get 显示状态或待答问题，read 显示流与字节区间，send 显示真实 action，stop 显示结算/清理与级联数量，并在 details 保存名称供历史回放。展开以名称开头，保留完整 prompt、model/thinking、用量、模型返回摘要、待答问题和本页正文；list 逐项显示名称与状态，ID/runId 为 dim 信息。wait 折叠保留结算比例，展开的普通 agent 摘要与 pending 按内存记录显示名称，未知记录保留 ID；模型正文与通知仍使用 agent_/run_ ID，read/send 参数不改写。taskId 使用 `1.2` 形式的直接父级子任务 ID；child 默认维护私有清单，对分配任务须显式使用 task_get/task_edit 的 `scope:"assigned"`，只允许读取或 start/done/block/unblock，默认 local 下的同名 ID 不指向父级。所有结果使用公共 renderer，点击结果切换单项，默认 Ctrl+O 切换全部，错误完整显示；child Transcript 使用实际 run.renderers。
+
+## Dock 键盘进入
+
+Agents 行直接显示主 agent 设置的名称（未设置时使用类型 displayName/name），右侧为 `状态 · 运行时间 · ↑输入 token ↓输出 token · N tools`；先截短名称，再依次省略 token、工具次数，状态优先保留，待父级回答显示 `waiting(parent)`。标题右侧按本分区实际对象状态显示数量，例如 `2 running · 1 queued`，不重复活动摘要行；运行指标随订阅与每秒展示刷新更新，不产生额外会话记录。ID 保留在查看器详情与模型工具正文中。
+
+主会话空编辑器按 ← 进入底部 Dock，↑↓ 选择实际 agent、workflow 或 job 行，Enter 打开所选 agent 的现有 Transcript 或 workflow 运行详情；Esc 或 → 返回编辑器，其他按键退出选择并交给编辑器。非空编辑器、补全、询问及其他界面不拦截 ←；任务与活动数量摘要不参与选择。打开后退出 Dock 选择，关闭查看器可再按 ← 进入，保留同一会话绑定内的对象身份；完整历史仍从 `/subagents` 进入。
 
 ## /subagents
 
-`/subagents` 直接打开 Runs 的 Active 记录；也可使用 `/subagents all` 等直接指定筛选。顶部页面为 Runs、Types，以及启用时的 Schedules、Workflows。Runs 的 Scope 独立选择 This session 或 Workspace，State 独立选择 Active、Queued、Finished、All 并显示该范围内的数量；Active 包含 starting/running/waiting/stopping，Queued 单独计数。列表仅包含 run，不含导航或筛选菜单项。
+`/subagents` 直接打开 Runs 的 Active 记录；也可使用 `/subagents all` 等直接指定筛选。顶部标题为 `Subagents ▸ <页名>`，页面标签为 Runs、Types，以及启用时的 Schedules、Workflows；标签按可见顺序编号，数字键或 `[`/`]` 一次切页，不进入 Tab 焦点环。Runs 的 Scope 按 `w` 循环选择 This session 或 Workspace，State 按 `s` 循环选择 Active、Queued、Finished、All 并显示该范围内的数量；Active 包含 starting/running/waiting/stopping，Queued 单独计数。列表仅包含 run，不含导航或筛选菜单项。
 
-Enter 直接打开所选 run 的 Transcript，排队记录打开 Task details。底部操作栏按所选 run 提供 Message、Jobs、Model / thinking、Background、Stop subtree 或 Cancel queued；结束记录存在所属活动 job 时提供 Cleanup jobs。Jobs 查看该 run 子树创建的活动 job，Model / thinking 修改该 agent，停止和清理按 run 范围执行并保留二次确认。
+Enter 直接打开所选 run 的 Transcript，排队记录打开 Task details。底部按键说明按所选 run 提供 `m Message`、`j Jobs`、`c Model / thinking`、`b Background`、`x Stop subtree` 或 `x Cancel queued`；结束记录存在所属活动 job 时提供 `x Cleanup jobs`。Jobs 查看该 run 子树创建的活动 job，Model / thinking 修改所选 run 的覆盖值，从它下一次请求生效；停止和清理按 run 范围执行并保留二次确认。
 
-Types 和 `/subagents types` 显示全部类型，包括 disabled 类型；行内以 ●/○ 标识启用/禁用，并显示模型名称与实际思考强度，长名称截断时保留状态和思考强度。右侧显示说明、完整模型身份、模型/思考来源、定义路径、字段写入位置、类型参数与系统提示。Enter 打开 Model / thinking；底部按当前状态提供 Enable 或 Disable，存在 enabled 配置覆盖时提供 Use definition。写回位置和作用范围见 [类型配置](models.md)。
+Types 和 `/subagents types` 显示全部类型，包括 disabled 类型；行内以 ●/○ 标识启用/禁用，并显示模型名称与实际思考强度；来源为 inherited 的字段显示 `not configured`，详情说明执行启动时继承父级当前值，长名称截断时保留状态和思考强度。右侧显示说明、完整模型身份、模型/思考来源、定义路径、字段写入位置、类型参数与系统提示。Enter 或 `c` 打开 Model / thinking，修改类型默认值，只作用于之后新建的执行；底部 `d` 按当前状态执行 Enable 或 Disable，存在 enabled 配置覆盖时提供 `u Use definition`。写回位置和作用范围见 [类型配置](models.md)。
 
-列表顶部可直接输入筛选，检索 ID/runId、名称、类型、状态、模型与 prompt；按当前范围的完整记录筛选，↑↓ 和 PgUp/PgDn 选择。初始焦点在 Filter；Tab 按顶部控件、输入、列表、详情、操作栏顺序循环，Shift+Tab 反向。顶部控件用 ←→ 选择候选、Enter 应用，操作栏用 ←→ 选择动作、Enter 执行；详情焦点使用阅读和搜索按键。宽屏右侧显示所选 run 的模型/思考强度及来源、上下文占用与模型窗口、工具调用次数、运行时间和任务说明，窄屏改为上下布局。列表行保留状态与时长，Queued 显示排队时长，已启动记录显示运行时长。Esc 先离开详情焦点或清空筛选，再退出列表；页面、状态/范围切换及从操作返回保留筛选、runId 和各项阅读位置。顶部切换控件保持可达，空结果明确显示。运行统计取所选 run 的 Manager 快照，历史未知上下文显示不可用；统计口径见 [执行与记录](runtime.md)。
+列表先按 `/` 进入过滤后输入文字，检索 ID/runId、名称、类型、状态、模型与 prompt；按当前范围的完整记录筛选，↑↓ 和 PgUp/PgDn 选择。初始焦点在列表，直接输入字符不会过滤；仅保留列表、详情、过滤三个焦点。Tab 从列表进入详情、再次 Tab 或 Esc 返回列表；过滤内 Enter/Tab 保留查询并回到列表，Esc 清空并退出过滤。控件按键直接循环并应用选项，底部动作仅按对应键执行，没有可选中的操作条；详情焦点使用阅读和搜索按键。状态行显示当前页、范围、状态、文本查询、匹配数/范围总数和选中名称/ID，窄屏优先保留当前页与选中对象。Shift+Tab 留给 Pi 的全局思考强度切换；页面动作使用无修饰的字母键，与宿主 Ctrl/Alt 快捷键独立。宽屏右侧显示所选 run 的模型/思考强度及来源、上下文占用与模型窗口、工具调用次数、运行时间和任务说明，窄屏改为上下布局。列表行保留状态与时长，Queued 显示排队时长，已启动记录显示运行时长。Esc 先离开详情焦点或清空筛选，再退出列表；页面、状态/范围切换及从操作返回保留筛选、runId 和各项阅读位置。顶部切换控件保持可达，空结果明确显示。运行统计取所选 run 的 Manager 快照，历史未知上下文显示不可用；统计口径见 [执行与记录](runtime.md)。
 
 Runs 的 Scope → Workspace 或 `/subagents workspace [active|queued|finished|all]` 查看当前配置工作区的完整记录；workspace 命令默认 all，界面切换范围保留当前状态筛选。列表发现保存于默认/当前配置目录及可达引用的其他主会话、分支和 child 历史，按 runId 保持原生选择身份。其他 owner 或当前分支之外的已结算记录标记 Read only，提供 Transcript 和只读 Jobs，隐藏 Message、Model / thinking、Background、停止与清理，仍可阅读及展开 Tools/Thinking。当前 owner/分支可见的结束记录保留模型覆盖与遗留 job 清理；真实运行句柄沿用既有控制。浏览不切换主会话、不转移归属或通知，发现到的中断运行显示 failed。
 
-Schedules 与 `/subagents schedules` 查看当前会话的调度，右侧显示详情，Enter 打开完整详情，底部 Cancel schedule 确认后取消；创建使用 agent_start 的 schedule，规则、开关、时间与已触发运行的控制见 [定时调度](schedules.md)。
+Schedules 与 `/subagents schedules` 查看当前会话的调度，右侧显示详情，Enter 打开完整详情，底部 `x Cancel schedule` 确认后取消；创建使用 agent_start 的 schedule，规则、开关、时间与已触发运行的控制见 [定时调度](schedules.md)。
 
-Workflows 与 `/subagents workflows` 查看当前会话与分支的编排、保存资源、阶段、日志和结果；顶部独立切换 Runs/Saved，右侧显示运行进度或保存脚本。Enter 打开运行详情或源码，底部按状态提供暂停/恢复/停止和 journal 重放，保存资源提供 Start。child 会话、gate 日志和跳过/重试在运行详情操作；控制条件、开关和按键见 [Workflow 操作](workflow/operations.md)。
+Workflows 与 `/subagents workflows` 查看当前会话与分支的编排、保存资源、阶段、日志和结果；顶部 `s` 一次切换 Runs/Saved，右侧显示运行进度或保存脚本。Enter 打开运行详情或源码，底部按状态提供 `p` 暂停/恢复、`x` 两次停止和 `r` journal 重放，保存资源提供 `n Start`。child 会话、gate 日志和跳过/重试在运行详情操作；控制条件、开关和按键见 [Workflow 操作](workflow/operations.md)。
 
-查看器复用共享 Transcript 与 DetailsView；Markdown、thinking、工具调用/结果由 Pi 原生组件渲染，使用所选 child 的实际工作目录。工具优先使用对应 child 的渲染定义，持久历史缺少定义时使用 Pi 标准渲染；调用、流式部分输出和最终结果按 toolCallId 配对。稳定消息缓存组件及宽度渲染，每条变化的流式消息和工具部分输出随事件更新；在底部时跟随，向上阅读保留位置。
+查看器复用共享 Transcript、DetailsView 和阅读 overlay；fullscreen 按当前 TUI 模式满屏显示，inline 居中 90% 宽并限制为终端 70% 高度，正文高度与 overlay 上限一致。关闭 overlay 恢复打开它的列表或提示符及主会话视口，不滚动主会话。Markdown、thinking、工具调用/结果由 Pi 原生组件渲染，使用所选 child 的实际工作目录。工具优先使用对应 child 的渲染定义，持久历史缺少定义时使用 Pi 标准渲染；调用、流式部分输出和最终结果按 toolCallId 配对。稳定消息缓存组件及宽度渲染，每条变化的流式消息和工具部分输出随事件更新；在底部时跟随，向上阅读保留位置。
 
 - ↑↓、PageUp/PageDown、Home/End 滚动；鼠标滚轮滚动。
 - `/` 搜索；n/N 查下一个/上一个；搜索内 Esc 退出搜索。
-- ←→ 选择当前可用的 Message、Tools、Thinking、Jobs、Model / thinking、Background、Stop subtree 或 Back；Enter 执行动作；Esc 返回。
-- 可接收消息的运行默认选中 Message，Enter 打开输入。提交后按 agent_send 返回 answered、steered 或 queued；空输入或取消返回阅读。输入结束时重新检查所选 run，已结束、结算中或同一 agent 的旧 run 不发送，也不隐式恢复。
-- x 按两次停止所选 run 及其嵌套 child/所属 job；第一次提示“再按 x 停止”，其他按键取消确认。已结束或结算中的 run 隐藏快捷停止；从操作栏选中 Stop subtree 后 Enter 同样进入确认。
+- `m` Message、`o` Tools、`h` Thinking、`j` Jobs、`c` Model / thinking；动作按当前可用状态显示，Esc 返回，Enter 不触发消息或停止。
+- 可接收消息的运行按 `m` 打开输入。提交后按 agent_send 返回 answered、steered 或 queued；空输入或取消返回阅读。输入结束时重新检查所选 run，已结束、结算中或同一 agent 的旧 run 不发送，也不隐式恢复。
+- x 按两次停止所选 run 及其嵌套 child/所属 job；第一次提示 `Press x again to stop subtree`，其他按键取消确认。已结束或结算中的 run 隐藏快捷停止。
 - b 将正在等待真实 agent_start 前台调用返回的顶级普通运行转为后台，立即释放前台调用；排队、停止中、已结束、嵌套、workflow、RPC 和普通恢复运行不提供此操作。后台池已满时仍可转入，后续启动继续按池上限排队。转入后父级 Esc 不停止该 child，最终结果通过统一通知送达。
 
 Message 输入、Model / thinking 选择与 Jobs 在关闭当前详情后打开，返回后保留滚动、搜索和展开状态。搜索框和输入框拥有文字按键，输入 x 或 b 只输入文字。普通消息限当前主会话的直接 child；workflow 查看器只允许回答当前可见且已挂起的问题，普通引导与恢复由 workflow 控制。
 
-记录菜单和 Transcript 的 Jobs 按所选 run 子树查询所属活动 job；选择 job 后复用 [jobs 操作界面](../jobs/index.md#用户操作)，使用该 job 的 cwd，允许详情、各日志通道和单独停止。只读历史隐藏 attach、stop 与 Clear history，仍可阅读详情和日志；返回所属列表时刷新活动集合并保留选择 ID。没有所属活动 job 时明确提示，退出 Jobs 不停止 agent。
+记录菜单和 Transcript 的 `j Jobs` 按所选 run 子树查询所属活动 job；所属 Jobs 列表同样以 `/` 进入过滤、Tab 进入详情、Enter 打开 job 操作，状态行显示 job 名称与 ID；选择 job 后复用 [jobs 操作界面](../jobs/index.md#用户操作)，使用该 job 的 cwd，允许详情、各日志通道和单独停止。只读历史隐藏 attach、stop 与 Clear history，仍可阅读详情和日志；返回所属列表时刷新活动集合并保留选择 ID。没有所属活动 job 时明确提示，退出 Jobs 不停止 agent。
 
 进入查看器持有公共通知阻塞令牌；关闭后恢复通知投递，主会话保持原绑定。关闭查看器只结束阅读。
 

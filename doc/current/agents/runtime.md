@@ -38,7 +38,9 @@ agent_stop 不指定 runId 时覆盖该 agent 各次运行及其后代创建的�
 
 Pi 1.5.0 的 ExtensionContext 提供 ModelRegistry，而 createAgentSession 只接受 ModelRuntime。执行层沿用上游在该边界读取 registry.runtime，保持父级认证、Provider 和虚拟模型路由；此访问集中在 runner，公共 context.modelRuntime 可用时替换。
 
-child 的 task_list/task_edit、taskId 与 job 引用使用父级捕获的 TaskStore，嵌套逐级沿用。agent 恢复保持任务关联；删除任务不停止执行，child 结算不自动修改任务完成状态。
+child 的 task_list/task_get/task_edit 默认使用按 child 会话目标定位的私有 TaskStore；job_start(taskId) 和嵌套 agent_start(taskId) 引用直接执行者的私有清单。agent_start 的 taskId 为 child 捕获直接父级清单中的单个子任务，child 仅能通过 task_get/task_edit 的 scope:assigned 读取该任务或执行 start/done/block/unblock；其他 ID 或 add/update/delete 返回 TASK_SCOPE。省略 scope 的 ID 始终指向私有清单，编号重名不改变路由。工具描述和私有清单提醒明确给出分配任务 ID 与入口，私有任务不进入主会话 Dock。
+
+嵌套准入使用直接父 child 绑定的私有 store，不从其分配任务引用获取父级权限；直接父级 tasks 未启用时，携带 taskId 的新准入明确返回 TASK_SCOPE。agent 恢复复用原 child 会话目标与任务关联，并校验有效 taskId；不存在对应子任务时返回 NOT_FOUND。删除任务不停止存活执行，child 结算不自动修改任务完成状态。
 
 指定目标 cwd 的运行记录保存实际工具目录与 configCwd；工作区列表与手动停止按配置目录归属，类型与资源使用父级配置目录，嵌套沿用同一配置根。结构化运行将验证后的 JSON 保存为 structuredJson 与 result，模型后续文本不覆盖该结果；会话读取与恢复仍通过普通 run 记录。
 

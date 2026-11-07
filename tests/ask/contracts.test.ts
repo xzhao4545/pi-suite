@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { stripVTControlCharacters } from 'node:util';
 import { ToolExecutionComponent } from '@earendil-works/pi-coding-agent';
 import { Value } from "typebox/value";
-import { normalize, askSchema } from "../../src/ask/schema.ts";
+import { normalize, askSchema, type AskParams, type AskResult } from "../../src/ask/schema.ts";
 import { AskForm } from "../../src/ask/form.ts";
-import { askDetails } from "../../src/ask/index.ts";
+import { askDetails, askToolResult } from "../../src/ask/result.ts";
 import { AskQueue } from "../../src/ask/queue.ts";
 import { host } from "../support/host.ts";
 import { terminal } from "../support/terminal.ts";
@@ -53,11 +53,46 @@ test("native ask results terminate only system cancellation and preserve automat
         question: "Q", defaultAnswer: "draft", timeoutMs: status === "timed_out" ? 1 : 0,
       }, new AbortController().signal, undefined, ctx as never);
       assert.equal(result.terminate, status === "cancelled");
+      // Model-facing text: status and answer only; non-answered statuses label retained answers as not consent.
+      assert.deepEqual(result.content, [{ type: "text", text: {
+        answered: "answered (custom): draft", skipped: "skipped (custom, not consent): draft",
+        timed_out: "timed_out (custom, auto-selected, not consent): draft", cancelled: "cancelled" }[status] }]);
       const details = result.details as { status: string; cancelled: boolean; response: { text: string; autoSelected?: true } | null };
       assert.equal(details.status, status); assert.equal(details.cancelled, status === "skipped" || status === "cancelled");
       if (status === "timed_out") assert.equal(details.response?.autoSelected, true);
       if (status === "skipped") assert.equal(details.response?.text, 'draft');
     } finally { await h.dispose(); }
+  }
+});
+
+test("ask text contracts preserve answers, comments and parent provenance without echoing request details", () => {
+  const single = { question: '选型', context: '背景', options: [{ title: '方案A', description: '说明', recommended: true }, '方案B'] };
+  const batch = { question: '批量标题', questions: [{ question: '数据\n库选型', options: ['PostgreSQL'] },
+    { question: '是否加缓存' }, { question: '部'.repeat(61) }] };
+  const selected = { kind: 'selection' as const, selections: ['方案A'], optionIds: ['option-1'] };
+  const cases: [AskParams, AskResult, string][] = [
+    [single, { status: 'answered', responses: [{ kind: 'selection', selections: ['方案B'], optionIds: ['option-2'], comment: '按此执行' }] },
+      'answered: 方案B (option-2)\ncomment: 按此执行'],
+    [{ ...single, options: ['A', 'B', 'C'], allowMultiple: true }, { status: 'answered', responses: [{ kind: 'selection', selections: ['A', 'C'], optionIds: ['option-1', 'option-3'], text: '另外加个日志' }] },
+      'answered: A, C (option-1, option-3) + custom: 另外加个日志'],
+    [single, { status: 'answered', responses: [{ kind: 'freeform', text: '用 SQLite' }] }, 'answered (custom): 用 SQLite'],
+    [single, { status: 'timed_out', responses: [{ ...selected, autoSelected: true }] }, 'timed_out (auto-selected, not consent): 方案A (option-1)'],
+    [single, { status: 'timed_out', responses: [] }, 'timed_out (not consent): unanswered'],
+    [single, { status: 'skipped', responses: [selected] }, 'skipped (not consent): 方案A (option-1)'],
+    [single, { status: 'skipped', responses: [undefined] }, 'skipped: unanswered'],
+    [single, { status: 'cancelled', responses: [] }, 'cancelled'],
+    [batch, { status: 'skipped', responses: [{ kind: 'selection', selections: ['PostgreSQL'], optionIds: ['option-1'] },
+      { kind: 'freeform', text: '先不加', comment: '之后评估' }, undefined] },
+      `skipped (not consent) · 2/3 answered\n1. 数据 库选型 → PostgreSQL (option-1)\n2. 是否加缓存 → custom: 先不加\n   comment: 之后评估\n3. ${'部'.repeat(59)}… → unanswered`],
+    [batch, { status: 'timed_out', responses: [undefined, { kind: 'freeform', text: '先不加', autoSelected: true }, undefined] },
+      `timed_out (auto-selected, not consent) · 1/3 answered\n1. 数据 库选型 → unanswered\n2. 是否加缓存 → custom: 先不加\n3. ${'部'.repeat(59)}… → unanswered`],
+  ];
+  for (const [params, result, text] of cases) {
+    const questions = normalize(params), expected = askDetails(params, questions, result);
+    assert.deepEqual(askToolResult(params, questions, result), { content: [{ type: 'text', text }], details: expected });
+    assert.deepEqual(askToolResult(params, questions, result, 'parent'), {
+      content: [{ type: 'text', text: `${text}\nsource: parent` }], details: { ...expected, source: 'parent' },
+    });
   }
 });
 
@@ -105,13 +140,17 @@ test("native skip and history retain preset and custom selections together and k
       ] };
     assert.equal(result.terminate, false);
     assert.ok(result.content[0].type === 'text');
-    assert.partialDeepStrictEqual(JSON.parse(result.content[0].text), expected);
+    assert.equal(result.content[0].text, ['skipped (not consent) · 3/4 answered', '1. Single → A (option-1)', '2. Unanswered → unanswered',
+      '3. Multi → C, D (option-1, option-2) + custom: multi text', '4. Text → custom: partial'].join('\n'));
     assert.partialDeepStrictEqual(result.details, expected);
     const history = new ToolExecutionComponent('ask_user', 'partial', params, { outputPad: 0 }, tool, terminal(), process.cwd());
     history.updateResult({ ...result, isError: false }); history.setExpanded(true);
     const text = history.render(120).map(stripVTControlCharacters).join('\n');
     assert.match(text, /☑ C/); assert.match(text, /☑ D/); assert.match(text, /☑ ✎ multi text/);
     assert.doesNotMatch(text, /Type your own answer/);
+    // Persisted details, not the model-facing encoding, own historical expansion.
+    history.updateResult({ ...result, content: [{ type: 'text', text: JSON.stringify(result.details) }], isError: false });
+    assert.equal(history.render(120).map(stripVTControlCharacters).join('\n'), text);
   } finally { await h.dispose(); }
 });
 

@@ -16,11 +16,13 @@ export class TaskBrowserView extends BrowserView {
     const groups = () => taskViews(data()).filter(task => !task.parentId);
     let views = new Map<string, TaskView>();
     super(tui, { title: 'Tasks', state: browseState(), subscribe,
+      total: () => queryTasks(data(), {parentId: groupId, state: 'all'}).length,
+      selection: item => ({name: views.get(item.value)!.title, id: item.value}),
       layout: { truncatePrimary: ({item, text, maxWidth}) => taskStyle(views.get(item.value)!, truncateToWidth(text, maxWidth, ''), theme) },
       controls: [
-        { label: 'Group', selected: () => groupId ?? 'all', items: () => [{ value: 'all', label: 'All' },
+        { key: 'g', label: 'Group', selected: () => groupId ?? 'all', items: () => [{ value: 'all', label: 'All' },
           ...groups().map(group => ({ value: group.id, label: `${group.id}` }))], select: value => { groupId = value === 'all' ? undefined : value; } },
-        { label: 'State', selected: () => state, items: () => [
+        { key: 's', label: 'State', selected: () => state, items: () => [
           { value: 'unfinished', label: 'Unfinished' }, { value: 'doing', label: 'Running' }, { value: 'blocked', label: 'Blocked' },
           { value: 'done', label: 'Completed' }, { value: 'all', label: 'All' }], select: value => { state = value as TaskFilter; } },
       ], items: () => {

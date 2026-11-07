@@ -72,5 +72,10 @@
 - [子代理运行记录与手动控制](./pi-suite/agents/runs.md) — 完整 run 历史、真实级联停止、所属活动 jobs、日志与单独控制；Linux SDK/进程和原生界面验收。
 - [主 agent 与 subagent 交互](./pi-suite/agents/interaction.md) — 父级提问、共享等待、完整进度、并发工具参数摘要、用量/错误通知与 run 级消费；Linux SDK 验收。
 - [两级任务基础阶段](./pi-suite/tasks/core.md) — 原子批量编辑、派生进度、统一存储、会话与提醒、共享详情和 job 引用；Linux 离线验收。
+- [模型工具上下文精简](./pi-suite/tool-protocol/context-budget.md) — ask_user 文本结果只含状态与回答、agent_workflow 约 1 KB 短描述与 pi-suite-workflow skill；Linux 类型检查与全量测试通过。
+- [浏览界面交互重构](./pi-suite/ui/browser-interaction.md) — 页面标签、控件热键、list/details/filter 三态焦点、按键动作与状态行，Types 未配置显示；/subagents、/tasks、/jobs 统一。
+- [Subagent 快捷进入与全屏查看](./pi-suite/ui/agent-viewer.md) — 空提示符 ← 进入 Dock 选择，阅读视图全屏 overlay，capturesViewportInput 接管 PgUp/PgDn。
+- [Subagent 名称显示与 Dock Agents 分区](./pi-suite/ui/agent-display-names.md) — 工具与 wait 显示名称优先，Dock 行显示状态、时间、token 与工具次数，标题右侧显示数量。
+- [Subagent 任务清单隔离](./pi-suite/tasks/child-task-scope.md) — child 会话私有目标、scope:assigned 受限进度、同名 ID 显式分流、嵌套与稳定会话恢复；Linux 相关 SDK/任务测试及类型检查通过。
 - [子代理共享任务清单与执行恢复集成](./pi-suite/tasks/agents-integration.md) — 多 child 并发、reload/fork 清单边界、回收后稳定执行引用与实际任务状态；Linux SDK 验收。
 - [Windows 原生两级任务与并发 child](./pi-suite/tasks/windows-combination.md) — 三尺寸详情、折叠/筛选/blocked、并发更新、owner reload/fork 与回收后恢复。

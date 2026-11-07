@@ -30,6 +30,13 @@ export function agentRuntime(): AgentManager {
   return managers.get(agentDir)!;
 }
 
+/** Display queries may run before session binding; acquiring a runtime would initialize jobs and touch disk. */
+export function agentDisplayName(id: string, runId?: string): string {
+  if (!id?.startsWith('agent_')) return id;
+  return registry[key]?.get(getAgentDir())?.records()
+    .find(record => record.id === id && (!runId || record.runId === runId) && !record.workflowId)?.name ?? id;
+}
+
 /** Query only: quit must not create an owner when agent tools are disabled. */
 export function quitExistingAgentRuntime(agentDir: string): Promise<void> | undefined {
   return registry[key]?.get(agentDir)?.shutdown();

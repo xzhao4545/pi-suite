@@ -44,7 +44,9 @@ export type StartAgent = {
 };
 export type ParentContext = Pick<ExtensionContext, 'cwd' | 'model' | 'modelRegistry' | 'thinkingLevel' | 'sessionManager' | 'isProjectTrusted' | 'getSystemPrompt'>;
 export interface ParentScope {
-  ctx: ParentContext; run?: Execution; taskStore?: TaskStore;
+  ctx: ParentContext; run?: Execution;
+  /** The direct parent's own list, never the task that was assigned to that parent. */
+  taskStore?: TaskStore;
   owner?: Pick<AgentRecord, 'ownerSessionId' | 'anchorEntryId'>;
 }
 export const isTopLevelAgent = (record: Pick<AgentRecord, 'parentAgentId' | 'workflowId'>): boolean =>
@@ -68,6 +70,8 @@ export type PendingQuestion = {
 /** Runtime handles belong to one run, never to the stable agent ID. */
 export interface Execution {
   record: AgentRecord; type: AgentType; model: Model<any>; parent: ParentScope;
+  /** Bound child-session store retained for descendant admission; absent when its task module is disabled. */
+  taskStore?: TaskStore;
   controller: AbortController; done: PromiseWithResolvers<AgentRecord>; chargedPool?: Pool;
   startedMonotonic?: number; session?: AgentSession; sessionManager?: SessionManager; entries?: SessionEntry[]; question?: PendingQuestion;
   settled?: boolean; terminated?: boolean; streamingEntry?: SessionEntry;

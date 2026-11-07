@@ -54,7 +54,8 @@ export async function host(options: {
   const theme = globalThis[Symbol.for("@earendil-works/pi-coding-agent:theme") as unknown as keyof typeof globalThis] as unknown as Theme;
   const uiContext = {
     theme, setStatus(key: string, text?: string) { statuses.set(key, text); if (key === "goal") writes.push(text); },
-    setWidget() {}, notify(text: string, type?: string) { notices.push({ text, type }); }, confirm: async () => true,
+    setWidget() {}, onTerminalInput: () => () => {}, getEditorText: () => '',
+    notify(text: string, type?: string) { notices.push({ text, type }); }, confirm: async () => true,
     addAutocompleteProvider(factory: (current: AutocompleteProvider) => AutocompleteProvider) { autocomplete.push(factory); },
     custom: async (factory: Parameters<ExtensionUIContext["custom"]>[0]) => new Promise(resolve => {
       Promise.resolve(factory(terminal(), theme, {} as never, resolve)).then(view => {

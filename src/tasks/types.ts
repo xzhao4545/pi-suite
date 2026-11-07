@@ -5,6 +5,8 @@ import { Type, type Static } from 'typebox';
 export const groupId = Type.String({ pattern: '^[1-9][0-9]*$' });
 export const childId = Type.String({ pattern: '^[1-9][0-9]*\\.[1-9][0-9]*$' });
 export const taskId = Type.String({ pattern: '^[1-9][0-9]*(?:\\.[1-9][0-9]*)?$' });
+export const taskScope = Type.Union([Type.Literal('local'), Type.Literal('assigned')]);
+export type TaskScope = Static<typeof taskScope>;
 export const title = Type.String({ minLength: 1, maxLength: 200 });
 export const description = Type.String({ maxLength: 8000 });
 export const status = Type.Union([Type.Literal('todo'), Type.Literal('doing'), Type.Literal('blocked'), Type.Literal('done')]);

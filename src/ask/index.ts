@@ -6,18 +6,10 @@ import type { Dock } from "../ui/dock.ts";
 import type { AskView } from "./view.ts";
 import { AskQueue, cancelled } from "./queue.ts";
 import { askSchema, normalize, type AskParams, type AskResult, type Question } from "./schema.ts";
+import { askToolResult } from "./result.ts";
 
 import { registerBoundTool, toolRenderer } from '../runtime/tools.ts';
 import { askRenderers } from './tool-render.ts';
-
-export function askDetails(params: AskParams, questions: Question[], result: AskResult) {
-  // A skipped form retains partial user answers; cancellation carries no answers.
-  const common = { status: result.status, cancelled: result.status === "skipped" || result.status === "cancelled" };
-  return params.questions ? {
-    ...common, kind: "batch", heading: params.question, questions,
-    answers: result.responses.map(response => response ? { status: "answered", response } : { status: "unanswered" }),
-  } : { ...common, question: params.question, context: params.context, options: questions[0].options, response: result.responses[0] ?? null };
-}
 
 export class AskManager {
   private queue = new AskQueue();
@@ -73,9 +65,7 @@ export function registerAsk(pi: ExtensionAPI, manager: AskManager, getConfig: ()
     parameters: askSchema, executionMode: "sequential",
     async execute(_id, params, signal, _update, ctx) {
       const { result, questions } = await manager.ask(params, ctx, getConfig(), signal);
-      const record = askDetails(params, questions, result);
-      return { content: [{ type: "text", text: JSON.stringify(record) }], details: record,
-        terminate: result.status === "cancelled" };
+      return { ...askToolResult(params, questions, result), terminate: result.status === "cancelled" };
     },
   }, 'initial');
 }

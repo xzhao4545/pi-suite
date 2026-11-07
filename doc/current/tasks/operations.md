@@ -1,16 +1,18 @@
 # 任务操作与显示
 
-`/tasks [group ID]` 打开共享浏览器。默认 State 为 All，包含已完成组与子任务；指定组 ID 查看该组，State 可切换为 Unfinished、Running、Blocked、Completed。非 TUI 模式通过通知展示对应文本。
+`/tasks [group ID]` 在编辑器位置打开共享浏览器，标题为 `Tasks ▸ List`。默认 State 为 All，包含已完成组与子任务；指定组 ID 查看该组，State 可切换为 Unfinished、Running、Blocked、Completed。非 TUI 模式通过通知展示对应文本。
 
 | 详情操作 | 行为 |
 | --- | --- |
-| 输入文字 | 筛选当前范围的 ID、标题、说明、阻塞原因与状态 |
+| / 后输入文字 | 进入过滤，筛选当前范围的 ID、标题、说明、阻塞原因与状态；直接输入字符不筛选 |
 | ↑/↓、PageUp/PageDown、鼠标滚轮 | 选择列表项；详情焦点下滚动正文 |
-| Tab / Shift+Tab | 切换 Group、State、输入、列表、详情焦点 |
-| ←/→、Enter | 顶部控件选择并应用组或状态 |
+| Tab | 列表进入详情，再次 Tab 或 Esc 返回列表；过滤内 Tab/Enter 保留查询并回到列表 |
+| g / s | 一次循环并应用 Group / State，不进入 Tab 焦点环 |
 | /、Enter、n/N | 详情内搜索，定位下一/上一匹配 |
 | Enter | 选择任务并返回，Dock 选中其所属组 |
 | Esc | 退出详情搜索/焦点，清空筛选或关闭浏览器 |
+
+默认焦点在列表，状态行显示 List、组/状态筛选、匹配数/范围总数、选中标题与任务 ID；窄屏优先保留页名和选中对象。过滤内 Esc 清空并退出，详情搜索内 Esc 仅退出搜索。BrowserView 声明 capturesViewportInput，使 fullscreen 的翻页键作用于当前列表或详情而非主会话。
 
 宽屏左侧显示 `图标 ID 标题` 与组进度，右侧显示说明、依赖和执行引用，窄屏改为上下布局。浏览器订阅同一 TaskStore，提交后更新正文，选中任务 ID、各项搜索和阅读位置保持稳定；删除所选任务时定位相邻项。任务标题和说明显示为安全字面量文本。浏览期间收起 Dock 并暂缓结算通知，关闭后恢复。
 
@@ -25,10 +27,14 @@ tasks 向共享 Dock 提交 Tasks 分区，标题显示全部子任务完成数/
 
 task_edit 调用中显示简短“正在更新任务”，结果折叠为一行：单回执为任务与动作，多回执按动作分别统计组与子项，并附依赖变化和警告数；展开显示全部回执、派生变化、字段、组进度与警告。task_list 折叠为筛选、组/子数量、状态计数与下一页摘要，展开显示两级任务行；task_get 折叠为任务行，展开显示完整详情。鼠标左键点击结果切换该项，Pi 的 app.tools.expand（默认 Ctrl+O）切换全部；工具失败正文始终完整可见。显示采用 Pi 原生 renderer，真实工具结果和会话记录继续保留。
 
+## child 任务范围
+
+child 的 task_list 与默认 scope:local 的 task_get/task_edit 操作自己的私有清单，私有项不显示在主会话 Dock；可在 `/subagents` Transcript 查看工具调用与结果。agent_start(taskId) 分配的父级任务用 `task_get({"scope":"assigned","id":"1.2"})` 读取，用 `task_edit({"scope":"assigned","op":"done","id":"1.2"})` 更新，仅允许 start/done/block/unblock。assigned 批次的所有操作须作用于同一分配任务，不接受 CRUD 或其他父级 ID，越权返回 TASK_SCOPE；scope 作用于整批，不在 changes 内设置。同名的私有 `1.2` 仍由省略 scope 或 scope:local 操作，编号不会隐式切换清单。
+
 ## 提醒
 
 配置 tasks.reminders 默认 true，用户或项目的 pi-suite.json 可设置 false。未使用任务工具的间隔达到 4 轮时，在下一次模型请求加入一次任务提醒；存在 doing 子任务时缩短为 2 轮。task_list/task_get/task_edit 使用重置间隔并允许下一次提醒。
 
-提醒最多回显 10 个未完成清单项，仅进入当次 context，不持久保存到会话，也不修改工具结果。提醒不会修改任务、停止执行或自动完成 goal。
+提醒最多回显 10 个未完成清单项，仅进入当次 context，不持久保存到会话，也不修改工具结果。child 提醒读取其私有清单，并说明分配任务 ID 与 scope:assigned 的受限入口，不回显父级清单。提醒不会修改任务、停止执行或自动完成 goal。
 
 [返回任务索引](index.md)

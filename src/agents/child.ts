@@ -11,7 +11,7 @@ import { registerJobTools } from '../jobs/tools.ts';
 import { askSchema, type AskParams } from '../ask/schema.ts';
 import { registerBoundTool } from '../runtime/tools.ts';
 import { askRenderers } from '../ask/tool-render.ts';
-import { askDetails } from '../ask/index.ts';
+import { askToolResult } from '../ask/result.ts';
 import { askParent } from './questions.ts';
 import { AgentsModule } from './index.ts';
 import { registerAgentTools } from './tools.ts';
@@ -19,11 +19,12 @@ import type { AgentManager } from './manager.ts';
 import type { Execution } from './types.ts';
 import { loadConfig } from '../runtime/config.ts';
 
-/** Child tools use the owner's task list and real run ancestry; the model cannot forge creators. */
+/** Child tools own a private list; only an explicit assigned scope can update parent progress. */
 export function childSuite(pi: ExtensionAPI, run: Execution, manager: AgentManager): void {
   const config = run.config, binding = new SessionBinding(), dock = new Dock();
   const status = new StatusPublisher(dock), notices = new Notifications(pi, binding), waits = new WaitRegistry();
-  const tasks = config.modules.tasks ? new TasksModule(binding, dock, run.parent.taskStore) : undefined;
+  const tasks = config.modules.tasks ? new TasksModule(binding, dock, { persisted: run.record.persisted,
+    assigned: run.record.taskId && run.parent.taskStore ? { id: run.record.taskId, store: run.parent.taskStore } : undefined }) : undefined;
   const agents = new AgentsModule(pi, binding, notices, status, tasks, run, manager);
   const creatorRoots = () => binding.current ? agents.visibleRunIds(binding.current.ctx) : [];
   const jobs = config.modules.jobs ? new JobsModule(pi, binding, notices, status, creatorRoots) : undefined;
@@ -32,8 +33,7 @@ export function childSuite(pi: ExtensionAPI, run: Execution, manager: AgentManag
     description: 'Ask your direct parent for information; wait for its explicit answer. timed_out/cancelled never means consent.',
     async execute(_id, params, signal) {
       const { result, questions } = await ask.ask(params, undefined, undefined, signal);
-      const details = { ...askDetails(params, questions, result), source: 'parent' };
-      return { content: [{ type: 'text', text: JSON.stringify(details) }], details, terminate: result.status !== 'answered' };
+      return { ...askToolResult(params, questions, result, 'parent'), terminate: result.status !== 'answered' };
     } }, 'initial');
   if (tasks) { registerTaskTools(pi, tasks); tasks.registerReminders(pi, () => config); }
   if (jobs) {
@@ -54,6 +54,7 @@ export function childSuite(pi: ExtensionAPI, run: Execution, manager: AgentManag
   pi.on('session_start', async (_event, ctx) => {
     binding.bind(ctx);
     await tasks?.bind(ctx, { reason: 'startup' });
+    run.taskStore = tasks?.scope(ctx);
     agents.bind(); jobs?.bind();
   });
   pi.on('input', event => { if (event.streamingBehavior === 'steer') waits.userSteered(); });

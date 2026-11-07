@@ -14,7 +14,7 @@ import { terminal } from '../support/terminal.ts';
 test('task dock and live browser share committed status; important children keep parents within phone budget', async t => {
   const root = mkdtempSync(join(tmpdir(), 'pi-suite-tasks-ui-')), tui = terminal(), dock = new Dock(), binding = new SessionBinding();
   const ctx = { cwd: root, mode: 'tui', sessionManager: SessionManager.inMemory(root),
-    ui: { theme: {fg: (_tone: string, text: string) => text}, notify() {}, setWidget(_key: string, factory: (tui: ReturnType<typeof terminal>) => unknown) { factory?.(tui); } },
+    ui: { onTerminalInput() { return () => {}; }, getEditorText: () => '', theme: {fg: (_tone: string, text: string) => text}, notify() {}, setWidget(_key: string, factory: (tui: ReturnType<typeof terminal>) => unknown) { factory?.(tui); } },
   } as unknown as ExtensionContext;
   const tasks = new TasksModule(binding, dock); binding.bind(ctx); dock.bind(ctx, 6); await tasks.bind(ctx, { reason: 'startup' });
   t.mock.timers.enable({ apis: ['Date', 'setTimeout'] });
@@ -35,9 +35,9 @@ test('task dock and live browser share committed status; important children keep
       const lines = view.render(width);
       assert.ok(lines.length <= Math.floor(24 * 0.8)); assert.ok(lines.every(line => visibleWidth(line) <= width));
     }
-    view.handleInput('1.1'); view.render(120);
+    view.handleInput('/'); view.handleInput('1.1'); view.handleInput('\r'); view.render(120);
     assert.equal(view.getSelectedItem()?.value, '1.1');
-    view.handleInput('\t'); view.handleInput('\t'); // details focus
+    view.handleInput('\t'); // details focus
     const selected = view.getSelectedItem()?.value;
     await tasks.edit(ctx, [{ op: 'done', id: '1.1' }, {op: 'done', id: '1.2'}]);
     assert.equal(view.getSelectedItem()?.value, selected);

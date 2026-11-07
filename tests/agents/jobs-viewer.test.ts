@@ -85,9 +85,9 @@ test('agent Transcript reuses owned job UI across child cwd and collected runs, 
     agents.sweep(Date.now() + 10 * 60_000 + 1); assert.equal(agents.get(parent.record.id, parent.record.runId).run, undefined);
     let reader!: DetailsView['reader'], offset = 0, expanded = '';
     const steps = [(view: View) => choose(view, parent.record.runId), (view: View) => {
-      assert.ok(view instanceof DetailsView); view.actions.find(action => action.label === 'Tools')!.run();
+      assert.ok(view instanceof DetailsView); view.handleInput('o');
       reader = view.reader; expanded = reader.render(120).join('\n'); assert.match(expanded, /TOOL_FOLD_CONTENT/);
-      reader.scroll(5); reader.query = 'READER_MARKER'; offset = reader.offset; view.actions.find(action => action.label === 'Jobs')!.run();
+      reader.scroll(5); reader.query = 'READER_MARKER'; offset = reader.offset; view.handleInput('j');
     }, (view: View) => {
       const list = view.render(120).join('\n'); assert.ok(list.includes(ownJob.id) && list.includes(childJob.id), list);
       assert.ok(!list.includes(nextJob.id) && !list.includes(unrelatedJob.id)); choose(view, ownJob.id);

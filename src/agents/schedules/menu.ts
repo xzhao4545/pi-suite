@@ -13,12 +13,12 @@ const details = (job: ScheduledAgent) => [job.name, `ID: ${job.id}`, `Type: ${jo
 export async function showSchedules(ctx: ExtensionContext, scheduler: AgentScheduler, dock: Dock, page: BrowsePage): Promise<void> {
   for (;;) {
     let action = 'details';
-    const id = await browse(ctx, dock, { title: 'Subagents', state: page.state, controls: [page.navigation],
+    const id = await browse(ctx, dock, { title: 'Subagents', state: page.state, pages: page.pages,
+      selection: item => { const job = scheduler.list().find(job => job.id === item.value)!; return {name: job.name, id: job.id}; },
       ticking: () => scheduler.list().some(job => job.enabled || job.lastStatus === 'running'),
       items: () => scheduler.list().map(job => ({ value: job.id, label: `${job.name} · ${job.schedule}`, description: job.request.type,
         search: `${job.id} ${job.name} ${job.schedule} ${job.request.type} ${job.request.prompt}`, details: () => details(job) })),
-      actions: (item, done) => [{ label: 'Details', run: () => done(item.value) },
-        { label: 'Cancel schedule', run: () => { action = 'cancel'; done(item.value); } }],
+      actions: (item, done) => [{ key: 'x', label: 'Cancel schedule', run: () => { action = 'cancel'; done(item.value); } }],
     });
     if (id === undefined) return;
     const job = scheduler.list().find(job => job.id === id);

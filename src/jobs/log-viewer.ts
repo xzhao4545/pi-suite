@@ -1,6 +1,7 @@
 import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { Text, type TUI, type TuiMouseEvent } from '@earendil-works/pi-tui';
 import { DetailsView } from '../ui/details.ts';
+import { openReading } from '../ui/reading.ts';
 import type { Dock } from '../ui/dock.ts';
 import { fileSource, READ_LIMITS, type ReadPage } from '../runtime/read.ts';
 import type { JobReader } from './control.ts';
@@ -25,10 +26,10 @@ export class JobLogView extends DetailsView {
   constructor(private terminal: TUI, private manager: JobReader, private job: JobSummary,
     private stream: Stream, private live: boolean, done: () => void, theme?: Theme) {
     super(terminal, () => this.header(), new Text('Loading log…', 0, 0), done, [
-      { label: 'Previous bytes', run: () => { void this.previous(); } },
-      { label: 'Next bytes', run: () => { void this.next(); } },
-      { label: 'Follow latest', run: () => { void this.follow(); } },
-    ], undefined, undefined, theme);
+      { key: '[', label: 'Previous bytes', run: () => { void this.previous(); } },
+      { key: ']', label: 'Next bytes', run: () => { void this.next(); } },
+      { key: 'f', label: 'Follow latest', run: () => { void this.follow(); } },
+    ], undefined, theme);
     this.unsubscribe = live ? manager.subscribe(() => {
       if (this.closed) return;
       const wasFinished = isTerminal(this.job.state);
@@ -126,7 +127,7 @@ export async function showJobLog(ctx: ExtensionContext, dock: Dock, manager: Job
   dock.setDetail(true);
   let view: JobLogView | undefined;
   try {
-    await ctx.ui.custom<void>(async (tui, theme, _keys, done) => {
+    await openReading<void>(ctx, async (tui, theme, _keys, done) => {
       view = new JobLogView(tui, manager, job, stream, live, done, theme);
       await view.initialize(); return view;
     });

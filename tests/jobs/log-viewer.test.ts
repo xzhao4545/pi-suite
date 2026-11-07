@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { visibleWidth } from '@earendil-works/pi-tui';
+import { readingRows } from '../../src/ui/reading.ts';
 import { JobLogView } from '../../src/jobs/log-viewer.ts';
 import { shellArgument } from '../../src/jobs/launch/presets.ts';
 import { listJobs } from '../../src/jobs/query.ts';
@@ -73,17 +74,17 @@ test('history reads a bounded tail and preceding/next byte windows as literal te
     await view.initialize();
     const tail = view.render(120).join('\n');
     assert.match(tail, /# literal heading/); assert.match(tail, /```/);
-    await view.previous();
+    view.handleInput('['); await view.refresh();
     const middle = view.render(120).join('\n'); assert.ok(!middle.includes('literal heading'));
     await view.previous(); view.render(120);
     await view.previous();
     assert.ok(view.render(120).some(line => line.startsWith('行0 ')), 'the first byte window remains available');
     await view.next(); assert.ok(!view.render(120).some(line => line.startsWith('行0 ')));
-    await view.follow();
+    view.handleInput('f'); await view.refresh();
     for (const width of [40, 60, 120]) {
       const lines = view.render(width);
       assert.ok(lines.every(line => visibleWidth(line) <= width));
-      assert.ok(lines.length <= Math.floor(24 * 0.8));
+      assert.ok(lines.length <= readingRows(terminal(24, 120)));
     }
     assert.equal(jobs.peek(job.id).state, 'completed');
   } finally { view?.dispose(); await jobs.shutdown(Date.now() + 5000); }
