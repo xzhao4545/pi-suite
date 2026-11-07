@@ -25,7 +25,7 @@ test("terminal view: typing takes control from the model, ctrl+g returns it, ctr
     }, exit => exits.push(exit));
     const view = open();
     await sleep(300);
-    assert.match(view.render(60)[0], /model controls input/);
+    assert.match(view.render(60)[1], /model controls input/);
     for (const key of "abc\r") view.handleInput(key);
     assert.equal(jobs.userControlled(id), true);
     assert.throws(() => jobs.write(id, "x\r", { source: "model", kind: "text", text: "x" }), (error: { code?: string }) => error.code === "USER_CONTROL");

@@ -1,4 +1,4 @@
-import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
+import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { Text, type TUI, type TuiMouseEvent } from '@earendil-works/pi-tui';
 import { DetailsView } from '../ui/details.ts';
 import type { Dock } from '../ui/dock.ts';
@@ -23,12 +23,12 @@ export class JobLogView extends DetailsView {
   private queue = Promise.resolve();
 
   constructor(private terminal: TUI, private manager: JobReader, private job: JobSummary,
-    private stream: Stream, private live: boolean, done: () => void) {
+    private stream: Stream, private live: boolean, done: () => void, theme?: Theme) {
     super(terminal, () => this.header(), new Text('Loading log…', 0, 0), done, [
       { label: 'Previous bytes', run: () => { void this.previous(); } },
       { label: 'Next bytes', run: () => { void this.next(); } },
       { label: 'Follow latest', run: () => { void this.follow(); } },
-    ]);
+    ], undefined, undefined, theme);
     this.unsubscribe = live ? manager.subscribe(() => {
       if (this.closed) return;
       const wasFinished = isTerminal(this.job.state);
@@ -126,8 +126,8 @@ export async function showJobLog(ctx: ExtensionContext, dock: Dock, manager: Job
   dock.setDetail(true);
   let view: JobLogView | undefined;
   try {
-    await ctx.ui.custom<void>(async (tui, _theme, _keys, done) => {
-      view = new JobLogView(tui, manager, job, stream, live, done);
+    await ctx.ui.custom<void>(async (tui, theme, _keys, done) => {
+      view = new JobLogView(tui, manager, job, stream, live, done, theme);
       await view.initialize(); return view;
     });
   } finally { view?.dispose(); dock.setDetail(false); }

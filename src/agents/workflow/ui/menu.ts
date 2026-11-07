@@ -41,7 +41,7 @@ export async function showWorkflow(ctx: ExtensionContext, deps: Deps, task: Owne
     let action = '';
     deps.dock.setDetail(true);
     try {
-      await ctx.ui.custom<void>((tui, _theme, _keys, done) => {
+      await ctx.ui.custom<void>((tui, theme, _keys, done) => {
         // A workflow may settle while this detail remains open. Keep availability live,
         // so completion exposes replay and removes controls without a close/reopen cycle.
         const actions = [
@@ -50,7 +50,7 @@ export async function showWorkflow(ctx: ExtensionContext, deps: Deps, task: Owne
         ];
         const view = new DetailsView(tui, () => workflowSummary(task), content, done,
           actions.map(item => ({...item, ...item.label === 'Stop' ? {key: 'x' as const, confirm: '再按 x 停止 workflow'} : {},
-            run: () => { action = item.label; done(); }})), reader);
+            run: () => { action = item.label; done(); }})), reader, undefined, theme);
         view.reader.setContent(content, false); reader = view.reader;
         const off = deps.workflows.manager.subscribe(() => { content.invalidate(); tui.requestRender(); });
         const timer = setInterval(() => { if (workflowActive(task)) tui.requestRender(); }, 1000); timer.unref();

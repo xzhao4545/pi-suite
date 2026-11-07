@@ -1,5 +1,6 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { Key, matchesKey, truncateToWidth, type Component, type KeyId, type TUI } from '@earendil-works/pi-tui';
+import { commandFrame } from './frame.ts';
 
 /** What the terminal view needs from a live PTY; the job module adapts its session to this. */
 export interface TerminalSource {
@@ -37,15 +38,15 @@ export class TerminalView implements Component {
     this.unsubscribe = source.onVisualChange(() => tui.requestRender());
   }
   render(width: number): string[] {
-    // Header and hint line take two rows; the program gets the rest of the 80% view.
-    this.height = Math.max(3, Math.floor(this.tui.terminal.rows * 0.8) - 2);
+    // Borders, header and hint share the 80% view budget with the program.
+    this.height = Math.max(3, Math.floor(this.tui.terminal.rows * 0.8) - 4);
     if (!this.source.closed) this.source.resize(Math.max(20, width), this.height);
     const control = this.source.closed ? 'exited' : this.options.userControl() ? 'you control input' : 'model controls input';
     const screen = this.source.getViewportLines({ ansi: true }).slice(-this.height);
     const hint = this.error ? this.theme.fg('warning', this.error)
       : `${this.keys.detachKey} leave (job keeps running) · ${this.keys.returnKey} return to model · ${this.keys.transferKey} send screen · Shift+↑↓ scroll`;
-    return [truncateToWidth(this.theme.fg('accent', `${this.options.title()} · ${control}`), width),
-      ...screen.map(line => truncateToWidth(line, width)), truncateToWidth(this.theme.fg('dim', hint), width)];
+    return commandFrame(width, [truncateToWidth(this.theme.fg('accent', `${this.options.title()} · ${control}`), width),
+      ...screen.map(line => truncateToWidth(line, width)), truncateToWidth(this.theme.fg('dim', hint), width)], this.theme);
   }
   handleInput(data: string): void {
     this.error = undefined;

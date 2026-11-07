@@ -55,7 +55,7 @@ test('subagents navigates pages and empty filters without menu rows or model wor
             assert.equal(queued.controller.signal.aborted, false); view.handleInput('x'); break;
           case 4:
             assert.match(text(), /\[Queued 0\]/); assert.match(text(), /No matching records/);
-            assert.match(view.render(120).at(-1)!, /^Filter ·/, 'empty action sets return focus to filtering');
+            assert.match(view.render(120).at(-2)!, /^Filter ·/, 'empty action sets return focus to filtering');
             focusBrowser(view, 'State'); view.handleInput('\x1b[C'); view.handleInput('\r'); break;
           case 5:
             assert.match(text(), /\[Finished 1\]/); assert.equal(view.getSelectedItem()?.value, queued.record.runId);

@@ -26,6 +26,8 @@ pi-starship 的 `git_status` 使用 Git 上游跟踪分支的缓存差异：默�
 
 ## 原生会话查看
 
+`/tasks`、`/jobs`、`/subagents`、`/goal` 和 `/suite` 的内容块及公共选择器、详情、日志和终端接管视图，上下各有一道随宽度变化的横线，复用 Pi `/settings` 的 DynamicBorder 与 border 主题色。公共 frame.ts 统一生成边界，横线计入各视图高度预算，鼠标行坐标扣除顶部横线后交给内容组件。
+
 Transcript 复用 Pi 的 UserMessageComponent、AssistantMessageComponent、ToolExecutionComponent、CustomMessageComponent 和压缩/分支摘要组件。已知内置工具采用 Pi 提供的 renderers；child 提供其实际渲染定义，使用其实际 cwd，缺少定义的扩展工具使用原生通用工具呈现。稳定消息保留组件与宽度缓存，调用方按每条 entry 的身份检测变化，并只更新变化的流式消息或工具结果。工具调用与部分/最终结果按 toolCallId 配对，不执行工具。thinking 与工具详情可切换展开，输出默认不传输终端图片。
 
 AskView 持有询问状态、焦点与空闲计时，ask/keys.ts 分派选项及页签按键，ask/render.ts 统一题型标记、页签与空闲时间，ask/layout.ts 处理外框、内容折叠、换行与按选项身份映射的物理行窗口。Pi Editor 的 disableSubmit 让 Ask 确认时保留原生文字、光标和撤销状态，文本编辑不占用页签方向键。

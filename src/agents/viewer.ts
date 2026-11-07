@@ -73,7 +73,7 @@ export async function showAgent(ctx: ExtensionContext, agents: Pick<AgentsModule
     dock.setDetail(true);
     let action: 'model' | 'message' | 'stop' | 'jobs' | undefined;
     try {
-      await ctx.ui.custom<void>((tui, _theme, _keys, done) => {
+      await ctx.ui.custom<void>((tui, theme, _keys, done) => {
         content ??= new Transcript(tui, get().record.cwd, name => get().run?.renderers?.get(name));
         content.setEntries(transcript(get().record, get().run));
         const view = new DetailsView(tui, () => `${summaryLine(get().record)} · ${get().record.model} (${get().record.modelSource}) · thinking ${get().record.thinking} (${get().record.thinkingSource})`, content, done, [
@@ -84,7 +84,7 @@ export async function showAgent(ctx: ExtensionContext, agents: Pick<AgentsModule
           { label: 'Model / thinking', available: () => !readonly, run: () => { action = 'model'; done(); } },
           { label: 'Background', key: 'b', available: () => !readonly && agents.manager.canSendToBackground(id, runId), run: () => { agents.manager.sendToBackground(id, runId); } },
           { label: 'Stop subtree', key: 'x', confirm: '再按 x 停止', available: canStop, run: () => { action = 'stop'; done(); } },
-        ], reader, canMessage() ? 'Message' : undefined);
+        ], reader, canMessage() ? 'Message' : undefined, theme);
         view.reader.setContent(content, reader ? reader.atBottom : active(get().record.state));
         reader = view.reader;
         let revision = transcript(get().record, get().run);

@@ -5,6 +5,7 @@ import { configSchema, defaults, loadConfig, readConfig, type SuiteConfig } from
 import { configField, configPaths, writeConfigFields, type ConfigLayer } from '../config-fields.ts';
 import { selectValue } from '../../ui/select.ts';
 import type { Dock } from '../../ui/dock.ts';
+import { commandFrame } from '../../ui/frame.ts';
 
 const describe = (value: unknown): string => value === undefined ? 'inherit' : JSON.stringify(value);
 type FieldSchema = TSchema & { type?: string; enum?: string[] };
@@ -50,11 +51,15 @@ export async function showSuiteSettings(ctx: ExtensionCommandContext, dock: Dock
     dock.setDetail(true);
     let selected: string | undefined;
     try {
-      selected = await ctx.ui.custom<string | undefined>((tui, _theme, _keys, done) => {
-        const list = new SettingsList(items, Math.max(1, Math.floor(tui.terminal.rows * 0.7) - 5), getSettingsListTheme(), id => done(id), () => done(undefined), { enableSearch: true });
+      selected = await ctx.ui.custom<string | undefined>((tui, theme, _keys, done) => {
+        const list = new SettingsList(items, Math.max(1, Math.floor(tui.terminal.rows * 0.7) - 7), getSettingsListTheme(), id => done(id), () => done(undefined), { enableSearch: true });
         if (initial) list.selectItem(initial);
-        return { render: width => [truncateToWidth('Pi Suite · saved settings · /reload applies changes', width), ...list.render(width)],
-          invalidate: () => list.invalidate(), handleInput: data => { list.handleInput(data); tui.requestRender(); }, handleMouse: event => list.handleMouse({ ...event, y: event.y - 1 }) };
+        let listRows = 0;
+        return { render: width => {
+          const content = list.render(width); listRows = content.length;
+          return commandFrame(width, [truncateToWidth('Pi Suite · saved settings · /reload applies changes', width), ...content], theme);
+        }, invalidate: () => list.invalidate(), handleInput: data => { list.handleInput(data); tui.requestRender(); },
+        handleMouse: event => event.y >= 2 && event.y < listRows + 2 ? list.handleMouse({ ...event, y: event.y - 2 }) : undefined };
       });
     } finally { dock.setDetail(false); }
     if (selected === undefined) return;

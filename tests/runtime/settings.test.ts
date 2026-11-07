@@ -73,7 +73,7 @@ test('actual extension loader readies first commands/tools and suite edits apply
   try {
     assert.deepEqual(extensionsResult.errors, []);
     const ui = {setStatus() {}, setWidget() {}, notify() {}, addAutocompleteProvider() {},
-      custom: async (factory: Parameters<ExtensionUIContext['custom']>[0]) => new Promise((done, reject) => Promise.resolve(factory(terminal(), {} as never, {} as never, done)).then(view => {
+      custom: async (factory: Parameters<ExtensionUIContext['custom']>[0]) => new Promise((done, reject) => Promise.resolve(factory(terminal(), ctx.ui.theme, {} as never, done)).then(view => {
         view.render(120); view.handleInput?.('\x1b'); view.dispose?.();
       }).catch(reject))} as unknown as ExtensionUIContext;
     await session.bindExtensions({mode: 'tui', uiContext: ui, onError: error => {errors.push(error);}});

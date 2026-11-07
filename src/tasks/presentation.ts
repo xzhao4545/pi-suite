@@ -4,14 +4,17 @@ import { taskTitle } from './query.ts';
 import { sanitizeText } from '../runtime/text.ts';
 
 export const taskIcon = (state: string): string => ({ doing: '⟳', blocked: '⚠', done: '☑' })[state] ?? '☐';
+// Reuse the Dock heading's accent for pending work across every task view.
+export const taskTone = (state: TaskView['status']) => ({ todo: 'accent', doing: 'success', blocked: 'warning', done: 'dim' } as const)[state];
+export const taskHeading = (task: Pick<TaskView, 'id' | 'title' | 'status'>) => `${task.id} ${taskTitle(task)}${task.status === 'blocked' ? ' (Blocked)' : ''}`;
 export function taskRow(task: Pick<TaskView, 'id' | 'title' | 'parentId' | 'status'>, theme?: Theme): string {
-  const text = `${taskIcon(task.status)} ${task.id} ${taskTitle(task)}`;
+  const text = `${taskIcon(task.status)} ${taskHeading(task)}`;
   return taskStyle(task, text, theme);
 }
 /** Apply trusted theme styling after readers have sanitized/truncated task data. */
 export function taskStyle(task: Pick<TaskView, 'status'>, text: string, theme?: Theme): string {
-  if (!theme || task.status === 'todo') return text;
-  return theme.fg(task.status === 'doing' ? 'accent' : task.status === 'blocked' ? 'warning' : 'dim',
+  if (!theme) return text;
+  return theme.fg(taskTone(task.status),
     task.status === 'done' ? `\x1b[9m${text}\x1b[29m` : text);
 }
 export function receiptLine(change: EditReceipt): string {

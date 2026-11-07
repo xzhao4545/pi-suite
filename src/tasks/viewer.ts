@@ -31,7 +31,7 @@ export class TaskBrowserView extends BrowserView {
           description: task.progress ? `${task.progress.done}/${task.progress.total}` : '',
           search: `${task.id} ${task.title} ${task.description ?? ''} ${task.blockedReason ?? ''} ${task.status}`,
           details: () => taskDetails(task, views).join('\n') }));
-      } }, done);
+      } }, done, theme);
   }
 }
 

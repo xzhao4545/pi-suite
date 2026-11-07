@@ -5,7 +5,7 @@ import type { BrowserView } from '../../src/ui/browser.ts';
 /** Exercise native focus and action keys without inspecting private view state. */
 export function focusBrowser(view: BrowserView, region: string): void {
   for (let i = 0; i < 10; i++) {
-    if (stripVTControlCharacters(view.render(120).at(-1)!).startsWith(`${region} ·`)) return;
+    if (stripVTControlCharacters(view.render(120).at(-2)!).startsWith(`${region} ·`)) return;
     view.handleInput('\t');
   }
   assert.fail(`Missing browser region ${region}`);

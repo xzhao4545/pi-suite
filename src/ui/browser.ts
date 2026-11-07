@@ -1,10 +1,11 @@
-import { getSelectListTheme, type ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { getSelectListTheme, type ExtensionContext, type Theme } from '@earendil-works/pi-coding-agent';
 import { Input, Key, SelectList, Text, fuzzyFilter, matchesKey, truncateToWidth, visibleWidth,
   type SelectItem, type SelectListLayoutOptions, type TUI, type Component, type TuiMouseEvent } from '@earendil-works/pi-tui';
 import { sanitizeText } from '../runtime/text.ts';
 import { ScrollView } from './scroll.ts';
 import type { Dock } from './dock.ts';
 import { ActionBar, type DetailAction } from './actions.ts';
+import { commandFrame } from './frame.ts';
 
 export interface BrowseItem extends SelectItem { search?: string; details?: () => string | Component; pinned?: boolean }
 type BrowseFocus = 'filter' | 'list' | 'details' | 'actions' | `control:${number}`;
@@ -42,11 +43,12 @@ export class BrowserView implements Component {
   private detailsTop = 0;
   private matches = 0;
   private bodyTop = 2;
+  private renderedRows = 0;
   private refreshTimer?: ReturnType<typeof setTimeout>;
   private clock?: ReturnType<typeof setInterval>;
   private unsubscribe?: () => void;
 
-  constructor(private tui: TUI, private options: BrowseOptions, private done: (value?: string) => void) {
+  constructor(private tui: TUI, private options: BrowseOptions, private done: (value?: string) => void, private theme?: Theme) {
     this.focus = options.state.focus ?? 'filter';
     this.bar = new ActionBar(() => this.actions(), options.state.action);
     this.input.setValue(options.state.query);
@@ -127,7 +129,7 @@ export class BrowserView implements Component {
       ...!this.matches && this.items.length ? [truncateToWidth('No matching records', width)] : []];
     this.bodyTop = header.length;
     const actions = this.bar.available(), hint = this.bar.hint;
-    const height = Math.max(2, Math.floor(this.tui.terminal.rows * 0.8) - header.length - 1 - (actions.length ? 1 : 0) - (hint ? 1 : 0));
+    const height = Math.max(2, Math.floor(this.tui.terminal.rows * 0.8) - header.length - 3 - (actions.length ? 1 : 0) - (hint ? 1 : 0));
     const wide = this.wide = width >= 80;
     this.visibleRows = wide ? Math.max(1, height - 1) : this.focus === 'details' ? 1 : Math.max(1, Math.floor(height / 2) - 1);
     this.update();
@@ -150,9 +152,11 @@ export class BrowserView implements Component {
     this.options.state.focus = this.focus;
     const control = this.focus.startsWith('control:');
     const focusName = control ? this.options.controls![this.controlIndex()].label || 'Pages' : `${this.focus[0].toUpperCase()}${this.focus.slice(1)}`;
-    return [...header, ...body.slice(0, height), ...(this.reader?.searching ? this.reader.search.render(width)
+    const lines = commandFrame(width, [...header, ...body.slice(0, height), ...(this.reader?.searching ? this.reader.search.render(width)
       : [...hint ? [truncateToWidth(hint, width)] : [], ...actions.length ? [this.bar.render(width)] : [],
-        truncateToWidth(`${focusName} · Tab focus · ${control || this.focus === 'actions' ? '←→ Enter' : this.focus === 'details' ? '↑↓ / search' : '↑↓ Enter'} · Esc`, width)])];
+        truncateToWidth(`${focusName} · Tab focus · ${control || this.focus === 'actions' ? '←→ Enter' : this.focus === 'details' ? '↑↓ / search' : '↑↓ Enter'} · Esc`, width)])], this.theme);
+    this.renderedRows = lines.length;
+    return lines;
   }
   handleInput(data: string): void {
     this.update();
@@ -187,6 +191,8 @@ export class BrowserView implements Component {
     this.tui.requestRender();
   }
   handleMouse(event: TuiMouseEvent) {
+    if (event.y <= 0 || event.y >= this.renderedRows - 1) return;
+    event = { ...event, y: event.y - 1 };
     if (event.y < this.bodyTop) return;
     if (this.wide ? event.x > this.leftWidth : event.y >= this.detailsTop) {
       this.focus = this.options.state.focus = 'details'; return this.reader?.handleMouse(event);
@@ -197,6 +203,6 @@ export class BrowserView implements Component {
 
 export async function browse(ctx: ExtensionContext, dock: Dock, options: BrowseOptions): Promise<string | undefined> {
   dock.setDetail(true);
-  try { return await ctx.ui.custom<string | undefined>((tui, _theme, _keys, done) => new BrowserView(tui, options, done)); }
+  try { return await ctx.ui.custom<string | undefined>((tui, theme, _keys, done) => new BrowserView(tui, options, done, theme)); }
   finally { dock.setDetail(false); }
 }

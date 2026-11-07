@@ -1,11 +1,10 @@
 import { toolRenderers, type ToolLine } from '../ui/tool-render.ts';
-import { taskTitle } from './query.ts';
-import { taskRow, taskIcon, receiptAction, receiptDisplay, derivedDisplay } from './presentation.ts';
+import { taskRow, taskIcon, taskTone, taskHeading, receiptAction, receiptDisplay, derivedDisplay } from './presentation.ts';
 import type { EditResult, TaskView } from './types.ts';
 
 function line(task: Pick<TaskView, 'id' | 'title' | 'parentId' | 'status'>): ToolLine {
-  return { icon: taskIcon(task.status), title: `${task.id} ${taskTitle(task)}`,
-    tone: task.status === 'doing' ? 'accent' : task.status === 'blocked' ? 'warning' : task.status === 'done' ? 'dim' : undefined,
+  return { icon: taskIcon(task.status), title: taskHeading(task),
+    tone: taskTone(task.status),
     strike: task.status === 'done', indent: task.parentId ? 2 : 0 };
 }
 export const listRenderers = toolRenderers<{ state?: string; groupId?: string }, { tasks: TaskView[]; nextCursor?: string }>({
