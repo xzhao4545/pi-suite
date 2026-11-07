@@ -4,7 +4,7 @@
 
 ## 任务索引
 
-- [Pi Suite 待办](pi-suite/index.md) — 活跃计划与专项归档入口。
+当前无活跃待办。已完成专项见 [归档索引](../finished/index.md)。
 
 Pi Suite Windows 验收见 [收尾记录](../finished/pi-suite/windows-completion.md)；Cursor CLI 验收按用户要求移除。
 
