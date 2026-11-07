@@ -86,7 +86,8 @@ export function toolRenderers<A, D>(view: ToolView<A, D>): Pick<ToolDefinition, 
 | --- | --- |
 | 调用中 | `? Ask · <第一题题干 60 列>`；多题为 `? Ask · 3 questions` |
 | 折叠 answered | 单题：`✔ Ask · <题干 40 列> → <答案>`，答案为选中标题（多选以 `, ` 连接）或输入文字首行；多题：`✔ Ask · 3 answered` |
-| 折叠 skipped / timed_out / cancelled | `⊘ Ask · skipped`、`⏱ Ask · timed out`、`⊘ Ask · cancelled` |
+| 折叠 timed_out | 与 answered 同格式，图标为 `⏱`，meta `auto-selected`；有 unanswered 题时 meta 追加 `1 unanswered` |
+| 折叠 skipped / cancelled | `⊘ Ask · skipped`、`⊘ Ask · cancelled` |
 | 展开 | 每题：题干、context，选项用 [Ask 交互](ask-interaction.md) 第 3 节的标记显示（已选 success），自由输入文字与评论 |
 
 - 子代理的 ask_user（`src/agents/child.ts`）标题为 `Ask parent`，其余相同。
