@@ -4,7 +4,8 @@
 
 ## 任务索引
 
-当前没有活跃待办。
+- [模型工具上下文精简](tool-context-budget.md)：ask_user 文本结果、agent_workflow 描述按需加载
+- [浏览界面交互重构](browser-interaction.md)：BrowserView 页面/筛选/焦点/按键统一，覆盖 /subagents、/tasks、/jobs
 
 Pi Suite Windows 验收见 [收尾记录](../finished/pi-suite/windows-completion.md)；Cursor CLI 验收按用户要求移除。
 
