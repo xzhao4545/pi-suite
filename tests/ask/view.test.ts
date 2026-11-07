@@ -19,11 +19,11 @@ function fixture(params: AskParams, rows = 24, columns = 40) {
   const results: AskResult[] = [];
   const form = new AskForm(normalize(params));
   const view = new AskView(form, tui, theme, dock, defaults, transcript, result => results.push(result), params.timeoutMs ?? defaults.ask.timeout);
-  return { view, form, results, dock };
+  return { view, form, results, dock, tui };
 }
 
 test("inline layout fits all specified terminal sizes and preserves filtered selections", () => {
-  for (const [columns, rows] of [[40, 24], [60, 30], [120, 40]]) {
+  for (const [columns, rows] of [24, 30, 40, 60].flatMap(rows => [40, 80, 120].map(columns => [columns, rows]))) {
     const { view, form, dock } = fixture({ question: "中文长标题🙂".repeat(15), allowMultiple: true,
       options: Array.from({ length: 40 }, (_, i) => ({ id: `${i}`, title: `选择${i}🙂`, description: "完整说明\n".repeat(100) + "说明末尾" })),
       defaultOptionIds: ["30"], timeoutMs: 0 }, rows, columns);
@@ -102,4 +102,40 @@ test("idle expiry keeps draft/recommended/first choices and unanswered slots; ac
   assert.equal(answered.results.length, 1); assert.equal(answered.results[0].status, "answered");
   const unlimited = fixture({ question: "Q", defaultAnswer: "yes", timeoutMs: 0 });
   unlimited.view.render(40); t.mock.timers.tick(100); assert.deepEqual(unlimited.results, []); unlimited.view.cancel();
+});
+
+
+test("multi-line choices, tabs, preview and Review details retain identity through expansion and resizing", () => {
+  const { view, form, tui } = fixture({ questions: [
+    { question: 'Question '.repeat(30), context: 'Background '.repeat(80), allowMultiple: true,
+      options: [{ id: 'first', title: 'First', description: 'description line one\ndescription line two' },
+        { id: 'second', title: 'Second '.repeat(12), description: 'Preview '.repeat(100) + 'PREVIEW_END' }], defaultOptionIds: ['first'] },
+    { question: 'Text question', defaultAnswer: 'Answer '.repeat(30) + 'ANSWER_END' },
+  ], timeoutMs: 0 }, 40, 80);
+  const mouse = (x: number, y: number, type: 'click' | 'wheel' = 'click') => ({ type, button: 'left' as const, x, y, screenX: x, screenY: y,
+    width: tui.terminal.columns, height: tui.terminal.rows, shift: false, alt: false, ctrl: false, wheelDelta: 1 });
+  const initial = view.render(80);
+  const description = initial.findIndex(line => line.includes('description line two'));
+  assert.ok(description > 0);
+  view.handleMouse(mouse(8, description));
+  assert.equal(form.draft.selected.has('first'), false, 'clicking a continuation row chooses its actual option');
+  view.handleInput('e'); const expanded = view.render(80);
+  assert.ok(expanded.some(line => line.includes('d 全文')));
+  const expandedHeight = expanded.length;
+  view.handleInput('\x1b[C'); assert.equal(view.render(80).length, expandedHeight, 'page changes retain height');
+  assert.equal(form.draft.text.endsWith('ANSWER_END'), true);
+  view.handleInput('\t'); view.handleInput('\r'); // View details remains reachable while text is focused.
+  assert.ok(view.render(80).some(line => line.includes('Text question')));
+  view.handleInput('\x1b'); view.handleInput('\r'); // Review
+  view.handleInput('\x1b[B'); view.handleInput('d'); view.render(80); view.handleInput('\x1b[F');
+  assert.ok(view.render(80).some(line => line.includes('ANSWER_END')), 'Review full reading contains the answer');
+  view.handleInput('\x1b'); view.handleInput('\x1b[C'); // first question
+  Object.defineProperties(tui.terminal, { columns: { value: 120, configurable: true }, rows: { value: 60, configurable: true } });
+  view.render(120); form.draft.cursor = 1; let wide = view.render(120);
+  const selected = new Set(form.draft.selected);
+  for (let index = 0; index < 80; index++) view.handleMouse(mouse(105, wide.findIndex(line => line.includes('Preview')) > 0 ? wide.findIndex(line => line.includes('Preview')) : 8, 'wheel'));
+  wide = view.render(120);
+  assert.equal(form.draft.cursor, 1, 'preview wheel does not move the list cursor');
+  assert.deepEqual(form.draft.selected, selected);
+  view.dispose();
 });

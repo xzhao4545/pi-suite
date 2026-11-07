@@ -53,7 +53,7 @@ test("status publishing deduplicates IDs, clears old bindings and honors status/
   const length = writes.length, before = renders;
   publisher.setActivities("agents", ["b", "a"]); publisher.setActivities("jobs", ["another-job"]); publisher.setGoal("⏳ goal");
   assert.equal(writes.length, length); assert.equal(renders, before, 'unchanged summaries do not invalidate Dock');
-  assert.ok(dock.render(40).some(line => line.includes("jobs 1")));
+  assert.ok(dock.render(40).some(line => line.includes("Jobs") && line.includes("1 active")));
   assert.ok(dock.render(40).every(line => !line.includes("agents 2") && !line.includes("goal")));
   publisher.detach(); assert.deepEqual(writes.slice(-2), [["goal", undefined], ["pi-suite:runtime", undefined]]);
   writes.length = 0;
@@ -68,18 +68,20 @@ test("status publishing deduplicates IDs, clears old bindings and honors status/
   publisher.setActivities('agents', ['a'], [{...running, suffix: 'waiting(parent)', priority: 100}]);
   assert.equal(writes.length, countWrites, 'state-only changes update details without rewriting counts');
   publisher.setActivities('jobs', ['job'], [{id: 'job', text: 'hidden job', priority: 110}]);
-  dock.register('tasks', () => [
-    {id: 'parent', text: 'parent', priority: 40}, {id: 'child', parentId: 'parent', text: 'child', priority: 40},
+  dock.register('tasks', { title: 'Tasks', rows: () => [
+    {id: 'parent', text: 'parent', priority: 40}, {id: 'child', parentId: 'parent', text: 'child', priority: 45},
     {id: 'other', text: 'other', priority: 30},
-  ]);
-  const compact = dock.render(40);
-  assert.match(compact[0], /waiting\(parent\)/); assert.match(compact.at(-1)!, /\+2/);
-  assert.ok(compact.every(line => !line.includes('hidden job') && !line.includes('child')));
+  ] });
   const tui = terminal(40, 40);
-  dock.bind({mode: 'tui', ui: {setWidget: (_key: string, factory: (tui: ReturnType<typeof terminal>) => unknown) => factory(tui)}} as unknown as ExtensionContext, 6);
-  assert.deepEqual(dock.render(40).map(line => line.includes('child') ? 'child' : line.includes('parent') && !line.includes('waiting') ? 'parent' : 'other'),
-    ['other', 'parent', 'child', 'other']);
+  dock.bind({mode: 'tui', ui: {setWidget: (_key: string, factory: (tui: ReturnType<typeof terminal>) => unknown) => factory(tui)}} as unknown as ExtensionContext, 12);
+  const panel = dock.render(40);
+  assert.match(panel[0], /waiting\(parent\)/);
+  assert.ok(panel.every(line => !line.includes('hidden job')));
+  assert.ok(panel.findIndex(line => line.includes('child')) > panel.findIndex(line => line.includes('├─ parent')));
   dock.bind({mode: 'tui', ui: {setWidget: (_key: string, factory: (tui: ReturnType<typeof terminal>) => unknown) => factory(tui)}} as unknown as ExtensionContext, 1);
-  assert.deepEqual(dock.render(40), []); dock.setAsk(true); assert.equal(dock.askBudget(40), 1);
+  assert.equal(dock.render(40).length, 1);
+  const askHeight = dock.askBudget(40);
+  dock.setAsk(true); assert.deepEqual(dock.render(40), []);
+  assert.equal(dock.askBudget(40), askHeight, 'Ask height is independent of the idle Dock cap');
   publisher.detach();
 });

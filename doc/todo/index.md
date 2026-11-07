@@ -4,7 +4,7 @@
 
 ## 任务索引
 
-- [底部布局：Dock、询问与输入区](dock-ask-layout.md)：放宽 tasks 与询问的高度预算，询问覆盖 Dock，区分 tasks/询问/输入区，并保证折叠内容可展开查看全文。
+当前没有活跃待办。
 
 Pi Suite Windows 验收见 [收尾记录](../finished/pi-suite/windows-completion.md)；Cursor CLI 验收按用户要求移除。
 

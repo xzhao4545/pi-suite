@@ -98,7 +98,7 @@ test('native asks hold real child questions and job completion; only system canc
       assert.deepEqual(shown, ['gate']); assert.equal(notices().length, 1, 'only the initial goal request has been delivered');
       assert.equal(rootCalls, 2, 'background completion and parent questions cannot interrupt the native ask');
       assert.ok(runs.every(run => run.record.state === 'waiting' && run.question?.seen === false));
-      assert.match(dock.render(40)[0], /waiting\(parent\)/, 'pending child questions replace ordinary activity during a native ask');
+      assert.deepEqual(dock.render(40), [], 'native Ask owns the Dock area while background questions remain queued');
       const gate = forms.get('gate')!;
       if (outcome === 'answered') answer(gate);
       else if (outcome === 'skipped') gate.handleInput('\x1b');
@@ -123,7 +123,7 @@ test('native asks hold real child questions and job completion; only system canc
       assert.deepEqual(shown, ['gate', 'child A']); assert.equal(rootCalls, heldCalls);
       assert.ok(runs.every(run => run.record.state === 'waiting'));
       assert.ok(runs.every(run => run.question?.seen === true));
-      assert.match(dock.render(40)[0], /waiting\(parent\)/, 'delivery of the notice does not hide an unanswered question');
+      assert.deepEqual(dock.render(40), [], 'the next native Ask also covers Dock without consuming unanswered child questions');
       answer(forms.get('child A')!); await resumed; await h.idle(); await Promise.all(runs.map(run => run.done.promise));
       assert.deepEqual(shown, ['gate', 'child A', 'child B']);
       assert.equal(h.goal()?.status, 'completed'); assert.equal(rootCalls, 7);

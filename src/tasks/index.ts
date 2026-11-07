@@ -25,7 +25,11 @@ export class TasksModule {
   private lastUse = 0;
   private reminded = false;
   private selectedGroup?: string;
-  constructor(private binding: SessionBinding, private dock: Dock, private inheritedStore?: TaskStore) { dock.register('tasks', compact => this.rows(compact)); }
+  constructor(private binding: SessionBinding, private dock: Dock, private inheritedStore?: TaskStore) {
+    dock.register('tasks', { title: 'Tasks', rows: () => this.rows(), summary: () => this.summary(), subtitle: () => this.progressText,
+      footer: () => this.completed ? `☑ 已完成 ${this.completed} 组` : '',
+      progress: () => { const count = this.progress; return count.total ? count.done / count.total : 0; } });
+  }
   async bind(ctx: ExtensionContext, event: Pick<SessionStartEvent, 'reason' | 'previousSessionFile'>): Promise<void> {
     const previous = this.store;
     this.detach(); this.turn = this.lastUse = 0; this.reminded = false;
@@ -87,55 +91,45 @@ export class TasksModule {
     }
     this.dock.invalidate();
   }
-  rows(compact = false): DockRow[] {
+  private get completed(): number { return this.views.filter(task => task.progress && task.status === 'done').length; }
+  private get progress(): { done: number; total: number } {
+    const count = { done: 0, total: 0 };
+    for (const task of this.views) if (task.progress) { count.done += task.progress.done; count.total += task.progress.total; }
+    return count;
+  }
+  private get progressText(): string { const count = this.progress; return `${count.done}/${count.total}`; }
+  private summary(): string {
+    const rows = this.rows();
+    const child = [...rows].sort((a, b) => b.priority - a.priority).find(row => row.parentId);
+    return this.progressText + (child ? ` · ${child.text}` : '');
+  }
+  rows(): DockRow[] {
     if (!this.binding.current) return [];
-    const groups = this.views.filter(task => task.progress), completed = groups.filter(task => task.status === 'done').length;
-    const blocked = new Set(this.views.filter(task => task.status === 'blocked').map(task => task.id));
-    const completedIds = new Set(groups.filter(group => group.status === 'done').map(group => `task:${group.id}`));
-    const rows: DockRow[] = [];
-    const children = new Map<string, TaskView[]>();
-    const grouped = new Map<string, TaskView[]>();
-    for (const task of this.views) if (task.parentId) {
-      const list = grouped.get(task.parentId) ?? []; list.push(task); grouped.set(task.parentId, list);
-    }
-    const currents = new Map(groups.map(group => [group.id, currentChild(group, grouped.get(group.id) ?? [])]));
-    const recent = new Map(groups.map(group => [group.id, group.updatedAt]));
-    for (const task of this.views) if (task.parentId) {
-      recent.set(task.parentId, Math.max(recent.get(task.parentId)!, task.updatedAt));
-      if (task.status === 'doing' || blocked.has(task.id) || this.feedback.has(task.id)
-        || currents.get(task.parentId)?.id === task.id) {
-        const list = children.get(task.parentId) ?? []; list.push(task); children.set(task.parentId, list);
-      }
-    }
-    groups.sort((a, b) => recent.get(b.id)! - recent.get(a.id)! || Number(a.id) - Number(b.id));
-    for (const [index, group] of groups.entries()) {
-      if (group.status === 'done' && !this.feedback.has(group.id)) continue;
-      const selected = group.id === this.selectedGroup;
-      const blockedCount = Number(blocked.has(group.id)) + (children.get(group.id) ?? []).filter(task => blocked.has(task.id)).length;
-      const priority = (selected ? 50 : group.status === 'doing' ? 40 : blockedCount ? 38 : this.feedback.has(group.id) ? 35 : 30)
-        + (groups.length - index) / (groups.length + 1) * 0.25;
-      rows.push({ id: `task:${group.id}`, text: taskRow(group, this.binding.current.ctx.ui.theme),
-        suffix: `${group.progress!.done}/${group.progress!.total}`, priority });
-      const visible = children.get(group.id) ?? [], current = currents.get(group.id);
-      // The phone budget may fit only one child; show current work before older activity.
-      for (const task of current ? [current, ...visible.filter(task => task.id !== current.id)] : visible) {
-        rows.push({ id: `task:${task.id}`, parentId: `task:${group.id}`,
-          text: taskRow(task, this.binding.current.ctx.ui.theme),
-          priority: priority + 0.5 });
-      }
-    }
-    if (completed) rows.push({ id: 'tasks:finished', text: this.binding.current.ctx.ui.theme.fg('dim', `☑ 已完成 ${completed} 组`), priority: 10 });
-    if (compact) {
-      const unfinished = rows.filter(row => !row.parentId && row.id !== 'tasks:finished'
-        && !completedIds.has(row.id)).sort((a, b) => b.priority - a.priority);
-      const first = unfinished[0];
-      if (!first) return rows.filter(row => row.id === 'tasks:finished');
-      const group = groups.find(group => `task:${group.id}` === first.id)!;
-      const child = currents.get(group.id);
-      return [{ ...first, suffix: first.suffix + (unfinished.length > 1 ? ` · +${unfinished.length - 1} 组` : '') },
-        ...child ? rows.filter(row => row.id === `task:${child.id}`) : []];
-    }
-    return rows;
+    const theme = this.binding.current.ctx.ui.theme;
+    const groups = this.views.filter(task => task.progress);
+    if (!groups.some(group => group.status !== 'done' || this.feedback.has(group.id))) return [];
+    const children = new Map(groups.map(group => [group.id, [] as TaskView[]]));
+    for (const task of this.views) if (task.parentId) children.get(task.parentId)!.push(task);
+    for (const items of children.values()) items.sort((a, b) => Number(a.id.split('.')[1]) - Number(b.id.split('.')[1]));
+    const recent = (group: TaskView) => Math.max(group.updatedAt, ...children.get(group.id)!.map(task => task.updatedAt));
+    const rank = (group: TaskView) => group.id === this.selectedGroup ? 50 : group.status === 'doing' ? 40
+      : group.status === 'blocked' || children.get(group.id)!.some(task => task.status === 'blocked') ? 38 : 30;
+    const visible = groups.filter(group => group.status !== 'done' || this.feedback.has(group.id))
+      .sort((a, b) => rank(b) - rank(a) || recent(b) - recent(a) || Number(a.id) - Number(b.id));
+    const focus = visible[0];
+    return visible.flatMap((group, index) => {
+      const priority = rank(group) + (visible.length - index) / (visible.length + 1) * 0.25;
+      const rows: DockRow[] = [{ id: `task:${group.id}`, text: taskRow(group, theme),
+        suffix: `${group.progress!.done}/${group.progress!.total}`, priority }];
+      if (group !== focus) return rows;
+      const items = children.get(group.id)!, current = currentChild(group, items);
+      const latestDone = [...items].filter(task => task.status === 'done').sort((a, b) => b.updatedAt - a.updatedAt)[0];
+      for (const task of items) rows.push({ id: `task:${task.id}`, parentId: `task:${group.id}`,
+        text: taskRow(task, theme), priority: priority + (task === current ? 5 : task.status === 'doing' || task.status === 'blocked' ? 4
+          : task.status === 'todo' && (!current || Number(task.id.split('.')[1]) > Number(current.id.split('.')[1])) ? 3
+          : task === latestDone ? 2 : 1) });
+      return rows;
+    });
   }
   selectGroup(id?: string): void { this.selectedGroup = id; this.dock.invalidate(); }
   registerReminders(pi: ExtensionAPI, config: () => SuiteConfig): void {

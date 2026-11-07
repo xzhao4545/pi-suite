@@ -25,11 +25,11 @@ test('task dock and live browser share committed status; important children keep
     await tasks.edit(ctx, [{ op: 'start', id: '1.1' }, {op: 'block', id: '2.1', reason: 'waiting for server'}]);
     t.mock.timers.tick(1);
     await tasks.edit(ctx, [{op: 'start', id: '1.2'}]);
-    assert.equal(tasks.rows().filter(row => row.parentId === 'task:1')[0].id, 'task:1.2', 'latest current work precedes other activity in the phone budget');
+    assert.equal(tasks.rows().filter(row => row.parentId === 'task:1')[0].id, 'task:1.1', 'task ID determines reading order, priority determines retention');
     tasks.selectGroup('2');
     for (const width of [40, 60, 120]) {
       const rows = dock.render(width);
-      assert.ok(rows.every(row => visibleWidth(row) <= width)); assert.ok(rows.length <= 3);
+      assert.ok(rows.every(row => visibleWidth(row) <= width)); assert.ok(rows.length <= dock.budget());
       const child = rows.findIndex(line => /2\.1 /.test(line));
       assert.ok(child > 0 && /2 /.test(rows[child-1]), 'changed child remains visible beside its parent');
       const lines = view.render(width);
@@ -44,10 +44,14 @@ test('task dock and live browser share committed status; important children keep
     assert.match(view.render(120).join('\n'), /done/);
     t.mock.timers.tick(5001);
     assert.equal(tasks.rows().some(row => row.id === 'task:1'), false);
-    assert.ok(tasks.rows().some(row => row.id === 'tasks:finished'));
+    assert.ok(dock.render(80).some(row => row.includes('已完成 1 组')));
     await tasks.edit(ctx, [{op: 'unblock', id: '2.1'}]);
-    assert.equal(tasks.rows(true).length, 2);
-    assert.match(tasks.rows(true)[0].suffix!, /0\/1/);
-    dock.setAsk(true); assert.equal(dock.render(40).length, 2);
+    assert.equal(tasks.rows().length, 3);
+    assert.match(tasks.rows()[0].suffix!, /0\/1/);
+    dock.setAsk(true); assert.equal(dock.render(40).length, 0); dock.setAsk(false);
+    await tasks.edit(ctx, [{op: 'done', id: '2.1'}, {op: 'done', id: '3.1'}]);
+    t.mock.timers.tick(5001);
+    assert.deepEqual(dock.render(80), [], 'all-complete feedback expires without deleting task data');
+    assert.ok(tasks.current(ctx).tasks.length > 0);
   } finally { view.dispose(); tasks.detach(); binding.revoke(); t.mock.timers.reset(); rmSync(root, { recursive: true, force: true }); }
 });

@@ -23,10 +23,10 @@ export class WorkflowsModule implements Waitable {
   constructor(private pi: ExtensionAPI, private binding: SessionBinding, private notices: Notifications,
     private dock: Dock, private agents: AgentsModule, manager?: WorkflowManager) {
     this.manager = manager ?? workflowRuntime();
-    dock.register('workflows', () => this.list().filter(task => !this.manager.settled(task.id)).map(task => ({
+    dock.register('workflows', { title: 'Workflows', rows: () => this.list().filter(task => !this.manager.settled(task.id)).map(task => ({
       id: task.id, text: `${task.id} ${task.workflowName ?? 'workflow'}`, priority: 60,
       suffix: `${task.status} · ${task.doneCount}/${task.agentCount}`,
-    })));
+    })) });
   }
   list(): OwnedWorkflowTask[] {
     const current = this.binding.current;

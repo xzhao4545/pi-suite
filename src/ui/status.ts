@@ -13,12 +13,12 @@ export class StatusPublisher {
   private modes: Record<"goal" | "agents" | "jobs", DisplayMode> = { goal: "status", agents: "status", jobs: "status" };
 
   constructor(private dock: Dock) {
-    dock.register("status", () => [
-      ...(this.modes.goal === "dock" && this.goal ? [{ id: "goal", text: this.goal, priority: 90 }] : []),
-      ...(["agents", "jobs"] as const).flatMap(key => this.modes[key] === "dock" && this[key].size
-        ? [{ id: key, text: `${key} ${this[key].size}`, priority: 70 }] : []),
-      ...(["agents", "jobs"] as const).flatMap(key => this.modes[key] === 'hidden' ? [] : this.details[key]),
-    ]);
+    dock.register("goal", { title: "Goal", rows: () => this.modes.goal === "dock" && this.goal
+      ? [{ id: "goal", text: this.goal, priority: 90 }] : [] });
+    for (const key of ["agents", "jobs"] as const) dock.register(key, { title: key === 'agents' ? 'Agents' : 'Jobs', rows: () => [
+      ...(this.modes[key] === "dock" && this[key].size ? [{ id: key, text: `${this[key].size} active`, priority: 70 }] : []),
+      ...(this.modes[key] === 'hidden' ? [] : this.details[key]),
+    ] });
   }
 
   bind(ui: ExtensionUIContext, modes: typeof this.modes, ownsGoal = true): void {

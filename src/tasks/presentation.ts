@@ -5,7 +5,7 @@ import { sanitizeText } from '../runtime/text.ts';
 
 export const taskIcon = (state: string): string => ({ doing: '⟳', blocked: '⚠', done: '☑' })[state] ?? '☐';
 export function taskRow(task: Pick<TaskView, 'id' | 'title' | 'parentId' | 'status'>, theme?: Theme): string {
-  const text = `${task.parentId ? '  ' : ''}${taskIcon(task.status)} ${task.id} ${taskTitle(task)}`;
+  const text = `${taskIcon(task.status)} ${task.id} ${taskTitle(task)}`;
   return taskStyle(task, text, theme);
 }
 /** Apply trusted theme styling after readers have sanitized/truncated task data. */

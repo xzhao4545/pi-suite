@@ -69,8 +69,8 @@ test("published pi-starship footer coexists with real suite execution and ask at
     columns = width; rows = height;
     const foot = footer!.render(width), panel = dock.render(width), ask = asking?.render(width) ?? [];
     assert.ok([...foot, ...panel, ...ask].every(line => visibleWidth(line) <= width));
-    assert.ok(panel.length + ask.length <= dock.budget(height) + Number(!!asking && height < 28 && panel.length === 2), "suite components share their height allowance");
-    assert.ok(foot.length + panel.length + ask.length < height * 0.4, "configured external footer leaves chat space");
+    assert.ok(asking ? panel.length === 0 && ask.length <= dock.askBudget(height) : panel.length <= dock.budget(height), "Ask replaces Dock with an independent budget");
+    assert.ok(foot.length + panel.length + ask.length < height * (asking ? 0.7 : 0.5), "configured external footer leaves chat space");
     assert.ok(!text(panel).includes("goal") && !text(panel).includes("🤖1") && !text(panel).includes("⚙1"));
     return foot;
   });

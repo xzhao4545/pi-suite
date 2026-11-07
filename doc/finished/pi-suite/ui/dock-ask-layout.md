@@ -8,7 +8,7 @@
 - 问题、背景、选项标题与说明在折叠显示时必须提供展开方式，保证用户始终可以看到全部信息。
 - 体验优先，参考 oh-my-pi（omp）的实现；聊天内容在任意尺寸下仍保持可见。
 
-## 当前状态
+## 规划时状态
 
 ### tasks 只显示两行
 
@@ -247,21 +247,33 @@ Dock 中被截断的任务、workflow、agent、job 行沿用既有入口查看�
 
 ## 相关文档
 
-- [统一界面](../current/ui/index.md)：高度与状态、DetailsView、ScrollView。
-- [询问](../current/ask/index.md)：操作一节需同步新增按键与动作。
-- [任务操作与显示](../current/tasks/operations.md)：常驻摘要一节。
-- [运行时配置](../current/runtime/index.md)：`ui.maxRows` 范围。
+- [统一界面](../../../current/ui/index.md)：高度与状态、DetailsView、ScrollView。
+- [询问](../../../current/ask/index.md)：操作一节需同步新增按键与动作。
+- [任务操作与显示](../../../current/tasks/operations.md)：常驻摘要一节。
+- [运行时配置](../../../current/runtime/index.md)：`ui.maxRows` 范围。
 
 ## 任务列表
 
-- [ ] Dock 预算公式改为半屏共享，`ui.maxRows` 默认 12、范围 1–30
-- [ ] Dock 分区注册与渲染：标题、竖线、尾线、单行摘要、显示顺序与 priority 分离
-- [ ] 询问打开时 Dock 让位，删除 `dockAllowance` 与 `compact`
-- [ ] tasks 焦点组完整子任务、裁剪优先级、溢出行与全部完成后隐藏
-- [ ] workflows、goal、agents、jobs 分区标题
-- [ ] 询问外框、70% 上限、按内容取高与高度稳定
-- [ ] 问题区显示问题与背景，窄屏内联选项说明
-- [ ] `e` / Expand 展开折叠内容，`d` / View details 扩展为完整阅读，Review 详情
-- [ ] 宽屏预览滚轮、多行选项鼠标映射与外框坐标偏移
-- [ ] 更新 current 文档（统一界面、询问操作、任务显示、运行时配置）与 `/suite` 字段说明
-- [ ] 实际 Pi CLI 多尺寸验收
+- [x] Dock 预算公式改为半屏共享，`ui.maxRows` 默认 12、范围 1–30
+- [x] Dock 分区注册与渲染：标题、竖线、尾线、单行摘要、显示顺序与 priority 分离
+- [x] 询问打开时 Dock 让位，删除 `dockAllowance` 与 `compact`
+- [x] tasks 焦点组完整子任务、裁剪优先级、溢出行与全部完成后隐藏
+- [x] workflows、goal、agents、jobs 分区标题
+- [x] 询问外框、70% 上限、按内容取高与高度稳定
+- [x] 问题区显示问题与背景，窄屏内联选项说明
+- [x] `e` / Expand 展开折叠内容，`d` / View details 扩展为完整阅读，Review 详情
+- [x] 宽屏预览滚轮、多行选项鼠标映射与外框坐标偏移
+- [x] 更新 current 文档（统一界面、询问操作、任务显示、运行时配置）与 `/suite` 字段说明
+- [x] 实际 Pi CLI 多尺寸验收
+
+
+## 实施与验证结论
+
+- Dock 采用半屏共享预算与独立 Ask 上限，ui.maxRows 默认 12、范围 1–30；来源统一注册标题、行及可选摘要/尾线/完成比例。分区按 priority 保留、按来源顺序显示，任务树竖线沿全部子任务完成比例着色。
+- tasks 焦点组提供全部按 ID 排序的子任务，裁剪保留当前工作与待办上下文，溢出行替代多个隐藏项；完成组数量并入尾线，全部完成反馈结束后隐藏分区且保留任务数据。goal、agents、jobs 与 workflows 使用同一 Dock 分区接口。
+- Ask 采用圆角外框、整批内容测量、缩放/展开重算与切页/筛选固定高度。问题与背景、内联说明、展开、全文阅读、Review 答案/comment、预览滚动和物理行到选项身份的鼠标映射接入原生组件；读行在缩放时按同一条目与条目内行位置保持。
+- Linux Node 24.22.2 / Pi 1.5.0 实际 CLI 在 24/30/40/60 行 × 40/80/120 列验证独立预算、任务顺序与溢出、询问覆盖/关闭恢复、单题/批量/Review、高度稳定、边框、筛选外选择、展开、全文阅读、文本草稿、页签与多行点击、预览滚轮及自然退出；低于 18 行的摘要与 Ask 上限低于 5 行的回答/提交同样通过。原生 SDK 聚合验证通知仍暂存并合并一次，状态 footer 与实际 pi-starship 共存遵循独立预算。
+- 类型检查与 171 项完整检查通过；日常完整检查约 43 秒。新增 1 项跨布局风险检查，其余更新既有高度、任务与协调契约。验收使用受控离线 Provider，结论涵盖实际 Pi SDK、CLI、PTY 与原生 TUI，Windows 本专项未重复验收。
+- 稳定事实与操作已写入 [统一界面](../../../current/ui/index.md)、[询问](../../../current/ask/index.md)、[任务操作](../../../current/tasks/operations.md) 与 [运行时配置](../../../current/runtime/index.md)，/suite 同步说明范围与独立 Ask 高度。
+
+[返回已完成专项](../../index.md)

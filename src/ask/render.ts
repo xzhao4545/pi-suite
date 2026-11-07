@@ -15,11 +15,6 @@ export function optionRow(theme: Theme, question: Question, draft: Pick<Draft, '
   return (focused ? theme.fg("accent", "❯ ") : "  ") + theme.fg(selected ? "success" : "dim", marker) + " " +
     (focused ? theme.fg("accent", oneLine(title)) : oneLine(title)) + (option?.recommended ? theme.fg("accent", " (Recommended)") : "");
 }
-export function questionType(form: AskForm): string {
-  if (form.reviewing) return "Review";
-  return !form.question.options.length ? "✎ Text" : form.question.allowMultiple
-    ? `☐ Multiple choice · ${form.draft.selected.size} selected` : "○ Single choice";
-}
 export interface TabRegion { start: number; end: number; page: number }
 export function questionTabs(form: AskForm, theme: Theme, width: number): { line: string; regions: TabRegion[] } {
   const page = form.reviewing ? form.questions.length : form.index;
@@ -35,10 +30,6 @@ export function questionTabs(form: AskForm, theme: Theme, width: number): { line
     return { start, end: Math.min(width, end), page: index };
   });
   return { line: truncateToWidth(line.trimEnd(), width), regions };
-}
-export function reviewRows(form: AskForm, theme: Theme, width: number): string[] {
-  return form.questions.map((question, index) => truncateToWidth(`${index + 1}. ${oneLine(question.question)}: ` +
-    (answerText(form.response(index)) ? oneLine(answerText(form.response(index))!) : theme.fg("warning", "Unanswered")), width));
 }
 export function idleTime(deadline?: number): string {
   if (deadline === undefined) return "no timeout";

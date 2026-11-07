@@ -4,6 +4,7 @@
 
 已实施模块的完整设计与原验收契约见 [设计与实施记录](./pi-suite/design/index.md)；平台证据按各专项的实际范围读取，Windows 本轮状态见 [Windows 验收收尾](./pi-suite/windows-completion.md)。
 
+- [底部布局：Dock、询问与输入区](./pi-suite/ui/dock-ask-layout.md) — 半屏 Dock 分区、独立询问高度、任务顺序与裁剪、展开与全文、多行鼠标映射；Linux 实际 Pi CLI 十二尺寸与紧凑布局验收。
 - [Tasks 两级编号与紧凑反馈](./pi-suite/tasks-display.md) — version 3/依赖迁移、统一任务行与完成样式、询问父子两行、默认 All 与工具一行摘要；Linux 三尺寸实际 Pi CLI 验收。
 - [公共工具显示精简](./pi-suite/tool-display.md) — 所有 Suite 工具共用状态行、折叠/展开、敏感输入隐藏与完整错误，Ask History/child Transcript 接入；Linux 三尺寸实际 Pi CLI 验收。
 - [Ask 空闲计时与交互](./pi-suite/ask/interaction.md) — 默认 10 分钟空闲、草稿/推荐/首项自动答案、题型标记、循环页签与 Review、Esc 跳过时模型继续；Linux 三尺寸实际 Pi CLI PTY 验收。

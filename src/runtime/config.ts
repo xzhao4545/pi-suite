@@ -20,7 +20,7 @@ export const configSchema = Type.Object({
     jobs: Type.Optional(Type.Boolean()), goal: Type.Optional(Type.Boolean()),
     agents: Type.Optional(Type.Boolean()),
   }, { additionalProperties: false })),
-  ui: Type.Optional(Type.Object({ maxRows: Type.Optional(Type.Integer({ minimum: 1, maximum: 6 })) }, { additionalProperties: false })),
+  ui: Type.Optional(Type.Object({ maxRows: Type.Optional(Type.Integer({ minimum: 1, maximum: 30 })) }, { additionalProperties: false })),
   ask: Type.Optional(Type.Object({
     timeout: Type.Optional(Type.Integer({ minimum: 0, maximum: 2147483647 })),
     historyKey: Type.Optional(Type.String({ pattern: keyPattern })),
@@ -68,7 +68,7 @@ export interface SuiteConfig {
 export const defaults: SuiteConfig = {
   commands: { exit: true },
   modules: { ask: true, tasks: true, jobs: true, goal: true, agents: true },
-  ui: { maxRows: 6 }, ask: { timeout: 600000, historyKey: "ctrl+h" },
+  ui: { maxRows: 12 }, ask: { timeout: 600000, historyKey: "ctrl+h" },
   goal: { display: "status" }, agents: { display: "status", maxConcurrent: 10, maxConcurrentForeground: 0,
     maxDepth: 3, persistSessions: true, types: {}, mentions: true, scheduling: true, workflows: true },
   tasks: { reminders: true },
