@@ -1,4 +1,4 @@
-import type { Theme } from '@earendil-works/pi-coding-agent';
+import type { Theme, ThemeColor } from '@earendil-works/pi-coding-agent';
 import { sanitizeText } from '../runtime/text.ts';
 import { truncateToWidth, visibleWidth, type KeyId, type SelectItem } from '@earendil-works/pi-tui';
 
@@ -10,7 +10,43 @@ export interface BrowseSelection { name: string; id?: string }
 
 const current = (choice: BrowseChoice) => choice.items().find(item => item.value === choice.selected());
 const cell = (item: SelectItem) => item.description ? `${item.label} ${item.description}` : item.label;
-const mark = (text: string, on: boolean, theme?: Theme) => on ? theme?.fg('accent', theme.bold(`[${text}]`)) ?? `[${text}]` : theme?.fg('dim', text) ?? text;
+const paint = (token: ThemeColor, text: string, theme?: Theme) => theme?.fg(token, text) ?? text;
+const strong = (text: string, theme?: Theme) => theme?.bold(text) ?? text;
+/** Browser and detail roles live here so pages provide data, never ANSI or palette choices. */
+export const heading = (text: string, theme?: Theme) => paint('accent', strong(text, theme), theme);
+export const feedback = (text: string, error: boolean, theme?: Theme) => paint(error ? 'error' : 'muted', text, theme);
+export const newOutputHint = (theme?: Theme, compact = false) => compact ? `${paint('dim', '↓ ', theme)}${keyToken('End', theme)}`
+  : `${paint('dim', '↓ new output · ', theme)}${keyHint('End', 'to follow', theme)}`;
+/** The title names what is being read; on narrow screens the new-output hint shrinks before the title disappears. */
+export function readerHeading(title: string, position: string, hasNewOutput: boolean, width: number, theme?: Theme): string {
+  const suffix = (compact: boolean) => `${paint('muted', ` · ${position}`, theme)}${hasNewOutput ? ` · ${newOutputHint(theme, compact)}` : ''}`;
+  const tail = width - visibleWidth(suffix(false)) >= 16 ? suffix(false) : suffix(true);
+  return truncateToWidth(heading(truncateToWidth(title, Math.max(0, width - visibleWidth(tail))), theme) + tail, width);
+}
+export const selectedTab = (text: string, theme?: Theme) => theme?.bg('selectedBg', strong(text, theme)) ?? text;
+export const keyToken = (key: string, theme?: Theme) => paint(key === 'x' ? 'error' : 'warning', strong(key, theme), theme);
+export const keyHint = (key: string, action: string, theme?: Theme) => `${keyToken(key, theme)} ${paint('dim', action, theme)}`;
+export const confirmation = (key: string, action: string, theme?: Theme) =>
+  `${paint(key === 'x' ? 'error' : 'warning', `Press ${keyToken(key, theme)} again to ${action}`, theme)} · ${paint('dim', 'any other key cancels', theme)}`;
+export const divider = (text: string, theme?: Theme) => paint('borderMuted', text, theme);
+export const separator = (width: number, theme?: Theme) => divider('─'.repeat(width), theme);
+export const selectedRow = (text: string, width: number, theme?: Theme) => {
+  const row = `${paint('accent', text.slice(0, 2), theme)}${text.slice(2)}${' '.repeat(Math.max(0, width - visibleWidth(text)))}`;
+  return theme?.bg('selectedBg', row) ?? row;
+};
+const stateTones: Record<string, ThemeColor> = { running: 'success', starting: 'success', waiting: 'warning', stopping: 'warning', queued: 'warning',
+  failed: 'error', limited: 'error', timed_out: 'error', completed: 'dim', stopped: 'dim', doing: 'success', blocked: 'warning', done: 'dim',
+  enabled: 'success', disabled: 'dim', paused: 'warning', todo: 'accent' };
+export function recordStyle(text: string, state: string | undefined, theme?: Theme): string {
+  if (!state) return text;
+  const tone = stateTones[state];
+  if (!tone) return text;
+  if (['todo', 'doing', 'blocked', 'done'].includes(state)) return paint(tone, state === 'done' ? theme?.strikethrough(text) ?? text : text, theme);
+  if (state === 'enabled' || state === 'disabled') text = text.replace(state === 'enabled' ? '●' : '○', icon => paint(tone, icon, theme));
+  // Only color a declared state at a field boundary, not a matching word in a record's name.
+  return text.replace(new RegExp(`(^| · |(?:job_[a-f0-9]{8}|wf_[a-f0-9]{12}) )(${state})(?= · |$)`), (_match, prefix: string, word: string) => prefix + paint(tone, word, theme));
+}
+const mark = (text: string, on: boolean, theme?: Theme) => on ? heading(text, theme) : paint('muted', text, theme);
 
 /** Pressing a control key moves to the next choice and applies it immediately. */
 export function cycle(choice: BrowseChoice, done: (value?: string) => void, step = 1): void {
@@ -20,11 +56,15 @@ export function cycle(choice: BrowseChoice, done: (value?: string) => void, step
 
 /** `<command> ▸ <page>` always leads; the tab bar degrades to bare digits, then disappears, before the page name is cut. */
 export function titleRow(title: string, pages: BrowseChoice | undefined, width: number, theme?: Theme, page?: string): string {
-  const head = `${title} ▸ ${pages ? current(pages)?.label ?? pages.selected() : page ?? 'List'}`;
+  const head = heading(`${title} ▸ ${pages ? current(pages)?.label ?? pages.selected() : page ?? 'List'}`, theme);
   if (!pages) return truncateToWidth(head, width);
   const items = pages.items();
   for (const full of [true, false]) {
-    const tabs = items.map((item, i) => mark(full ? `${i + 1} ${item.label}` : `${i + 1}`, item.value === pages.selected(), theme)).join(full ? '  ' : ' ');
+    const tabs = items.map((item, i) => {
+      const selected = item.value === pages.selected();
+      const tab = `${keyToken(String(i + 1), theme)}${full ? ` ${paint(selected ? 'text' : 'muted', item.label, theme)}` : ''}`;
+      return selected ? selectedTab(tab, theme) : tab;
+    }).join(full ? '  ' : ' ');
     const line = `${head}    ${tabs}`;
     if (visibleWidth(line) <= width) return line;
   }
@@ -32,38 +72,59 @@ export function titleRow(title: string, pages: BrowseChoice | undefined, width: 
 }
 
 export function controlRows(controls: BrowseControl[], width: number, theme?: Theme): string[] {
-  const rows = controls.map(control => `${control.label} (${control.key}): ${control.items()
+  const label = (control: BrowseControl) => `${paint('muted', control.label, theme)} (${keyToken(control.key, theme)}): `;
+  const rows = controls.map(control => `${label(control)}${control.items()
     .map(item => mark(cell(item), item.value === control.selected(), theme)).join(' · ')}`);
   if (rows.length && visibleWidth(rows.join('    ')) <= width) return [rows.join('    ')];
   return controls.map((control, i) => {
     if (visibleWidth(rows[i]) <= width) return rows[i];
     // Narrow rows keep only the applied value; its key still reaches the hidden choices.
     const item = current(control);
-    return truncateToWidth(`${control.label} (${control.key}): ${item ? cell(item) : control.selected()} ›`, width);
+    return truncateToWidth(`${label(control)}${mark(item ? cell(item) : control.selected(), true, theme)} ›`, width);
   });
 }
 
 export function statusLabels(controls: BrowseControl[]): string[] { return controls.map(control => current(control)?.label ?? control.selected()); }
 
+/** Existing controls already describe an empty list's escape route; no page-specific key prose. */
+export function emptyRow(page: string, controls: BrowseControl[], query: string, pages?: BrowseChoice, theme?: Theme): string {
+  const next = (message: string, key: string, action: string) => `${paint('dim', message, theme)} · ${paint('dim', 'press ', theme)}${keyHint(key, action, theme)}`;
+  if (query) return next('No matches', 'Esc', 'to clear filter');
+  const filter = controls.find(control => control.items().some(item => item.value === 'all') && control.selected() !== 'all');
+  if (filter) {
+    const all = filter.items().find(item => item.value === 'all')!;
+    return next(`No ${current(filter)?.label.toLowerCase()} ${page.toLowerCase()}`, filter.key, `for ${all.label}${all.description ? ` (${all.description})` : ''}`);
+  }
+  const control = controls.find(control => control.items().length > 1);
+  if (control) {
+    const items = control.items(), index = items.findIndex(item => item.value === control.selected());
+    return next(`No ${page.toLowerCase()}`, control.key, `for ${items[(index + 1) % items.length].label}`);
+  }
+  const pageIndex = pages?.items().findIndex(item => item.value !== pages.selected()) ?? -1;
+  return pageIndex >= 0 ? next(`No ${page.toLowerCase()}`, String(pageIndex + 1), `for ${pages!.items()[pageIndex].label}`)
+    : next(`No ${page.toLowerCase()}`, 'Esc', 'to close');
+}
+
 /**
  * Status line: page, filters, matches and the selected record. Below 80 columns the page and
  * selection move to the front. Both name and ID receive space, even for a long workflow ID.
  */
-export function statusRow(width: number, page: string | undefined, filters: string[], selection?: BrowseSelection): string {
+export function statusRow(width: number, page: string | undefined, filters: string[], selection?: BrowseSelection, theme?: Theme): string {
   const literal = (text: string) => sanitizeText(text).replace(/[\r\n\t]/g, ' ');
   const fit = (max: number) => {
     if (!selection) return '';
     const name = literal(selection.name), id = selection.id && literal(selection.id);
-    if (!id) return truncateToWidth(name, max);
+    if (!id) return paint('text', truncateToWidth(name, max), theme);
     // Names explain what is selected; IDs disambiguate it. Neither may consume the entire row.
     const nameRoom = Math.min(visibleWidth(name), Math.max(1, Math.floor((max - 3) / 2)));
     const shownId = truncateToWidth(id, Math.max(0, max - nameRoom - 3));
-    return `${truncateToWidth(name, max - visibleWidth(shownId) - 3)} (${shownId})`;
+    return `${paint('text', truncateToWidth(name, max - visibleWidth(shownId) - 3), theme)} ${paint('muted', `(${shownId})`, theme)}`;
   };
-  const head = [...page ? [page] : [], ...filters].join(' · ');
+  const join = ' · ', filterText = paint('muted', filters.join(join), theme);
+  const head = [...page ? [paint('text', page, theme)] : [], ...filters.length ? [filterText] : []].join(paint('muted', join, theme));
   const room = width - visibleWidth(head) - 3;
   if (!selection) return truncateToWidth(head, width);
-  if (width >= 80 && room >= 12) return `${head} · ${fit(room)}`;
-  const prefix = page ? `${page} · ` : '';
-  return truncateToWidth([prefix + fit(width - visibleWidth(prefix)), ...filters].join(' · '), width);
+  if (width >= 80 && room >= 12) return `${head}${paint('muted', join, theme)}${fit(room)}`;
+  const prefix = page ? `${paint('text', page, theme)}${paint('muted', join, theme)}` : '';
+  return truncateToWidth([prefix + fit(width - visibleWidth(prefix)), ...filters.length ? [filterText] : []].join(paint('muted', join, theme)), width);
 }

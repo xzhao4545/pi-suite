@@ -7,6 +7,7 @@ import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { host } from '../support/host.ts';
 import { agentDir } from '../support/jobs.ts';
 import { AgentManager } from '../../src/agents/manager.ts';
+import { createChildSession } from '../../src/agents/session.ts';
 import { loadConfig } from '../../src/runtime/config.ts';
 import { AGENT_ENTRY, hydrate, readAgentSession, recordsIn, transcript, transcriptText } from '../../src/agents/records.ts';
 import { active, type AgentRecord, type ParentScope } from '../../src/agents/types.ts';
@@ -23,6 +24,37 @@ function saveRun(session: SessionManager, id: string, configCwd: string, ownerSe
   session.appendCustomEntry(AGENT_ENTRY, record);
   return record;
 }
+
+test('child storage hides flat nested sessions from Pi lists while cold history follows parent references', async () => {
+  const root = agentDir(); process.env.PI_CODING_AGENT_DIR = root;
+  const parent = SessionManager.create(root);
+  parent.appendMessage(fauxAssistantMessage('main conversation'));
+  const h = await host({root, sessionManager: parent});
+  const manager = new AgentManager(async () => {}, async () => []);
+  try {
+    const child = createChildSession(root, parent.getSessionFile());
+    assert.equal(child.getSessionDir(), join(parent.getSessionDir(), 'subagents'));
+    assert.equal(child.getHeader()?.parentSession, parent.getSessionFile());
+    const record = saveRun(child, 'agent_00000001', root, parent.getSessionId(), 'hidden child transcript');
+    parent.appendCustomEntry(AGENT_ENTRY, {...record, state: 'running', result: undefined});
+    const nested = createChildSession(root, child.getSessionFile());
+    assert.equal(nested.getSessionDir(), child.getSessionDir(), 'nested storage is flat');
+    const nestedRecord = saveRun(nested, 'agent_00000002', root, parent.getSessionId(), 'nested transcript');
+    child.appendCustomEntry(AGENT_ENTRY, nestedRecord);
+    assert.deepEqual((await SessionManager.list(root)).map(info => info.path), [parent.getSessionFile()]);
+    assert.deepEqual((await SessionManager.listAll()).map(info => info.path), [parent.getSessionFile()]);
+    const ctx = h.session.extensionRunner.createContext();
+    // A fresh memory reader has no child references: the only scan root is Pi's main directory.
+    await manager.discover({ctx: {...ctx, sessionManager: SessionManager.inMemory(root)}}, loadConfig(root, root));
+    assert.match(transcriptText(transcript(manager.get(record.id).record)), /hidden child transcript/);
+    assert.match(transcriptText(transcript(manager.get(nestedRecord.id).record)), /nested transcript/);
+    assert.equal(createChildSession(root).getSessionDir(), child.getSessionDir(), 'memory parents use Pi default storage');
+    const custom = SessionManager.create(root, join(root, 'custom-parent'));
+    assert.equal(createChildSession(root, custom.getSessionFile()).getSessionDir(), join(custom.getSessionDir(), 'subagents'));
+    const explicit = join(root, 'explicit');
+    assert.equal(createChildSession(root, parent.getSessionFile(), explicit).getSessionDir(), explicit);
+  } finally { await manager.shutdown(); await h.dispose(); rmSync(root, {recursive: true, force: true}); }
+});
 
 test('saved agent reads never repair files and reject corrupt storage, invalid leaves and phantom owners', async () => {
   const root = agentDir(), manager = new AgentManager(async () => {}, async () => []);

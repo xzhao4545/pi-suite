@@ -4,7 +4,9 @@
 
 ## 任务索引
 
-当前没有活跃待办。
+- [浏览界面可发现性与配色](browser-discoverability.md)：去掉 Active 筛选、最近活动排序、固定导航/动作行与配色角色
+- [Subagent 查看器内联消息与底部跟随](agent-viewer-input.md)：m 在查看器内输入、底部持续跟随新输出
+- [Subagent 会话存储位置与空值参数](child-sessions-and-arguments.md)：child 会话移入 subagents/ 子目录，可选参数填值根因为 provider strict 配置
 
 Pi Suite Windows 验收见 [收尾记录](../finished/pi-suite/windows-completion.md)；Cursor CLI 验收按用户要求移除。
 

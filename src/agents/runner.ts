@@ -6,16 +6,16 @@ import { childResources, resourcePath } from './resources/loader.ts';
 import { installExtensionToolScope } from './resources/scope.ts';
 import { createStructuredCapture, createStructuredOutputTool, structuredRetryPrompt } from './output/tool.ts';
 import { sanitizeText } from '../runtime/text.ts';
+import { createChildSession } from './session.ts';
 
 export async function executeAgent(run: Execution, factory: ExtensionFactory, changed: () => void,
   emitEvent: (kind: AgentEventKind, details?: Record<string, unknown>) => void): Promise<void> {
   const { record, parent } = run, agentDir = getAgentDir();
   const { settingsManager, loader, scope } = await childResources(run, factory);
   if (run.controller.signal.aborted) return;
-  const sessionDir = run.type.sessionDir ?? process.env.PI_CODING_AGENT_SESSION_DIR ?? settingsManager.getSessionDir();
   const manager = run.sessionManager ?? (record.sessionFile ? SessionManager.open(record.sessionFile)
-    : record.persisted ? SessionManager.create(record.cwd, sessionDir ? resourcePath(sessionDir, record.cwd) : undefined,
-      { parentSession: parent.ctx.sessionManager.getSessionFile() }) : SessionManager.inMemory(record.cwd));
+    : record.persisted ? createChildSession(record.cwd, parent.ctx.sessionManager.getSessionFile(),
+      run.type.sessionDir === undefined ? undefined : resourcePath(run.type.sessionDir, record.cwd)) : SessionManager.inMemory(record.cwd));
   // Pi 1.5.0 exposes ModelRegistry to extensions but accepts only ModelRuntime in the SDK.
   // Like upstream, bridge this single SDK boundary to retain the parent's providers, auth and
   // virtual routers. Remove the field access when Pi exposes a public context.modelRuntime.

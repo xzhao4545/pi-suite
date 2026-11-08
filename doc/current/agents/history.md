@@ -6,7 +6,7 @@ AgentManager 的 workspace 查询从 Pi 会话文件和既有 suite 记录发现
 
 默认扫描 `<agentDir>/sessions` 下一层 SDK 工作区编码目录中的 `.jsonl`，包括该层指向会话目录的符号链接。额外扫描当前打开主会话的 sessionDir、`PI_CODING_AGENT_SESSION_DIR`、SettingsManager 的 sessionDir 配置，以及当前信任/包门控范围内 catalog 类型的 `session_dir`；各配置目录读取其直接子级 `.jsonl`，自定义目录按当前 configCwd 解析。
 
-扫描主会话的全部 entries，包含当前分支之外的记录，并沿以下持久引用继续发现：
+扫描主会话的全部 entries，包含当前分支之外的记录，并沿以下持久引用继续发现。`subagents/` 不加入扫描目录；其中的 child、嵌套与 workflow 会话通过父级记录中的绝对 sessionFile 或 workflow 快照引用到达，不依赖与主会话同目录：
 
 | 引用 | 读取范围 |
 | --- | --- |

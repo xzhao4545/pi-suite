@@ -7,14 +7,14 @@ import { RUN_FILTERS, runsState, showRuns, type RunFilter } from './runs.ts';
 
 export async function showSubagents(args: string, ctx: ExtensionContext, deps: SubagentsDeps): Promise<void> {
   if (ctx.mode !== 'tui') { ctx.ui.notify('Use agent_list and agent_read outside the terminal UI'); return; }
-  const words = args.trim().split(/\s+/).filter(Boolean), command = words[0] ?? 'active';
+  const words = args.trim().split(/\s+/).filter(Boolean), command = words[0] ?? 'all';
   const pages = ['runs', 'types', ...deps.scheduler?.isActive ? ['schedules'] : [], ...deps.workflows?.available() ? ['workflows'] : []];
   if (!(RUN_FILTERS as readonly string[]).includes(command) && command !== 'workspace' && !pages.includes(command)
     || words.length > (command === 'workspace' ? 2 : 1) || command === 'workspace' && words[1] && !(RUN_FILTERS as readonly string[]).includes(words[1])) {
-    throw new Error('Use /subagents [active|queued|finished|all|types|schedules|workflows] or /subagents workspace [state]');
+    throw new Error('Use /subagents [queued|finished|all|types|schedules|workflows] or /subagents workspace [queued|finished|all]');
   }
   let page = pages.includes(command) ? command : 'runs';
-  const runs = runsState((command === 'workspace' ? words[1] ?? 'all' : (RUN_FILTERS as readonly string[]).includes(command) ? command : 'active') as RunFilter, command === 'workspace');
+  const runs = runsState((command === 'workspace' ? words[1] ?? 'all' : (RUN_FILTERS as readonly string[]).includes(command) ? command : 'all') as RunFilter, command === 'workspace');
   const states = new Map(pages.map(page => [page, page === 'runs' ? runs.browser : browseState()]));
   let next: string | undefined;
   // Every page shares one switcher; each keeps its own list state so returning restores its selection.

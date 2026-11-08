@@ -1,3 +1,6 @@
+import type { Theme } from '@earendil-works/pi-coding-agent';
+import type { InlineRequest } from './inline-input.ts';
+import { confirmation, keyHint } from './browser-chrome.ts';
 import { matchesKey, truncateToWidth, wrapTextWithAnsi, type KeyId } from '@earendil-works/pi-tui';
 
 /**
@@ -5,7 +8,8 @@ import { matchesKey, truncateToWidth, wrapTextWithAnsi, type KeyId } from '@eare
  * disagree with what Enter does. Several actions may share a key when their
  * availability is mutually exclusive (Pause/Resume, Stop subtree/Cleanup jobs).
  */
-export type DetailAction = { key: KeyId; label: string; run: () => void; available?: () => boolean; confirm?: boolean };
+export type DetailAction = { key: KeyId; label: string; available?: () => boolean; confirm?: boolean } &
+  ({run: () => void; input?: never} | {input: () => InlineRequest; run?: never});
 
 export const keyLabel = (key: KeyId): string => key === 'enter' ? 'Enter' : key;
 /** Desktop widths show every key; phone widths may truncate without stealing body height. */
@@ -14,7 +18,7 @@ export const keyHelp = (text: string, width: number): string[] => width >= 80 ? 
 /** Detail and browser frames share availability and two-step confirmation. */
 export class ActionBar {
   private armed?: DetailAction;
-  constructor(private source: () => DetailAction[]) {}
+  constructor(private source: () => DetailAction[], private compose: (request: InlineRequest) => void) {}
   disarm(): void { this.armed = undefined; }
   available(): DetailAction[] {
     const actions = this.source().filter(action => action.available?.() !== false);
@@ -22,11 +26,11 @@ export class ActionBar {
     return actions;
   }
   /** One confirmation wording for every destructive key keeps the prompt in the UI's language. */
-  get hint(): string | undefined {
+  hint(theme?: Theme): string | undefined {
     this.available();
-    return this.armed && `Press ${keyLabel(this.armed.key)} again to ${this.armed.label.toLowerCase()} · any other key cancels`;
+    return this.armed && confirmation(keyLabel(this.armed.key), this.armed.label.toLowerCase(), theme);
   }
-  render(): string { return this.available().map(action => `${keyLabel(action.key)} ${action.label}`).join(' · '); }
+  render(theme?: Theme): string { return this.available().map(action => keyHint(keyLabel(action.key), action.label.toLowerCase(), theme)).join(' · '); }
   /** Any other key cancels a pending confirmation, so a stray second press cannot act on new state. */
   handleInput(data: string): boolean {
     const action = this.available().find(action => matchesKey(data, action.key));
@@ -34,6 +38,7 @@ export class ActionBar {
     if (!action) return false;
     // Sources rebuild action objects per call; identity is the key and label pair.
     if (action.confirm && (previous?.key !== action.key || previous.label !== action.label)) this.armed = action;
+    else if (action.input) this.compose(action.input());
     else action.run();
     return true;
   }

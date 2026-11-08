@@ -60,21 +60,24 @@ test('viewer answers workflow questions, preserves search through input and requ
     const run = await h.manager.start({prompt: 'workflow question'}, {ctx: h.ctx}, h.config, undefined, {workflowId: 'wf_viewer'});
     await until(h.manager, () => Boolean(run.question));
     let reader: DetailsView['reader'];
-    const steps = [(view: DetailsView) => {
-      reader = view.reader; view.handleInput('x'); assert.ok(view.render(40).some(line => line.includes('Press x again to stop')));
-      view.handleInput('\x1b[A'); assert.ok(view.render(40).every(line => !line.includes('Press x again to stop')));
+    const steps = [async (view: DetailsView) => {
+      reader = view.reader; view.handleInput('x'); assert.ok(view.render(40).some(line => stripVTControlCharacters(line).includes('Press x again to stop')));
+      view.handleInput('\x1b[A'); assert.ok(view.render(40).every(line => !stripVTControlCharacters(line).includes('Press x again to stop')));
       view.handleInput('x'); view.handleInput('/'); view.handleInput('x'); view.handleInput('b');
       assert.equal(run.controller.signal.aborted, false); view.handleInput('\r'); assert.equal(reader.query, 'xb');
       view.handleInput('m');
-    }, async (view: DetailsView) => {
+      assert.ok(view.render(120).some(line => line.includes('Answer parent question:')));
+      view.handleInput('xb answer'); view.handleInput('\r');
       await entered.promise;
+      await new Promise(resolve => setImmediate(resolve));
       assert.strictEqual(view.reader, reader); assert.equal(view.reader.query, 'xb');
+      assert.match(view.render(120).map(stripVTControlCharacters).join('\n'), /: answered/);
       assert.ok(!visibleActions(view).includes('Message'), 'workflow steering belongs to its host after the question is answered');
       view.handleInput('x'); view.handleInput('x');
     }, (view: DetailsView) => {
       assert.ok(!visibleActions(view).includes('Stop subtree')); view.handleInput('x'); view.handleInput('x'); view.handleInput('\x1b');
     }];
-    const ctx = scripted(h.ctx, steps, async () => 'xb answer');
+    const ctx = scripted(h.ctx, steps);
     await showAgent(ctx, {manager: h.manager, scope: context => ({ctx: context})}, new Dock(), run.record.id, run.record.runId, () => h.config);
     assert.equal(steps.length, 0); assert.equal(run.record.state, 'stopped');
     assert.ok(h.notices.some(notice => /cleanup confirmed/.test(notice.text)));
@@ -116,22 +119,22 @@ test('viewer refreshes every streaming identity in child cwd and refuses late in
     run.renderers!.set('read', {renderCall: (_args, _theme, context) => { assert.equal(context.cwd, target); return new Text('child tool', 0, 0); },
       renderResult: result => new Text(result.content.map(part => part.type === 'text' ? part.text : '').join('\n'), 0, 0)});
     let resumed: Awaited<ReturnType<AgentManager['send']>>;
-    const steps = [(view: DetailsView) => {
+    const steps = [async (view: DetailsView) => {
       view.handleInput('o');
       run.liveResults!.set('call1', result('call1', 'changed middle')); h.manager.changed(); assert.match(text(view), /changed middle/);
       run.streamingEntry = assistant('changed assistant'); h.manager.changed(); assert.match(text(view), /changed assistant/);
       assert.match(text(view), /unchanged last/); view.handleInput('m');
-    }, (view: DetailsView) => {
+      gate.resolve(); await run.done.promise;
+      resumed = await h.manager.send(run.record.id, 'separate resume', {ctx: h.ctx}, h.config); await resumedEntered.promise;
+      view.handleInput('late viewer message'); view.handleInput('\r');
+      await new Promise(resolve => setImmediate(resolve));
+      assert.match(view.render(120).map(stripVTControlCharacters).join('\n'), /no longer accepts messages/);
       assert.ok(!visibleActions(view).includes('Message')); assert.ok(!visibleActions(view).includes('Stop subtree'));
       view.handleInput('x'); view.handleInput('x'); assert.equal(resumed.run.controller.signal.aborted, false); view.handleInput('\x1b');
     }];
-    const ctx = scripted(h.ctx, steps, async () => {
-      gate.resolve(); await run.done.promise;
-      resumed = await h.manager.send(run.record.id, 'separate resume', {ctx: h.ctx}, h.config); await resumedEntered.promise;
-      return 'late viewer message';
-    });
+    const ctx = scripted(h.ctx, steps);
     await showAgent(ctx, {manager: h.manager, scope: context => ({ctx: context})}, new Dock(), run.record.id, run.record.runId, () => h.config);
-    assert.equal(h.faux.state.callCount, 2); assert.ok(h.notices.some(notice => /no longer accepts messages/.test(notice.text)));
+    assert.equal(h.faux.state.callCount, 2); assert.ok(!h.notices.some(notice => /no longer accepts messages/.test(notice.text)));
     resumedGate.resolve(); await resumed!.run.done.promise;
   } finally { gate.resolve(); resumedGate.resolve(); await h.cleanup(); }
 });

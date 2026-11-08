@@ -4,12 +4,18 @@ import { Input, Key, SelectList, Text, fuzzyFilter, matchesKey, truncateToWidth,
 import { sanitizeText } from '../runtime/text.ts';
 import { ScrollView } from './scroll.ts';
 import type { Dock } from './dock.ts';
-import { ActionBar, keyHelp, type DetailAction } from './actions.ts';
+import { InlineInput } from './inline-input.ts';
+import { ActionBar, type DetailAction } from './actions.ts';
 import { commandFrame } from './frame.ts';
-import { controlRows, cycle, statusLabels, statusRow, titleRow, type BrowseChoice, type BrowseControl, type BrowseSelection } from './browser-chrome.ts';
+import { controlRows, cycle, divider, emptyRow, keyHint, readerHeading, recordStyle, selectedRow, separator, statusLabels, statusRow, titleRow, type BrowseChoice, type BrowseControl, type BrowseSelection } from './browser-chrome.ts';
 export type { BrowseChoice, BrowseControl, BrowseSelection } from './browser-chrome.ts';
 
-export interface BrowseItem extends SelectItem { search?: string; details?: () => string | Component }
+export interface BrowseItem extends SelectItem { search?: string; status?: string; details?: () => string | Component }
+/** Browsing is not tool pagination: active execution stays above even newly finished history. */
+export function compareActivity<T extends { createdAt: string; startedAt?: string; lastUpdateAt?: string; endedAt?: string }>(a: T, b: T, active: (item: T) => boolean): number {
+  const time = (item: T) => (!active(item) && item.endedAt) || item.lastUpdateAt || item.startedAt || item.createdAt;
+  return Number(active(b)) - Number(active(a)) || time(b).localeCompare(time(a));
+}
 /** The list owns every command key; details is a reading mode and filter a text mode, both left with Esc. */
 type BrowseFocus = 'list' | 'details' | 'filter';
 export interface BrowseState { query: string; selected?: string; readers: Map<string, ScrollView>; focus?: BrowseFocus }
@@ -47,12 +53,14 @@ export class BrowserView implements Component {
   private visibleRows = 8;
   private focus: BrowseFocus;
   private bar: ActionBar;
+  private composer: InlineInput;
   private actionOwner?: string;
   private reader?: ScrollView;
   private leftWidth = 0;
   private wide = false;
   private detailsTop = 0;
   private bodyTop = 1;
+  private bodyBottom = 1;
   private renderedRows = 0;
   private refreshTimer?: ReturnType<typeof setTimeout>;
   private clock?: ReturnType<typeof setInterval>;
@@ -60,7 +68,8 @@ export class BrowserView implements Component {
 
   constructor(private tui: TUI, private options: BrowseOptions, private done: (value?: string) => void, private theme?: Theme) {
     this.focus = options.state.focus ?? 'list';
-    this.bar = new ActionBar(() => this.actions());
+    this.composer = new InlineInput(() => tui.requestRender(), theme);
+    this.bar = new ActionBar(() => this.actions(), request => this.composer.open(request));
     this.input.setValue(options.state.query);
     this.update();
     // Streaming events share one render request; elapsed-time ticks only read live snapshots.
@@ -72,7 +81,7 @@ export class BrowserView implements Component {
       this.clock.unref();
     }
   }
-  dispose(): void { this.unsubscribe?.(); clearTimeout(this.refreshTimer); clearInterval(this.clock); }
+  dispose(): void { this.composer.dispose(); this.unsubscribe?.(); clearTimeout(this.refreshTimer); clearInterval(this.clock); }
   invalidate(): void { this.list.invalidate(); this.reader?.invalidate(); }
   getSelectedItem(): SelectItem | null { return this.list.getSelectedItem(); }
   private selectedItem(): BrowseItem | undefined { return this.items.find(item => item.value === this.list?.getSelectedItem()?.value); }
@@ -86,11 +95,19 @@ export class BrowserView implements Component {
       description: item.description === undefined ? undefined : sanitizeText(item.description).replace(/[\r\n\t]/g, ' ') }));
     this.total = this.options.total?.() ?? all.length;
     this.items = fuzzyFilter(all, this.options.state.query, item => item.search ?? `${item.label} ${item.description ?? ''}`);
-    const fingerprint = JSON.stringify([this.visibleRows, this.items.map(item => [item.value, item.label, item.description])]);
+    const fingerprint = JSON.stringify([this.visibleRows, this.items.map(item => [item.value, item.label, item.description, item.status])]);
     if (reset || fingerprint !== this.fingerprint || !this.list) {
       const previous = reset ? undefined : this.list?.getSelectedItem()?.value ?? this.options.state.selected;
       const index = this.items.findIndex(item => item.value === previous);
-      this.list = new SelectList(this.items, this.visibleRows, getSelectListTheme(), this.options.layout);
+      // Native SelectList still owns selection and scrolling. Its selectedText callback receives
+      // the complete visible row, so background and marker do not require a parallel renderer.
+      this.list = new SelectList(this.items, this.visibleRows, { ...getSelectListTheme(),
+        selectedText: text => selectedRow(text, this.leftWidth, this.theme) }, {
+        ...this.options.layout, truncatePrimary: context => {
+          const text = this.options.layout?.truncatePrimary?.(context) ?? truncateToWidth(context.text, context.maxWidth, '');
+          return recordStyle(text, (context.item as BrowseItem).status, this.theme);
+        },
+      });
       this.list.setSelectedIndex(index >= 0 ? index : reset ? 0 : Math.max(0, Math.min(oldIndex, this.items.length - 1)));
       this.list.onSelectionChange = () => this.changed();
       this.list.onSelect = () => this.select();
@@ -119,49 +136,72 @@ export class BrowserView implements Component {
   private status(width: number): string {
     const { pages, controls = [], state, selection } = this.options, item = this.selectedItem();
     const page = pages ? pages.items().find(page => page.value === pages.selected())?.label ?? pages.selected() : this.options.page ?? 'List';
+    // The new-output hint belongs to the Details heading; the status row keeps its width for page and selection.
     return statusRow(width, page, [...this.options.scope ? [this.options.scope] : [], ...statusLabels(controls), ...state.query ? [`/${state.query}`] : [], `${this.items.length}/${this.total}`],
-      item && (selection?.(item) ?? { name: item.label }));
+      item && (selection?.(item) ?? { name: item.label }), this.theme);
+  }
+  private page(): string {
+    return this.options.pages ? this.options.pages.items().find(page => page.value === this.options.pages!.selected())?.label ?? this.options.pages.selected()
+      : this.options.page ?? this.options.title;
+  }
+  private empty(): string { return emptyRow(this.page(), this.options.controls ?? [], this.options.state.query, this.options.pages, this.theme); }
+  private navigation(): string {
+    const hint = (key: string, action: string) => keyHint(key, action, this.theme);
+    if (this.focus === 'filter') return `Type to filter · ${hint('↑↓', 'select')} · ${hint('Enter', 'keep')} · ${hint('Esc', 'clear')}`;
+    if (this.focus === 'details') return `${hint('↑↓ PgUp PgDn', 'scroll')} · ${hint('/', 'search')} · ${hint('n/N', 'next')} · ${hint('Tab/Esc', 'list')}`;
+    const { pages, controls = [] } = this.options;
+    return [...pages ? [hint(`1-${Math.min(9, pages.items().length)} / [ ]`, 'page')] : [],
+      ...controls.map(control => hint(control.key, control.label.toLowerCase())), hint('/', 'filter'),
+      hint('Tab', 'details'), hint('Esc', this.options.state.query ? 'clear filter' : 'close')].join(' · ');
   }
   private help(): string {
-    if (this.bar.hint) return this.bar.hint;
-    if (this.focus === 'filter') return 'Type to filter · ↑↓ select · Enter keep · Esc clear';
-    if (this.focus === 'details') return '↑↓ PgUp PgDn scroll · / search · n/N next · Tab/Esc list';
-    const actions = this.bar.render();
-    return [...this.items.length ? [`Enter ${this.options.open ?? 'Open'}`] : [], ...actions ? [actions] : [], '/ filter',
-      ...this.reader ? ['Tab details'] : [], this.options.state.query ? 'Esc clear filter' : 'Esc close'].join(' · ');
+    const confirmation = this.bar.hint(this.theme);
+    if (confirmation) return confirmation;
+    if (!this.items.length) return this.empty();
+    // Reading and text modes do not own record shortcuts; advertise only keys they can execute.
+    if (this.focus === 'filter') return [keyHint('Enter', 'keep filter', this.theme), keyHint('Esc', 'clear filter', this.theme)].join(' · ');
+    return [keyHint('Enter', (this.options.open ?? 'open').toLowerCase(), this.theme),
+      ...this.focus === 'list' ? [this.bar.render(this.theme)] : []].filter(Boolean).join(' · ');
   }
   render(width: number): string[] {
     this.update();
     this.input.focused = this.focus === 'filter';
     const header = [titleRow(this.options.title, this.options.pages, width, this.theme, this.options.page), ...controlRows(this.options.controls ?? [], width, this.theme),
-      ...this.focus === 'filter' || this.options.state.query ? this.input.render(width) : []];
+      ...this.focus === 'filter' || this.options.state.query ? this.input.render(width) : [], this.status(width), separator(width, this.theme)];
     this.bodyTop = header.length;
-    const help = this.reader?.searching && this.focus === 'details' ? this.reader.search.render(width) : keyHelp(this.help(), width);
-    const height = Math.max(2, Math.floor(this.tui.terminal.rows * 0.8) - header.length - help.length - 3);
+    // Status belongs to the header; the footer always reserves exactly navigation + action.
+    const height = Math.max(1, Math.floor(this.tui.terminal.rows * 0.8) - header.length - 5);
     const wide = this.wide = width >= 80;
     this.visibleRows = wide ? Math.max(1, height - 1) : this.focus === 'details' ? 1 : Math.max(1, Math.floor(height / 2) - 1);
     this.update();
     this.leftWidth = wide ? Math.min(52, Math.floor(width * 0.45)) : width;
-    const list = this.items.length ? this.list.render(this.leftWidth) : [truncateToWidth('No matching records', this.leftWidth)];
+    const list = this.items.length ? this.list.render(this.leftWidth) : [truncateToWidth(this.empty(), this.leftWidth)];
     let body: string[];
     if (wide) {
       const right = this.reader?.viewport(Math.max(1, width - this.leftWidth - 3), height) ?? [];
       body = Array.from({ length: Math.max(list.length, right.length) }, (_, index) => {
         const left = truncateToWidth(list[index] ?? '', this.leftWidth);
-        return `${left}${' '.repeat(Math.max(0, this.leftWidth - visibleWidth(left)))} │ ${right[index] ?? ''}`;
+        return `${left}${' '.repeat(Math.max(0, this.leftWidth - visibleWidth(left)))}${divider(' │ ', this.theme)}${right[index] ?? ''}`;
       });
     } else {
       const count = this.focus === 'details' ? 1 : Math.max(1, Math.floor(height / 2));
       this.detailsTop = this.bodyTop + Math.min(list.length, count) + 1;
       const details = this.reader?.viewport(width, Math.max(1, height - count - 1));
-      body = [...list.slice(0, count), ...(this.reader ? [truncateToWidth(`Details · ${this.reader.position}`, width), ...details!] : [])];
+      body = [...list.slice(0, count), ...(this.reader ? [readerHeading('Details', this.reader.position, this.reader.hasNewOutput, width, this.theme), ...details!] : [])];
     }
     this.options.state.focus = this.focus;
-    const lines = commandFrame(width, [...header, ...body.slice(0, height), this.status(width), ...help], this.theme);
+    const viewport = Array.from({ length: height }, (_, index) => body[index] ?? '');
+    this.bodyBottom = this.bodyTop + height;
+    header[header.length - 2] = this.status(width);
+    const inline = this.composer.render(width);
+    const navigation = this.composer.active ? inline! : this.reader?.searching && this.focus === 'details' ? this.reader.search.render(width)[0] ?? '' : this.navigation();
+    const lines = commandFrame(width, [...header, ...viewport, separator(width, this.theme),
+      truncateToWidth(navigation, width), truncateToWidth(this.composer.active ? this.composer.help() : inline ?? this.help(), width)], this.theme);
     this.renderedRows = lines.length;
     return lines;
   }
   handleInput(data: string): void {
+    if (this.composer.handleInput(data)) { this.bar.disarm(); return; }
     this.update();
     const nav = [Key.up, Key.down, Key.pageUp, Key.pageDown].some(key => matchesKey(data, key));
     if (this.focus !== 'list') this.bar.disarm();
@@ -199,9 +239,10 @@ export class BrowserView implements Component {
     }
   }
   handleMouse(event: TuiMouseEvent) {
+    if (this.composer.active) return {handled: true};
     if (event.y <= 0 || event.y >= this.renderedRows - 1) return;
     event = { ...event, y: event.y - 1 };
-    if (event.y < this.bodyTop) return;
+    if (event.y < this.bodyTop || event.y >= this.bodyBottom) return;
     if (this.wide ? event.x > this.leftWidth : event.y >= this.detailsTop) {
       this.focus = this.options.state.focus = 'details'; return this.reader?.handleMouse(event);
     }

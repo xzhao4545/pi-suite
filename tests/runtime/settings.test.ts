@@ -5,11 +5,13 @@ import {join, resolve} from 'node:path';
 import {DefaultResourceLoader, SettingsManager, SessionManager, createAgentSession,
   type ExtensionCommandContext, type ExtensionContext, type ExtensionUIContext} from '@earendil-works/pi-coding-agent';
 import {fauxProvider, fauxAssistantMessage, fauxToolCall} from '@earendil-works/pi-ai';
+import {stripVTControlCharacters} from 'node:util';
 import {Text, TuiAltScreen, visibleWidth} from '@earendil-works/pi-tui';
 import {configPaths, writeConfigFields} from '../../src/runtime/config-fields.ts';
 import {loadConfig, readConfig} from '../../src/runtime/config.ts';
 import {prepareClipboard} from '../../src/runtime/clipboard.ts';
 import {BrowserView, browseState} from '../../src/ui/browser.ts';
+import {ScrollView} from '../../src/ui/scroll.ts';
 import {DetailsView} from '../../src/ui/details.ts';
 import {openReading, readingRows} from '../../src/ui/reading.ts';
 import {terminal} from '../support/terminal.ts';
@@ -36,8 +38,42 @@ test('browser searches full data, preserves identity and readers across resize/r
   for (let i = 0; i < 5; i++) next.handleInput('\x1b[B');
   const before = next.getSelectedItem()!.value; items = items.filter(item => item.value !== before); next.render(120);
   assert.equal(next.getSelectedItem()?.value, `run:${Number(before.slice(4)) + 1}`);
-  next.handleInput('/'); next.handleInput('missing'); assert.match(next.render(120).join('\n'), /No matching records/);
+  next.handleInput('/'); next.handleInput('missing'); assert.match(next.render(120).join('\n'), /No matches · press Esc to clear filter/);
   next.dispose(); assert.equal(released, 2);
+});
+
+test('shared frames keep inline input local and native follow-end persists through streaming, pause and resume', async () => {
+  let lines = Array.from({length: 40}, (_, i) => `line ${i}`);
+  const reader = new ScrollView({render: () => [...lines], invalidate() {}}, true);
+  const tui = terminal(24, 120), state = browseState();
+  let closes = 0, message = '';
+  const result = Promise.withResolvers<string>();
+  const action = {key: 'm' as const, label: 'Message', input: () => ({prompt: 'Message probe: ', submit: async (text: string) => {message = text; return result.promise;}})};
+  const detail = new DetailsView(tui, () => 'Probe', new Text(''), () => {closes++;}, [action], reader);
+  const browser = new BrowserView(tui, {title: 'Runs', state, items: () => [{value: 'probe', label: 'probe', details: () => lines.join('\n')}], actions: () => [action]}, () => {closes++;});
+  try {
+    detail.render(120); const end = reader.offset;
+    lines.push('streamed tail'); assert.ok(detail.render(120).some(line => line.includes('streamed tail'))); assert.ok(reader.offset > end);
+    reader.scroll(-3); const paused = reader.offset;
+    lines.push('unread tail');
+    assert.match(detail.render(120).map(stripVTControlCharacters).join('\n'), /↓ new output · End to follow/); assert.equal(reader.offset, paused);
+    reader.scroll(999); assert.equal(reader.following, true);
+    lines.push('latest tail'); assert.ok(detail.render(120).some(line => line.includes('latest tail'))); assert.equal(reader.hasNewOutput, false);
+    reader.handleInput('/'); reader.handleInput('line 10'); reader.handleInput('\r'); assert.equal(reader.following, false);
+    reader.handleInput('\x1b[F'); assert.equal(reader.following, true);
+    for (const view of [detail, browser]) {
+      view.render(120); view.handleInput('m');
+      assert.ok(view.render(120).some(line => line.includes('Message probe:')));
+      view.handleInput('x'); view.handleInput('/'); view.handleInput('\x1b[A'); view.handleInput('\r');
+      assert.equal(closes, 0); assert.equal(message, 'x/');
+      result.resolve('probe: steered'); await new Promise(resolve => setImmediate(resolve));
+      assert.match(view.render(120).map(stripVTControlCharacters).join('\n'), /probe: steered/);
+      view.handleInput('m'); view.handleInput('discard'); view.handleInput('\x1b'); assert.equal(closes, 0);
+      view.handleInput('m'); view.handleInput('\r'); assert.equal(closes, 0);
+      assert.ok(!view.render(120).some(line => line.includes('Message probe:')));
+    }
+    assert.equal(browser.getSelectedItem()?.value, 'probe'); assert.equal(state.focus, 'list');
+  } finally {detail.dispose(); browser.dispose();}
 });
 
 test('reading overlays share the actual height ceiling and fullscreen viewport keys defer to readers and lists', async () => {

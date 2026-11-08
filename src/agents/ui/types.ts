@@ -29,7 +29,7 @@ export async function showAgentTypes(ctx: ExtensionContext, dock: Dock, config: 
         settings = `Configuration error: ${error instanceof Error ? error.message : String(error)}`;
       }
       const locations = agentTypeLocations(ctx.cwd, type.name);
-      return { value: type.name, modelId: model.slice(model.indexOf('/') + 1), thinking, enabled: type.enabled !== false,
+      return { value: type.name, status: type.enabled === false ? 'disabled' : 'enabled', modelId: model.slice(model.indexOf('/') + 1), thinking, enabled: type.enabled !== false,
         label: `${type.name} · ${type.enabled === false ? 'disabled' : 'enabled'} · ${model} · ${thinking}`,
         search: `${type.name} ${type.description} ${model} ${thinking}`, details: () => [type.name, type.description,
           `Enabled: ${type.enabled !== false} (${current.agents.types[type.name]?.enabled === undefined ? 'definition' : 'configuration'})`,

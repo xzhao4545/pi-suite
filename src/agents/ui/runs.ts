@@ -1,18 +1,18 @@
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { browse, browseState, type BrowsePage, type BrowseState } from '../../ui/browser.ts';
+import { browse, browseState, compareActivity, type BrowsePage, type BrowseState } from '../../ui/browser.ts';
 import { showDetails } from '../../ui/details.ts';
 import { isActive as jobActive } from '../../jobs/state.ts';
 import type { SubagentsDeps } from '../commands.ts';
-import { active, executing, recordWorkspace, type AgentRecord } from '../types.ts';
+import { active, recordWorkspace, type AgentRecord } from '../types.ts';
 import { agentDetails } from '../viewer-info.ts';
-import { agentControls, performAgentAction, showAgent } from '../viewer.ts';
+import { agentControls, agentMessage, performAgentAction, showAgent } from '../viewer.ts';
 import { truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
 
-export const RUN_FILTERS = ['active', 'queued', 'finished', 'all'] as const;
+export const RUN_FILTERS = ['all', 'queued', 'finished'] as const;
 export type RunFilter = typeof RUN_FILTERS[number];
 export interface RunsState { browser: BrowseState; filter: RunFilter; workspace: boolean; selections: Map<string, string | undefined> }
 export const runsState = (filter: RunFilter, workspace: boolean): RunsState => ({ browser: browseState(), filter, workspace, selections: new Map() });
-const matches = (record: AgentRecord, filter: RunFilter) => filter === 'all' || filter === 'active' && executing(record.state)
+const matches = (record: AgentRecord, filter: RunFilter) => filter === 'all'
   || filter === 'queued' && record.state === 'queued' || filter === 'finished' && !active(record.state);
 const duration = (record: AgentRecord) => record.state === 'queued' ? `${Math.max(0, (Date.now() - Date.parse(record.createdAt)) / 1000).toFixed(1)}s wait`
   : record.elapsedMs === undefined ? 'not started' : `${(record.elapsedMs / 1000).toFixed(1)}s`;
@@ -54,10 +54,10 @@ export async function showRuns(ctx: ExtensionContext, deps: SubagentsDeps, state
         return `${truncateToWidth(name, Math.max(0, maxWidth - visibleWidth(tail) - 3))} · ${tail}`;
       } },
       items: () => {
-        const rows = records().filter(record => matches(record, state.filter)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        const rows = records().filter(record => matches(record, state.filter)).sort((a, b) => compareActivity(a, b, record => active(record.state)));
         displayed = new Map(rows.map(record => [record.runId, record]));
         return rows.map(record => {
-        return { value: record.runId, label: `${record.name} · ${record.state} · ${duration(record)}`,
+        return { value: record.runId, status: record.state, label: `${record.name} · ${record.state} · ${duration(record)}`,
           search: `${record.id} ${record.runId} ${record.name} ${record.type} ${record.state} ${record.model} ${record.prompt}`,
           details: () => `${readonly(record) ? 'Read only\n' : ''}${agentDetails(record)}` };
         });
@@ -68,7 +68,8 @@ export async function showRuns(ctx: ExtensionContext, deps: SubagentsDeps, state
         const run = (value: string) => () => { action = value; done(item.value); };
         const pending = record.state === 'queued';
         return [
-          { key: 'm', label: 'Message', available: controls.canMessage, run: run('message') },
+          { key: 'm', label: 'Message', available: controls.canMessage,
+            input: () => agentMessage(ctx, agents, record.id, record.runId, readOnly, config) },
           ...jobs ? [{ key: 'j' as const, label: 'Jobs', run: run('jobs') }] : [],
           { key: 'c', label: 'Model / thinking', available: () => !readOnly, run: run('model') },
           { key: 'b', label: 'Background', available: () => !readOnly && agents.manager.canSendToBackground(record.id, record.runId), run: run('background') },

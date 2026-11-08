@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 import { SessionManager, type ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { visibleWidth } from '@earendil-works/pi-tui';
 import { Dock } from '../../src/ui/dock.ts';
@@ -20,6 +21,9 @@ test('task dock and live browser share committed status; important children keep
   t.mock.timers.enable({ apis: ['Date', 'setTimeout'] });
   const view = new TaskBrowserView(tui, () => tasks.current(ctx), () => {}, undefined, 'all', refresh => tasks.subscribe(ctx, refresh));
   try {
+    const empty = view.render(120).map(stripVTControlCharacters);
+    assert.match(empty.at(-3)!, /g group.*s state.*\/ filter.*Tab details.*Esc close/);
+    assert.match(empty.at(-2)!, /No tasks · press s for Unfinished/);
     await tasks.edit(ctx, [{ op: 'add', title: '中文长标题'.repeat(30), children: ['执行'.repeat(40), '验收'] },
       {op: 'add', title: 'Blocked group', children: ['blocked execution']}, {op: 'add', title: 'Future group', children: ['future execution']}]);
     await tasks.edit(ctx, [{ op: 'start', id: '1.1' }, {op: 'block', id: '2.1', reason: 'waiting for server'}]);

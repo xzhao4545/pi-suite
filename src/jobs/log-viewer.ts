@@ -16,7 +16,6 @@ const REFRESH_MS = 250;
 export class JobLogView extends DetailsView {
   private page?: ReadPage;
   private totalBytes = 0;
-  private autoFollow = true;
   private error?: string;
   private closed = false;
   private timer?: NodeJS.Timeout;
@@ -42,7 +41,7 @@ export class JobLogView extends DetailsView {
   }
   private header(): string {
     if (this.error) return `${this.job.id} · read failed: ${this.error}`;
-    const following = this.autoFollow && this.reader.atBottom && !this.reader.searching;
+    const following = this.reader.following && !this.reader.searching;
     return `${summaryLine(this.job)} · ${this.stream} bytes ${this.page?.offset ?? 0}-${this.page?.nextOffset ?? 0}/${this.totalBytes} · ${following ? 'following' : 'paused'}`;
   }
   private request(action: () => Promise<void>): Promise<void> {
@@ -66,31 +65,31 @@ export class JobLogView extends DetailsView {
     const page = await readJobLog(this.manager, this.job, this.stream, { offset, limitBytes });
     if (this.closed) return;
     // Reading is asynchronous: navigation during the read must still pause following.
-    if (mode === 'follow' && (!this.reader.atBottom || this.reader.searching)) return;
+    if (mode !== 'page' && (!this.reader.following || this.reader.searching)) return;
     this.page = page; this.totalBytes = page.totalBytes;
     if (mode === 'page') this.reader.offset = 0;
     // Program text stays literal; code fences in a log must not become Markdown structure.
-    this.reader.setContent(new Text(sanitizeText(page.text) || '(no output)', 0, 0), mode !== 'page');
+    this.reader.setContent(new Text(sanitizeText(page.text) || '(no output)', 0, 0));
   }
   initialize(): Promise<void> { return this.follow(); }
   follow(): Promise<void> {
+    this.reader.follow();
     return this.request(async () => {
-      this.autoFollow = true;
       const size = await this.size();
       await this.load(Math.max(0, size - READ_LIMITS.maxBytes), 'latest');
       this.arm();
     });
   }
   previous(): Promise<void> {
+    this.reader.pause();
     return this.request(async () => {
-      this.autoFollow = false;
       const end = this.page?.offset ?? 0;
       if (end) { const start = Math.max(0, end - READ_LIMITS.maxBytes); await this.load(start, 'page', end - start); }
     });
   }
   next(): Promise<void> {
+    this.reader.pause();
     return this.request(async () => {
-      this.autoFollow = false;
       if (this.page && this.page.nextOffset < this.totalBytes) await this.load(this.page.nextOffset, 'page');
     });
   }
@@ -99,7 +98,8 @@ export class JobLogView extends DetailsView {
     return this.request(async () => {
       const size = await this.size();
       this.totalBytes = size;
-      if (size !== this.page?.totalBytes && this.autoFollow && this.reader.atBottom && !this.reader.searching) {
+      if (size !== this.page?.totalBytes) this.reader.markNewOutput();
+      if (size !== this.page?.totalBytes && this.reader.following && !this.reader.searching) {
         await this.load(Math.max(0, size - READ_LIMITS.maxBytes), 'follow');
       }
     });
@@ -113,14 +113,14 @@ export class JobLogView extends DetailsView {
   override handleInput(data: string): void {
     super.handleInput(data);
     // A terminal job has no timer; returning to the bottom must fetch its last output too.
-    if (this.autoFollow && this.reader.atBottom && !this.reader.searching) void this.refresh();
+    if (this.reader.following && !this.reader.searching) void this.refresh();
   }
   override handleMouse(event: TuiMouseEvent) {
     const result = super.handleMouse(event);
-    if (result?.handled && this.autoFollow && this.reader.atBottom && !this.reader.searching) void this.refresh();
+    if (result?.handled && this.reader.following && !this.reader.searching) void this.refresh();
     return result;
   }
-  dispose(): void { this.closed = true; clearTimeout(this.timer); this.unsubscribe(); }
+  dispose(): void { super.dispose(); this.closed = true; clearTimeout(this.timer); this.unsubscribe(); }
 }
 
 export async function showJobLog(ctx: ExtensionContext, dock: Dock, manager: JobReader, job: JobSummary, stream: Stream, live: boolean): Promise<void> {

@@ -102,7 +102,7 @@ test('empty editor enters Dock with left and Enter opens the selected agent thro
       onTerminalInput: handler => { input = handler; return () => {detached++;}; },
       custom: async factory => new Promise(resolve => {
         Promise.resolve(factory(tui, ui.theme, {} as never, resolve)).then(view => {
-          assert.match(view.render(120).join('\n'), /Subagents.*Transcript/);
+          assert.match(view.render(120).join('\n'), /Subagents ▸ Dock contract · running/);
           view.handleInput?.('\x1b'); opened.resolve();
         });
       }),

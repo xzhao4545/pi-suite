@@ -40,11 +40,12 @@ else process.stdout.write(command+'\\n');});`) }, testShell());
     await until(() => readFileSync(log, 'utf8').includes('new output'));
     await view.refresh();
     assert.equal(view.reader.offset, offset);
-    assert.ok(!view.render(120).some(line => line.includes('new output')));
+    assert.match(view.render(120).join('\n'), /↓ new output/);
+    assert.ok(!view.render(120).some(line => line.trim() === 'new output'));
     view.handleInput('/'); view.handleInput('line-3');
     await view.refresh(); assert.equal(view.reader.search.getValue(), 'line-3');
     view.handleInput('\x1b'); view.handleInput('\x1b[F'); // Leave search; End resumes following.
-    await view.refresh(); assert.ok(view.render(120).some(line => line.includes('new output')));
+    await view.refresh(); assert.ok(view.render(120).some(line => line.trim() === 'new output'));
 
     jobs.write(job.id, 'partial\n', { source: 'model', kind: 'text' });
     await until(() => readFileSync(log).at(-1) === 0xe4);

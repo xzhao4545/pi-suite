@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { stripVTControlCharacters } from 'node:util';
 import { dirname, join } from 'node:path';
 import { AgentSessionRuntime, type ExtensionAPI, type ExtensionContext, type ExtensionCommandContext, type ExtensionUIContext } from '@earendil-works/pi-coding-agent';
 import { fauxAssistantMessage, fauxToolCall, type JsonObject, type TranscriptContext } from '@earendil-works/pi-ai';
@@ -265,10 +266,10 @@ test('native workflow UI wraps phones, keeps exact phases and retains reader/sea
           focusBrowser(frame, 'Filter'); frame.handleInput('browser'); assert.match(frame.render(120).join('\n'), /SAVED_SOURCE_MARKER/);
           frame.handleInput('\r'); frame.handleInput('2');
         } else if (browserPhase === 5) {
-          assert.match(frame.render(120).join('\n'), /\[2 Types\]/);
+          assert.match(frame.render(120).map(stripVTControlCharacters).join('\n'), /Subagents ▸ Types.*2 Types/);
           frame.handleInput('4');
         } else {
-          assert.equal(browserPhase, 6); assert.match(frame.render(120).join('\n'), /\[Saved\]/);
+          assert.equal(browserPhase, 6); assert.match(frame.render(120).map(stripVTControlCharacters).join('\n'), /Workflows · Saved/);
           assert.equal(frame.getSelectedItem()?.value, 'browser'); assert.match(frame.render(120).join('\n'), /SAVED_SOURCE_MARKER/);
           focusBrowser(frame, 'Filter'); frame.handleInput('\x1b'); frame.handleInput('\x1b');
         }

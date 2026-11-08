@@ -6,7 +6,7 @@ import type { Notifications } from '../runtime/notifications.ts';
 import type { TasksModule } from './index.ts';
 import { queryTasks, taskDetails, type TaskFilter } from './query.ts';
 import { taskViews } from './model.ts';
-import { taskRow, taskStyle } from './presentation.ts';
+import { taskRow } from './presentation.ts';
 import type { TaskData, TaskView } from './types.ts';
 
 /** Selection and readers belong to stable task IDs; data stays in the shared store. */
@@ -18,7 +18,7 @@ export class TaskBrowserView extends BrowserView {
     super(tui, { title: 'Tasks', state: browseState(), subscribe,
       total: () => queryTasks(data(), {parentId: groupId, state: 'all'}).length,
       selection: item => ({name: views.get(item.value)!.title, id: item.value}),
-      layout: { truncatePrimary: ({item, text, maxWidth}) => taskStyle(views.get(item.value)!, truncateToWidth(text, maxWidth, ''), theme) },
+      layout: { truncatePrimary: ({text, maxWidth}) => truncateToWidth(text, maxWidth, '') },
       controls: [
         { key: 'g', label: 'Group', selected: () => groupId ?? 'all', items: () => [{ value: 'all', label: 'All' },
           ...groups().map(group => ({ value: group.id, label: `${group.id}` }))], select: value => { groupId = value === 'all' ? undefined : value; } },
@@ -28,7 +28,7 @@ export class TaskBrowserView extends BrowserView {
       ], items: () => {
         if (groupId && !groups().some(group => group.id === groupId)) groupId = undefined;
         const current = data(); views = new Map(taskViews(current).map(task => [task.id, task]));
-        return queryTasks(current, { parentId: groupId, state }).map(task => ({ value: task.id,
+        return queryTasks(current, { parentId: groupId, state }).map(task => ({ value: task.id, status: task.status,
           label: taskRow(task),
           description: task.progress ? `${task.progress.done}/${task.progress.total}` : '',
           search: `${task.id} ${task.title} ${task.description ?? ''} ${task.blockedReason ?? ''} ${task.status}`,

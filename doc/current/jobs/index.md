@@ -106,17 +106,17 @@ PTY 行先按回车覆写转为可见文本，pipe 行去除控制字符。事�
 
 job_start 检查参数后直接执行，普通命令、CLI 预设及 monitor（含 detector）遵循同一启动流程。TUI 与非交互模式均直接启动；`attach: true` 打开 PTY 用户操作视图，要求交互终端。配置入口与默认值见 [CLI 预设与直接启动](launch.md#启动行为)。
 
-`/jobs [active|finished|all] [workspace]` 在编辑器位置打开 job 列表，标题为 `Jobs ▸ List`，默认当前会话的活动 job；`w` 一次循环 Scope（This session/Workspace），`s` 一次循环 State（Active/Finished/All）。列表不含导航菜单项，默认列表焦点，先按 `/` 进入过滤再输入 ID、名称、状态、完整命令和 cwd，直接输入字符不筛选；检索覆盖当前范围完整元数据集合，↑↓ / PgUp/PgDn 选择，Tab 从列表进入详情，再次 Tab 或 Esc 回到列表；过滤内 Enter/Tab 保留查询返回列表、Esc 清空并退出。状态行显示页名、范围/状态、匹配数/范围总数与选中名称/ID，窄屏优先保留页名和选中对象。宽屏右侧显示运行时长、完整命令、cwd、模式、退出和清理信息，窄屏采用上下布局；Enter 打开操作，Esc 先离开详情或清空筛选，再退出。返回列表保留查询、job ID 和详情阅读位置。运行变化通过 Manager 订阅刷新，活动时每秒更新时间，时钟不读取历史文件或完整日志。选择 job 后可查看详情、读取各通道、对运行中的 PTY job 打开终端视图（已结束的 PTY 显示最后一屏），以及在确认后停止运行中的 job。只有历史记录的 job 不提供 attach 或 stop。浏览期间暂缓结算通知，关闭后合并送达。
+`/jobs [finished|all] [workspace]` 在编辑器位置打开 job 列表，标题为 `Jobs ▸ List`，不带参数每次默认当前会话的 All；`w` 一次循环 Scope（This session/Workspace），`s` 一次循环 State（All/Finished），显示各状态数量。活动 job（含清理未确认且公共 isActive 判定为活动的对象）排在最前，内部按现有生命周期的最近时间（启动或创建时间）倒序；其余按结束时间（无则启动或创建时间）倒序。模型工具 job_list 的筛选参数与默认值见工具表。标题区包含状态行，与列表、底部各用一条 borderMuted 分隔线；底部固定导航行与动作行，空记录也显示 `w scope · s state · / filter · Tab details · Esc close`，正文和动作行显示可操作的下一步提示。配色见 [统一界面配色角色](../ui/index.md#浏览器配色角色)。列表不含导航菜单项，默认列表焦点，先按 `/` 进入过滤再输入 ID、名称、状态、完整命令和 cwd，直接输入字符不筛选；检索覆盖当前范围完整元数据集合，↑↓ / PgUp/PgDn 选择，Tab 从列表进入详情，再次 Tab 或 Esc 回到列表；过滤内 Enter/Tab 保留查询返回列表、Esc 清空并退出。状态行显示页名、范围/状态、匹配数/范围总数与选中名称/ID，窄屏优先保留页名和选中对象。宽屏右侧显示运行时长、完整命令、cwd、模式、退出和清理信息，窄屏采用上下布局；Enter 打开操作，Esc 先离开详情或清空筛选，再退出。返回列表保留查询、job ID 和详情阅读位置。运行变化通过 Manager 订阅刷新，活动时每秒更新时间，时钟不读取历史文件或完整日志。选择 job 后可查看详情、读取各通道、对运行中的 PTY job 打开终端视图（已结束的 PTY 显示最后一屏），以及在确认后停止运行中的 job。只有历史记录的 job 不提供 attach 或 stop。浏览期间暂缓结算通知，关闭后合并送达。
 
 当前执行协议可用时，已结算且 cleanup 不是 pending/unconfirmed 的记录提供 `Clear history`；用户确认 `Delete history and logs?` 后，删除该 job 的元数据与全部输入、输出和 monitor 日志。JobManager 等待已有结算、输入/事件写入和保存队列，重试未保存的终态，再由 JobStore 复核磁盘状态后删除目录；删除期间拒绝重复清理，晚到的通知消费不重新创建历史，已排队的结果与事件通知一并撤销。该操作不会停止进程或使用历史 PID，活动与未确认记录、只读 agents 历史及执行协议受限的 owner 不提供清理入口。
 
 agents 记录与 Transcript 的 Jobs 入口复用同一 job 操作界面，按 job 自己的 cwd 读取详情和日志，返回时刷新所属活动集合；只读 agents 历史允许读取详情及日志，隐藏 attach、stop 和 Clear history。浏览保持公共通知阻塞令牌，退出 job 界面不停止其所属 agent。
 
-日志详情初始显示末尾最多 64 KiB 的字节窗口，使用共享 DetailsView、ScrollView 与阅读 overlay 显示安全的字面量文本。fullscreen 满屏（top-left、100% 宽高、无边距），inline 居中 90% 宽、终端 70% 高度上限；正文高度与 overlay 实际可用行数一致，声明 capturesViewportInput 使翻页作用于日志。Esc 关闭 overlay 恢复打开它的列表或提示符及主会话视口，关闭阅读不停止 job。运行中的 job 每 250 ms 检查通道大小；阅读位置在底部且未输入搜索时跟随新输出，向上滚动或搜索时保留当前正文和位置。结算后停止轮询，返回底部仍会补读最终输出；关闭日志详情不停止 job。
+日志详情初始显示末尾最多 64 KiB 的字节窗口，使用共享 DetailsView、ScrollView 与阅读 overlay 显示安全的字面量文本。fullscreen 满屏（top-left、100% 宽高、无边距），inline 居中 90% 宽、终端 70% 高度上限；正文高度与 overlay 实际可用行数一致，声明 capturesViewportInput 使翻页作用于日志。Esc 关闭 overlay 恢复打开它的列表或提示符及主会话视口，关闭阅读不停止 job。运行中的 job 每 250 ms 检查通道大小；共享 ScrollView 使用 Pi 原生持续 follow-end，停在底部时渲染持续跟随；向上滚动或搜索时取消跟随并保留当前正文和位置，滚动回到底部或 End 恢复。暂停期间日志大小增长只更新大小与 `↓ new output · End to follow` 提示，不替换正在阅读的字节窗口。f（Follow latest）载入最新字节窗口并复用同一跟随状态。结算后停止轮询，返回底部仍会补读最终输出；关闭日志详情不停止 job。
 
 | 日志详情操作 | 行为 |
 | --- | --- |
-| ↑/↓、PageUp/PageDown、Home/End、滚轮 | 在当前字节窗口内滚动；自动跟随模式下返回底部恢复跟随 |
+| ↑/↓、PageUp/PageDown、Home/End、滚轮 | 在当前字节窗口内滚动；向上阅读取消持续跟随，回到底部或 End 恢复并补读最新输出 |
 | /、Enter、n/N | 输入并提交当前窗口的搜索，查找下一个/上一个匹配 |
 | [ / ] / f | 直接执行 Previous bytes / Next bytes / Follow latest；前后读取最多 64 KiB，Follow latest 返回最新窗口并恢复跟随 |
 | Esc | 退出搜索或关闭详情，job 继续运行 |

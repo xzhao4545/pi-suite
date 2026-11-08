@@ -106,7 +106,7 @@ test('unknown saved IDs retain send ownership and workspace cleanup while foreig
       frames++;
       if (frames === 1) {
         const rows = view.render(400).map(stripVTControlCharacters).slice(1).join('\n');
-        assert.match(rows, /Enter Open/); assert.doesNotMatch(rows, /Model \/ thinking|Stop child/);
+        assert.match(rows, /Enter open/); assert.doesNotMatch(rows, /model \/ thinking|stop child/);
       }
       if (view instanceof DetailsView) {
         assert.deepEqual(view.actions.filter(action => action.available?.() !== false).map(action => action.label), ['Tools', 'Thinking', 'Jobs']);
@@ -142,7 +142,7 @@ test('workspace branch history stays readonly while visible saved records retain
       const ctx = nativePicker(h.ctx, [record.runId, undefined], view => {
         if (++frames !== 1) return;
         const rows = view.render(400).map(stripVTControlCharacters).slice(1).join('\n');
-        assert.equal(rows.includes('Model / thinking'), editable); assert.ok(!rows.includes('Stop subtree'), 'settled runs without jobs have no stop action');
+        assert.equal(rows.includes('model / thinking'), editable); assert.ok(!rows.includes('stop subtree'), 'settled runs without jobs have no stop action');
       });
       await h.session.extensionRunner.getCommand('subagents')!.handler('workspace finished', ctx as ExtensionCommandContext);
       assert.equal(frames, 3);

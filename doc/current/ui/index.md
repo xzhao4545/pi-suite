@@ -44,13 +44,39 @@ ScrollView 为历史与每个选项详情分别保存滚动位置及搜索内容
 
 Linux Pi 1.5.0 实际 CLI 在 24/30/40/60 行与 40/80/120 列组合验证独立高度预算、任务 ID 顺序与溢出、询问覆盖与恢复、切题/筛选高度稳定、边框、展开与全文阅读、多行点击、页签坐标、预览滚轮、缩放草稿保持，以及低于 18 行摘要与紧凑回答。平台及验收范围见 [底部布局专项](../../finished/pi-suite/ui/dock-ask-layout.md)。
 
-DetailsView 提供统一标题、滚动正文、搜索与按键驱动的操作说明；每个 DetailAction 必须声明 key，可提供动态可用条件与二次确认。ActionBar 由详情与浏览框架共享，不持有动作光标；按显示键直接执行，确认统一使用英文 `Press <key> again to <action>`，再次同键执行，其他按键取消确认，切换记录也清除确认。搜索期间所有文字键交给搜索框，不触发控制动作。80 列起按键说明按原生宽度换行，窄屏可以截断。静态 Markdown、任务详情、jobs 动态日志与 agents transcript 使用同一框架。ScrollView 支持替换正文并保留阅读状态，调用方可要求下次渲染跟随底部；用户在渲染前滚动或开始搜索会取消该次跟随。日志只缓存当前字节窗口，具体操作见 [执行任务](../jobs/index.md#用户操作) 与 [任务操作](../tasks/operations.md)。
+DetailsView 提供统一标题、滚动正文、搜索与按键驱动的操作说明；每个 DetailAction 必须声明 key，可提供动态可用条件与二次确认。ActionBar 由详情与浏览框架共享，不持有动作光标；按显示键直接执行，确认统一使用英文 `Press <key> again to <action>`，再次同键执行，其他按键取消确认，切换记录也清除确认。搜索期间所有文字键交给搜索框，不触发控制动作。80 列起按键说明按原生宽度换行，窄屏可以截断。静态 Markdown、任务详情、jobs 动态日志与 agents transcript 使用同一框架。ScrollView 组合 Pi 原生 ScrollView 的 `follow: "end"`、isFollowingEnd 与滚动方法，支持替换正文而不改变持续跟随状态；活动 Transcript 初始跟随，渲染始终保持最后一页。用户向上滚动、Home 或搜索离开底部取消跟随，滚动回到底部或 End 恢复；暂停时检测渲染正文变化而非 entry 身份，并在标题位置后显示 `↓ new output · End to follow`，尺寸变化本身不触发新输出提示。日志字节窗口仍由日志查看器管理，f 与 End 复用相同跟随状态。日志只缓存当前字节窗口，具体操作见 [执行任务](../jobs/index.md#用户操作) 与 [任务操作](../tasks/operations.md)。
 
 公共 reading.ts 的 openReading 使用 Pi `ctx.ui.custom` 的 focused overlay，不创建第二套终端渲染器。以当前 `tui.mode` 判断：fullscreen 为 top-left、100% 宽高、margin 0，inline 为 center、90% 宽、终端 70% 高度上限。readingRows 与 overlay 的 maxHeight 共用一处计算，DetailsView 从实际上限扣除标题、边界和按键说明；正文补齐空行使 fullscreen 覆盖整个主会话窗口。showAgent、workflow 运行详情、showJobLog 与 showDetails 统一调用，导出入口和参数保持一致；done 关闭 overlay 并恢复原焦点与主会话视口。DetailsView 与 BrowserView 声明 capturesViewportInput，Pi fullscreen 将 PgUp/PgDn 等视口键交给焦点组件；浏览列表仍在编辑器位置。
 
-BrowserView 是 agents/jobs/tasks 的公共列表框架，组合 Pi Input、fuzzyFilter、SelectList、Text 与 ScrollView；领域模块提供稳定身份、可搜索元数据和详情，筛选不创建独立业务数据源。标题统一为 `<命令> ▸ <页名>`，BrowsePage 提供共享页面标签栏，各页保留独立 BrowseState；数字键或 `[`/`]` 一次切页，标签不进入 Tab 焦点环。BrowseControl 必须声明 key，按键立即循环应用选项，没有独立候选光标。默认列表焦点，只有 list/details/filter：Tab 进入详情，Tab/Esc 返回列表，`/` 进入过滤，过滤内 Enter/Tab 保留查询回到列表、Esc 清空退出，直接输入字符不过滤。Enter 固定解析选中身份执行“打开”，不触发消息或停止；动作沿用共享 ActionBar。页面通过 selection 提供选中名称/ID、通过 total 提供范围内筛选前总数，scope 可提供固定范围（如 Run subtree）；状态行显示页名、范围/状态、查询、匹配数/总数与选中对象，80 列以下优先保留页名和名称/ID。SelectList 原生 layout/truncatePrimary 能力用于保留记录状态/时长，以及类型启用状态、模型名称和 thinking，完整身份与数据不被截断。80 列起使用左右布局，窄屏上下布局；重名、状态变动与显示截断不改变选中身份，每个条目保存独立阅读/搜索位置，往返时保留焦点。空结果明确显示且顶部控件保持可达。事件刷新合并为短期渲染请求，仅可见活动条目使用每秒时钟；dispose 释放订阅及计时器。任务行先清理字面量数据，再通过原生 truncatePrimary 应用可信主题色与完成删除线。按键与范围见 [子代理操作](../agents/operations.md)、[job 操作](../jobs/index.md#用户操作) 和 [任务操作](../tasks/operations.md)。
+BrowserView 是 agents/jobs/tasks 的公共列表框架，组合 Pi Input、fuzzyFilter、SelectList、Text 与 ScrollView；领域模块提供稳定身份、可搜索元数据和详情，筛选不创建独立业务数据源。标题统一为 `<命令> ▸ <页名>`，BrowsePage 提供共享页面标签栏，各页保留独立 BrowseState；数字键或 `[`/`]` 一次切页，标签不进入 Tab 焦点环。BrowseControl 必须声明 key，按键立即循环应用选项，没有独立候选光标。默认列表焦点，只有 list/details/filter：Tab 进入详情，Tab/Esc 返回列表，`/` 进入过滤，过滤内 Enter/Tab 保留查询回到列表、Esc 清空退出，直接输入字符不过滤。Enter 固定解析选中身份执行“打开”，不触发消息或停止；动作沿用共享 ActionBar。页面通过 selection 提供选中名称/ID、通过 total 提供范围内筛选前总数，scope 可提供固定范围（如 Run subtree）；状态行显示页名、范围/状态、查询、匹配数/总数与选中对象，80 列以下优先保留页名和名称/ID。SelectList 原生 layout/truncatePrimary 能力用于保留记录状态/时长，以及类型启用状态、模型名称和 thinking，完整身份与数据不被截断。80 列起使用左右布局，窄屏上下布局；重名、状态变动与显示截断不改变选中身份，每个条目保存独立阅读/搜索位置，往返时保留焦点。空结果的列表正文与底部动作行显示同一下一步提示；框架根据文本过滤、All 选项及其计数、范围或其他页面生成，例如 `No queued runs · press s for All (10)`。标题区包含状态行，标题区与列表、列表与底部各有一条 borderMuted 分隔线。列表正文补齐可用高度，底部始终固定两行：导航行按当前页列出数字键 / `[ ]` 切页、范围/状态等控件、`/ filter · Tab details · Esc close`，动作行显示 `Enter open` 与可用动作或空状态提示；无记录时仍显示全部导航控件，Tab 在无详情时不移动焦点。两行各自按可见宽度截断，不换行；窄屏导航优先保留切页与筛选键。事件刷新合并为短期渲染请求，仅可见活动条目使用每秒时钟；dispose 释放订阅及计时器。任务行先清理字面量数据，再由浏览框架在原生 truncatePrimary 布局之后应用公共记录角色与完成删除线。按键与范围见 [子代理操作](../agents/operations.md)、[job 操作](../jobs/index.md#用户操作) 和 [任务操作](../tasks/operations.md)。
 
 tool-render.ts 是 Suite 工具的公共一行状态与展开框架，统一调用隐藏、字面量清理、宽度、outputPad 和错误全文；Ask 历史与 child Transcript 复用已登记 renderer，规则见 [工具契约](../runtime/tools.md)。
+
+公共 InlineInput 复用 Pi Input，DetailAction 通过 input 提供当前提示和异步提交函数；BrowserView 与 DetailsView 在底部打开输入，不关闭原视图、不改变原阅读焦点。输入和提交等待期间独占全部按键，Enter 发送，Esc 或空提交取消。提交结果/错误在原视图底部显示一行，下一次按键清除，错误不静默回退或使用主会话 notify；领域提交函数在发送前检查归属和所选 run 是否仍接受消息。字段与结果先清理字面量，再应用公共反馈角色。
+
+## 浏览器配色角色
+
+browser-chrome.ts 统一定义 BrowserView 与 DetailsView 的语义角色，领域页面只提供状态和内容；使用回调传入的 Pi Theme，颜色随主题改变，不在页面生成 ANSI。SelectList 保持原生身份与滚动，通过 getSelectListTheme 的 selectedText 回调为完整可见选中行添加背景，并在原生 layout/truncatePrimary 后处理状态样式；字面量清理先于可信配色。
+
+| 角色 | 位置 | Pi 主题样式 |
+| --- | --- | --- |
+| 标题 | 命令 ▸ 页名、详情标题 | accent + bold |
+| 当前页签 | 选中页面标签，无方括号 | selectedBg 背景 + bold |
+| 可切换项 | 未选中页签、筛选其他选项 | muted |
+| 筛选当前值 | Scope/State 等当前值，无方括号 | accent + bold |
+| 按键 | 导航/动作键、页签编号、控件标签中的键 | warning + bold |
+| 按键说明文字 | 键后的英文动作名 | dim |
+| 选中行 | 当前记录 | selectedBg 背景，行首标记 accent |
+| 记录状态 | running/starting；waiting/stopping/queued；failed/limited/timed_out；completed/stopped | success；warning；error；dim |
+| 类型与任务状态 | enabled/disabled；todo/doing/blocked/done | success/dim；accent/success/warning/dim，done 删除线 |
+| 危险动作 | x 与二次确认 | error，其他二次确认 warning |
+| 状态行 | 页面及选中名称；范围/筛选/计数/ID | text；muted |
+| 内联反馈 | 消息提交结果/发送中；错误；新输出提示及 End 键 | muted；error；dim + warning/bold |
+| 内部分隔线 | 标题区与列表、列表与底部、左右分栏 | borderMuted |
+
+正文过滤和详情搜索独占文字输入，说明随焦点切换；DetailsView 的阅读与动作提示复用相同按键角色，80 列起可按原生宽度换行。BrowserView 的底部两行独立截断，空结果不隐藏导航。
+
+
 
 Pi 全屏文本拖选使用宿主共享剪贴板通道；tmux/SSH 的能力与操作条件见 [终端复制](terminal.md)。
 

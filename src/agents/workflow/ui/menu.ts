@@ -51,10 +51,11 @@ export async function showWorkflow(ctx: ExtensionContext, deps: Deps, task: Owne
         ];
         const view = new DetailsView(tui, () => `Subagents ▸ Workflow · ${workflowSummary(task)}`, content, done,
           actions.map(item => ({...item, run: () => { action = item.label; done(); }})), reader, theme);
-        view.reader.setContent(content, false); reader = view.reader;
+        view.reader.setContent(content); reader = view.reader;
         const off = deps.workflows.manager.subscribe(() => { content.invalidate(); tui.requestRender(); });
         const timer = setInterval(() => { if (workflowActive(task)) tui.requestRender(); }, 1000); timer.unref();
-        return Object.assign(view, {dispose() { off(); clearInterval(timer); }});
+        const dispose = view.dispose.bind(view);
+        return Object.assign(view, {dispose() { dispose(); off(); clearInterval(timer); }});
       });
     } finally { deps.dock.setDetail(false); }
     // Close the detail frame before async actions, then reuse its reader so returning
@@ -109,7 +110,7 @@ export async function showWorkflows(ctx: ExtensionContext, deps: Deps, page: Wor
       items: () => saved ? names.map(name => ({value: name, label: name, details: () => {
         const source = sources.get(name)!; if (!source.ok) return source.message;
         return source.script;
-      }})) : deps.workflows.list().sort((a, b) => b.startTime - a.startTime).map(task => ({value: task.id, label: workflowSummary(task), details: () => {
+      }})) : deps.workflows.list().sort((a, b) => b.startTime - a.startTime).map(task => ({value: task.id, status: task.status, label: workflowSummary(task), details: () => {
         if (!progress.has(task.id)) progress.set(task.id, new WorkflowProgress(task));
         return progress.get(task.id)!;
       }})),

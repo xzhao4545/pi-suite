@@ -146,7 +146,7 @@ test('new-session workspace history exposes owned PTY logs through the same menu
     let actions = 0;
     const steps = [(view: View) => {
       assert.ok(view instanceof BrowserView); assert.equal(view.getSelectedItem()?.value, run.record.runId);
-      const menu = view.render(400).join('\n'); assert.ok(!menu.includes('Stop subtree') && !menu.includes('Model / thinking'));
+      const menu = view.render(400).join('\n'); assert.ok(!menu.includes('stop subtree') && !menu.includes('model / thinking'));
       chooseBrowserAction(view, 'Jobs');
     }, (view: View) => choose(view, job.id), async (view: View) => {
       assert.ok(view instanceof JobLogView); assert.match(view.reader.render(120).join('\n'), /FOREIGN_JOB/);

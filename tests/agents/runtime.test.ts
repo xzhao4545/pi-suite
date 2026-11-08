@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { SessionManager, type ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { host } from '../support/host.ts';
@@ -42,6 +42,8 @@ test('SDK child persists a bounded run leaf, resumes with a fresh run ID and ret
     assert.equal(finished.state, 'completed', finished.error);
     assert.equal(finished.result, 'first result');
     assert.ok(finished.sessionFile);
+    assert.equal(dirname(finished.sessionFile), join(h.ctx.sessionManager.getSessionDir(), 'subagents'));
+    assert.ok(!(await SessionManager.list(h.root, h.ctx.sessionManager.getSessionDir())).some(info => info.path === finished.sessionFile));
     const saved = SessionManager.open(finished.sessionFile!);
     assert.equal(recordsIn(saved.getEntries())[0].runId, finished.runId);
     h.manager.sweep(Date.now() + 10 * 60_000 + 1);
@@ -50,6 +52,7 @@ test('SDK child persists a bounded run leaf, resumes with a fresh run ID and ret
     assert.equal(resumed.action, 'resumed');
     const second = await resumed.run.done.promise;
     assert.equal(second.id, finished.id); assert.notEqual(second.runId, finished.runId);
+    assert.equal(second.sessionFile, finished.sessionFile, 'resume keeps the recorded file');
     assert.equal(second.state, 'completed', second.error); assert.equal(second.result, 'second result');
     assert.ok(transcriptText(transcript(second, resumed.run)).includes('first task'));
     assert.ok(!transcriptText(transcript(finished)).includes('second task'));

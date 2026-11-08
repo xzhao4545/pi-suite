@@ -14,8 +14,8 @@ export function focusBrowser(view: BrowserView, region: 'List' | 'Details' | 'Fi
 /** Read the advertised key instead of simulating a cursor on an action bar. */
 export function chooseBrowserAction(view: BrowserView, label: string): void {
   focusBrowser(view, 'List');
-  const help = stripVTControlCharacters(view.render(600).join('\n')).split(' · ');
-  const cell = help.find(cell => cell.trim().endsWith(` ${label}`));
+  const help = stripVTControlCharacters(view.render(600).at(-2)!).split(' · ');
+  const cell = help.find(cell => cell.trim().toLowerCase().endsWith(` ${label.toLowerCase()}`));
   assert.ok(cell, `Missing browser action ${label}`);
   const key = cell.trim().split(' ')[0];
   view.handleInput(key === 'Enter' ? '\r' : key);
