@@ -4,6 +4,7 @@
 
 ## 任务索引
 
+- [执行界面与查看器优化](execution-ui/index.md)：Tasks → Agents → Jobs 固定顺序、工具外框与高亮、Jobs 直接实时查看、Subagents 底部信息栏与原生 Editor、双左退出
 - [浏览界面可发现性与配色](browser-discoverability.md)：去掉 Active 筛选、最近活动排序、固定导航/动作行与配色角色
 - [Subagent 查看器内联消息与底部跟随](agent-viewer-input.md)：m 在查看器内输入、底部持续跟随新输出
 - [Subagent 会话存储位置与空值参数](child-sessions-and-arguments.md)：child 会话移入 subagents/ 子目录，可选参数填值根因为 provider strict 配置
