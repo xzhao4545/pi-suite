@@ -1,13 +1,13 @@
 import { getSelectListTheme, type ExtensionContext, type Theme } from '@earendil-works/pi-coding-agent';
 import { Input, Key, SelectList, Text, fuzzyFilter, matchesKey, truncateToWidth, visibleWidth,
-  type SelectItem, type KeyId, type SelectListLayoutOptions, type TUI, type Component, type TuiMouseEvent } from '@earendil-works/pi-tui';
+  type SelectItem, type KeyId, type SelectListLayoutOptions, type TUI, type Component, type TuiMouseEvent, type TuiMouseEventResult } from '@earendil-works/pi-tui';
 import { sanitizeText } from '../runtime/text.ts';
 import { ScrollView } from './scroll.ts';
 import type { Dock } from './dock.ts';
 import { InlineInput } from './inline-input.ts';
 import { ActionBar, type DetailAction } from './actions.ts';
 import { commandFrame } from './frame.ts';
-import { controlRows, cycle, divider, emptyRow, keyHint, readerHeading, recordStyle, selectedRow, separator, statusLabels, statusRow, titleRow, type BrowseChoice, type BrowseControl, type BrowseSelection } from './browser-chrome.ts';
+import { controlRows, cycle, divider, emptyRow, focusLabel, keyHint, paneHeading, readerHeading, recordStyle, selectedRow, separator, statusLabels, statusRow, titleRow, type BrowseChoice, type BrowseControl, type BrowseSelection } from './browser-chrome.ts';
 export type { BrowseChoice, BrowseControl, BrowseSelection } from './browser-chrome.ts';
 
 export interface BrowseItem extends SelectItem { search?: string; status?: string; details?: () => string | Component }
@@ -45,7 +45,7 @@ export interface BrowseOptions {
 export class BrowserView implements Component {
   focused = true;
   readonly capturesViewportInput = true;
-  private input = new Input({ prompt: 'Filter: ' });
+  private input = new Input({ prompt: '' });
   private list!: SelectList;
   private items: BrowseItem[] = [];
   private total = 0;
@@ -59,6 +59,7 @@ export class BrowserView implements Component {
   private leftWidth = 0;
   private wide = false;
   private detailsTop = 0;
+  private filterTop = -1;
   private bodyTop = 1;
   private bodyBottom = 1;
   private renderedRows = 0;
@@ -102,7 +103,7 @@ export class BrowserView implements Component {
       // Native SelectList still owns selection and scrolling. Its selectedText callback receives
       // the complete visible row, so background and marker do not require a parallel renderer.
       this.list = new SelectList(this.items, this.visibleRows, { ...getSelectListTheme(),
-        selectedText: text => selectedRow(text, this.leftWidth, this.theme) }, {
+        selectedText: text => selectedRow(text, this.leftWidth, this.theme, this.active('list')) }, {
         ...this.options.layout, truncatePrimary: context => {
           const text = this.options.layout?.truncatePrimary?.(context) ?? truncateToWidth(context.text, context.maxWidth, '');
           return recordStyle(text, (context.item as BrowseItem).status, this.theme);
@@ -115,7 +116,19 @@ export class BrowserView implements Component {
       this.fingerprint = fingerprint;
     }
     this.changed();
-    if (this.focus === 'details' && !this.reader) this.focus = 'list';
+    this.setFocus(this.focus);
+  }
+  private setFocus(focus: BrowseFocus): void {
+    this.focus = this.options.state.focus = focus === 'details' && !this.reader ? 'list' : focus;
+    if (this.focus !== 'list') this.bar.disarm();
+  }
+  private active(focus: BrowseFocus): boolean {
+    return this.focused && !this.composer.active && this.focus === focus && !(focus === 'details' && this.reader?.searching);
+  }
+  /** Native inputs own their cursor; the prefix consumes columns, never another layout row. */
+  private inputRow(label: string, width: number, active: boolean, render: (width: number) => string): string {
+    const prefix = `${focusLabel(label, active, this.theme)} `;
+    return truncateToWidth(prefix + render(Math.max(1, width - visibleWidth(prefix))), width);
   }
   private changed(): void {
     const value = this.list.getSelectedItem()?.value;
@@ -165,9 +178,13 @@ export class BrowserView implements Component {
   }
   render(width: number): string[] {
     this.update();
-    this.input.focused = this.focus === 'filter';
-    const header = [titleRow(this.options.title, this.options.pages, width, this.theme, this.options.page), ...controlRows(this.options.controls ?? [], width, this.theme),
-      ...this.focus === 'filter' || this.options.state.query ? this.input.render(width) : [], this.status(width), separator(width, this.theme)];
+    this.input.focused = this.active('filter');
+    if (this.reader) this.reader.search.focused = this.focused && !this.composer.active && this.focus === 'details' && this.reader.searching;
+    const header = [titleRow(this.options.title, this.options.pages, width, this.theme, this.options.page), ...controlRows(this.options.controls ?? [], width, this.theme)];
+    this.filterTop = this.focus === 'filter' || this.options.state.query ? header.length : -1;
+    if (this.filterTop >= 0) header.push(this.inputRow('Filter:', width, this.active('filter'), room => this.input.focused
+      ? this.input.render(room)[0] ?? '' : truncateToWidth(this.options.state.query, room)));
+    header.push(this.status(width), separator(width, this.theme));
     this.bodyTop = header.length;
     // Status belongs to the header; the footer always reserves exactly navigation + action.
     const height = Math.max(1, Math.floor(this.tui.terminal.rows * 0.8) - header.length - 5);
@@ -175,6 +192,8 @@ export class BrowserView implements Component {
     this.visibleRows = wide ? Math.max(1, height - 1) : this.focus === 'details' ? 1 : Math.max(1, Math.floor(height / 2) - 1);
     this.update();
     this.leftWidth = wide ? Math.min(52, Math.floor(width * 0.45)) : width;
+    const listHeading = paneHeading('List', this.leftWidth, this.active('list'), this.theme);
+    header[header.length - 1] = listHeading;
     const list = this.items.length ? this.list.render(this.leftWidth) : [truncateToWidth(this.empty(), this.leftWidth)];
     let body: string[];
     if (wide) {
@@ -187,14 +206,19 @@ export class BrowserView implements Component {
       const count = this.focus === 'details' ? 1 : Math.max(1, Math.floor(height / 2));
       this.detailsTop = this.bodyTop + Math.min(list.length, count) + 1;
       const details = this.reader?.viewport(width, Math.max(1, height - count - 1));
-      body = [...list.slice(0, count), ...(this.reader ? [readerHeading('Details', this.reader.position, this.reader.hasNewOutput, width, this.theme), ...details!] : [])];
+      body = [...list.slice(0, count), ...(this.reader ? [readerHeading('Details', this.reader.position, this.reader.hasNewOutput, width, this.theme, this.active('details')), ...details!] : [])];
     }
     this.options.state.focus = this.focus;
     const viewport = Array.from({ length: height }, (_, index) => body[index] ?? '');
     this.bodyBottom = this.bodyTop + height;
     header[header.length - 2] = this.status(width);
-    const inline = this.composer.render(width);
-    const navigation = this.composer.active ? inline! : this.reader?.searching && this.focus === 'details' ? this.reader.search.render(width)[0] ?? '' : this.navigation();
+    // Refresh reader position/new-output after viewport layout, including the wide pane heading.
+    if (wide) header[header.length - 1] = `${listHeading}${divider(' │ ', this.theme)}${this.reader
+      ? readerHeading('Details', this.reader.position, this.reader.hasNewOutput, width - this.leftWidth - 3, this.theme, this.active('details'))
+      : paneHeading('Details', width - this.leftWidth - 3, false, this.theme)}`;
+    const navigation = this.composer.active ? this.inputRow('Input', width, this.focused, room => this.composer.render(room) ?? '')
+      : this.reader?.searching && this.focus === 'details' ? this.inputRow('Search', width, this.reader.search.focused, room => this.reader!.search.render(room)[0] ?? '') : this.navigation();
+    const inline = this.composer.active ? undefined : this.composer.render(width);
     const lines = commandFrame(width, [...header, ...viewport, separator(width, this.theme),
       truncateToWidth(navigation, width), truncateToWidth(this.composer.active ? this.composer.help() : inline ?? this.help(), width)], this.theme);
     this.renderedRows = lines.length;
@@ -217,7 +241,7 @@ export class BrowserView implements Component {
       else if (nav) this.list.handleInput(data);
       else { this.input.handleInput(data); this.options.state.query = this.input.getValue(); this.update(true); }
     } else this.listInput(data, nav);
-    this.options.state.focus = this.focus;
+    this.setFocus(this.focus);
     this.tui.requestRender();
   }
   /** Enter is owned by the frame, never by a record action. */
@@ -238,15 +262,32 @@ export class BrowserView implements Component {
       else if (control) cycle(control, this.done);
     }
   }
-  handleMouse(event: TuiMouseEvent) {
+  handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
     if (this.composer.active) return {handled: true};
+    // Hover/release must not steal keyboard focus or cancel an armed action.
+    if (event.type !== 'wheel' && !(event.button === 'left' && (event.type === 'press' || event.type === 'click'))) return;
     if (event.y <= 0 || event.y >= this.renderedRows - 1) return;
     event = { ...event, y: event.y - 1 };
-    if (event.y < this.bodyTop || event.y >= this.bodyBottom) return;
-    if (this.wide ? event.x > this.leftWidth : event.y >= this.detailsTop) {
-      this.focus = this.options.state.focus = 'details'; return this.reader?.handleMouse(event);
-    }
-    this.focus = this.options.state.focus = 'list'; return this.list.handleMouse({ ...event, y: event.y - this.bodyTop });
+    if (event.y === this.filterTop && event.type !== 'wheel') {
+      this.setFocus('filter');
+      // Input's native mouse positioning assumes a two-column prompt; ours is separate chrome.
+      const prefixWidth = visibleWidth(`${focusLabel('Filter:', true, this.theme)} `);
+      this.input.handleMouse({ ...event, x: event.x - prefixWidth + 2, y: 0 });
+    } else if (event.y === this.bodyBottom + 1 && this.reader?.searching && this.focus === 'details' && event.type !== 'wheel') {
+      const prefixWidth = visibleWidth(`${focusLabel('Search', true, this.theme)} `);
+      this.reader.search.handleMouse({ ...event, x: event.x - prefixWidth, y: 0 });
+    } else if (event.y >= this.bodyTop - 1 && event.y < this.bodyBottom) {
+      const details = this.wide ? event.x >= this.leftWidth : event.y >= this.detailsTop - 1;
+      if (details) {
+        if (!this.reader) return;
+        this.setFocus('details'); this.reader.handleMouse(event);
+      } else {
+        this.setFocus('list');
+        if (event.y >= this.bodyTop) this.list.handleMouse({ ...event, y: event.y - this.bodyTop });
+      }
+    } else return;
+    this.tui.requestRender();
+    return {handled: true, focus: true, render: true};
   }
 }
 

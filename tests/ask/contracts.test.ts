@@ -98,6 +98,16 @@ test("ask text contracts preserve answers, comments and parent provenance withou
 
 test("external schemas and semantic normalization reject conflicting defaults and batch settings", () => {
   for (const timeoutMs of [-1, Infinity, 0.5, 2147483648]) assert.equal(Value.Check(askSchema, { question: "Q", timeoutMs }), false);
+  const titled: AskParams = { questions: [{ title: 'Scope', question: 'Which application area?' }, { question: 'Which database?' }] };
+  assert.equal(Value.Check(askSchema, titled), true);
+  assert.equal(normalize(titled)[0].title, 'Scope');
+  const details = askDetails(titled, normalize(titled), { status: 'skipped', responses: [] });
+  assert.ok('questions' in details);
+  assert.equal(details.questions[0].title, 'Scope');
+  for (const title of ['', 'x'.repeat(61)]) assert.equal(Value.Check(askSchema, {
+    questions: [{ title, question: 'A' }, { question: 'B' }],
+  }), false);
+  assert.equal(Value.Check(askSchema, { question: 'Single', title: 'Scope' }), false, 'titles belong to batch question entries');
   assert.equal(Value.Check(askSchema, { question: "Q", timeoutMs: 0 }), true);
   assert.equal(Value.Check(askSchema, { question: 'Q', allowFreeform: false }), false);
   assert.equal(Value.Check(askSchema, { questions: [{ question: 'A', allowFreeform: false }, { question: 'B' }] }), false);

@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {mkdirSync, rmSync, writeFileSync} from 'node:fs';
 import {join, resolve} from 'node:path';
 import {DefaultResourceLoader, SettingsManager, SessionManager, createAgentSession,
-  type ExtensionCommandContext, type ExtensionContext, type ExtensionUIContext} from '@earendil-works/pi-coding-agent';
+  type ExtensionCommandContext, type ExtensionContext, type ExtensionUIContext, type Theme} from '@earendil-works/pi-coding-agent';
 import {fauxProvider, fauxAssistantMessage, fauxToolCall} from '@earendil-works/pi-ai';
 import {stripVTControlCharacters} from 'node:util';
-import {Text, TuiAltScreen, visibleWidth} from '@earendil-works/pi-tui';
+import {CURSOR_MARKER, Text, TuiAltScreen, getKeybindings, visibleWidth, type TuiMouseEvent} from '@earendil-works/pi-tui';
 import {configPaths, writeConfigFields} from '../../src/runtime/config-fields.ts';
 import {loadConfig, readConfig} from '../../src/runtime/config.ts';
 import {prepareClipboard} from '../../src/runtime/clipboard.ts';
@@ -80,7 +80,7 @@ test('reading overlays share the actual height ceiling and fullscreen viewport k
   for (const fullscreen of [false, true]) {
     const tui = fullscreen ? new TuiAltScreen(terminal(24, 120).terminal) : terminal(24, 120);
     const custom: ExtensionUIContext['custom'] = async (factory, options) => new Promise((resolve, reject) => {
-      Promise.resolve(factory(tui, {} as never, {} as never, resolve)).then(view => {
+      Promise.resolve(factory(tui, {} as never, getKeybindings() as never, resolve)).then(view => {
         const overlay = typeof options?.overlayOptions === 'function' ? options.overlayOptions() : options?.overlayOptions;
         assert.equal(options?.overlay, true);
         assert.deepEqual(overlay, fullscreen ? {anchor: 'top-left', width: '100%', maxHeight: '100%', margin: 0}
@@ -101,6 +101,82 @@ test('reading overlays share the actual height ceiling and fullscreen viewport k
     });
     await openReading<void>({ui: {custom}} as ExtensionContext, (tui, _theme, _keys, done) =>
       new DetailsView(tui, () => 'Reader', new Text('line\n'.repeat(80), 0, 0), done));
+  }
+});
+
+test('browser focus chrome distinguishes panes and text modes without repainting records or spending rows', () => {
+  const theme = {fg: (tone: string, text: string) => `\x1b[${({accent: 36, muted: 90, borderMuted: 90, error: 31, syntaxKeyword: 35} as Record<string, number>)[tone] ?? 37}m${text}\x1b[39m`,
+    bg: (_tone: string, text: string) => `\x1b[44m${text}\x1b[49m`, bold: (text: string) => `\x1b[1m${text}\x1b[22m`} as Theme;
+  for (const width of [40, 79, 80, 120]) {
+    const tui = terminal(30, width), state = browseState(); state.query = 'record';
+    const view = new BrowserView(tui, {title: 'Records', state, items: () => [{value: 'record', label: 'record · failed', status: 'failed',
+      details: () => new Text(`${theme.fg('syntaxKeyword', 'const')} record\n`.repeat(40), 0, 0)}],
+      actions: () => [{key: 'm', label: 'Message', input: () => ({prompt: 'Message: ', submit: async () => 'Sent'})}]}, () => {}, theme);
+    const screen = () => {
+      const lines = view.render(width);
+      assert.equal(lines.length, Math.floor(tui.terminal.rows * 0.8));
+      assert.ok(lines.every(line => visibleWidth(line) <= width));
+      const raw = lines.join('\n');
+      assert.ok(raw.includes(theme.fg('error', 'failed')), 'record status remains colored in either focus');
+      assert.ok(raw.includes(theme.fg('syntaxKeyword', 'const')), 'reader syntax remains colored in either focus');
+      return {raw, plain: stripVTControlCharacters(raw)};
+    };
+    try {
+      const initial = screen(); assert.match(initial.plain, /▸ List/); assert.ok(initial.raw.includes('\x1b[44m'));
+      assert.ok(initial.raw.includes(theme.fg('accent', theme.bold('▸ List'))));
+      assert.ok(!initial.raw.includes(CURSOR_MARKER), 'a kept filter is not a text cursor');
+      const reader = state.readers.get('record')!;
+      view.handleInput('\t'); const details = screen();
+      assert.match(details.plain, /(?:^| │ )▸ Details/m); assert.doesNotMatch(details.plain, /^▸ List/m);
+      assert.ok(!details.raw.includes('\x1b[44m'), 'inactive selection retains identity without active background');
+      reader.scroll(3); const offset = reader.offset;
+      view.handleInput('\t'); screen(); assert.equal(reader.offset, offset); assert.equal(state.query, 'record');
+      assert.strictEqual(state.readers.get('record'), reader); assert.equal(state.selected, 'record');
+      view.handleInput('/'); const filter = screen(); assert.match(filter.plain, /▸ Filter:/);
+      assert.equal(filter.raw.split(CURSOR_MARKER).length - 1, 1); assert.doesNotMatch(filter.plain, /(?:^| │ )▸ (?:List|Details)/m);
+      view.focused = false; assert.ok(!screen().raw.includes(CURSOR_MARKER)); view.focused = true;
+      view.handleInput('\t'); view.handleInput('\t'); view.handleInput('/');
+      const search = screen(); assert.match(search.plain, /▸ Search/); assert.doesNotMatch(search.plain, /▸ Details/);
+      assert.equal(search.raw.split(CURSOR_MARKER).length - 1, 1);
+      view.handleInput('\x1b'); view.handleInput('\t'); view.handleInput('m');
+      const composer = screen(); assert.match(composer.plain, /▸ Input Message:/);
+      assert.doesNotMatch(composer.plain, /(?:^| │ )▸ (?:List|Details)/m); assert.ok(!composer.raw.includes('\x1b[44m'));
+      assert.equal(composer.raw.split(CURSOR_MARKER).length - 1, 1);
+      view.handleInput('\x1b'); assert.match(screen().plain, /▸ List/);
+    } finally {view.dispose();}
+  }
+});
+
+test('browser mouse focus follows pane and native input geometry, skips unavailable details and ignores hover', () => {
+  for (const width of [40, 120]) {
+    const state = browseState(), tui = terminal(30, width);
+    let available = false;
+    const view = new BrowserView(tui, {title: 'Records', state, items: () => [{value: 'record', label: 'record',
+      ...available ? {details: () => 'line\n'.repeat(40)} : {}}]}, () => {});
+    const screen = () => view.render(width).map(stripVTControlCharacters);
+    const mouse = (x: number, y: number, type: TuiMouseEvent['type'] = 'press') => view.handleMouse({type, button: 'left', x, y,
+      screenX: x, screenY: y, width, height: 24, shift: false, alt: false, ctrl: false, ...type === 'wheel' ? {wheelDelta: 1} : {}});
+    try {
+      let lines = screen(), listTop = lines.findIndex(line => line.startsWith('▸ List'));
+      view.handleInput('\t'); assert.equal(state.focus, 'list');
+      if (width >= 80) {mouse(width - 5, listTop + 1); assert.equal(state.focus, 'list');}
+      available = true; lines = screen();
+      const detailsTop = width >= 80 ? lines.findIndex(line => line.includes('Details')) : lines.findIndex(line => line.startsWith('  Details'));
+      assert.equal(mouse(width - 5, detailsTop)?.render, true); assert.equal(state.focus, 'details');
+      mouse(0, listTop, 'move'); assert.equal(state.focus, 'details');
+      mouse(0, listTop); assert.equal(state.focus, 'list');
+      view.handleInput('/'); view.handleInput('record'); view.handleInput('\r'); lines = screen();
+      const filterTop = lines.findIndex(line => line.includes('Filter:'));
+      mouse(visibleWidth('▸ Filter: ') + 2, filterTop); assert.equal(state.focus, 'filter');
+      view.handleInput('X'); assert.equal(state.query, 'reXcord', 'native cursor positioning accounts for the separate chrome prefix');
+      view.handleInput('\x1b'); view.handleInput('\t'); view.handleInput('/'); lines = screen();
+      const searchTop = lines.findIndex(line => line.includes('▸ Search'));
+      mouse(visibleWidth('▸ Search ') + 2, searchTop); view.handleInput('line');
+      assert.equal(state.readers.get('record')!.search.getValue(), 'line');
+      mouse(width - 5, detailsTop, 'wheel'); assert.equal(state.focus, 'details');
+      assert.ok(state.readers.get('record')!.offset > 0);
+      available = false; screen(); assert.equal(state.focus, 'list');
+    } finally {view.dispose();}
   }
 });
 
@@ -140,7 +216,7 @@ test('actual extension loader readies first commands/tools and suite edits apply
   try {
     assert.deepEqual(extensionsResult.errors, []);
     const ui = {setStatus() {}, setWidget() {}, notify() {}, addAutocompleteProvider() {}, onTerminalInput() { return () => {}; }, getEditorText: () => '',
-      custom: async (factory: Parameters<ExtensionUIContext['custom']>[0]) => new Promise((done, reject) => Promise.resolve(factory(terminal(), ctx.ui.theme, {} as never, done)).then(view => {
+      custom: async (factory: Parameters<ExtensionUIContext['custom']>[0]) => new Promise((done, reject) => Promise.resolve(factory(terminal(), ctx.ui.theme, getKeybindings() as never, done)).then(view => {
         view.render(120); view.handleInput?.('\x1b'); view.dispose?.();
       }).catch(reject))} as unknown as ExtensionUIContext;
     await session.bindExtensions({mode: 'tui', uiContext: ui, onError: error => {errors.push(error);}});
@@ -157,7 +233,7 @@ test('actual extension loader readies first commands/tools and suite edits apply
     assert.equal(childResult.message.isError, false);
     assert.match(JSON.stringify(childResult.message.details), /completed/);
     let calls = 0;
-    const custom: ExtensionUIContext['custom'] = async factory => new Promise((done, reject) => Promise.resolve(factory(terminal(), ctx.ui.theme, {} as never, done)).then(view => {
+    const custom: ExtensionUIContext['custom'] = async factory => new Promise((done, reject) => Promise.resolve(factory(terminal(), ctx.ui.theme, getKeybindings() as never, done)).then(view => {
       const screen = view.render(120).join('\n');
       if (calls++ === 0) {assert.match(screen, /commands/); view.handleInput?.('exit'); view.handleInput?.('\r');}
       else if (calls === 2) view.handleInput?.('\r'); // user layer

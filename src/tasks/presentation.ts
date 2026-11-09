@@ -30,11 +30,11 @@ export function editLines(result: EditResult): string[] {
     ...result.progress.map(group => `${group.id} ${group.done}/${group.total} ${group.status}`),
     ...result.warnings.map(warning => `warning: ${warning}`)];
 }
-export const derivedDisplay = (change: DerivedChange): string => `${taskIcon(change.status)} ${change.id} ${sanitizeText(change.title).replace(/\s+/g, ' ')} · ${change.status === 'blocked' ? '已阻塞' : '依赖已解除'}`;
+export const derivedDisplay = (change: DerivedChange): string => `${taskIcon(change.status)} ${change.id} ${sanitizeText(change.title).replace(/\s+/g, ' ')} · ${change.status === 'blocked' ? 'blocked' : 'dependencies cleared'}`;
 export function receiptAction(change: EditReceipt): string {
-  return change.op === 'add' ? '已创建' : change.op === 'delete' ? '已删除' : !Object.keys(change.fields ?? {}).length ? '未变化'
-    : change.before !== change.after ? ({ doing: '已开始', done: '已完成', blocked: '已阻塞', todo: '待处理' })[change.after!] : '已更新';
+  return change.op === 'add' ? 'created' : change.op === 'delete' ? 'deleted' : !Object.keys(change.fields ?? {}).length ? 'unchanged'
+    : change.before !== change.after ? ({ doing: 'started', done: 'completed', blocked: 'blocked', todo: 'pending' })[change.after!] : 'updated';
 }
 export function receiptDisplay(change: EditReceipt): string {
-  return `${taskIcon(change.after ?? change.before ?? '')} ${change.id} ${sanitizeText(change.title).replace(/[\r\n\t]/g, ' ')} · ${receiptAction(change)}${change.fields?.blockedReason ? `：${sanitizeText(String(change.fields.blockedReason))}` : ''}`;
+  return `${taskIcon(change.after ?? change.before ?? '')} ${change.id} ${sanitizeText(change.title).replace(/[\r\n\t]/g, ' ')} · ${receiptAction(change)}${change.fields?.blockedReason ? `: ${sanitizeText(String(change.fields.blockedReason))}` : ''}`;
 }

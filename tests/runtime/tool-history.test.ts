@@ -63,7 +63,7 @@ test('actual loader resolves historical renderers before binding, during reload 
       assert.match(expanded[0], /History reviewer/); assert.match(expanded.join('\n'), /agent_00000001/);
     }
     const collapsed = list.render(120).map(stripVTControlCharacters).filter(line => line.trim());
-    assert.equal(collapsed.length, 1); assert.match(collapsed[0], /任务.*1 组 2 项/);
+    assert.equal(collapsed.length, 1); assert.match(collapsed[0], /Tasks.*1 groups 2 items/);
     list.setExpanded(true);
     assert.match(list.render(120).map(stripVTControlCharacters).join('\n'), /History child two/);
     return collapsed;

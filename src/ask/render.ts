@@ -21,18 +21,39 @@ export function optionRow(theme: Theme, question: Question, draft: Pick<Draft, '
 export interface TabRegion { start: number; end: number; page: number }
 export function questionTabs(form: AskForm, theme: Theme, width: number): { line: string; regions: TabRegion[] } {
   const page = form.reviewing ? form.questions.length : form.index;
-  let line = "";
-  const regions = Array.from({ length: form.questions.length + 1 }, (_, index) => {
-    const title = index === form.questions.length ? "Review" : `Q${index + 1}`;
-    const answered = index < form.questions.length && form.answered(index);
-    const label = index === page ? theme.fg("accent", title) : title;
+  const tabs = [...form.questions.map((question, index) => ({ page: index,
+    title: truncateToWidth(oneLine(question.title ?? question.question).replace(/\s+/g, ' ').trim() || 'Question', 22, '…'),
+    answered: form.answered(index),
+  })), { page: form.questions.length, title: 'Review', answered: false }];
+  // Budget every label before styling, rather than clipping the entire bar and leaving
+  // invisible tabs with clickable regions. Very narrow screens retain the active page.
+  const minimum = tabs.reduce((sum, tab) => sum + (tab.page === form.questions.length ? 6 : Math.min(3, visibleWidth(tab.title))) + Number(tab.answered), tabs.length - 1);
+  const shown = minimum <= width ? tabs : [tabs[page],
+    ...page !== form.questions.length && width >= Math.min(3, visibleWidth(tabs[page].title)) + Number(tabs[page].answered) + 7 ? [tabs.at(-1)!] : []];
+  const sizes = shown.map(tab => visibleWidth(tab.title) + Number(tab.answered));
+  let excess = sizes.reduce((sum, size) => sum + size, shown.length - 1) - width;
+  while (excess > 0) {
+    let widest = -1;
+    for (let index = 0; index < shown.length; index++) {
+      if (shown.length > 1 && shown[index].page === form.questions.length) continue;
+      if (sizes[index] > 1 && (widest < 0 || sizes[index] > sizes[widest])) widest = index;
+    }
+    if (widest < 0) break;
+    sizes[widest]--; excess--;
+  }
+  let line = '';
+  const regions: TabRegion[] = [];
+  shown.forEach((tab, index) => {
+    const badge = tab.answered && sizes[index] > 1 ? theme.fg('success', '✓') : '';
+    const title = truncateToWidth(tab.title, Math.max(0, sizes[index] - visibleWidth(badge)), '…');
+    const label = (tab.page === page ? theme.fg('accent', title) : title) + badge;
+    if (index) line += ' ';
     const start = visibleWidth(line);
-    line += label + (answered ? theme.fg("success", "✓") : "");
+    line += label;
     const end = visibleWidth(line);
-    line += " ";
-    return { start, end: Math.min(width, end), page: index };
+    if (end > start && end <= width) regions.push({ start, end, page: tab.page });
   });
-  return { line: truncateToWidth(line.trimEnd(), width), regions };
+  return { line: truncateToWidth(line, width), regions };
 }
 export function idleTime(deadline?: number): string {
   if (deadline === undefined) return "no timeout";

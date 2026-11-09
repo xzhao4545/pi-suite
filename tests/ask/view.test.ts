@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { stripVTControlCharacters } from 'node:util';
-import { visibleWidth } from "@earendil-works/pi-tui";
+import { sliceByColumn, visibleWidth } from "@earendil-works/pi-tui";
 import { initTheme, type Theme } from "@earendil-works/pi-coding-agent";
 import { defaults } from "../../src/runtime/config.ts";
 import { Dock } from "../../src/ui/dock.ts";
@@ -9,6 +9,7 @@ import { Transcript } from "../../src/ui/transcript.ts";
 import { AskForm } from "../../src/ask/form.ts";
 import { normalize, type AskResult, type AskParams } from "../../src/ask/schema.ts";
 import { AskView } from "../../src/ask/view.ts";
+import { questionTabs } from '../../src/ask/render.ts';
 import { terminal } from "../support/terminal.ts";
 
 function fixture(params: AskParams, rows = 24, columns = 40) {
@@ -63,6 +64,55 @@ test("mixed batches require final confirmation and retain each question's indepe
     { kind: "selection", selections: ["tests"], optionIds: ["option-2"] },
     { kind: "freeform", text: "feature/work" },
   ]);
+});
+
+test('question titles keep visible tab/click identities through narrow layouts, Unicode, answer badges and Review', () => {
+  const params: AskParams = { questions: [
+    { title: 'Scope', question: 'Which part of the application should we change?', defaultAnswer: 'UI' },
+    { question: '数据库🙂选型与部署位置', defaultAnswer: 'Postgres' },
+    { title: '\x1b[31mDeploy\t now\x1b[0m', question: 'How should we deploy the application?', defaultAnswer: 'Local' },
+    { title: 'Branch', question: 'Which branch should receive these changes?', defaultAnswer: 'main' },
+  ], timeoutMs: 0 };
+  const { view, form, tui } = fixture(params, 40, 80);
+  const theme = globalThis[Symbol.for('@earendil-works/pi-coding-agent:theme') as unknown as keyof typeof globalThis] as unknown as Theme;
+  for (const width of [1, 8, 16, 40, 80, 120]) {
+    for (let page = 0; page <= form.questions.length; page++) {
+      form.reviewing = page === form.questions.length;
+      if (!form.reviewing) form.index = page;
+      const tabs = questionTabs(form, theme, width), text = stripVTControlCharacters(tabs.line);
+      assert.ok(visibleWidth(tabs.line) <= width);
+      assert.ok(tabs.regions.some(region => region.page === page), 'active tab remains visible');
+      assert.doesNotMatch(text, /Q\d|\t|\n/);
+      for (const region of tabs.regions) {
+        assert.ok(region.start >= 0 && region.end > region.start && region.end <= visibleWidth(tabs.line));
+        assert.equal(visibleWidth(sliceByColumn(tabs.line, region.start, region.end - region.start)), region.end - region.start);
+      }
+      if (width >= 40) {
+        assert.equal(tabs.regions.length, 5); assert.match(text, /Review/);
+        assert.equal(text.match(/✓/g)?.length, 4);
+      }
+      if (width >= 80) assert.match(text, /Scope✓ 数据库🙂选型与部署位置✓ Deploy now✓ Branch✓ Review/);
+    }
+  }
+  for (const width of [40, 80, 120]) {
+    Object.defineProperty(tui.terminal, 'columns', { value: width, configurable: true });
+    const rendered = view.render(width), row = rendered[1];
+    const tabs = questionTabs(form, theme, width >= 50 ? width - 6 : width);
+    const inset = width >= 50 ? 3 : 0;
+    for (const region of tabs.regions) {
+      const x = inset + region.end - 1;
+      assert.ok(x < visibleWidth(row));
+      assert.equal(view.handleMouse({ type: 'click', button: 'left', x, y: 1, screenX: x, screenY: 1,
+        width, height: 40, shift: false, alt: false, ctrl: false })?.handled, true);
+      assert.equal(form.reviewing, region.page === 4);
+      if (!form.reviewing) assert.equal(form.index, region.page);
+    }
+  }
+  form.reviewing = false; form.index = 0;
+  assert.match(view.render(80).map(stripVTControlCharacters).join('\n'), /Which part of the application should we change\?/);
+  form.reviewing = true;
+  assert.match(view.render(80).map(stripVTControlCharacters).join('\n'), /Which part of the application should we change\?: ✎ UI/);
+  view.dispose();
 });
 
 test("history and answer share one view and focus changes retain text drafts", () => {
@@ -129,7 +179,7 @@ test("multi-line choices, tabs, preview and Review details retain identity throu
   view.handleMouse(mouse(8, description));
   assert.equal(form.draft.selected.has('first'), false, 'clicking a continuation row chooses its actual option');
   view.handleInput('e'); const expanded = view.render(80);
-  assert.ok(expanded.some(line => line.includes('d 全文')));
+  assert.ok(expanded.some(line => line.includes('d full text')));
   const expandedHeight = expanded.length;
   view.handleInput('\x1b[C'); assert.equal(view.render(80).length, expandedHeight, 'page changes retain height');
   assert.equal(form.draft.text.endsWith('ANSWER_END'), true);
@@ -191,7 +241,7 @@ test("every choice permits text and text pages navigate outside explicit editing
     ] }]);
   }
   const long = fixture({ question: 'Custom', options: ['A'], defaultAnswer: 'Long custom '.repeat(15) + 'CUSTOM_END', timeoutMs: 0 }, 40, 80);
-  assert.match(long.view.render(80).join('\n'), /e 展开/);
+  assert.match(long.view.render(80).join('\n'), /e expand/);
   long.view.handleInput('e');
   assert.match(long.view.render(80).join('\n'), /CUSTOM_END/);
   long.view.handleInput('d'); long.view.render(80); long.view.handleInput('\x1b[F');

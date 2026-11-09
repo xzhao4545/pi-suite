@@ -266,7 +266,7 @@ export class AskView implements Component {
   private renderActions(width: number): string {
     const active = this.actions[this.action] ?? this.actions[0];
     const listFocus = this.focus === 'answer' && (this.form.reviewing || !this.form.draft.editing);
-    const hint = !this.reading && listFocus ? `${this.expanded ? ' · e 折叠' : this.collapsible ? ' · e 展开' : ''} · d 全文` : '';
+    const hint = !this.reading && listFocus ? `${this.expanded ? ' · e collapse' : this.collapsible ? ' · e expand' : ''} · d full text` : '';
     const controls = this.theme.fg('accent', `[${active}]`) + ` · ${this.escapeHint} · Tab · ${this.action + 1}/${this.actions.length} ←→ Enter`;
     return truncateToWidth(controls, Math.max(0, width - visibleWidth(hint)), '') + hint;
   }
@@ -305,7 +305,7 @@ export class AskView implements Component {
     if (!wide || !option) return list.lines;
     const preview = this.preview(option), previewWidth = width - listWidth - 3;
     let detail = preview.viewport(previewWidth, height);
-    if (!preview.atBottom) detail = [...detail.slice(0, height - 1), this.theme.fg('dim', '↓ 更多 · d 全文')];
+    if (!preview.atBottom) detail = [...detail.slice(0, height - 1), this.theme.fg('dim', '↓ more · d full text')];
     this.previewRegion = { x: x + listWidth + 3, y, width: previewWidth, height, view: preview };
     return Array.from({ length: height }, (_, index) => {
       const left = list.lines[index] ?? '';
@@ -407,7 +407,7 @@ export class AskView implements Component {
     lines.push(truncateToWidth((!geometry.inset && scrolling ? `${cursor + 1}/${count} · ` : '') + status, geometry.width));
     const kind = !this.form.question.options.length ? '✎' : this.form.question.allowMultiple
       ? `☐${this.form.draft.selected.size + Number(this.form.draft.customSelected && Boolean(this.form.draft.text.trim()))}` : '○';
-    const page = this.form.reviewing ? 'Review' : `Q${this.form.index + 1}/${this.form.questions.length} ${kind}`;
+    const page = this.form.reviewing ? 'Review' : `${this.form.index + 1}/${this.form.questions.length} ${kind}`;
     return frameLines(this.theme, geometry, width, topBorder(this.theme, width, this.requester, this.heading, page, time), lines, markers)
       .map(line => truncateToWidth(line, width));
   }

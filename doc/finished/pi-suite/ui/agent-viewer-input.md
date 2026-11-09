@@ -28,7 +28,7 @@
 
 - src/ui/scroll.ts、src/ui/details.ts、src/ui/browser.ts，新增的公共内联输入
 - src/agents/viewer.ts、src/agents/ui/runs.ts、src/jobs/log-viewer.ts（跟随复用）
-- 相关 current 文档：[agents 操作](../current/agents/operations.md)、[ui](../current/ui/index.md)、[jobs](../current/jobs/index.md)
+- 相关 current 文档：[agents 操作](../../../current/agents/operations.md)、[ui](../../../current/ui/index.md)、[jobs](../../../current/jobs/index.md)
 
 ## 验收
 

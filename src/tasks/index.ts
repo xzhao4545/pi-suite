@@ -27,8 +27,8 @@ export class TasksModule {
   private selectedGroup?: string;
   constructor(private binding: SessionBinding, private dock: Dock,
     private child?: { persisted: boolean; assigned?: { id: string; store: TaskStore } }) {
-    dock.register('tasks', { title: 'Tasks', rows: () => this.rows(), summary: () => this.summary(), subtitle: () => this.progressText,
-      footer: () => this.completed ? `☑ 已完成 ${this.completed} 组` : '',
+    dock.register('tasks', { title: 'Tasks', readOnly: true, rows: () => this.rows(), summary: () => this.summary(), subtitle: () => this.progressText,
+      footer: () => this.completed ? `☑ ${this.completed} completed groups` : '',
       progress: () => { const count = this.progress; return count.total ? count.done / count.total : 0; } });
   }
   async bind(ctx: ExtensionContext, event: Pick<SessionStartEvent, 'reason' | 'previousSessionFile'>): Promise<void> {
@@ -150,11 +150,10 @@ export class TasksModule {
       const priority = rank(group) + (visible.length - index) / (visible.length + 1) * 0.25;
       const rows: DockRow[] = [{ id: `task:${group.id}`, text: taskRow(group, theme),
         suffix: `${group.progress!.done}/${group.progress!.total}`, priority }];
-      if (group !== focus) return rows;
       const items = children.get(group.id)!, current = currentChild(group, items);
       const latestDone = [...items].filter(task => task.status === 'done').sort((a, b) => b.updatedAt - a.updatedAt)[0];
       for (const task of items) rows.push({ id: `task:${task.id}`, parentId: `task:${group.id}`,
-        text: taskRow(task, theme), priority: priority + (task === current ? 5 : task.status === 'doing' || task.status === 'blocked' ? 4
+        text: taskRow(task, theme), priority: priority + (group !== focus ? -1 : task === current ? 5 : task.status === 'doing' || task.status === 'blocked' ? 4
           : task.status === 'todo' && (!current || Number(task.id.split('.')[1]) > Number(current.id.split('.')[1])) ? 3
           : task === latestDone ? 2 : 1) });
       return rows;

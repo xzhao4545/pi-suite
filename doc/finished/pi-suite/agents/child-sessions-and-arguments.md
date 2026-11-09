@@ -28,7 +28,7 @@
 ## 影响范围
 
 - src/agents/runner.ts（child 会话目录）、src/agents/workflow/host.ts（若 workflow child 另行创建会话）
-- 相关 current 文档：[agents 运行时](../current/agents/runtime.md)、[agents 历史](../current/agents/history.md)
+- 相关 current 文档：[agents 运行时](../../../current/agents/runtime.md)、[agents 历史](../../../current/agents/history.md)
 
 ## 验收
 

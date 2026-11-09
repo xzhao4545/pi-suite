@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import { fauxProvider, fauxAssistantMessage, fauxToolCall, type FauxResponseFactory } from '@earendil-works/pi-ai';
 import { SessionManager, type ExtensionCommandContext, type ExtensionContext, type ExtensionUIContext } from '@earendil-works/pi-coding-agent';
-import { visibleWidth } from '@earendil-works/pi-tui';
+import { CURSOR_MARKER, KeybindingsManager, TUI_KEYBINDINGS, getKeybindings, visibleWidth } from '@earendil-works/pi-tui';
 import { host } from '../support/host.ts';
 import { agentDir } from '../support/jobs.ts';
 import { terminal } from '../support/terminal.ts';
@@ -20,7 +20,7 @@ import { BrowserView } from '../../src/ui/browser.ts';
 import { chooseBrowserAction } from '../support/browser.ts';
 
 async function setup() {
-  const root = agentDir(), other = fauxProvider({ provider: 'suite-model-test', models: [{ id: 'reasoning', reasoning: true }, { id: 'plain', reasoning: false }] });
+  const root = agentDir(), other = fauxProvider({ provider: 'suite-model-test', models: [{ id: 'reasoning', name: 'Deep analysis', reasoning: true }, { id: 'plain', reasoning: false }] });
   let ctx!: ExtensionContext, authenticated = true;
   const h = await host({ root, persisted: true, tools: ['agent_start'], extend: pi => {
     pi.registerProvider({ ...other.provider, auth: { apiKey: { name: 'Offline auth', resolve: async () => authenticated ? { auth: {} } : undefined } } });
@@ -35,7 +35,7 @@ async function setup() {
 /** Exercise the same native component used by the UI, keeping the complete value behind its row. */
 function picker(ctx: ExtensionContext, choices: (string | undefined)[], seen: string[] = []): ExtensionContext {
   const custom: ExtensionUIContext['custom'] = async factory => new Promise((resolve, reject) => {
-    Promise.resolve(factory(terminal(), ctx.ui.theme, {} as never, resolve)).then(view => {
+    Promise.resolve(factory(terminal(), ctx.ui.theme, getKeybindings() as never, resolve)).then(view => {
       for (const width of [40, 120]) {
         const lines = view.render(width);
         assert.ok(lines.every(line => visibleWidth(line) <= width)); assert.ok(lines.length <= 24);
@@ -113,6 +113,59 @@ test('native model picker uses all authenticated models, clamps thinking choices
     const noAuth: string[] = [];
     await chooseModelSettings(picker(ctx, [undefined], noAuth), 'Models', {}, () => h.ctx.model);
     assert.ok(!noAuth[0].includes('suite-model-test/'));
+  } finally { await h.cleanup(); }
+});
+
+test('model filtering keeps complete identities, native input focus, injected selection keys and clear/cancel semantics', { timeout: 15000 }, async () => {
+  const h = await setup();
+  const keys = new KeybindingsManager(TUI_KEYBINDINGS, {
+    'tui.select.confirm': 'ctrl+g', 'tui.select.cancel': 'ctrl+x', 'tui.select.down': 'ctrl+n',
+    'tui.select.pageDown': 'ctrl+f',
+  });
+  let phase = 0;
+  const custom: ExtensionUIContext['custom'] = async factory => new Promise((done, reject) => {
+    const tui = terminal();
+    Promise.resolve(factory(tui, h.ctx.ui.theme, keys as never, done)).then(view => {
+      const selected = () => (view as typeof view & { getSelectedItem: () => { value: string } | null }).getSelectedItem();
+      const text = () => view.render(40).map(stripVTControlCharacters).join('\n');
+      assert.equal(view.capturesViewportInput, true);
+      if (phase === 0) {
+        assert.equal(selected()?.value, 'suite-model-test/plain');
+        (view as typeof view & { focused: boolean }).focused = true;
+        assert.ok(view.render(40).some(line => line.includes(CURSOR_MARKER)), 'native Input owns the focused cursor');
+        view.handleInput?.('suite-model-test dpanlys'); // Fuzzy provider + display name, not an ID prefix.
+        assert.equal(selected()?.value, 'suite-model-test/reasoning');
+        view.handleInput?.('\x15'); view.handleInput?.('no-such-model-zzz');
+        assert.equal(selected(), null); assert.match(text(), /No matching items/);
+        view.handleInput?.('\r'); assert.equal(phase, 0, 'empty results cannot confirm');
+        view.handleInput?.('\x0e'); assert.equal(selected(), null, 'navigation on empty results is harmless');
+        view.handleInput?.('\x15');
+        assert.equal(selected()?.value, '', 'clearing search makes No override selectable');
+        view.handleInput?.('\x0e'); assert.ok(selected()?.value);
+        view.handleInput?.('\x06'); assert.ok(selected()?.value, 'injected page key pages the native list');
+        Object.defineProperty(tui.terminal, 'rows', { value: 12, configurable: true });
+        assert.ok(view.render(40).length <= 12);
+        view.handleInput?.('\x15'); view.handleInput?.('dpanlys');
+      } else if (phase === 1) {
+        assert.doesNotMatch(text(), /Filter:/, 'thinking retains its simple native selector');
+        view.handleInput?.('\x0e'); assert.equal(selected()?.value, 'off');
+      } else if (phase === 2) {
+        view.handleInput?.('No override'); assert.equal(selected()?.value, '');
+      } else if (phase === 3) {
+        assert.doesNotMatch(text(), /high/, 'cleared model uses inherited non-reasoning capabilities');
+        assert.equal(selected()?.value, '');
+      }
+      const cancel = phase++ === 4;
+      view.handleInput?.(cancel ? '\x18' : '\x07');
+    }).catch(reject);
+  });
+  const ctx = { ...h.ctx, ui: { ...h.ctx.ui, custom } };
+  try {
+    assert.deepEqual(await chooseModelSettings(ctx, 'Models', { model: 'suite-model-test/plain' }, () => h.ctx.model),
+      { model: 'suite-model-test/reasoning', thinking: 'off' });
+    assert.deepEqual(await chooseModelSettings(ctx, 'Models', {}, () => h.ctx.model), { model: undefined, thinking: undefined });
+    assert.equal(await chooseModelSettings(ctx, 'Models', {}, () => h.ctx.model), undefined);
+    assert.equal(phase, 5); assert.equal(h.session.model?.id, 'offline');
   } finally { await h.cleanup(); }
 });
 
@@ -198,7 +251,7 @@ test('transcript model editing closes its UI first and preserves the native read
       assert.equal(opened, false, 'selectors must not nest inside transcript custom UI'); opened = true;
       let dispose: (() => void) | undefined;
       const done = (value: unknown) => { opened = false; dispose?.(); resolve(value as never); };
-      Promise.resolve(factory(terminal(), h.ctx.ui.theme, {} as never, done)).then(view => {
+      Promise.resolve(factory(terminal(), h.ctx.ui.theme, getKeybindings() as never, done)).then(view => {
         dispose = (view as { dispose?: () => void }).dispose?.bind(view);
         for (const width of [40, 120]) assert.ok(view.render(width).every(line => visibleWidth(line) <= width));
         if (view instanceof BrowserView) {

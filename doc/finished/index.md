@@ -4,6 +4,10 @@
 
 已实施模块的完整设计与原验收契约见 [设计与实施记录](./pi-suite/design/index.md)；平台证据按各专项的实际范围读取，Windows 本轮状态见 [Windows 验收收尾](./pi-suite/windows-completion.md)。
 
+- [导航焦点、Dock 只读任务与问题标题](./pi-suite/ui/navigation-details.md) — 活动区域高亮、分区切换与双向折叠、英文提示、模型筛选及 Ask 短标题；SDK/组件验证。
+- [浏览界面可发现性与配色](./pi-suite/ui/browser-discoverability.md) — 默认 All、最近活动排序、固定导航/动作行与共享配色角色；实际 CLI 两尺寸验收。
+- [Subagent 内联消息与持续跟随](./pi-suite/ui/agent-viewer-input.md) — Transcript/Runs 内输入、底部持续跟随和当前 run 发送边界。
+- [Subagent 会话目录与可选参数根因](./pi-suite/agents/child-sessions-and-arguments.md) — child 会话存入 subagents/、持久引用发现和 provider strict 配置核实。
 - [Oh My Pi 参考主题](./pi-suite/ui/oh-my-pi-theme.md) — Titanium 蓝灰/电蓝配色、Pi 原生 56 色角色、包主题加载与正文/次要文字面板对比度。
 - [底部布局：Dock、询问与输入区](./pi-suite/ui/dock-ask-layout.md) — 半屏 Dock 分区、独立询问高度、任务顺序与裁剪、展开与全文、多行鼠标映射；Linux 实际 Pi CLI 十二尺寸与紧凑布局验收。
 - [Tasks 两级编号与紧凑反馈](./pi-suite/tasks-display.md) — version 3/依赖迁移、统一任务行与完成样式、询问父子两行、默认 All 与工具一行摘要；Linux 三尺寸实际 Pi CLI 验收。

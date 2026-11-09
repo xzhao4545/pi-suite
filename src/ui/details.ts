@@ -1,5 +1,5 @@
 import { getMarkdownTheme, type ExtensionContext, type Theme } from "@earendil-works/pi-coding-agent";
-import { Key, Markdown, matchesKey, type Component, type TUI, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { Key, Markdown, Text, matchesKey, type Component, type TUI, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { Dock } from "./dock.ts";
 import { ScrollView } from "./scroll.ts";
 import { ActionBar, keyHelp, type DetailAction } from './actions.ts';
@@ -8,6 +8,7 @@ import { readerHeading, keyHint } from './browser-chrome.ts';
 import { InlineInput } from './inline-input.ts';
 import { commandFrame } from './frame.ts';
 import { openReading, readingRows } from './reading.ts';
+import { sanitizeText } from '../runtime/text.ts';
 
 /** Shared detail frame: static Markdown and live log windows use the same reader and key-driven actions. */
 export class DetailsView implements Component {
@@ -56,10 +57,11 @@ export class DetailsView implements Component {
   }
 }
 
-export async function showDetails(ctx: ExtensionContext, dock: Dock, title: string, text: string): Promise<void> {
+export async function showDetails(ctx: ExtensionContext, dock: Dock, title: string, text: string, format: 'markdown' | 'text' = 'markdown'): Promise<void> {
   if (ctx.mode !== "tui") { ctx.ui.notify(`${title}\n${text}`); return; }
   dock.setDetail(true);
   try {
-    await openReading<void>(ctx, (tui, theme, _keys, done) => new DetailsView(tui, () => title, new Markdown(text, 0, 0, getMarkdownTheme()), done, [], undefined, theme));
+    await openReading<void>(ctx, (tui, theme, _keys, done) => new DetailsView(tui, () => title,
+      format === 'text' ? new Text(sanitizeText(text), 0, 0) : new Markdown(text, 0, 0, getMarkdownTheme()), done, [], undefined, theme));
   } finally { dock.setDetail(false); }
 }

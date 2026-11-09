@@ -48,9 +48,9 @@ test('task dock and live browser share committed status; important children keep
     assert.match(view.render(120).join('\n'), /done/);
     t.mock.timers.tick(5001);
     assert.equal(tasks.rows().some(row => row.id === 'task:1'), false);
-    assert.ok(dock.render(80).some(row => row.includes('已完成 1 组')));
+    assert.ok(dock.render(80).some(row => row.includes('1 completed groups')));
     await tasks.edit(ctx, [{op: 'unblock', id: '2.1'}]);
-    assert.equal(tasks.rows().length, 3);
+    assert.equal(tasks.rows().length, 4, 'all visible groups offer their children for read-only Dock navigation');
     assert.match(tasks.rows()[0].suffix!, /0\/1/);
     dock.setAsk(true); assert.equal(dock.render(40).length, 0); dock.setAsk(false);
     await tasks.edit(ctx, [{op: 'done', id: '2.1'}, {op: 'done', id: '3.1'}]);

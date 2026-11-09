@@ -8,6 +8,7 @@ import { loadConfig } from "../../src/runtime/config.ts";
 import { SessionBinding } from "../../src/runtime/binding.ts";
 import { Notifications } from "../../src/runtime/notifications.ts";
 import { Dock } from "../../src/ui/dock.ts";
+import { dockWindow } from '../../src/ui/dock/rows.ts';
 import { StatusPublisher } from "../../src/ui/status.ts";
 import { host } from "../support/host.ts";
 import { agentRuntime } from "../../src/agents/runtime.ts";
@@ -81,7 +82,8 @@ test("status publishing deduplicates IDs, clears old bindings and honors status/
     onTerminalInput: () => () => {}}} as unknown as ExtensionContext;
   dock.bind(dockContext, 12);
   const panel = dock.render(40);
-  assert.match(panel[0], /waiting\(parent\)/);
+  assert.ok(panel.findIndex(line => line.includes('Tasks')) < panel.findIndex(line => line.includes('Agents')), 'source order is independent of waiting priority');
+  assert.match(panel.join('\n'), /waiting\(parent\)/);
   assert.ok(panel.every(line => !line.includes('hidden job')));
   assert.ok(panel.findIndex(line => line.includes('child')) > panel.findIndex(line => line.includes('├─ parent')));
   dock.bind(dockContext, 1);
@@ -171,4 +173,92 @@ test('Dock leaves nonempty editors and other focused components untouched; selec
   const oldInput = input; dock.bind(ctx, 12); assert.equal(detached, 1);
   dock.detach(); assert.equal(detached, 2); assert.equal(oldInput('\x1b[D'), undefined);
   rows = []; dock.bind(ctx, 12); assert.equal(input('\x1b[D'), undefined); dock.detach();
+});
+
+test('Tasks join Dock navigation and section shortcuts with read-only details and unchanged committed data', {timeout: 15000}, async () => {
+  const tui = terminal(40, 120);
+  let dock!: Dock, ctx!: ExtensionContext, input!: (data: string) => unknown, views = 0;
+  const h = await host({tools: ['task_edit', 'task_list'], extend: pi => pi.on('session_start', (_event, context) => {ctx = context;}), ui: ui => ({...ui,
+    setWidget: (_key, factory) => {if (typeof factory === 'function') dock = factory(tui, ui.theme) as Dock;},
+    onTerminalInput: handler => {input = handler; return () => {};},
+    custom: async factory => new Promise((resolve, reject) => {
+      Promise.resolve(factory(tui, ui.theme, {} as never, resolve)).then(view => {
+        const screen = view.render(120).join('\n');
+        assert.match(screen, /Tasks ▸ inspect child red · read only/);
+        assert.ok(screen.includes('## literal *text* red'), 'task text is neither terminal control nor Markdown syntax');
+        assert.deepEqual((view as {actions?: unknown[]}).actions, [], 'task reader never admits mutations');
+        views++; view.handleInput?.('\x1b');
+      }).catch(reject);
+    }),
+  })});
+  try {
+    const tool = (name: string) => h.session.getToolDefinition(name)!;
+    await tool('task_edit').execute('create', {op: 'batch', changes: [
+      {op: 'add', title: 'inspect group', children: ['inspect child \x1b[31mred\x1b[0m', 'second child']},
+      {op: 'update', id: '1.1', description: '## literal *text* \x1b[31mred\x1b[0m'},
+    ]}, undefined, undefined, ctx as never);
+    const snapshot = async () => (await tool('task_list').execute('read', {state: 'all'}, undefined, undefined, ctx as never)).details;
+    const before = await snapshot();
+    for (const section of ['jobs', 'agents']) dock.register(section, {title: section === 'jobs' ? 'Jobs' : 'Agents',
+      rows: () => [{id: section, text: section, priority: 100}], open: () => {assert.fail('only Tasks should open');}});
+    input('\x1b[D'); input('\x1b[B');
+    assert.match(dock.render(120).join('\n'), /> .*1\.1 inspect child/);
+    input(']'); assert.match(dock.render(120).join('\n'), /> agents/);
+    input(']'); assert.match(dock.render(120).join('\n'), /> jobs/);
+    input(']'); assert.match(dock.render(120).join('\n'), /> .*1 inspect group/);
+    input('['); assert.match(dock.render(120).join('\n'), /> jobs/);
+    input(']'); input('\x1b[B'); input('\r');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(views, 1); assert.deepEqual(await snapshot(), before);
+    assert.ok(dock.render(120).every(line => !line.includes('> ')));
+    for (const budget of [1, 2, 3, 6, 12]) {
+      dock.bind(ctx, budget);
+      if (budget === 1) assert.match(dock.render(120).join('\n'), /Agents/, 'priority admits urgent content without moving sections');
+      input('\x1b[D');
+      for (const section of ['Tasks', 'Agents', 'Jobs']) {
+        for (const width of [40, 60, 120]) {
+          const lines = dock.render(width);
+          assert.ok(lines.length <= dock.budget() && lines.every(line => visibleWidth(line) <= width));
+          const positions = ['Tasks', 'Agents', 'Jobs'].map(label => lines.findIndex(line => line.includes(label))).filter(index => index >= 0);
+          assert.deepEqual(positions, [...positions].sort((a, b) => a - b), 'focus and priority never move source positions');
+          assert.ok(lines.some(line => line.includes(section) || line.includes('> ')), 'tiny budgets retain the selected source/object');
+          if (section === 'Tasks' && budget > 3) assert.match(lines.join('\n'), /Tasks.*read only/, 'compact key hints cannot erase the source/read-only heading');
+        }
+        input(']');
+      }
+      input('\x1b');
+    }
+  } finally {await h.dispose();}
+});
+
+test('Dock windows keep selected rows and place exact overflow gaps before, between and after siblings', () => {
+  const flat = Array.from({length: 12}, (_, index) => ({id: `row:${index}`, text: `row ${index}`, priority: index === 6 ? 100 : 1}));
+  for (const capacity of [1, 2, 3, 4, 6, 12]) for (const focus of flat) {
+    const window = dockWindow(flat, capacity, focus.id);
+    assert.ok(window.rows.length <= capacity);
+    assert.ok(window.rows.some(row => row.id === focus.id));
+    assert.equal(new Set(window.rows.map(row => row.id)).size, window.rows.length);
+    const actual = window.rows.filter(row => !row.id.startsWith('overflow:'));
+    assert.deepEqual(actual, [...actual].sort((a, b) => flat.indexOf(a) - flat.indexOf(b)));
+  }
+  const tail = dockWindow(flat, 6, flat.at(-1)!.id).rows;
+  assert.match(tail[0].text, /^↑ … \d+ more items$/);
+  assert.equal(tail.at(-1)!.id, flat.at(-1)!.id, 'no trailing overflow after the last object');
+  const middle = dockWindow(flat, 5, flat[6].id).rows;
+  assert.match(middle[0].text, /^↑/); assert.match(middle.at(-1)!.text, /^↓/);
+  const gaps = dockWindow(flat, 6).rows;
+  assert.ok(gaps.some(row => row.text.startsWith('↕')), 'disjoint priority membership labels its real interior gap');
+  const tree = Array.from({length: 4}, (_, group) => [
+    {id: `group:${group}`, text: `group ${group}`, priority: 1},
+    ...Array.from({length: 4}, (_, child) => ({id: `child:${group}:${child}`, parentId: `group:${group}`, text: `child ${child}`, priority: 2})),
+  ]).flat();
+  for (const capacity of [1, 2, 4, 8, 12]) for (const focus of tree) {
+    const window = dockWindow(tree, capacity, focus.id, 'groups');
+    assert.ok(window.rows.length <= capacity && window.rows.some(row => row.id === focus.id));
+    if (!window.compactHint) for (const row of window.rows) if (row.parentId) assert.ok(window.rows.some(parent => parent.id === row.parentId));
+  }
+  const lastChild = dockWindow(tree, 6, tree.at(-1)!.id, 'groups').rows;
+  assert.equal(lastChild.at(-1)!.id, tree.at(-1)!.id);
+  assert.ok(lastChild.some(row => /more groups/.test(row.text)));
+  assert.ok(lastChild.every(row => !/\p{Script=Han}/u.test(row.text)));
 });

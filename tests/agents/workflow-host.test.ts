@@ -5,7 +5,7 @@ import { stripVTControlCharacters } from 'node:util';
 import { dirname, join } from 'node:path';
 import { AgentSessionRuntime, type ExtensionAPI, type ExtensionContext, type ExtensionCommandContext, type ExtensionUIContext } from '@earendil-works/pi-coding-agent';
 import { fauxAssistantMessage, fauxToolCall, type JsonObject, type TranscriptContext } from '@earendil-works/pi-ai';
-import { visibleWidth } from '@earendil-works/pi-tui';
+import { getKeybindings, visibleWidth } from '@earendil-works/pi-tui';
 import { host } from '../support/host.ts';
 import { agentDir } from '../support/jobs.ts';
 import { terminal } from '../support/terminal.ts';
@@ -234,7 +234,7 @@ test('native workflow UI wraps phones, keeps exact phases and retains reader/sea
     let frames = 0, reader: unknown;
     task.status = 'running'; task.control = {pause() {}, resume() {}, isPaused: () => task.status === 'paused', skip: () => false, retry: () => false};
     const context = {...h.ctx, ui: {...h.ctx.ui, custom: async (factory: Function) => new Promise<void>(resolve => {
-      const frame = factory(terminal(), h.ctx.ui.theme, {}, resolve);
+      const frame = factory(terminal(), h.ctx.ui.theme, getKeybindings() as never, resolve);
       frame.render(40); frames++;
       if (frames === 1) {
         const available = () => frame.actions.filter((action: {available?: () => boolean}) => action.available?.() !== false).map((action: {label: string}) => action.label);
@@ -255,7 +255,7 @@ test('native workflow UI wraps phones, keeps exact phases and retains reader/sea
     const custom: ExtensionUIContext['custom'] = async factory => new Promise((resolve, reject) => {
       let dispose: (() => void) | undefined;
       const done = (value: unknown) => { dispose?.(); resolve(value as never); };
-      Promise.resolve(factory(terminal(), h.ctx.ui.theme, {} as never, done)).then(frame => {
+      Promise.resolve(factory(terminal(), h.ctx.ui.theme, getKeybindings() as never, done)).then(frame => {
         dispose = frame.dispose?.bind(frame);
         for (const width of [40, 60, 120]) assert.ok(frame.render(width).every(line => visibleWidth(line) <= width));
         if (browserPhase++ === 1) { assert.ok(frame instanceof DetailsView); frame.handleInput('\x1b'); return; }

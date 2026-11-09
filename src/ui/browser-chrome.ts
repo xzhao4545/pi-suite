@@ -14,14 +14,24 @@ const paint = (token: ThemeColor, text: string, theme?: Theme) => theme?.fg(toke
 const strong = (text: string, theme?: Theme) => theme?.bold(text) ?? text;
 /** Browser and detail roles live here so pages provide data, never ANSI or palette choices. */
 export const heading = (text: string, theme?: Theme) => paint('accent', strong(text, theme), theme);
+/** Focus decorates chrome only; record states and highlighted reader content keep their own palette. */
+export const focusLabel = (text: string, active: boolean, theme?: Theme) => active ? heading(`▸ ${text}`, theme) : paint('muted', `  ${text}`, theme);
+const focusRule = (text: string, active: boolean, theme?: Theme) => paint(active ? 'accent' : 'borderMuted', text, theme);
+const ruled = (text: string, width: number, active: boolean, theme?: Theme) => {
+  const caption = truncateToWidth(text, width), room = width - visibleWidth(caption);
+  return caption + (room > 1 ? focusRule(` ${'─'.repeat(room - 1)}`, active, theme) : ' '.repeat(room));
+};
+export const paneHeading = (text: string, width: number, active: boolean, theme?: Theme) => ruled(focusLabel(text, active, theme), width, active, theme);
 export const feedback = (text: string, error: boolean, theme?: Theme) => paint(error ? 'error' : 'muted', text, theme);
 export const newOutputHint = (theme?: Theme, compact = false) => compact ? `${paint('dim', '↓ ', theme)}${keyToken('End', theme)}`
   : `${paint('dim', '↓ new output · ', theme)}${keyHint('End', 'to follow', theme)}`;
 /** The title names what is being read; on narrow screens the new-output hint shrinks before the title disappears. */
-export function readerHeading(title: string, position: string, hasNewOutput: boolean, width: number, theme?: Theme): string {
+export function readerHeading(title: string, position: string, hasNewOutput: boolean, width: number, theme?: Theme, active?: boolean): string {
   const suffix = (compact: boolean) => `${paint('muted', ` · ${position}`, theme)}${hasNewOutput ? ` · ${newOutputHint(theme, compact)}` : ''}`;
   const tail = width - visibleWidth(suffix(false)) >= 16 ? suffix(false) : suffix(true);
-  return truncateToWidth(heading(truncateToWidth(title, Math.max(0, width - visibleWidth(tail))), theme) + tail, width);
+  const shownTitle = truncateToWidth(title, Math.max(0, width - visibleWidth(tail) - (active === undefined ? 0 : 2)));
+  const caption = (active === undefined ? heading(shownTitle, theme) : focusLabel(shownTitle, active, theme)) + tail;
+  return active === undefined ? truncateToWidth(caption, width) : ruled(caption, width, active, theme);
 }
 export const selectedTab = (text: string, theme?: Theme) => theme?.bg('selectedBg', strong(text, theme)) ?? text;
 export const keyToken = (key: string, theme?: Theme) => paint(key === 'x' ? 'error' : 'warning', strong(key, theme), theme);
@@ -30,9 +40,11 @@ export const confirmation = (key: string, action: string, theme?: Theme) =>
   `${paint(key === 'x' ? 'error' : 'warning', `Press ${keyToken(key, theme)} again to ${action}`, theme)} · ${paint('dim', 'any other key cancels', theme)}`;
 export const divider = (text: string, theme?: Theme) => paint('borderMuted', text, theme);
 export const separator = (width: number, theme?: Theme) => divider('─'.repeat(width), theme);
-export const selectedRow = (text: string, width: number, theme?: Theme) => {
-  const row = `${paint('accent', text.slice(0, 2), theme)}${text.slice(2)}${' '.repeat(Math.max(0, width - visibleWidth(text)))}`;
-  return theme?.bg('selectedBg', row) ?? row;
+export const selectedRow = (text: string, width: number, theme?: Theme, active = true) => {
+  const marker = paint(active ? 'accent' : 'muted', text.slice(0, 2), theme);
+  const row = `${marker}${text.slice(2)}${' '.repeat(Math.max(0, width - visibleWidth(text)))}`;
+  // An inactive selection still identifies the record, but cannot compete with the focused pane.
+  return active ? theme?.bg('selectedBg', strong(row, theme)) ?? row : row;
 };
 const stateTones: Record<string, ThemeColor> = { running: 'success', starting: 'success', waiting: 'warning', stopping: 'warning', queued: 'warning',
   failed: 'error', limited: 'error', timed_out: 'error', completed: 'dim', stopped: 'dim', doing: 'success', blocked: 'warning', done: 'dim',

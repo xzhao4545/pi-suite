@@ -10,10 +10,10 @@ function line(task: Pick<TaskView, 'id' | 'title' | 'parentId' | 'status'>): Too
 export const listRenderers = toolRenderers<{ state?: string; groupId?: string }, { tasks: TaskView[]; nextCursor?: string }>({
   call: () => ({ icon: '⟳', tone: 'accent', title: 'Tasks' }),
   collapsed({ tasks, nextCursor }, args) {
-    return { icon: '', title: '任务', summary: `${args.state ?? 'unfinished'}${args.groupId ? ` group ${args.groupId}` : ''} · ` +
-      `${tasks.filter(task => !task.parentId).length} 组 ${tasks.filter(task => task.parentId).length} 项 · ` +
-      `进行中 ${tasks.filter(task => task.status === 'doing').length} · 阻塞 ${tasks.filter(task => task.status === 'blocked').length} · 完成 ${tasks.filter(task => task.status === 'done').length}`,
-      meta: nextCursor ? ['有下一页'] : [] };
+    return { icon: '', title: 'Tasks', summary: `${args.state ?? 'unfinished'}${args.groupId ? ` group ${args.groupId}` : ''} · ` +
+      `${tasks.filter(task => !task.parentId).length} groups ${tasks.filter(task => task.parentId).length} items · ` +
+      `running ${tasks.filter(task => task.status === 'doing').length} · blocked ${tasks.filter(task => task.status === 'blocked').length} · completed ${tasks.filter(task => task.status === 'done').length}`,
+      meta: nextCursor ? ['next page available'] : [] };
   },
   expanded: ({ tasks, nextCursor }, _args, _text, theme) => [
     ...tasks.map(task => taskRow(task, theme) + (task.progress ? ` ${task.progress.done}/${task.progress.total}` : '')),
@@ -25,7 +25,7 @@ export const getRenderers = toolRenderers<{ id: string }, { task: TaskView }>({
   collapsed: ({ task }) => ({ ...line(task), meta: task.progress ? [`${task.progress.done}/${task.progress.total}`] : [] }),
 });
 export const editRenderers = toolRenderers<unknown, EditResult>({
-  call: () => ({ icon: '⟳', tone: 'accent', title: '正在更新任务…' }),
+  call: () => ({ icon: '⟳', tone: 'accent', title: 'Updating tasks…' }),
   collapsed(data) {
     const single = data.changes.length === 1 ? data.changes[0] : undefined;
     const counts = new Map<string, { groups: number; children: number }>();
@@ -34,11 +34,11 @@ export const editRenderers = toolRenderers<unknown, EditResult>({
       if (change.parentId) count.children++; else count.groups++;
       counts.set(action, count);
     }
-    const heading = single ? line({ ...single, status: single.after ?? single.before ?? 'todo' }) : { icon: '', title: '任务' };
-    if (single) heading.title += ` · ${receiptAction(single)}${single.fields?.blockedReason ? `：${single.fields.blockedReason}` : ''}`;
+    const heading = single ? line({ ...single, status: single.after ?? single.before ?? 'todo' }) : { icon: '', title: 'Tasks' };
+    if (single) heading.title += ` · ${receiptAction(single)}${single.fields?.blockedReason ? `: ${single.fields.blockedReason}` : ''}`;
     return { ...heading,
-      summary: single ? undefined : [...counts].map(([action, count]) => `${action}${count.groups ? ` ${count.groups} 组` : ''}${count.children ? ` ${count.children} 项` : ''}`).join(' · '),
-      meta: [...data.derived.length ? [`依赖变化 ${data.derived.length}`] : [],
+      summary: single ? undefined : [...counts].map(([action, count]) => `${action}${count.groups ? ` ${count.groups} groups` : ''}${count.children ? ` ${count.children} items` : ''}`).join(' · '),
+      meta: [...data.derived.length ? [`dependency changes ${data.derived.length}`] : [],
         ...data.warnings.length ? [{ text: `⚠ ${data.warnings.length}`, tone: 'warning' as const }] : []] };
   },
   expanded: (data, _args, _text, theme) => [

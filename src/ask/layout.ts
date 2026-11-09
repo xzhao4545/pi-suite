@@ -13,7 +13,7 @@ export function fold(lines: string[], width: number, cap: number, hint = ''): st
 }
 export function questionLines(question: Question, theme: Theme, width: number, cap: number, expanded: boolean): string[] {
   const lines = [...wrap(question.question, width), ...question.context ? wrap(question.context, width).map(line => theme.fg('muted', line)) : []];
-  return fold(lines, width, cap, expanded ? 'd 全文' : 'e 展开');
+  return fold(lines, width, cap, expanded ? 'd full text' : 'e expand');
 }
 export function choiceLines(theme: Theme, question: Question, draft: Draft, option: Option | undefined, focused: boolean,
   width: number, expanded: boolean, preview: boolean): string[] {

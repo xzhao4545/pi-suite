@@ -1,6 +1,9 @@
 import type { Component, TUI } from "@earendil-works/pi-tui";
 import { isKeyRelease, matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
+import { dockWindow } from './dock/rows.ts';
+
+const sourceOrder = ['goal', 'tasks', 'agents', 'jobs', 'workflows'];
 
 export interface DockRow {
   id: string; text: string; priority: number; suffix?: string; parentId?: string; selectable?: boolean;
@@ -16,6 +19,8 @@ export interface DockSource {
   footer?: () => string;
   progress?: () => number;
   open?: (rowId: string, ctx: ExtensionContext) => void | Promise<void>;
+  /** Read-only viewers participate in navigation without admitting mutation actions. */
+  readOnly?: boolean;
 }
 type Section = { id: string; source: DockSource; rows: DockRow[] };
 type Choice = { section: Section; row: DockRow };
@@ -61,7 +66,8 @@ export class Dock implements Component {
 
   private sections(): Section[] {
     return [...this.sources].map(([id, source]) => ({ id, source, rows: source.rows() })).filter(item => item.rows.length)
-      .sort((a, b) => Math.max(...b.rows.map(row => row.priority)) - Math.max(...a.rows.map(row => row.priority)));
+      .sort((a, b) => (sourceOrder.indexOf(a.id) < 0 ? sourceOrder.length : sourceOrder.indexOf(a.id))
+        - (sourceOrder.indexOf(b.id) < 0 ? sourceOrder.length : sourceOrder.indexOf(b.id)));
   }
   private choices(sections: Section[]): Choice[] {
     return sections.flatMap(section => section.source.open ? section.rows.filter(row => row.selectable !== false)
@@ -100,6 +106,13 @@ export class Dock implements Component {
       const next = choices[index]; this.selection = { sourceId: next.section.id, rowId: next.row.id, index };
       this.invalidate(); return { consume: true };
     }
+    if (matchesKey(data, '[') || matchesKey(data, ']')) {
+      const sections = [...new Set(choices.map(item => item.section.id))];
+      const sectionId = sections[(sections.indexOf(choice.section.id) + (matchesKey(data, '[') ? -1 : 1) + sections.length) % sections.length];
+      const index = choices.findIndex(item => item.section.id === sectionId), next = choices[index];
+      this.selection = {sourceId: sectionId, rowId: next.row.id, index};
+      this.invalidate(); return {consume: true};
+    }
     if (matchesKey(data, 'enter')) {
       this.deactivate();
       // Input listeners cannot await a reader. Report failures at this user boundary,
@@ -113,11 +126,12 @@ export class Dock implements Component {
     return back ? { consume: true } : undefined;
   }
   private highlight(text: string): string { return this.theme?.bold(this.color('accent', text)) ?? text; }
-  private header(source: DockSource, width: number, selecting = false): string {
-    const aside = source.aside?.() ?? '', space = Math.max(0, width - visibleWidth(aside) - Number(!!aside));
-    const fullHint = '← select · Enter open · Esc back';
-    const hint = selecting ? (!aside || visibleWidth(source.title) + 2 + visibleWidth(fullHint) <= space ? fullHint : '← Enter Esc') : '';
-    const title = hint ? truncateToWidth(this.title(source), Math.max(0, space - visibleWidth(hint) - 2), '…') : this.title(source);
+  private header(source: DockSource, width: number, selecting = false, compactHint = ''): string {
+    const aside = [compactHint, source.aside?.()].filter(Boolean).join(' · '), space = Math.max(0, width - visibleWidth(aside) - Number(!!aside));
+    const fullHint = `↑↓ select · [ ] section · Enter ${source.readOnly ? 'view' : 'open'} · Esc back`;
+    const label = this.title(source) + (selecting && source.readOnly ? this.color('dim', ' · read only') : '');
+    const hint = selecting ? (visibleWidth(label) + 2 + visibleWidth(fullHint) <= space ? fullHint : '[ ] Enter Esc') : '';
+    const title = hint ? truncateToWidth(label, Math.max(0, space - visibleWidth(hint) - 2), '…') : label;
     return this.row({id: 'header', priority: 0, text: title + (hint ? '  ' + this.color('dim', hint)
       : source.subtitle ? '  ' + this.color('dim', source.subtitle()) : ''), suffix: aside ? this.color('dim', aside) : undefined}, width);
   }
@@ -144,77 +158,47 @@ export class Dock implements Component {
   }
   private section(source: DockSource, rows: DockRow[], limit: number, width: number, selectedId?: string): string[] {
     const focus = rows.find(row => row.id === selectedId);
-    if (focus && (rows.length === 1 || limit <= 3)) {
-      // A compact section must show the selected object, not an unrelated aggregate.
-      // With only one budget row, shorten the hint instead of hiding the object.
-      const prefix = limit === 1 ? this.title(source) + ' Enter/Esc · > ' : '> ';
-      const line = this.highlight(prefix + this.row(focus, Math.max(0, width - visibleWidth(prefix))));
-      return limit === 1 ? [line] : [this.header(source, width, true), line];
+    if (focus && limit === 1) {
+      const index = rows.indexOf(focus);
+      const counts = [index ? `↑${index}` : '', rows.length - index - 1 ? `↓${rows.length - index - 1}` : ''].filter(Boolean).join(' ');
+      const title = this.title(source);
+      const full = title + ` [ ] Enter/Esc${counts ? ` ${counts}` : ''} · > `;
+      const prefix = visibleWidth(full) <= width - Math.min(8, visibleWidth(focus.text)) ? full
+        : truncateToWidth(title, Math.max(0, width - visibleWidth(` [ ] ${counts} > `) - 8)) + ` [ ] ${counts} > `;
+      return [truncateToWidth(this.highlight(prefix + this.row(focus, Math.max(0, width - visibleWidth(prefix)))), width)];
     }
     if (!focus && rows.length === 1 && source.aside?.() && limit >= 2) return [this.header(source, width), this.row(rows[0], width)];
-    if (rows.length === 1 || limit <= 2) return [this.summary(source, rows, width)];
-    const ids = new Set<string>(), byId = new Map(rows.map(row => [row.id, row]));
-    const roots = rows.filter(row => !row.parentId), children = new Map<string, DockRow[]>();
-    for (const row of rows) if (row.parentId) {
-      const items = children.get(row.parentId) ?? []; items.push(row); children.set(row.parentId, items);
-    }
-    const selected = (): DockRow[] => {
-      const result: DockRow[] = [];
-      const append = (items: DockRow[], parentId?: string): void => {
-        const hidden = items.filter(row => !ids.has(row.id));
-        // An overflow row costs the same as one hidden item; show that item instead.
-        const showLast = hidden.length === 1;
-        for (const row of items) if (ids.has(row.id) || showLast) {
-          result.push(row);
-          if (!row.parentId) append(children.get(row.id) ?? [], row.id);
-        }
-        if (hidden.length > 1) result.push({ id: `overflow:${parentId ?? ''}`, parentId, priority: 0,
-          text: this.color('muted', `… 还有 ${hidden.length} ${!parentId && source.title === 'Tasks' ? '组' : '项'}`) });
-      };
-      append(roots);
-      return result;
-    };
-    // Priority chooses membership only; source order remains the reading order.
-    for (const row of [...rows].sort((a, b) => Number(b.id === selectedId) - Number(a.id === selectedId) || b.priority - a.priority)) {
-      const parent = row.parentId ? byId.get(row.parentId) : undefined;
-      if (row.parentId && !parent) continue;
-      const added = [parent, row].filter((item): item is DockRow => !!item && !ids.has(item.id));
-      added.forEach(item => ids.add(item.id));
-      const count = selected().length + 2;
-      if (count > limit) added.forEach(item => ids.delete(item.id));
-      else if (count === limit) break;
-    }
-    const shown = ids.size ? selected() : [{ id: 'summary', priority: 0,
-      text: source.summary?.() ?? this.row([...rows].sort((a, b) => b.priority - a.priority)[0], width) }];
-    const tree = width >= 40;
-    const ratio = source.progress?.() ?? 0;
+    if (!focus && (rows.length === 1 || limit <= 3)) return [this.summary(source, rows, width)];
+    const tail = limit >= 4 ? 1 : 0;
+    const window = dockWindow(rows, limit - 1 - tail, selectedId, source.title === 'Tasks' ? 'groups' : 'items');
+    const shown = window.rows.length ? window.rows : [{id: 'summary', priority: 0, text: source.summary?.() ?? this.row(rows[0], width)}];
+    const tree = width >= 40, ratio = source.progress?.() ?? 0;
     const branch = (text: string, index: number): string => this.color(index < Math.round((shown.length + 1) * ratio) ? 'accent' : 'borderMuted', text);
-    return [this.header(source, width, !!focus),
+    return [this.header(source, width, !!focus, window.compactHint),
       ...shown.map((row, index) => {
         const selected = row.id === selectedId;
         const prefix = selected ? '> ' : tree ? branch(row.parentId ? '│    ' : '├─ ', index) : '';
-        const line = prefix + this.row(row, Math.max(0, width - visibleWidth(prefix)));
-        return selected ? this.highlight(line) : line;
-      }), truncateToWidth((tree ? branch('└─────', shown.length) : '') + (source.footer?.() ? ' ' + this.color('dim', source.footer!()) : ''), width)];
+        const text = row.id.startsWith('overflow:') ? this.color('muted', this.row(row, Math.max(0, width - visibleWidth(prefix))))
+          : this.row(row, Math.max(0, width - visibleWidth(prefix)));
+        return selected ? this.highlight(prefix + text) : prefix + text;
+      }), ...tail ? [truncateToWidth((tree ? branch('└─────', shown.length) : '')
+        + (source.footer?.() ? ' ' + this.color('dim', source.footer!()) : ''), width)] : []];
   }
   render(width: number): string[] {
     if (this.ask || this.detail) return [];
     const limit = this.budget();
+    if (!limit) return [];
     const sources = this.sections();
     const choice = this.active ? this.reconcile(this.choices(sources)) : undefined;
-    // Pin only while selecting so keyboard navigation never opens an invisible row;
-    // idle priority and the height budget remain unchanged.
-    if (choice) sources.sort((a, b) => Number(b.id === choice.section.id) - Number(a.id === choice.section.id));
-    const lines: string[] = [];
-    for (const [index, {id, source, rows}] of sources.entries()) {
-      const remaining = limit - lines.length;
-      if (remaining <= 0) break;
-      // Reserve one summary per lower-priority section while there is room.
-      const selectedId = choice?.section.id === id ? choice.row.id : undefined;
-      const allowance = Math.max(selectedId ? Math.min(2, remaining) : 1, remaining - (sources.length - index - 1));
-      lines.push(...this.section(source, rows, allowance, width, selectedId));
-    }
-    return lines;
+    // Priority decides scarce membership and extra rows, never source position. Active
+    // selection wins admission so Enter cannot open an object cropped out of the Dock.
+    const ranked = [...sources].sort((a, b) => Number(b.id === choice?.section.id) - Number(a.id === choice?.section.id)
+      || Math.max(...b.rows.map(row => row.priority)) - Math.max(...a.rows.map(row => row.priority)));
+    const allowances = new Map(ranked.slice(0, limit).map(section => [section.id, 1]));
+    const recipient = ranked[0]?.id;
+    if (recipient) allowances.set(recipient, allowances.get(recipient)! + Math.max(0, limit - allowances.size));
+    return sources.flatMap(({id, source, rows}) => allowances.has(id) ? this.section(source, rows, allowances.get(id)!, width,
+      choice?.section.id === id ? choice.row.id : undefined) : []);
   }
   invalidate(): void { this.tui?.requestRender(); }
 }

@@ -12,7 +12,12 @@ const fields = {
 };
 export const askSchema = Type.Object({
   question: Type.Optional(Type.String({ minLength: 1 })), ...fields,
-  questions: Type.Optional(Type.Array(Type.Object({ question: Type.String({ minLength: 1 }), ...fields }, { additionalProperties: false }), { minItems: 2, maxItems: 4 })),
+  questions: Type.Optional(Type.Array(Type.Object({
+    question: Type.String({ minLength: 1 }),
+    title: Type.Optional(Type.String({ minLength: 1, maxLength: 60,
+      description: "Concise tab title, e.g. 'Scope' or 'Database'. Omit to derive a short title from question; the full question stays in the body." })),
+    ...fields,
+  }, { additionalProperties: false }), { minItems: 2, maxItems: 4 })),
   allowComment: Type.Optional(Type.Boolean()),
   timeoutMs: Type.Optional(Type.Integer({ minimum: 0, maximum: 2147483647,
     description: "Milliseconds of user inactivity before expiry. Omit for configured default (600000); 0 disables expiry. On expiry each question submits the user's current draft, else recommended options, else the first option." })),

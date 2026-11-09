@@ -14,10 +14,12 @@ import { getAgentDir } from '@earendil-works/pi-coding-agent';
 
 export async function chooseModelSettings(ctx: ExtensionContext, title: string, initial: ModelOverrides, inherited: () => Model<any> | undefined): Promise<ModelOverrides | undefined> {
   const available = ctx.modelRegistry.getAvailable().sort((a, b) => `${a.provider}/${a.id}`.localeCompare(`${b.provider}/${b.id}`));
-  // ModelSelector requires ModelRuntime and has no "no override" entry. The shared native
-  // SelectList retains identities and paging without another private SDK bridge or scoped filter.
-  const values = ['', ...available.map(model => `${model.provider}/${model.id}`)];
-  const selected = await selectValue(ctx, `${title} · Model`, values.map(value => ({ value, label: value || 'No override' })), initial.model ?? '');
+  // ModelSelector needs the host's private ModelRuntime and cannot represent clearing an
+  // override. Reuse the shared native fuzzy picker without changing the main session model.
+  const items = [{ value: '', label: 'No override' }, ...available.map(model => ({
+    value: `${model.provider}/${model.id}`, label: `${model.provider}/${model.id}`, description: model.name,
+  }))];
+  const selected = await selectValue(ctx, `${title} · Model`, items, initial.model ?? '', { filter: true });
   if (selected === undefined) return;
   const model = selected || undefined;
   const effective = model ? resolveModel(ctx, model, title) : inherited();

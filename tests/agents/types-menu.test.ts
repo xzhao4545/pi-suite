@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import { fauxAssistantMessage, fauxProvider, fauxToolCall } from '@earendil-works/pi-ai';
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext, ExtensionUIContext } from '@earendil-works/pi-coding-agent';
-import { CombinedAutocompleteProvider, visibleWidth } from '@earendil-works/pi-tui';
+import { CombinedAutocompleteProvider, getKeybindings, visibleWidth } from '@earendil-works/pi-tui';
 import { host } from '../support/host.ts';
 import { agentDir } from '../support/jobs.ts';
 import { terminal } from '../support/terminal.ts';
@@ -27,7 +27,7 @@ function definition(root: string, name: string, enabled: boolean) {
 /** Select native rows by their full identity while checking both phone and desktop widths. */
 function picker(ctx: ExtensionContext, choices: (string | undefined)[]): ExtensionContext {
   const custom: ExtensionUIContext['custom'] = async factory => new Promise((resolve, reject) => {
-    Promise.resolve(factory(terminal(), ctx.ui.theme, {} as never, resolve)).then(view => {
+    Promise.resolve(factory(terminal(), ctx.ui.theme, getKeybindings() as never, resolve)).then(view => {
       for (const width of [40, 120]) assert.ok(view.render(width).every(line => visibleWidth(line) <= width));
       const choice = choices.shift();
       if (choice === undefined) { view.handleInput?.('\x1b'); return; }

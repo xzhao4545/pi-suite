@@ -65,7 +65,7 @@ Runs · This session · Active · 0/0
 
 - src/ui/browser.ts、src/ui/browser-chrome.ts、src/ui/actions.ts、src/ui/details.ts（按键颜色复用）
 - src/agents/ui/index.ts、src/agents/ui/runs.ts、src/jobs/viewer.ts（State 与排序）及其他 BrowserView 使用者（只接入公共角色）
-- 相关 current 文档：[agents 操作](../current/agents/operations.md)、[jobs](../current/jobs/index.md)、[ui](../current/ui/index.md)
+- 相关 current 文档：[agents 操作](../../../current/agents/operations.md)、[jobs](../../../current/jobs/index.md)、[ui](../../../current/ui/index.md)
 
 ## 验收
 

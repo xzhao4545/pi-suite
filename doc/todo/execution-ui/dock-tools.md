@@ -2,21 +2,27 @@
 
 ## 当前实现与根因
 
-- `src/ui/dock.ts` 的 `sections()` 按分区最高 priority 排序；`render()` 在选择激活时再把选中分区置顶。显示顺序与键盘遍历因此随状态和选择发生变化。
+- `src/ui/dock.ts` 已使用集中声明的 `sourceOrder` 固定 Goal → Tasks → Agents → Jobs → Workflows；`render()` 先按激活选择和 priority 分配预算，再按固定顺序输出，不把选中分区置顶。顺序与同序遍历已形成基线，不再是待修复根因。
+- `DockSource.readOnly`、Tasks 的 `showTask()` 和 `src/runtime/suite.ts` 的任务打开入口已接通；可见组与子任务可通过 ↑↓ 选择、Enter 只读查看，`[`/`]` 在 Dock 激活态循环切换可选分区。
+- `src/ui/dock/rows.ts` 的 `dockWindow()` 已按真实兄弟位置生成 `↑/↓/↕ … N more items/groups`，微小预算保留选中对象并把上下隐藏数放入标题；这套预算与稳定身份能力应直接复用。
 - `src/jobs/index.ts` 的 `refresh()` 拼接 `job <短 ID> <名称>`，并按 `selectedJob` 直接在文本前追加 `> `。Dock 自身也维护选择并绘制 `>`，形成两套可见选择状态。
-- BrowserView 通过 `src/ui/browser-chrome.ts` 应用记录状态颜色，DockRow 尚未携带统一状态角色。Agents 的 `waiting(parent)`、Job 的 cleanup 也需要明确的显示状态。
-- `src/ui/tool-render.ts` 设置 `renderShell: 'self'`，绕过 Pi 默认工具背景，但自身只返回带 outputPad 的文本，没有执行外框。展开路径主要使用无颜色 Text，领域 renderer 返回的普通字符串没有统一语义高亮。
+- BrowserView 已通过 `src/ui/browser-chrome.ts` 应用记录状态色和焦点角色：活动区域有 `▸`、accent 与粗体，离开列表时移除选中背景但保留记录颜色。DockRow 仍只有文本、后缀与 priority，没有共享状态角色；Dock 的 `highlight()` 仍采用整行 accent，没有统一选中背景。Agents 的 `waiting(parent)`、Job 的 cleanup 也需要明确的显示状态。
+- `src/ui/tool-render.ts` 设置 `renderShell: 'self'`，绕过 Pi 默认工具背景，自身只返回带 outputPad 的文本，没有执行外框。ToolLine 已支持 tone、meta 和删除线，`ToolView.expanded()` 仍只返回字符串数组；部分领域 renderer 已染色，但普通字段、命令、JSON 和错误全文没有统一展开高亮。调用/结果通过 `ctx.state.finished` 合并的机制已存在，应保留。
 
 ## 1. Dock 固定顺序、名称与配色
 
 ### 分区与导航顺序
 
+本节的固定顺序、预算和导航已实现；剩余工作是 Job 名称、状态角色及领域选择状态统一。后续修改以以下现有契约为约束：
+
 - Tasks、Agents、Jobs 固定为 **Tasks → Agents → Jobs**；任何状态变化、刷新和键盘选择都不得改变三者相对位置。
-- 扩展 DockSource 的固定顺序声明，在注册来源处给出明确顺序。Goal 的独立 Dock 摘要放在这三类之前，Workflows 的独立分区放在三类之后；两者不插入这三类之间。
-- priority 仅用于决定保留哪些对象行、父子连带保留和必要详情预算，不用于分区排序。
-- 进入选择时不将选中分区置顶。可选行使用同一固定分区序列和来源内部顺序遍历；数量摘要不参与选择，Tasks 常驻摘要仍按其现有可打开能力决定是否参与。
-- 高度足够时为非空分区保留至少一条摘要，再给选中对象分配可见空间。高度不足以容纳全部分区时，使用保持相对顺序的可见窗口，保证所选对象可见；不能为避免裁剪而倒置分区，也不能允许 Enter 打开不可见对象。
+- 固定顺序由 Dock 的 `sourceOrder` 集中声明，Goal 在三类之前，Workflows 在三类之后；不再要求为此新增 DockSource 排序字段或在各来源建立另一套排序配置。
+- priority 用于决定预算不足时保留哪些分区/对象、父子连带保留和必要详情预算；被保留分区仍按固定顺序输出。
+- 进入选择时不将选中分区置顶。可选行使用同一固定分区序列和来源内部顺序遍历；数量摘要不参与，Tasks 的真实组/子项已通过 `readOnly: true` 参与选择。Enter 只查看任务，不修改状态、依赖、执行引用或焦点组。
+- 空主编辑器按 ← 进入，↑↓ 逐行移动，`[`/`]` 循环切换有实际可选对象的分区并定位该分区首项；Dock 不在普通编辑、补全、Ask 或详情拥有焦点时拦截这些字符。
+- 高度足够时为非空分区保留至少一条摘要，再给激活选择或最高优先级分区分配剩余空间。高度不足时先决定保留成员，再按固定相对顺序输出，保证所选对象可见；不要求连续截取分区窗口，也不能允许 Enter 打开不可见对象。
 - 对象刷新、同名、截断和移除时仍按 sourceId + rowId 协调选择。不会因为名称变化跳到另一个对象。
+- 保留 `dockWindow()` 的首/中/尾隐藏提示与父子窗口，组和子项分别计数，单项同成本时直接显示；标题/尾线计入预算，极小预算使用选中行与 `↑N ↓N`，不为状态着色重新裁剪一套列表。
 
 ### Job 名称
 
@@ -28,7 +34,7 @@
 
 ### 状态角色
 
-DockRow 携带状态或语义角色，统一在共享 UI 层着色。领域模块提供字面量数据，不将主题 ANSI 写入状态快照。
+后续扩展 DockRow 的状态或语义字段，复用 `browser-chrome.ts` 已有状态角色与选中样式能力，不另建 Dock 专属状态色表；补齐 waiting(parent) 与 cleanup 的语义。领域模块提供字面量数据，已有 Tasks 的状态色和完成删除线需保持，不将主题 ANSI 写入状态快照。
 
 | 状态 | Pi 主题角色 |
 | --- | --- |
@@ -64,7 +70,7 @@ DockRow 携带状态或语义角色，统一在共享 UI 层着色。领域模�
 | 明确类型的命令、代码、JSON | Pi 原生语言高亮 |
 | 原生 read/write 代码、edit diff | 保留原生 renderer 的高亮与差异呈现 |
 
-- 扩展 ToolView 的展开表达能力，允许结构化行或原生 Component，避免把所有字段和正文拼成失去角色的字符串。
+- 复用现有 ToolLine 的 tone/meta/strike 表达能力，扩展 ToolView 的展开结果，使其支持结构化行或原生 Component；普通字符串继续用于字面量正文，不把现有已高亮任务行退化成无角色文本。
 - 调用、折叠、展开和错误使用同一语义角色。展开内容保留主要对象与状态概览，正文不会因展开失去高亮。
 - 只有明确标注语言或可依据真实文件路径确定语言的内容才进行语法高亮；普通日志和任意工具正文不强行识别成 Markdown/代码。
 - 先清理不可信内容，再生成可信样式。不在染色后执行会剥离 ANSI 的 sanitize；进程控制序列只在终端模型中解释，不能直接注入主会话工具显示。
@@ -73,11 +79,13 @@ DockRow 携带状态或语义角色，统一在共享 UI 层着色。领域模�
 
 ## 4. 选择状态与残留标记
 
+Dock 已将 `selection` 身份与 `active` 分开；Enter、Esc/→、Ask/详情占用焦点和 bind/detach 会结束激活选择，同一绑定内可记住上次对象。Job 返回后的残留不能因此标记为已修复：JobsModule 仍按 `selectedJob` 拼接文本级 `>`，AgentsModule 的 `selectedRun` 和 JobsModule 的 `selectedJob` 仍给予最近查看对象优先级。剩余工作针对领域显示与引用，不重复实现 Dock 的身份协调。
+
 - 可见 `>` 与选中背景只由 Dock 管理，移除 JobsModule 的文本级选中标记。
 - 将“记住最近查看对象”与“当前选择激活”分开。可记住上次对象身份，但关闭查看器后常驻行不得继续显示选中标记或选中背景。
 - Agents/Jobs 的最近查看引用不再永久提高常驻优先级。必要的选中行优先保留由激活中的 Dock 负责，不由领域状态长期持有。
 - Enter 打开、Esc/→ 退出选择、详情关闭、双左退出以及会话 bind/detach 都走统一状态更新。异常关闭也不能遗留可见选择状态。
-- 检查 Dock 的 ask/detail 隐藏与恢复路径，确保重新显示时 active 为 false；后续再次按左可定位上次仍存在的对象。
+- 保持 Dock 的 ask/detail 隐藏与恢复路径在重新显示时 active 为 false；后续再次按左可定位上次仍存在的对象。Tasks 只读查看和方括号切换也遵守这一生命周期。
 
 ## 5. 共享命令高亮与 Suite 配置
 
@@ -91,6 +99,8 @@ DockRow 携带状态或语义角色，统一在共享 UI 层着色。领域模�
 使用 Pi 现有语言高亮及真实 shell 语言信息，区分字符串、变量、选项、管道、重定向、注释和多行结构，不用整行单色冒充语法高亮。不执行命令来取得高亮信息，也不改变命令原文。用户 `!`/`!!` 的 BashExecutionComponent 不属于本次内置模型工具配置范围。
 
 ### 配置契约
+
+该字段尚不存在：当前 `configSchema`、`SuiteConfig.ui` 和 defaults 的 ui 仅定义 `maxRows`。下面是后续拟新增契约，不是当前可使用的配置：
 
 ```json
 {
@@ -109,13 +119,13 @@ DockRow 携带状态或语义角色，统一在共享 UI 层着色。领域模�
 
 ## 影响范围
 
-`src/ui/dock.ts`、`src/ui/status.ts`、`src/ui/browser-chrome.ts`、`src/ui/frame.ts`、`src/ui/tool-render.ts`、`src/ui/transcript.ts`，以及 agents/jobs 的行数据与工具 renderers、`src/runtime/renderers.ts`、`src/runtime/tools.ts`、`src/runtime/config.ts` 和设置入口。
+`src/ui/dock.ts`、`src/ui/dock/rows.ts`、`src/ui/status.ts`、`src/ui/browser-chrome.ts`、`src/ui/frame.ts`、`src/ui/tool-render.ts`、`src/ui/transcript.ts`，以及 agents/jobs 的行数据与工具 renderers、`src/runtime/renderers.ts`、`src/runtime/tools.ts`、`src/runtime/config.ts` 和设置入口。
 
 新增能力按 UI 展示/渲染职责分组；`src/ui` 已有较多文件，不继续在其根目录平摊新增文件，应结合本专项评估以 dock、rendering 或 viewer 子目录组织，保留模块边界。
 
 ## 验收
 
-- Tasks/Agents/Jobs 同时存在，分别出现 waiting、failed、stopping、cleanup 和普通活动；刷新、左键进入、跨分区移动时顺序不变，所选对象始终可见。
+- Tasks/Agents/Jobs 同时存在，分别出现 waiting、failed、stopping、cleanup 和普通活动；刷新、左键进入、↑↓ 与 `[`/`]` 跨分区移动时顺序不变。Tasks 仍只读，首/中/尾折叠位置与数量正确，极小预算下所选对象始终可见。
 - 同名 Job、中文名称、超长名称和极小预算下，不显示机器 ID、不选择错误对象。状态颜色在普通、选中、紧凑和标题计数场景一致。
 - 从 Dock 与 `/jobs` 打开 Job，Esc 返回后无残留 `>` 或选中背景；重新选择仍可定位有效对象。
 - 代表性 Suite 工具在调用、部分结果、最终成功、错误与展开中仅有一套外框；主会话和 child Transcript 一致，敏感输入不泄露。
@@ -124,7 +134,8 @@ DockRow 携带状态或语义角色，统一在共享 UI 层着色。领域模�
 
 ## 任务
 
-- [ ] Dock 固定分区顺序、可见预算与同序键盘选择
+- [x] Dock 固定分区顺序、可见预算与同序键盘选择
+- [x] Tasks 组/子项只读查看、方括号分区切换、双向/间隙折叠与紧凑预算
 - [ ] Job 人类浏览名称精简及 Dock/Browser 统一状态角色
 - [ ] 可见选择状态归一化，清除领域文本 `>` 与持久选中优先级
 - [ ] 公共工具执行外框与调用/结果合并显示

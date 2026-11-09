@@ -1,10 +1,11 @@
 import type { ExtensionAPI, ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { truncateToWidth, type TUI } from '@earendil-works/pi-tui';
 import { BrowserView, browseState } from '../ui/browser.ts';
+import { showDetails } from '../ui/details.ts';
 import type { Dock } from '../ui/dock.ts';
 import type { Notifications } from '../runtime/notifications.ts';
 import type { TasksModule } from './index.ts';
-import { queryTasks, taskDetails, type TaskFilter } from './query.ts';
+import { queryTasks, taskDetails, taskTitle, type TaskFilter } from './query.ts';
 import { taskViews } from './model.ts';
 import { taskRow } from './presentation.ts';
 import type { TaskData, TaskView } from './types.ts';
@@ -35,6 +36,12 @@ export class TaskBrowserView extends BrowserView {
           details: () => taskDetails(task, views).join('\n') }));
       } }, done, theme);
   }
+}
+
+/** Dock opens a read-only task receipt; selection never edits or changes task status. */
+export async function showTask(ctx: ExtensionContext, tasks: TasksModule, dock: Dock, id: string): Promise<void> {
+  const {task, views} = await tasks.get(ctx, id);
+  await showDetails(ctx, dock, `Tasks ▸ ${taskTitle(task)} · read only`, taskDetails(task, views).join('\n'), 'text');
 }
 
 export function registerTasksCommand(pi: ExtensionAPI, tasks: TasksModule, dock: Dock, notifications: Notifications): void {

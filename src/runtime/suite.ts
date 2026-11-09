@@ -35,7 +35,14 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
   const status = new StatusPublisher(dock);
   const notifications = new Notifications(pi, binding);
   const tasks = config.modules.tasks ? new taskApi![0].TasksModule(binding, dock) : undefined;
-  if (tasks) { taskApi![1].registerTaskTools(pi, tasks); taskApi![2].registerTasksCommand(pi, tasks, dock, notifications); tasks.registerReminders(pi, () => config); }
+  if (tasks) {
+    taskApi![1].registerTaskTools(pi, tasks); taskApi![2].registerTasksCommand(pi, tasks, dock, notifications); tasks.registerReminders(pi, () => config);
+    dock.setOpen('tasks', async (rowId, ctx) => {
+      const release = notifications.hold();
+      try { await taskApi![2].showTask(ctx, tasks, dock, rowId.slice('task:'.length)); }
+      finally { release(); }
+    });
+  }
   const waits = new WaitRegistry();
   const goal = config.modules.goal ? new goalApi![0].GoalManager(pi, binding, notifications, status, waits) : undefined;
   const ask = config.modules.ask ? new AskManager(binding, notifications, dock, (status, ctx) => goal?.askResult(status, ctx)) : undefined;
