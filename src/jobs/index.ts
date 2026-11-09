@@ -1,10 +1,11 @@
-import { stripVTControlCharacters } from 'node:util';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { getAgentDir } from '@earendil-works/pi-coding-agent';
 import type { SessionBinding } from '../runtime/binding.ts';
 import type { Notifications } from '../runtime/notifications.ts';
 import type { Settlement, Waitable } from '../runtime/wait.ts';
 import type { StatusPublisher } from '../ui/status.ts';
+import type { DisplayField } from '../ui/browser-chrome.ts';
+import { jobName } from './launch/name.ts';
 import { isActive, isTerminal } from './state.ts';
 import { acquireRuntime, quitRuntime, type RuntimeHandle } from './runtime.ts';
 import type { JobManager } from './manager.ts';
@@ -16,9 +17,32 @@ import type { JobControl } from './control.ts';
 import { listJobs, selectJobRows, type ListQuery, type ListRow, type SessionScope } from './query.ts';
 
 export function displayName(job: JobSummary): string {
-  return stripVTControlCharacters(job.name).replace(/[\x00-\x1f\x7f-\x9f]/g, ' ').trim() || job.id;
+  return jobName({name: job.name, command: job.command, monitor: job.monitor?.config});
 }
 function seconds(ms: number | undefined): string { return ms === undefined ? '' : `${(ms / 1000).toFixed(1)}s`; }
+/** Human browsing fields are separate from summaryLine's machine-addressable tool protocol. */
+export function jobStatus(job: JobSummary): DisplayField[] {
+  const fields: DisplayField[] = [{text: job.state, state: job.state}];
+  const add = (text: string, state?: string) => fields.push({text: ' · ', tone: 'dim'}, {text, ...(state ? {state} : {tone: 'dim' as const})});
+  if (job.exitCode !== null) add(`exit ${job.exitCode}`);
+  else if (job.signal) add(`signal ${job.signal}`);
+  if (job.elapsedMs !== undefined) add(seconds(job.elapsedMs));
+  add(job.mode);
+  if (job.cleanup.state === 'pending' || job.cleanup.state === 'unconfirmed') {
+    const cleanup = `cleanup ${job.cleanup.state}`; add(cleanup, cleanup);
+  }
+  if (job.monitor?.events) add(`events ${job.monitor.events}`);
+  return fields;
+}
+export function jobCompactStatus(job: JobSummary): DisplayField[][] {
+  const state = {text: job.state, state: job.state};
+  const warning = {text: `cleanup ${job.cleanup.state}`, state: `cleanup ${job.cleanup.state}`};
+  return job.cleanup.state === 'pending' || job.cleanup.state === 'unconfirmed'
+    ? [[state, {text: ' · ', tone: 'dim'}, warning], [warning]] : [[state]];
+}
+export function jobLabel(job: JobSummary): DisplayField[] {
+  return [{text: displayName(job)}, {text: ' · ', tone: 'dim'}, ...jobStatus(job)];
+}
 /** First line of every job result: `job_3fa1c2d0 completed · exit 0 · 12.4s · pipe`. */
 export function summaryLine(job: JobSummary): string {
   const parts = [`${job.id} ${job.state}`];
@@ -64,7 +88,6 @@ export class JobsModule implements Waitable {
   /** Monitor event count already handed to Notifications per job; a higher count re-enqueues. */
   private queuedEvents = new Map<string, number>();
   private queuedUpdates = new Map<string, number>();
-  private selectedJob?: string;
 
   constructor(private pi: ExtensionAPI, private binding: SessionBinding, private notifications: Notifications, private status: StatusPublisher,
     private creatorRoots: () => string[] = () => []) {}
@@ -90,7 +113,7 @@ export class JobsModule implements Waitable {
   sessionJobs(sessionId: string): JobSummary[] {
     const handle = this.runtime();
     if (handle.mode === 'active') return handle.manager.sessionJobs(sessionId);
-    if (handle.mode === 'restricted' && handle.control.version === 3) return handle.control.jobs.sessionJobs(sessionId);
+    if (handle.mode === 'restricted' && (handle.control.version === 3 || handle.control.version === 4)) return handle.control.jobs.sessionJobs(sessionId);
     throw new ToolError('RUNTIME_UNAVAILABLE', handle.mode === 'unavailable' ? handle.reason
       : `This jobs owner uses control bridge v${handle.control.version}; complete session queries require v3. Workspace history reads, stop and quit remain available`);
   }
@@ -123,11 +146,10 @@ export class JobsModule implements Waitable {
     return selectJobRows(loaded, { ...query, sessionId: ctx.sessionManager.getSessionId() }, current);
   }
   get executionAvailable(): boolean { return this.runtime().mode === 'active'; }
-  selectJob(id: string): void { this.selectedJob = id; this.refresh(); }
   bind(): void {
     this.detach();
     const handle = this.runtime();
-    if (handle.mode !== 'active') this.binding.current?.ctx.ui.notify(handle.reason + (handle.mode === 'restricted' && handle.control.version !== 3
+    if (handle.mode !== 'active') this.binding.current?.ctx.ui.notify(handle.reason + (handle.mode === 'restricted' && handle.control.version < 3
       ? '. Status shows direct jobs on this branch only; complete session lists and child job aggregation require control bridge v3' : ''), 'warning');
     if (handle.mode === 'unavailable') return;
     this.unsubscribe = this.control().subscribe(() => this.refresh());
@@ -142,7 +164,6 @@ export class JobsModule implements Waitable {
       for (const id of this.queuedUpdates.keys()) this.notifications.cancel(current.sessionId, `job:${id}:update`);
     }
     this.queued.clear(); this.queuedEvents.clear(); this.queuedUpdates.clear();
-    this.selectedJob = undefined;
     this.status.setActivities('jobs', []);
   }
   /** reload/new/resume/fork only detach; quit applies the stop-all policy. */
@@ -177,16 +198,14 @@ export class JobsModule implements Waitable {
   private refresh(): void {
     const current = this.binding.current;
     if (!this.handle || this.handle.mode === 'unavailable' || !current) return;
-    const scope = this.sessionScope(current.ctx, this.handle.mode === 'restricted' && this.handle.control.version !== 3);
+    const scope = this.sessionScope(current.ctx, this.handle.mode === 'restricted' && this.handle.control.version < 3);
     const jobs = [...new Map(scope.jobs().filter(scope.visible).map(job => [job.id, job])).values()];
     this.status.setActivities('jobs', jobs.filter(isActive).map(job => job.id), jobs.flatMap(job => {
       const cleanup = job.cleanup.state === 'pending' || job.cleanup.state === 'unconfirmed';
       const failed = (job.state === 'failed' || job.state === 'timed_out') && !job.notified;
       if (!isActive(job) && !cleanup && !failed) return [];
-      const selected = job.id === this.selectedJob;
-      return [{ id: job.id, text: `${selected ? '> ' : ''}job ${job.id.slice(-8)} ${displayName(job)}`,
-        suffix: cleanup ? `cleanup ${job.cleanup.state}` : job.state,
-        priority: cleanup ? 100 : failed ? 80 : job.state === 'stopping' ? 75 : selected ? 65 : 20 }];
+      return [{ id: job.id, text: displayName(job), suffix: jobStatus(job), compactSuffixes: jobCompactStatus(job),
+        priority: cleanup ? 100 : failed ? 80 : job.state === 'stopping' ? 75 : 20 }];
     }));
     if (this.handle.mode === 'restricted') return;
     const manager = this.handle.manager;

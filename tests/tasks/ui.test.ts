@@ -11,6 +11,7 @@ import { SessionBinding } from '../../src/runtime/binding.ts';
 import { TasksModule } from '../../src/tasks/index.ts';
 import { TaskBrowserView } from '../../src/tasks/viewer.ts';
 import { terminal } from '../support/terminal.ts';
+import { displayText } from '../../src/ui/browser-chrome.ts';
 
 test('task dock and live browser share committed status; important children keep parents within phone budget', async t => {
   const root = mkdtempSync(join(tmpdir(), 'pi-suite-tasks-ui-')), tui = terminal(), dock = new Dock(), binding = new SessionBinding();
@@ -22,7 +23,7 @@ test('task dock and live browser share committed status; important children keep
   const view = new TaskBrowserView(tui, () => tasks.current(ctx), () => {}, undefined, 'all', refresh => tasks.subscribe(ctx, refresh));
   try {
     const empty = view.render(120).map(stripVTControlCharacters);
-    assert.match(empty.at(-3)!, /g group.*s state.*\/ filter.*Tab details.*Esc close/);
+    for (const hint of ['g group', 's state', '/ filter', 'Tab details', 'Esc close']) assert.ok(empty.at(-3)!.includes(hint));
     assert.match(empty.at(-2)!, /No tasks · press s for Unfinished/);
     await tasks.edit(ctx, [{ op: 'add', title: '中文长标题'.repeat(30), children: ['执行'.repeat(40), '验收'] },
       {op: 'add', title: 'Blocked group', children: ['blocked execution']}, {op: 'add', title: 'Future group', children: ['future execution']}]);
@@ -51,7 +52,7 @@ test('task dock and live browser share committed status; important children keep
     assert.ok(dock.render(80).some(row => row.includes('1 completed groups')));
     await tasks.edit(ctx, [{op: 'unblock', id: '2.1'}]);
     assert.equal(tasks.rows().length, 4, 'all visible groups offer their children for read-only Dock navigation');
-    assert.match(tasks.rows()[0].suffix!, /0\/1/);
+    assert.match(displayText(tasks.rows()[0].suffix!), /0\/1/);
     dock.setAsk(true); assert.equal(dock.render(40).length, 0); dock.setAsk(false);
     await tasks.edit(ctx, [{op: 'done', id: '2.1'}, {op: 'done', id: '3.1'}]);
     t.mock.timers.tick(5001);

@@ -17,6 +17,7 @@ import { chooseModelSettings, editTypeModel, updateAgentModel } from '../../src/
 import { recordsIn } from '../../src/agents/records.ts';
 import { DetailsView } from '../../src/ui/details.ts';
 import { BrowserView } from '../../src/ui/browser.ts';
+import { ViewerNavigation } from '../../src/ui/viewer/navigation.ts';
 import { chooseBrowserAction } from '../support/browser.ts';
 
 async function setup() {
@@ -123,6 +124,7 @@ test('model filtering keeps complete identities, native input focus, injected se
     'tui.select.pageDown': 'ctrl+f',
   });
   let phase = 0;
+  const navigation = new ViewerNavigation();
   const custom: ExtensionUIContext['custom'] = async factory => new Promise((done, reject) => {
     const tui = terminal();
     Promise.resolve(factory(tui, h.ctx.ui.theme, keys as never, done)).then(view => {
@@ -154,6 +156,13 @@ test('model filtering keeps complete identities, native input focus, injected se
       } else if (phase === 3) {
         assert.doesNotMatch(text(), /high/, 'cleared model uses inherited non-reasoning capabilities');
         assert.equal(selected()?.value, '');
+      } else if (phase === 5) {
+        view.handleInput?.('\x1b[D'); view.handleInput?.('\x1b[D');
+        assert.equal(navigation.closed, false, 'model filtering owns its direction keys');
+      } else if (phase === 6) {
+        view.handleInput?.('\x1b[D'); view.handleInput?.('\x1b[D');
+        assert.equal(navigation.closed, true, 'thinking selection closes the same viewing chain');
+        phase++; return;
       }
       const cancel = phase++ === 4;
       view.handleInput?.(cancel ? '\x18' : '\x07');
@@ -166,6 +175,8 @@ test('model filtering keeps complete identities, native input focus, injected se
     assert.deepEqual(await chooseModelSettings(ctx, 'Models', {}, () => h.ctx.model), { model: undefined, thinking: undefined });
     assert.equal(await chooseModelSettings(ctx, 'Models', {}, () => h.ctx.model), undefined);
     assert.equal(phase, 5); assert.equal(h.session.model?.id, 'offline');
+    assert.equal(await chooseModelSettings(ctx, 'Models', {}, () => h.ctx.model, navigation), undefined);
+    assert.equal(phase, 7); assert.equal(h.session.model?.id, 'offline');
   } finally { await h.cleanup(); }
 });
 

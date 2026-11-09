@@ -2,7 +2,7 @@
 
 目标：主 agent 可以启动、等待、查看进度、发送消息、回答提问并强制停止 subagent；child 需要信息时可以向父 agent 提问。
 
-当前状态：共享 ask schema 的父级提问、agent_send、wait/前台提前返回及统一通知已接入，见 [基础阶段](core.md)。多 run 通知/读取隔离、真实多 child any/all 与问题提前返回、嵌套 FG/BG 直接父级提问和 Esc/timeout 等待边界通过 3 项 Linux SDK 聚合检查，见 [生命周期阶段](lifecycle.md)；所属活动 jobs 与当前工具参数摘要的进度详情、结果通知的用量/错误正文已补齐，并通过 3 项 Linux 真实 SDK 聚合检查，稳定事实见 [进度与结果通知](../../../current/agents/progress.md)；平台验收由 [扩展专项](../../../todo/pi-suite/index.md) 管理。
+当前状态：共享 ask schema 的父级提问、agent_send、wait/前台提前返回及统一通知已接入，见 [基础阶段](core.md)。多 run 通知/读取隔离、真实多 child any/all 与问题提前返回、嵌套 FG/BG 直接父级提问和 Esc/timeout 等待边界通过 3 项 Linux SDK 聚合检查，见 [生命周期阶段](lifecycle.md)；所属活动 jobs 与当前工具参数摘要的进度详情、结果通知的用量/错误正文已补齐，并通过 3 项 Linux 真实 SDK 聚合检查，稳定事实见 [进度与结果通知](../../../current/agents/progress.md)；平台验收由 [扩展专项](../windows-completion.md) 管理。
 
 影响范围：AgentManager、child 会话工具注入、共享 Notifications 与 wait、agent_* 工具、状态栏计数和 goal 调度。
 

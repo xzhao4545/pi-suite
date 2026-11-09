@@ -37,18 +37,18 @@ Schedules 与 `/subagents schedules` 查看当前会话的调度，右侧显示�
 
 Workflows 与 `/subagents workflows` 查看当前会话与分支的编排、保存资源、阶段、日志和结果；顶部 `s` 一次切换 Runs/Saved，右侧显示运行进度或保存脚本。Enter 打开运行详情或源码，底部按状态提供 `p` 暂停/恢复、`x` 两次停止和 `r` journal 重放，保存资源提供 `n Start`。child 会话、gate 日志和跳过/重试在运行详情操作；控制条件、开关和按键见 [Workflow 操作](workflow/operations.md)。
 
-查看器复用共享 Transcript、DetailsView 和阅读 overlay；fullscreen 按当前 TUI 模式满屏显示，inline 居中 90% 宽并限制为终端 70% 高度，正文高度与 overlay 上限一致。关闭 overlay 恢复打开它的列表或提示符及主会话视口，不滚动主会话。Markdown、thinking、工具调用/结果由 Pi 原生组件渲染，使用所选 child 的实际工作目录。工具优先使用对应 child 的渲染定义，持久历史缺少定义时使用 Pi 标准渲染；调用、流式部分输出和最终结果按 toolCallId 配对。稳定消息缓存组件及宽度渲染，每条变化的流式消息和工具部分输出随事件更新；在底部时持续跟随新输出，即使同一组件流式增长也保持最后一页；向上阅读、Home 或搜索离开底部时取消跟随。滚动回到底部或 End 恢复跟随；暂停阅读期间新增正文在标题位置后显示 `↓ new output · End to follow`，恢复后消失。
+查看器复用共享 Transcript、DetailsView 和阅读 overlay；fullscreen 按当前 TUI 模式满屏显示，inline 居中 90% 宽并限制为终端 70% 高度，正文高度与 overlay 上限一致。关闭 overlay 恢复打开它的列表或提示符及主会话视口，不滚动主会话。Markdown、thinking、工具调用/结果由 Pi 原生组件渲染，使用所选 child 的实际工作目录。工具优先使用对应 child 的渲染定义，已回收定义的历史使用 Suite 登记 lookup，未知第三方工具使用 Pi 通用渲染；调用、流式部分输出和最终结果按 toolCallId 配对。稳定消息缓存组件及宽度渲染，每条变化的流式消息和工具部分输出随事件更新；在底部时持续跟随新输出，即使同一组件流式增长也保持最后一页；向上阅读、Home 或搜索离开底部时取消跟随。滚动回到底部或 End 恢复跟随；查看器顶部只保留外边界，不显示运行长标题。所选 run 的名称、状态、耗时、模型/thinking、token、工具次数与阅读状态精简到独立底部信息栏，宽屏尽量一行、普通宽度最多两行；窄屏先省略次要指标，`d` 查看 ID、runId、cwd、完整来源、权限、用量与错误。正文、信息、操作/Editor 区用分隔线区分，预算与原生百分比 overlay 同步缩放，不替换主会话或第三方 footer。暂停阅读期间新输出与 End 恢复提示位于底部，恢复跟随后消失。
 
 - ↑↓、PageUp/PageDown、Home/End 滚动；鼠标滚轮滚动。
 - `/` 搜索；n/N 查下一个/上一个；搜索内 Esc 退出搜索。
-- `m` Message、`o` Tools、`h` Thinking、`j` Jobs、`c` Model / thinking；动作按当前可用状态显示，Esc 返回，Enter 不触发消息或停止。
-- 可接收消息的运行按 `m` 在查看器底部打开内联输入，提示为 `Message <名称>: ` 或 `Answer parent question: `。Enter 提交后按 agent_send 返回 answered、steered 或 queued，查看器保持打开并恢复底部跟随；空提交或 Esc 取消返回原阅读焦点。结果或错误在本查看器底部显示一行，下一次按键清除，不通过主会话通知显示。提交前再次检查所选 run；已结束、结算中或同一 agent 的旧 run 不发送，也不隐式恢复。Runs 列表的 `m` 使用相同内联输入并留在列表。
+- `m` Message、`d` Details、`o` Tools、`h` Thinking、`j` Jobs、`c` Model / thinking；动作按当前可用状态显示，Esc 返回，300ms 内双左退出整个 Subagents/Jobs 浏览链；Enter 不触发消息或停止。
+- 可接收消息的运行按 `m` 在查看器底部打开原生多行 Editor，提示为 `Message <名称>` 或 `Answer parent question`。发送/换行键读取宿主 KeybindingsManager，默认 Enter 发送、Shift+Enter/Ctrl+J 换行，支持中文、粘贴、撤销和原生光标。成功后按 agent_send 返回 answered、steered 或 queued，原视图保持打开，following reader 继续跟随，paused reader 不强制跳到底部；失败保留可重试草稿并在本视图反馈。空白提交或 Esc 取消编辑并恢复原焦点，发送中禁止重复发送，Esc 不取消已交给 Manager 的请求。提交前再次检查所选 run；已结束、结算中或同一 agent 的旧 run 不发送，不隐式恢复或转发到后续 run。Runs 列表的 `m` 使用同一 Editor 与提交边界。
 - x 按两次停止所选 run 及其嵌套 child/所属 job；第一次提示 `Press x again to stop subtree`，其他按键取消确认。已结束或结算中的 run 隐藏快捷停止。
 - b 将正在等待真实 agent_start 前台调用返回的顶级普通运行转为后台，立即释放前台调用；排队、停止中、已结束、嵌套、workflow、RPC 和普通恢复运行不提供此操作。后台池已满时仍可转入，后续启动继续按池上限排队。转入后父级 Esc 不停止该 child，最终结果通过统一通知送达。
 
-Message 使用框架内联 Input，不关闭列表或 Transcript；输入期间全部文字与方向键交给 Input，x/b 不触发控制动作。Model / thinking 选择与 Jobs 在关闭当前详情后打开，返回后保留滚动、搜索和展开状态。搜索框独占文字按键。普通消息限当前主会话的直接 child；workflow 查看器只允许回答当前可见且已挂起的问题，普通引导与恢复由 workflow 控制。
+Message 使用共享 composer 的原生 Editor，不关闭列表或 Transcript；输入期间文字与方向键只交给 Editor，x/b 和双左不触发控制或退出。Model / thinking 选择与 Jobs 在关闭当前详情后打开，返回后保留滚动、搜索和展开状态。搜索框独占文字按键。普通消息限当前主会话的直接 child；workflow 查看器只允许回答当前可见且已挂起的问题，普通引导与恢复由 workflow 控制。
 
-记录菜单和 Transcript 的 `j Jobs` 按所选 run 子树查询所属活动 job；所属 Jobs 列表同样以 `/` 进入过滤、Tab 进入详情、Enter 打开 job 操作，状态行显示 job 名称与 ID；选择 job 后复用 [jobs 操作界面](../jobs/index.md#用户操作)，使用该 job 的 cwd，允许详情、各日志通道和单独停止。只读历史隐藏 attach、stop 与 Clear history，仍可阅读详情和日志；返回所属列表时刷新活动集合并保留选择 ID。没有所属活动 job 时明确提示，退出 Jobs 不停止 agent。
+记录菜单和 Transcript 的 `j Jobs` 按所选 run 子树查询所属活动 job；所属 Jobs 列表同样以 `/` 进入过滤、Tab 进入详情、Enter 直接打开命令/输出查看器，状态行只显示 job 名称；详情与搜索仍保留稳定 ID。选择 job 后复用 [jobs 直接查看界面](../jobs/index.md#用户操作)，使用该 job 的 cwd，允许详情、各日志通道和单独停止。只读历史隐藏 Input、Stop 与 Delete history，仍可阅读详情、各通道和已有终态快照；返回所属列表时刷新活动集合并保留选择 ID。没有所属活动 job 时明确提示，退出 Jobs 不停止 agent。
 
 进入查看器持有公共通知阻塞令牌；关闭后恢复通知投递，主会话保持原绑定。关闭查看器只结束阅读。
 

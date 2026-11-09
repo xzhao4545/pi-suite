@@ -74,4 +74,4 @@
 
 ## 验收结论
 
-单选、多选、文本默认值与冲突校验、切题编辑、多选取消默认项、搜索隐藏预选项、终端缩放和超时不作答均通过离线契约检查。适用范围为 Pi 1.5.0、新作用域依赖、Windows 与 Linux。当前操作与接口见 [ask](../../../current/ask/index.md)；Windows 全部业务面板并存的综合验收统一维护在 [Windows 待办](../../../todo/pi-suite/index.md)。
+单选、多选、文本默认值与冲突校验、切题编辑、多选取消默认项、搜索隐藏预选项、终端缩放和超时不作答均通过离线契约检查。适用范围为 Pi 1.5.0、新作用域依赖、Windows 与 Linux。当前操作与接口见 [ask](../../../current/ask/index.md)；Windows 全部业务面板并存的综合验收统一维护在 [Windows 验收收尾](windows-combination.md)。

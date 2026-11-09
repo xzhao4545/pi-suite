@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import { fauxAssistantMessage, fauxText, fauxToolCall } from '@earendil-works/pi-ai';
 import type { ExtensionContext, ExtensionUIContext, SessionEntry } from '@earendil-works/pi-coding-agent';
-import { Text, visibleWidth } from '@earendil-works/pi-tui';
+import { Text, getKeybindings, visibleWidth } from '@earendil-works/pi-tui';
 import { host } from '../support/host.ts';
 import { agentDir } from '../support/jobs.ts';
 import { terminal } from '../support/terminal.ts';
@@ -34,7 +34,7 @@ function scripted(ctx: ExtensionContext, steps: ((view: DetailsView) => void | P
     assert.equal(opened, false); opened = true;
     let dispose: (() => void) | undefined;
     const done = (value: unknown) => { opened = false; dispose?.(); resolve(value as never); };
-    Promise.resolve(factory(terminal(), ctx.ui.theme, {} as never, done)).then(async view => {
+    Promise.resolve(factory(terminal(), ctx.ui.theme, getKeybindings() as never, done)).then(async view => {
       assert.ok(view instanceof DetailsView); dispose = (view as DetailsView & {dispose?: () => void}).dispose;
       for (const width of [40, 60, 120]) assert.ok(view.render(width).every(line => visibleWidth(line) <= width));
       const step = steps.shift(); assert.ok(step, 'Unexpected reader reopen'); await step(view);
@@ -78,7 +78,7 @@ test('viewer answers workflow questions, preserves search through input and requ
       assert.ok(!visibleActions(view).includes('Stop subtree')); view.handleInput('x'); view.handleInput('x'); view.handleInput('\x1b');
     }];
     const ctx = scripted(h.ctx, steps);
-    await showAgent(ctx, {manager: h.manager, scope: context => ({ctx: context})}, new Dock(), run.record.id, run.record.runId, () => h.config);
+    await showAgent(ctx, {manager: h.manager, renderer: () => undefined, scope: context => ({ctx: context})}, new Dock(), run.record.id, run.record.runId, () => h.config);
     assert.equal(steps.length, 0); assert.equal(run.record.state, 'stopped');
     assert.ok(h.notices.some(notice => /cleanup confirmed/.test(notice.text)));
   } finally { gate.resolve(); await h.cleanup(); }
@@ -96,7 +96,7 @@ test('viewer b hands off a real foreground caller and leaves the child running',
       assert.equal(run.record.background, true); assert.equal(run.controller.signal.aborted, false);
       assert.ok(!visibleActions(view).includes('Background')); view.handleInput('\x1b');
     }];
-    await showAgent(scripted(h.ctx, steps), {manager, scope: context => ({ctx: context})}, new Dock(), run.record.id, run.record.runId, () => h.config);
+    await showAgent(scripted(h.ctx, steps), {manager, renderer: () => undefined, scope: context => ({ctx: context})}, new Dock(), run.record.id, run.record.runId, () => h.config);
     assert.equal(((await pending).details as {backgrounded: boolean}).backgrounded, true); assert.equal(run.settled, undefined);
     gate.resolve(); assert.equal((await run.done.promise).state, 'completed');
   } finally { gate.resolve(); await h.cleanup(); }
@@ -130,10 +130,12 @@ test('viewer refreshes every streaming identity in child cwd and refuses late in
       await new Promise(resolve => setImmediate(resolve));
       assert.match(view.render(120).map(stripVTControlCharacters).join('\n'), /no longer accepts messages/);
       assert.ok(!visibleActions(view).includes('Message')); assert.ok(!visibleActions(view).includes('Stop subtree'));
-      view.handleInput('x'); view.handleInput('x'); assert.equal(resumed.run.controller.signal.aborted, false); view.handleInput('\x1b');
+      view.handleInput('x'); view.handleInput('x'); assert.equal(resumed.run.controller.signal.aborted, false);
+      assert.match(view.render(120).map(stripVTControlCharacters).join('\n'), /late viewer message/);
+      view.handleInput('\x1b'); view.handleInput('\x1b');
     }];
     const ctx = scripted(h.ctx, steps);
-    await showAgent(ctx, {manager: h.manager, scope: context => ({ctx: context})}, new Dock(), run.record.id, run.record.runId, () => h.config);
+    await showAgent(ctx, {manager: h.manager, renderer: () => undefined, scope: context => ({ctx: context})}, new Dock(), run.record.id, run.record.runId, () => h.config);
     assert.equal(h.faux.state.callCount, 2); assert.ok(!h.notices.some(notice => /no longer accepts messages/.test(notice.text)));
     resumedGate.resolve(); await resumed!.run.done.promise;
   } finally { gate.resolve(); resumedGate.resolve(); await h.cleanup(); }

@@ -1,6 +1,6 @@
 # Ask 空闲计时、题型标记、多题切换与跳过语义
 
-状态：已完成。空闲计时、自动提交、题型标记、循环页签/Review 与 skipped 语义均已实施。ask_user 的工具调用显示（renderCall/renderResult）归入 [工具调用显示](../../../todo/pi-suite/tool-display.md)，本文件只处理询问界面与结果语义。
+状态：已完成。空闲计时、自动提交、题型标记、循环页签/Review 与 skipped 语义均已实施。ask_user 的工具调用显示（renderCall/renderResult）归入 [工具调用显示](../tool-display.md)，本文件只处理询问界面与结果语义。
 
 ## 原始需求
 

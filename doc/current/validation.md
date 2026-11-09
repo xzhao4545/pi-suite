@@ -49,7 +49,7 @@ Linux 实际 Pi 1.5.0 CLI 另在 PTY 中核对普通 command、CLI 预设、带 
 
 输出组合的 1 项 Linux（Node 24.22.2）真实 PTY 检查通过，核对密码提示至 LF 回显隐藏、从提示之后的原始 offset/search 读取、CSI/BS/中文宽字素、重复两行折叠与 fullScreen 提示；原始日志保留真实字节，sensitive 输入不保存正文，终态 outputPreview 在 2 KiB 内。既有真实 SDK 通知聚合核对预览与完成结果同条投递；14 项读取/agent/job 定向聚合同时核对上下文、keys 原始范围、预算与实际 more 提示续读。多行 100 MiB 与 UTF-8 验收通过，Windows 实际 CLI 输出与终端组合见 [监督与输出验收](../finished/pi-suite/jobs/windows-supervision-output.md)。
 
-超长逻辑行的 1 项 Linux（Node 24.22.2）聚合通过，覆盖 100 MiB 文件单行的完整起止锚定、未命中、中文跨块、空行、原始 offset 续读及默认关键行预算。相同环境的含中文单行与 Unicode 正则可复现 V8 栈资源失败，完整匹配输入保持原样，求值 RangeError 明确报告 REGEX_RESOURCE_LIMIT。真实 SDK 核对 job_read/agent_read 直接调用与工具管线保留错误、失败不消费结果或增加模型请求、普通全文匹配与原始分页成功；job 日志来自实际进程，agent 大结果为真实已结束 child 记录的受控注入。单行组装为线性，缓冲与解码内存随行长增长，任意正则不保证执行时限；机制见 [长行阶段](../finished/pi-suite/jobs/long-line.md)。真实 PTY 另核对垂直重绘、备用屏幕切换、覆盖帧、停在备用屏幕和先返回主屏再退出，以及同 owner 最后一屏和重启只读日志；当前画面使用既有 xterm，线性 reader 不还原二维历史，见 [屏幕范围](../finished/pi-suite/jobs/screen-range.md)。
+超长逻辑行的 1 项 Linux（Node 24.22.2）聚合通过，覆盖 100 MiB 文件单行的完整起止锚定、未命中、中文跨块、空行、原始 offset 续读及默认关键行预算。相同环境的含中文单行与 Unicode 正则可复现 V8 栈资源失败，完整匹配输入保持原样，求值 RangeError 明确报告 REGEX_RESOURCE_LIMIT。真实 SDK 核对 job_read/agent_read 直接调用与工具管线保留错误、失败不消费结果或增加模型请求、普通全文匹配与原始分页成功；job 日志来自实际进程，agent 大结果为真实已结束 child 记录的受控注入。单行组装为线性，缓冲与解码内存随行长增长，任意正则不保证执行时限；机制见 [长行阶段](../finished/pi-suite/jobs/long-line.md)。真实 PTY 另核对垂直重绘、备用屏幕切换、覆盖帧、停在备用屏幕和先返回主屏再退出，以及同 owner 最后一屏、终态原生快照与无快照历史的只读边界；当前画面使用既有 xterm，线性 reader 不还原二维历史，见 [屏幕范围](../finished/pi-suite/jobs/screen-range.md)。
 
 jobs 技能格式与实际 Pi 包资源加载验收通过，覆盖 package.pi.skills、包管理器/ResourceLoader/SDK 发现、原生 /skill 调用及 jobs=false reload 撤销工具并保留 ask_user；技能始终先核对实际工具，模块开关不影响 Pi 包级资源发现，见 [技能发布阶段](../finished/pi-suite/jobs/skill.md)。
 
@@ -105,7 +105,7 @@ Workflow 宿主的 5 项 Linux（Node 24.22.2）真实 SDK/faux 与进程检查�
 
 真实 MCP 的 1 项 Linux stdio 聚合验证原生传输与 discovery、mcp__ 服务器名单和显式资源 helper 并存、禁用与非选择服务器不执行，以及 child 结束后全部服务进程退出。受控真实服务另核对原生 codemode/tool_search、晚注册工具在下一请求执行、隔离与不可信项目不连接；跨 cwd RPC 只加载用户 MCP，不加载父项目或目标项目 MCP。服务为本机协议夹具，传输范围见 [MCP 阶段](../finished/pi-suite/agents/mcp-transport.md)；Windows 实际外部服务见 [Context7 验收](../finished/pi-suite/agents/windows-context7.md)，不推及 OAuth 或其他服务。
 
-当前 Linux（Node 24.22.2）检查集共 171 项，全量检查与类型检查通过，无失败、跳过或取消项；日常检查耗时在 5 分钟内。检查覆盖询问、目标、任务、执行、子代理、workflow 和共享组件的当前契约。平台适用范围按上述各专项结论区分。
+当前 Linux（Node 24.22.2）检查集共 203 项，全量检查与类型检查通过，无失败、跳过或取消项；完整测试约 45 秒，日常检查耗时在 5 分钟内。检查覆盖询问、目标、任务、执行、子代理、workflow 和共享组件的当前契约。平台适用范围按上述各专项结论区分。
 
 完整 Starship 的 1 项 Linux SDK 聚合从开发依赖加载 0.65.2 实际发布入口，核对 goal_wait、tasks、运行 child、两个 job 与主询问在 40×24、60×30、120×40 并存，实际 emoji/24 位样式、max_statuses 插入顺序、disabled/缺失 extension_status、整体换行和显式 Dock 显示。询问期间实际 job 结算不增加模型调用。终端尺寸由受控 fixture 驱动；当前布局使用独立的空闲 Dock/询问预算，任意用户 footer format 无可靠公共高度反馈，Windows 原生 footer 见 [CLI/footer 验收](../finished/pi-suite/jobs/windows-cli-ui.md)，预算与焦点/鼠标/草稿见 [询问组合](../finished/pi-suite/ask/windows-combination.md)。
 
@@ -116,5 +116,9 @@ Windows（Node 24.22.2）完整检查 158 项通过，无失败、跳过或取�
 Windows 实际 Pi/Codex/Claude CLI 组合验收结论与范围见 [Windows CLI 阶段](../finished/pi-suite/jobs/windows-cli-ui.md)：Pi 验证前导 `@` 复杂正文、reload/new 不重放、会话身份与自然退出；Codex 0.162.1 和 Claude Code 2.1.301 通过本地受控 SSE 核对复杂正文、用户接管输入、模型交还输入、主对话回复及进程树停止确认。Starship 0.65.2 与 Pi 原生 footer 在 40×24、60×30、120×40 下核对目标、任务、child、job 与询问；用户 format 缺少 `$extension_status` 时状态不可见，隔离副本可通过 Dock 明示。
 
 Windows 实际 Pi 1.5.0 原生组合覆盖询问/通知、两级任务、模型与 @handle、调度、workflow/child 查看、持久历史与主从交互、Pi 预设，以及监督/输出/屏幕和只读边界，逐项范围见 [完成索引](../finished/index.md)。实际业务 RPC 使用 pi-tasks 0.9.1，实际外部 MCP 使用 Context7 4.5.0；离线 Provider 仅控制模型请求，真实进程、SDK、TUI 与外部文档查询按各专项验证。上游固定版本的静态结论与当前运行层次见 [Windows 问题追踪](../finished/pi-suite/windows-baseline.md)。Cursor 实际 agent CLI 不在本轮验证范围，不计为通过项。
+
+## 执行界面验收
+
+八项执行界面需求通过当前类型检查、203 项全量检查及 Linux Pi 1.5.0 实际 CLI 验收。40×24/120×40、regular/fullscreen、dark/light、原生/第三方 footer 的 16 种组合均通过，深度检查覆盖真实 PTY 屏幕/输入/尺寸/转交、独立 pipe 流及结算补读、Subagents 底部信息与中文多行 Editor、失败草稿/旧 run 拒绝、18 行编辑、嵌套 Esc/双左和主输入焦点恢复。原生百分比 overlay 与 reader 预算随 resize 一致；第三方 footer 夹具的实例、订阅和分支更新保持，实际 pi-starship 0.65.2 发布入口另在 40×24 regular/light 与 120×40 fullscreen/dark 验证查看往返、输入焦点和分支更新后继续显示。新检查使用隔离配置/cwd 和离线 Provider，不改全局设置或调用收费模型 API；跨进程终态快照及危险操作权限另由真实进程/存储契约核对。文字终端之外的图像协议、完整过去帧或跨进程输入控制不在支持范围，本轮实际 CLI 平台仅 Linux；完整需求与结论见 [执行界面专项](../finished/pi-suite/ui/execution-ui/index.md)。
 
 [返回当前文档](./index.md)

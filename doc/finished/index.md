@@ -4,6 +4,7 @@
 
 已实施模块的完整设计与原验收契约见 [设计与实施记录](./pi-suite/design/index.md)；平台证据按各专项的实际范围读取，Windows 本轮状态见 [Windows 验收收尾](./pi-suite/windows-completion.md)。
 
+- [执行界面与查看器优化](./pi-suite/ui/execution-ui/index.md) — 八项需求完整实施：名称/状态/选择、统一执行外框与命令配置、Jobs 直接查看/逐流阅读/终态快照、Subagents 底部信息/原生 Editor、显式整链退出；Linux 实际 Pi CLI 16 组合与深度验收。
 - [导航焦点、Dock 只读任务与问题标题](./pi-suite/ui/navigation-details.md) — 活动区域高亮、分区切换与双向折叠、英文提示、模型筛选及 Ask 短标题；SDK/组件验证。
 - [浏览界面可发现性与配色](./pi-suite/ui/browser-discoverability.md) — 默认 All、最近活动排序、固定导航/动作行与共享配色角色；实际 CLI 两尺寸验收。
 - [Subagent 内联消息与持续跟随](./pi-suite/ui/agent-viewer-input.md) — Transcript/Runs 内输入、底部持续跟随和当前 run 发送边界。

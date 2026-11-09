@@ -9,7 +9,9 @@ export const readingRows = (tui: TUI): number => tui.mode === 'fullscreen' ? tui
 export function readingOverlayOptions(tui: TUI): OverlayOptions {
   return tui.mode === 'fullscreen'
     ? {anchor: 'top-left', width: '100%', maxHeight: '100%', margin: 0}
-    : {anchor: 'center', width: '90%', maxHeight: readingRows(tui), margin: 0};
+    // Pi evaluates the custom-view options factory only on opening. Percentage values
+    // are resolved by TUI on every render, keeping the ceiling aligned after resize.
+    : {anchor: 'center', width: '90%', maxHeight: '70%', margin: 0};
 }
 
 /** Use Pi's focused overlay lifecycle; done() restores the previous focus and transcript viewport. */

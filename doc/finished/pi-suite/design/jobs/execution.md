@@ -2,7 +2,7 @@
 
 目标：融合交互 shell 和非交互后台任务，共用管理、日志与通知。
 
-归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 验收收尾](../../windows-completion.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
 
 当前状态：实施中；pipe 与 PTY 执行、记录、工具与通知已实现并在 Windows（Git Bash）和 Linux 通过检查，见 [执行任务](../../../../current/jobs/index.md)。/jobs 列表与详情、job_start 的 attach、终端视图（用户接管、Ctrl+G 交还、Ctrl+T 发送屏幕、Ctrl+B 离开）已实现。Linux 实际 Pi CLI 的 /jobs attach 缩放、接管与重新 attach 通过 [终端缩放阶段](../../jobs/terminal-resize.md)；Windows 实际 Pi 1.5.0 CLI 的四次缩放、内层 TTY 尺寸、输入、交还、离开后继续、重新 attach 与 quit 确认清理通过 [Windows 阶段](../../jobs/windows-runtime.md)。监督与 CLI 预设组合按关联专项继续验收。
 

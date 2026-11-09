@@ -3,6 +3,7 @@ import type { SessionBinding } from '../runtime/binding.ts';
 import type { Notifications } from '../runtime/notifications.ts';
 import type { StatusPublisher } from '../ui/status.ts';
 import type { DockRow } from '../ui/dock.ts';
+import type { DisplayField, DisplayText } from '../ui/browser-chrome.ts';
 import type { Settlement, Waitable } from '../runtime/wait.ts';
 import { sanitizeText } from '../runtime/text.ts';
 import { boundedText } from '../runtime/read.ts';
@@ -11,6 +12,7 @@ import { AGENT_ENTRY, recordsIn } from './records.ts';
 import { questionText } from './questions.ts';
 import { agentRuntime } from './runtime.ts';
 import type { AgentManager } from './manager.ts';
+import { toolRenderer } from '../runtime/tools.ts';
 import type { TasksModule } from '../tasks/index.ts';
 
 export function summaryLine(record: AgentRecord): string {
@@ -36,11 +38,12 @@ export class AgentsModule implements Waitable {
   private timer?: NodeJS.Timeout;
   private queued = new Set<string>();
   private saved = new Map<string, string>();
-  private selectedRun?: string;
   constructor(private pi: ExtensionAPI, private binding: SessionBinding, private notifications: Notifications,
     private status: StatusPublisher, private tasks?: TasksModule, private parentRun?: Execution, manager?: AgentManager) {
     this.manager = manager ?? agentRuntime();
   }
+  /** Collected runs have no live renderer map; their transcript uses the same registered display lookup. */
+  renderer(name: string) { return toolRenderer(this.pi, name); }
   scope(ctx: ExtensionContext): ParentScope { return { ctx, run: this.parentRun, taskStore: this.tasks?.scope(ctx) ?? this.parentRun?.parent.taskStore }; }
   visibleRunIds(ctx: ExtensionContext): string[] {
     const scope = this.scope(ctx);
@@ -60,10 +63,9 @@ export class AgentsModule implements Waitable {
     clearInterval(this.timer); this.timer = undefined;
     const current = this.binding.current;
     if (current) for (const request of this.queued) this.notifications.cancel(current.sessionId, request);
-    this.queued.clear(); this.saved.clear(); this.selectedRun = undefined; this.status.setActivities('agents', []);
+    this.queued.clear(); this.saved.clear(); this.status.setActivities('agents', []);
   }
-  selectRun(runId: string): void { this.selectedRun = runId; this.refresh(); }
-  private rows(records: AgentRecord[], scope: ParentScope): { rows: DockRow[]; aside: string; ticking: boolean } {
+  private rows(records: AgentRecord[], scope: ParentScope): { rows: DockRow[]; aside: DisplayText; ticking: boolean } {
     // A consumed question is still awaiting its answer. Include workflow questions
     // visible to this parent without exposing unrelated runs or nested descendants.
     const visible = new Map(records.map(record => [record.runId, record]));
@@ -71,20 +73,24 @@ export class AgentsModule implements Waitable {
       visible.set(run.record.runId, this.manager.view(run));
     }
     const counts = new Map<string, number>();
-    const rows = [...visible.values()].flatMap(record => {
-      const run = this.manager.runs.get(record.runId), question = Boolean(run?.question), selected = record.runId === this.selectedRun;
+    const rows = [...visible.values()].flatMap<DockRow>(record => {
+      const run = this.manager.runs.get(record.runId), question = Boolean(run?.question);
       const failed = ['failed', 'limited'].includes(record.state) && run && !run.consumed;
       if (!active(record.state) && !failed) return [];
-      counts.set(record.state, (counts.get(record.state) ?? 0) + 1);
       const state = question ? 'waiting(parent)' : record.state;
-      const basic = `${state} · ${((record.elapsedMs ?? 0) / 1000).toFixed(1)}s`, tools = `${record.toolUses ?? 0} tools`;
+      counts.set(state, (counts.get(state) ?? 0) + 1);
+      const stateField = {text: state, state};
+      const basic: DisplayField[] = [stateField, {text: ` · ${((record.elapsedMs ?? 0) / 1000).toFixed(1)}s`, tone: 'dim'}];
+      const tools = `${record.toolUses ?? 0} tools`;
       return [{ id: `agent:${record.runId}`, text: sanitizeText(record.name).replace(/[\r\n\t]/g, ' '),
-        suffix: `${basic} · ↑${record.usage?.tokens.input ?? 0} ↓${record.usage?.tokens.output ?? 0} · ${tools}`,
-        compactSuffixes: [`${basic} · ${tools}`, basic, state],
-        priority: question ? 100 : failed ? 80 : record.state === 'stopping' ? 75 : selected ? 65 : record.state === 'queued' ? 15 : 25 }];
+        suffix: [...basic, {text: ` · ↑${record.usage?.tokens.input ?? 0} ↓${record.usage?.tokens.output ?? 0} · ${tools}`, tone: 'dim'}],
+        compactSuffixes: [[...basic, {text: ` · ${tools}`, tone: 'dim'}], basic, [stateField]],
+        priority: question ? 100 : failed ? 80 : record.state === 'stopping' ? 75 : record.state === 'queued' ? 15 : 25 }];
     });
-    const aside = ['starting', 'running', 'waiting', 'stopping', 'queued', 'failed', 'limited']
-      .filter(state => counts.has(state)).map(state => `${counts.get(state)} ${state}`).join(' · ');
+    const aside: DisplayField[] = ['starting', 'running', 'waiting', 'waiting(parent)', 'stopping', 'queued', 'failed', 'limited']
+      .filter(state => counts.has(state)).flatMap((state, index) => [
+        ...index ? [{text: ' · ', tone: 'dim' as const}] : [], {text: `${counts.get(state)} ${state}`, state},
+      ]);
     return {rows, aside, ticking: [...visible.values()].some(record => active(record.state))};
   }
   private publishActivities(records: AgentRecord[], scope: ParentScope): void {

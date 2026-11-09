@@ -1,6 +1,6 @@
 import { agentDisplayName } from '../agents/runtime.ts';
 import { sanitizeText } from './text.ts';
-import { toolRenderers } from '../ui/tool-render.ts';
+import { toolRenderers, stateLine } from '../ui/tool-render.ts';
 import type { WaitResult } from './wait.ts';
 
 export const waitRenderers = toolRenderers<{ ids: string[] }, WaitResult>({
@@ -9,7 +9,8 @@ export const waitRenderers = toolRenderers<{ ids: string[] }, WaitResult>({
     const failed = [...data.results, ...data.others].filter(item => item.state === 'failed').length;
     return { icon: failed ? '✘' : '', tone: failed ? 'error' : undefined, title: 'Wait',
       summary: `${data.results.filter(item => item.settled).length}/${data.results.length} settled`,
-      meta: [...failed ? [`${failed} failed`] : [], ...data.reason !== 'condition' ? [`returned early: ${data.reason}`] : []] };
+      meta: [...failed ? [{ text: `${failed} failed`, tone: 'error' as const }] : [],
+        ...data.reason !== 'condition' ? [{ text: `returned early: ${data.reason}`, tone: 'warning' as const }] : []] };
   },
   expanded: (data, _args, text) => {
     // Only rewrite the rendered identity; result bodies and read/send arguments keep their IDs.
@@ -24,6 +25,8 @@ export const waitRenderers = toolRenderers<{ ids: string[] }, WaitResult>({
       display = display.replace(`pending: ${data.pending.join(', ')}`,
         () => `pending: ${data.pending.map(id => sanitizeText(agentDisplayName(id))).join(', ')}`);
     }
-    return [display];
+    return [...[...data.results, ...data.others].map(item => ({ ...stateLine(item.state),
+      title: agentDisplayName(item.id, item.runId), meta: [{ text: item.state, tone: stateLine(item.state).tone! }] })),
+    ...[...data.results, ...data.others].filter(item => item.state === 'failed').map(item => ({ label: 'error', value: item.summary, tone: 'error' as const })), display];
   },
 });

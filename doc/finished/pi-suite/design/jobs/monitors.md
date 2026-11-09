@@ -2,7 +2,7 @@
 
 目标：保留 pi-interactive-shell 的输出 monitor 与 hands-free/dispatch，使模型可以监视输出模式、委派 CLI agent 并在需要时被唤醒，用户随时接管。
 
-归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 验收收尾](../../windows-completion.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
 
 当前状态：实施中；stream、poll-diff、file-watch 三种 monitor（trigger、阈值、冷却、去重、detector）、events 通道与唤醒已实现并在 Linux 通过检查，见 [执行任务](../../../../current/jobs/index.md)；hands-free 的增量更新与预算、dispatch 的静默终止与宽限期、用户接管时暂停监督，以及 wait/goal_wait 联动与 reload 保活已实现并通过 Linux 离线检查，见 [基础阶段记录](../../jobs/hands-free-core.md) 与 [当前监督契约](../../../../current/jobs/hands-free.md)。CLI 预设与用户级 launchPolicy 已实现并通过 Linux 离线检查，见 [预设阶段记录](../../jobs/cli-launch-core.md)。Windows 监督与预设验收待实施；保留范围由用户确认，不保留 Jev 语义监督与语义输出裁剪。导入文件见 [上游导入](../upstream-import.md)。
 

@@ -1,5 +1,6 @@
 // Adapted from pi-background-jobs 0.1.3 src/types.ts (MIT, third-party/licenses/pi-background-jobs.txt).
 // pi-suite adds PTY mode, creator ownership, input records, monotonic elapsed time and monitors.
+import type { TerminalSnapshot } from './terminal/screen.ts';
 import type { MonitorInput } from './monitors/compile.ts';
 import type { HandsFreeInput, HandsFreeState } from './monitors/hands-free.ts';
 export type JobMode = 'pipe' | 'pty';
@@ -32,6 +33,8 @@ export type JobSummary = {
   error?: string; notified?: boolean;
   /** Final bounded output, captured at the settlement boundary for a single completion notice. */
   outputPreview?: string; fullScreen?: boolean;
+  /** Presence/size only; the bounded restore stream lives in terminal.json, not tool summaries. */
+  terminalSnapshot?: Omit<TerminalSnapshot, 'data'>;
 };
 export type StartRequest = {
   /** Omitted only for a file-watch monitor, which generates its own command. */

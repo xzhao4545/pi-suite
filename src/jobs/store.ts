@@ -8,6 +8,8 @@ import { join, relative, sep, isAbsolute } from 'node:path';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { isTerminal } from './state.ts';
 import { ToolError } from '../runtime/errors.ts';
+import type { TerminalSnapshot } from './terminal/screen.ts';
+import { SNAPSHOT_BYTES, SNAPSHOT_SCROLLBACK } from './terminal/screen.ts';
 import type { JobSummary, Workspace, Stream, InputRecord } from './types.ts';
 
 const JOB_ID = /^job_[a-f0-9]{8}$/;
@@ -87,6 +89,29 @@ export class JobStore {
     try { writeFileSync(temp, JSON.stringify(job), { flag: 'wx', mode: 0o600 }); renameSync(temp, dest); }
     catch (error) { throw new ToolError('STORAGE_ERROR', String(error), job.id); }
     finally { try { unlinkSync(temp); } catch {} }
+  }
+  /** Settlement-only atomic screen save. Removal of the job directory includes its snapshot. */
+  async saveTerminalSnapshot(job: JobSummary, snapshot: TerminalSnapshot): Promise<void> {
+    const dir = this.directory(job), dest = join(dir, 'terminal.json'), temp = join(dir, `.${randomUUID()}.tmp`);
+    this.secure(dest);
+    try {
+      await writeFile(temp, JSON.stringify(snapshot), {flag: 'wx', mode: 0o600});
+      await rename(temp, dest);
+    } catch (error) { throw new ToolError('STORAGE_ERROR', `terminal snapshot: ${String(error)}`, job.id); }
+    finally { await unlink(temp).catch(() => {}); }
+  }
+  async readTerminalSnapshot(job: JobSummary): Promise<TerminalSnapshot | undefined> {
+    if (!job.terminalSnapshot) return undefined;
+    const path = join(this.directory(job), 'terminal.json'); this.secure(path);
+    const size = (await stat(path)).size;
+    if (size > SNAPSHOT_BYTES * 2) throw new ToolError('CORRUPT_HISTORY', 'Terminal snapshot exceeds storage limit', job.id);
+    const snapshot = JSON.parse(await readFile(path, 'utf8')) as TerminalSnapshot;
+    if (snapshot?.version !== 1 || typeof snapshot.data !== 'string' || Buffer.byteLength(snapshot.data) > SNAPSHOT_BYTES ||
+      !Number.isInteger(snapshot.cols) || snapshot.cols < 1 || !Number.isInteger(snapshot.rows) || snapshot.rows < 1 ||
+      !Number.isInteger(snapshot.scrollback) || snapshot.scrollback < 0 || snapshot.scrollback > SNAPSHOT_SCROLLBACK ||
+      !Number.isInteger(snapshot.cursor?.x) || !Number.isInteger(snapshot.cursor?.y) || typeof snapshot.cursor?.visible !== 'boolean' ||
+      typeof snapshot.alternate !== 'boolean') throw new ToolError('CORRUPT_HISTORY', 'Invalid terminal snapshot', job.id);
+    return snapshot;
   }
   async appendInput(job: JobSummary, record: InputRecord): Promise<void> {
     await appendFile(this.logPath(job, 'input'), JSON.stringify(record) + '\n', { mode: 0o600 });

@@ -2,7 +2,7 @@
 
 目标：以上游 pi-subagents 为基础导入改造 subagent 执行、记录、查看、主从交互与扩展能力，接入统一工具、界面和通知。
 
-归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 验收收尾](../../windows-completion.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
 
 当前状态：实施中；同进程执行、两池队列、核心类型、run 记录、恢复、工具/查看器、父级提问、任务共享与 job 级联停止已接入，Linux 8 项契约验收通过，见 [基础阶段](../../agents/core.md)；类型模型写回与单 agent 实时配置见 [模型基础阶段](../../agents/models-core.md)，扩展、技能、包资源与 memory 见 [资源基础阶段](../../agents/resources-core.md)。@handle 输入与克隆启动见 [提及基础阶段](../../agents/mentions-core.md)。定时调度见 [调度基础阶段](../../agents/schedules-core.md)。RPC 五通道见 [RPC 基础阶段](../../agents/rpc-core.md)。workflow 编排核心见 [核心阶段](../../agents/workflow-core.md)，宿主/工具/原生控制见 [宿主接入阶段](../../agents/workflow-host.md)。类型开关菜单与 Execution 回收见 [类型与回收阶段](../../agents/types-retention.md)；workspace 持久历史发现与只读查询见 [历史发…
 

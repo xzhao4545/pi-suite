@@ -15,6 +15,7 @@ import { acquireRuntime } from '../../src/jobs/runtime.ts';
 import { loadConfig } from '../../src/runtime/config.ts';
 import { DetailsView } from '../../src/ui/details.ts';
 import { JobLogView } from '../../src/jobs/log-viewer.ts';
+import { JobView } from '../../src/jobs/viewer/component.ts';
 import { BrowserView } from '../../src/ui/browser.ts';
 import { chooseBrowserAction } from '../support/browser.ts';
 
@@ -89,24 +90,21 @@ test('agent Transcript reuses owned job UI across child cwd and collected runs, 
       reader = view.reader; expanded = reader.render(120).join('\n'); assert.match(expanded, /TOOL_FOLD_CONTENT/);
       reader.scroll(5); reader.query = 'READER_MARKER'; offset = reader.offset; view.handleInput('j');
     }, (view: View) => {
-      const list = view.render(120).join('\n'); assert.ok(list.includes(ownJob.id) && list.includes(childJob.id), list);
-      assert.ok(!list.includes(nextJob.id) && !list.includes(unrelatedJob.id)); choose(view, ownJob.id);
-    }, (view: View) => {
-      assert.ok(view instanceof JobLogView); assert.match(view.reader.render(120).join('\n'), /PARENT_JOB/); view.handleInput('\x1b');
-    }, (view: View) => { assert.ok(!view.render(120).join('\n').includes(ownJob.id)); choose(view, childJob.id); },
-    (view: View) => { assert.ok(view instanceof JobLogView); assert.match(view.reader.render(120).join('\n'), /CHILD_JOB/); view.handleInput('\x1b'); },
+      const list = view.render(120).join('\n'); assert.ok(list.includes('PARENT_JOB') && list.includes('CHILD_JOB'), list);
+      assert.ok(!list.includes('NEXT_JOB') && !list.includes('OTHER_JOB')); choose(view, ownJob.id);
+    }, async (view: View) => {
+      assert.ok(view instanceof JobView); assert.ok(view.output instanceof JobLogView);
+      assert.match(view.output.reader.render(120).join('\n'), /PARENT_JOB/);
+      view.handleInput('x'); assert.equal(jobs.peek(ownJob.id).state, 'running'); view.handleInput('x');
+      await jobs.stop(ownJob.id); // Join actual cleanup; a terminal state alone can still be pending.
+      view.handleInput('\x1b');
+    }, (view: View) => { const resumed = view.render(120).join('\n'); assert.ok(!resumed.includes('PARENT_JOB'), resumed); choose(view, childJob.id); },
+    (view: View) => { assert.ok(view instanceof JobView); assert.ok(view.output instanceof JobLogView); assert.match(view.output.reader.render(120).join('\n'), /CHILD_JOB/); view.handleInput('\x1b'); },
     (view: View) => view.handleInput?.('\x1b'), (view: View) => {
       assert.ok(view instanceof DetailsView); assert.strictEqual(view.reader, reader); assert.equal(reader.offset, offset); assert.equal(reader.query, 'READER_MARKER');
       assert.equal(reader.render(120).join('\n'), expanded); view.handleInput('\x1b');
     }, (view: View) => view.handleInput?.('\x1b')];
-    let parentActions = 0, childActions = 0;
-    const ui = scriptUI(ctx, steps, (title, choices) => {
-      if (title === 'Select agent run') return choices.find(choice => choice.includes(parent.record.runId));
-      if (title.startsWith(parent.record.id)) { assert.ok(choices.includes('Jobs')); return 'Transcript'; }
-      if (title.startsWith(ownJob.id)) return ['Read stdout', 'Stop job', 'Back'][parentActions++];
-      if (title.startsWith(childJob.id)) return ['Read stdout', 'Back'][childActions++];
-      assert.fail(`Unexpected selection: ${title}`);
-    });
+    const ui = scriptUI(ctx, steps, title => assert.fail(`Unexpected candidate menu: ${title}`));
     const before = h.faux.state.callCount;
     await h.session.extensionRunner.getCommand('subagents')!.handler('finished', ui);
     assert.equal(steps.length, 0); assert.equal(h.faux.state.callCount, before, 'browsing does not invoke a model');
@@ -122,7 +120,7 @@ test('agent Transcript reuses owned job UI across child cwd and collected runs, 
   }
 });
 
-test('new-session workspace history exposes owned PTY logs through the same menu while withholding attach and stop', {timeout: 15000}, async () => {
+test('new-session workspace history opens owned PTY readonly without input or stop and releases held notifications', {timeout: 15000}, async () => {
   const root = agentDir(); let ctx!: ExtensionContext;
   let current = await host({root, persisted: true, extend: pi => { pi.on('session_start', (_event, context) => { ctx = context; }); }});
   const agents = agentRuntime(), owner = ctx.sessionManager.getSessionId();
@@ -143,21 +141,20 @@ test('new-session workspace history exposes owned PTY logs through the same menu
     await runtime.newSession(); assert.notEqual(ctx.sessionManager.getSessionId(), owner);
     assert.equal(agents.get(run.record.id).record.ownerSessionId, owner);
     current.faux.setResponses([fauxAssistantMessage('notification received after the reader closes')]);
-    let actions = 0;
     const steps = [(view: View) => {
       assert.ok(view instanceof BrowserView); assert.equal(view.getSelectedItem()?.value, run.record.runId);
       const menu = view.render(400).join('\n'); assert.ok(!menu.includes('stop subtree') && !menu.includes('model / thinking'));
       chooseBrowserAction(view, 'Jobs');
     }, (view: View) => choose(view, job.id), async (view: View) => {
-      assert.ok(view instanceof JobLogView); assert.match(view.reader.render(120).join('\n'), /FOREIGN_JOB/);
+      assert.ok(view instanceof JobView); assert.equal(view.currentStream, 'terminal');
+      assert.match(view.output.render(120).join('\n'), /FOREIGN_JOB/);
+      const screen = view.render(120).join('\n'); assert.ok(!screen.includes('i input') && !screen.includes('stop process'));
+      view.handleInput('i'); assert.equal(jobs.userControlled(job.id), false);
       const notice = await jobs.start({cwd: root, command: 'echo queued_notice', ownerSessionId: ctx.sessionManager.getSessionId(), anchorEntryId: null}, testShell());
       await jobs.wait(notice.id); assert.equal(current.faux.state.callCount, 0, 'job results cannot wake the model inside an agent job reader');
       view.handleInput('\x1b');
     }, (view: View) => view.handleInput?.('\x1b'), (view: View) => view.handleInput?.('\x1b')];
-    const ui = scriptUI(ctx, steps, (_title, choices) => {
-      assert.ok(!choices.includes('Stop job') && !choices.includes('Attach terminal'));
-      return actions++ === 0 ? 'Read output' : 'Back';
-    });
+    const ui = scriptUI(ctx, steps, title => assert.fail(`Unexpected candidate menu: ${title}`));
     await current.session.extensionRunner.getCommand('subagents')!.handler('workspace', ui);
     assert.equal(steps.length, 0); assert.equal(jobs.peek(job.id).state, 'running');
     await current.idle(); assert.equal(current.faux.state.callCount, 1, 'closing all readers releases the pending result once');

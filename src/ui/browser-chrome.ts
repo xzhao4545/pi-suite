@@ -7,6 +7,9 @@ export interface BrowseChoice { items: () => SelectItem[]; selected: () => strin
 /** Item descriptions (e.g. counts) appear in the control row; the status line names only the label. */
 export interface BrowseControl extends BrowseChoice { key: KeyId; label: string }
 export interface BrowseSelection { name: string; id?: string }
+/** Explicit fields prevent a state word in an object's name from acquiring status color. */
+export interface DisplayField { text: string; state?: string; tone?: ThemeColor }
+export type DisplayText = string | readonly DisplayField[];
 
 const current = (choice: BrowseChoice) => choice.items().find(item => item.value === choice.selected());
 const cell = (item: SelectItem) => item.description ? `${item.label} ${item.description}` : item.label;
@@ -44,19 +47,34 @@ export const selectedRow = (text: string, width: number, theme?: Theme, active =
   const marker = paint(active ? 'accent' : 'muted', text.slice(0, 2), theme);
   const row = `${marker}${text.slice(2)}${' '.repeat(Math.max(0, width - visibleWidth(text)))}`;
   // An inactive selection still identifies the record, but cannot compete with the focused pane.
-  return active ? theme?.bg('selectedBg', strong(row, theme)) ?? row : row;
+  if (!active || !theme) return row;
+  // TUI truncation emits SGR 0; restore only the selection background, never a row-wide foreground.
+  return theme.bg('selectedBg', strong(row, theme).replace(/\x1b\[0m/g, '\x1b[0m' + theme.getBgAnsi('selectedBg')));
 };
-const stateTones: Record<string, ThemeColor> = { running: 'success', starting: 'success', waiting: 'warning', stopping: 'warning', queued: 'warning',
+const stateTones: Record<string, ThemeColor> = { running: 'success', starting: 'success', waiting: 'warning', 'waiting(parent)': 'warning',
+  'cleanup pending': 'warning', 'cleanup unconfirmed': 'warning', stopping: 'warning', queued: 'warning',
   failed: 'error', limited: 'error', timed_out: 'error', completed: 'dim', stopped: 'dim', doing: 'success', blocked: 'warning', done: 'dim',
   enabled: 'success', disabled: 'dim', paused: 'warning', todo: 'accent' };
-export function recordStyle(text: string, state: string | undefined, theme?: Theme): string {
+export const stateTone = (state: string): ThemeColor | undefined => stateTones[state];
+/** Structured fields are literal domain data; sanitize before adding trusted theme escapes. */
+export function displayText(value: DisplayText, theme?: Theme, fallbackTone?: ThemeColor): string {
+  if (typeof value === 'string') return fallbackTone && value ? paint(fallbackTone, value, theme) : value;
+  return value.map(field => {
+    const text = sanitizeText(field.text).replace(/[\r\n\t]/g, ' '), tone = field.state ? stateTone(field.state) : field.tone;
+    const shown = field.state === 'done' ? theme?.strikethrough(text) ?? text : text;
+    return tone || fallbackTone ? paint(tone ?? fallbackTone!, shown, theme) : shown;
+  }).join('');
+}
+export function recordStyle(text: DisplayText, state: string | undefined, theme?: Theme): string {
+  if (typeof text !== 'string') return displayText(text, theme);
   if (!state) return text;
-  const tone = stateTones[state];
+  const tone = stateTone(state);
   if (!tone) return text;
   if (['todo', 'doing', 'blocked', 'done'].includes(state)) return paint(tone, state === 'done' ? theme?.strikethrough(text) ?? text : text, theme);
   if (state === 'enabled' || state === 'disabled') text = text.replace(state === 'enabled' ? '●' : '○', icon => paint(tone, icon, theme));
   // Only color a declared state at a field boundary, not a matching word in a record's name.
-  return text.replace(new RegExp(`(^| · |(?:job_[a-f0-9]{8}|wf_[a-f0-9]{12}) )(${state})(?= · |$)`), (_match, prefix: string, word: string) => prefix + paint(tone, word, theme));
+  const literal = state.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return text.replace(new RegExp(`(^| · |(?:job_[a-f0-9]{8}|wf_[a-f0-9]{12}) )(${literal})(?= · |$)`), (_match, prefix: string, word: string) => prefix + paint(tone, word, theme));
 }
 const mark = (text: string, on: boolean, theme?: Theme) => on ? heading(text, theme) : paint('muted', text, theme);
 

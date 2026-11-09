@@ -12,6 +12,6 @@ Pi 1.5.0 使用独立 agentDir 和离线 provider。实际 PTY 中前导 `@` 复
 
 以用户当前 pi-starship.toml 的原样副本验证：根 format 不含 `$extension_status`，因此 footer 不显示 goal/agent/job 数量；goal.display=dock 时数量改由原生 Dock 显示，hidden 时常驻状态隐藏。用户原配置的部分模块字段触发 pi-starship 0.65.2 设置校验警告；验收未改动用户配置。该警告与缺少 format 插槽是两项独立的外部配置边界。
 
-此阶段没有核对鼠标焦点、历史/详情往返、缩放期间询问草稿保持、实际终端输出浏览或用户配置修正。剩余组合与范围见 [Windows 待办](../../../todo/pi-suite/index.md)。
+此阶段没有核对鼠标焦点、历史/详情往返、缩放期间询问草稿保持、实际终端输出浏览或用户配置修正。剩余组合与范围见 [Windows 验收收尾](../windows-completion.md)。
 
 [返回完成索引](../../index.md)

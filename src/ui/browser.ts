@@ -1,4 +1,4 @@
-import { getSelectListTheme, type ExtensionContext, type Theme } from '@earendil-works/pi-coding-agent';
+import { getSelectListTheme, type ExtensionContext, type KeybindingsManager, type Theme } from '@earendil-works/pi-coding-agent';
 import { Input, Key, SelectList, Text, fuzzyFilter, matchesKey, truncateToWidth, visibleWidth,
   type SelectItem, type KeyId, type SelectListLayoutOptions, type TUI, type Component, type TuiMouseEvent, type TuiMouseEventResult } from '@earendil-works/pi-tui';
 import { sanitizeText } from '../runtime/text.ts';
@@ -7,10 +7,14 @@ import type { Dock } from './dock.ts';
 import { InlineInput } from './inline-input.ts';
 import { ActionBar, type DetailAction } from './actions.ts';
 import { commandFrame } from './frame.ts';
-import { controlRows, cycle, divider, emptyRow, focusLabel, keyHint, paneHeading, readerHeading, recordStyle, selectedRow, separator, statusLabels, statusRow, titleRow, type BrowseChoice, type BrowseControl, type BrowseSelection } from './browser-chrome.ts';
+import { DoubleLeft, type ViewerNavigation } from './viewer/navigation.ts';
+import { controlRows, cycle, divider, displayText, emptyRow, focusLabel, keyHint, paneHeading, readerHeading, recordStyle, selectedRow, separator, statusLabels, statusRow, titleRow, type BrowseChoice, type BrowseControl, type BrowseSelection, type DisplayText } from './browser-chrome.ts';
 export type { BrowseChoice, BrowseControl, BrowseSelection } from './browser-chrome.ts';
 
-export interface BrowseItem extends SelectItem { search?: string; status?: string; details?: () => string | Component }
+export interface BrowseItem extends SelectItem { search?: string; status?: string; display?: DisplayText; details?: () => string | Component }
+export type BrowseLayout = Omit<SelectListLayoutOptions, 'truncatePrimary'> & {
+  truncatePrimary?: (context: Parameters<NonNullable<SelectListLayoutOptions['truncatePrimary']>>[0] & {theme?: Theme}) => string;
+};
 /** Browsing is not tool pagination: active execution stays above even newly finished history. */
 export function compareActivity<T extends { createdAt: string; startedAt?: string; lastUpdateAt?: string; endedAt?: string }>(a: T, b: T, active: (item: T) => boolean): number {
   const time = (item: T) => (!active(item) && item.endedAt) || item.lastUpdateAt || item.startedAt || item.createdAt;
@@ -21,7 +25,7 @@ type BrowseFocus = 'list' | 'details' | 'filter';
 export interface BrowseState { query: string; selected?: string; readers: Map<string, ScrollView>; focus?: BrowseFocus }
 export const browseState = (): BrowseState => ({ query: '', readers: new Map() });
 /** One page of a multi-page command: its own list state plus the shared page switcher. */
-export interface BrowsePage { state: BrowseState; pages: BrowseChoice }
+export interface BrowsePage { state: BrowseState; pages: BrowseChoice; navigation?: ViewerNavigation }
 export interface BrowseOptions {
   title: string; items: () => BrowseItem[]; state: BrowseState;
   /** Page tabs live in the title row and switch with 1–9 or [ ]; they are not a focus stop. */
@@ -38,7 +42,8 @@ export interface BrowseOptions {
   /** Enter always resolves the selected value; pages only name what that opens. */
   open?: string;
   selection?: (item: BrowseItem) => BrowseSelection;
-  layout?: SelectListLayoutOptions;
+  navigation?: ViewerNavigation;
+  layout?: BrowseLayout;
 }
 
 /** A shared native list owns selection identities; details never become another data source. */
@@ -54,6 +59,7 @@ export class BrowserView implements Component {
   private focus: BrowseFocus;
   private bar: ActionBar;
   private composer: InlineInput;
+  private doubleLeft = new DoubleLeft();
   private actionOwner?: string;
   private reader?: ScrollView;
   private leftWidth = 0;
@@ -67,9 +73,9 @@ export class BrowserView implements Component {
   private clock?: ReturnType<typeof setInterval>;
   private unsubscribe?: () => void;
 
-  constructor(private tui: TUI, private options: BrowseOptions, private done: (value?: string) => void, private theme?: Theme) {
+  constructor(private tui: TUI, private options: BrowseOptions, private done: (value?: string) => void, private theme?: Theme, keys?: KeybindingsManager) {
     this.focus = options.state.focus ?? 'list';
-    this.composer = new InlineInput(() => tui.requestRender(), theme);
+    this.composer = new InlineInput(() => tui.requestRender(), theme, tui, keys);
     this.bar = new ActionBar(() => this.actions(), request => this.composer.open(request));
     this.input.setValue(options.state.query);
     this.update();
@@ -82,7 +88,7 @@ export class BrowserView implements Component {
       this.clock.unref();
     }
   }
-  dispose(): void { this.composer.dispose(); this.unsubscribe?.(); clearTimeout(this.refreshTimer); clearInterval(this.clock); }
+  dispose(): void { this.doubleLeft.reset(); this.composer.dispose(); this.unsubscribe?.(); clearTimeout(this.refreshTimer); clearInterval(this.clock); }
   invalidate(): void { this.list.invalidate(); this.reader?.invalidate(); }
   getSelectedItem(): SelectItem | null { return this.list.getSelectedItem(); }
   private selectedItem(): BrowseItem | undefined { return this.items.find(item => item.value === this.list?.getSelectedItem()?.value); }
@@ -92,7 +98,7 @@ export class BrowserView implements Component {
   }
   private update(reset = false): void {
     const oldIndex = this.items.findIndex(item => item.value === this.list?.getSelectedItem()?.value);
-    const all = this.options.items().map(item => ({ ...item, label: sanitizeText(item.label).replace(/[\r\n\t]/g, ' '),
+    const all = this.options.items().map(item => ({ ...item, label: item.display ? displayText(item.display, this.theme) : sanitizeText(item.label).replace(/[\r\n\t]/g, ' '),
       description: item.description === undefined ? undefined : sanitizeText(item.description).replace(/[\r\n\t]/g, ' ') }));
     this.total = this.options.total?.() ?? all.length;
     this.items = fuzzyFilter(all, this.options.state.query, item => item.search ?? `${item.label} ${item.description ?? ''}`);
@@ -105,8 +111,8 @@ export class BrowserView implements Component {
       this.list = new SelectList(this.items, this.visibleRows, { ...getSelectListTheme(),
         selectedText: text => selectedRow(text, this.leftWidth, this.theme, this.active('list')) }, {
         ...this.options.layout, truncatePrimary: context => {
-          const text = this.options.layout?.truncatePrimary?.(context) ?? truncateToWidth(context.text, context.maxWidth, '');
-          return recordStyle(text, (context.item as BrowseItem).status, this.theme);
+          const text = this.options.layout?.truncatePrimary?.({...context, theme: this.theme}) ?? truncateToWidth(context.text, context.maxWidth, '');
+          return (context.item as BrowseItem).display ? text : recordStyle(text, (context.item as BrowseItem).status, this.theme);
         },
       });
       this.list.setSelectedIndex(index >= 0 ? index : reset ? 0 : Math.max(0, Math.min(oldIndex, this.items.length - 1)));
@@ -161,11 +167,12 @@ export class BrowserView implements Component {
   private navigation(): string {
     const hint = (key: string, action: string) => keyHint(key, action, this.theme);
     if (this.focus === 'filter') return `Type to filter · ${hint('↑↓', 'select')} · ${hint('Enter', 'keep')} · ${hint('Esc', 'clear')}`;
-    if (this.focus === 'details') return `${hint('↑↓ PgUp PgDn', 'scroll')} · ${hint('/', 'search')} · ${hint('n/N', 'next')} · ${hint('Tab/Esc', 'list')}`;
+    if (this.focus === 'details') return [...this.options.navigation ? [hint('←←', 'close')] : [],
+      hint('Tab/Esc', 'list'), hint('↑↓ PgUp PgDn', 'scroll'), hint('/', 'search'), hint('n/N', 'next')].join(' · ');
     const { pages, controls = [] } = this.options;
-    return [...pages ? [hint(`1-${Math.min(9, pages.items().length)} / [ ]`, 'page')] : [],
-      ...controls.map(control => hint(control.key, control.label.toLowerCase())), hint('/', 'filter'),
-      hint('Tab', 'details'), hint('Esc', this.options.state.query ? 'clear filter' : 'close')].join(' · ');
+    return [...this.options.navigation ? [hint('←←', 'close')] : [], hint('Esc', this.options.state.query ? 'clear filter' : this.options.navigation ? 'back' : 'close'),
+      ...pages ? [hint(`1-${Math.min(9, pages.items().length)} / [ ]`, 'page')] : [],
+      ...controls.map(control => hint(control.key, control.label.toLowerCase())), hint('/', 'filter'), hint('Tab', 'details')].join(' · ');
   }
   private help(): string {
     const confirmation = this.bar.hint(this.theme);
@@ -178,6 +185,7 @@ export class BrowserView implements Component {
   }
   render(width: number): string[] {
     this.update();
+    this.composer.focused = this.focused;
     this.input.focused = this.active('filter');
     if (this.reader) this.reader.search.focused = this.focused && !this.composer.active && this.focus === 'details' && this.reader.searching;
     const header = [titleRow(this.options.title, this.options.pages, width, this.theme, this.options.page), ...controlRows(this.options.controls ?? [], width, this.theme)];
@@ -186,8 +194,11 @@ export class BrowserView implements Component {
       ? this.input.render(room)[0] ?? '' : truncateToWidth(this.options.state.query, room)));
     header.push(this.status(width), separator(width, this.theme));
     this.bodyTop = header.length;
-    // Status belongs to the header; the footer always reserves exactly navigation + action.
-    const height = Math.max(1, Math.floor(this.tui.terminal.rows * 0.8) - header.length - 5);
+    // Native multiline input replaces the usual two-row navigation/action footer.
+    // Budget it before body layout, keeping its cursor and footer inside the frame.
+    const composerRows = this.composer.active && this.composer.multiline
+      ? this.composer.renderRows(width, Math.max(1, Math.floor(this.tui.terminal.rows * 0.8) - header.length - 5)) : [];
+    const height = Math.max(1, Math.floor(this.tui.terminal.rows * 0.8) - header.length - 5 - Math.max(0, composerRows.length - 1));
     const wide = this.wide = width >= 80;
     this.visibleRows = wide ? Math.max(1, height - 1) : this.focus === 'details' ? 1 : Math.max(1, Math.floor(height / 2) - 1);
     this.update();
@@ -220,12 +231,16 @@ export class BrowserView implements Component {
       : this.reader?.searching && this.focus === 'details' ? this.inputRow('Search', width, this.reader.search.focused, room => this.reader!.search.render(room)[0] ?? '') : this.navigation();
     const inline = this.composer.active ? undefined : this.composer.render(width);
     const lines = commandFrame(width, [...header, ...viewport, separator(width, this.theme),
-      truncateToWidth(navigation, width), truncateToWidth(this.composer.active ? this.composer.help() : inline ?? this.help(), width)], this.theme);
+      ...composerRows.length ? composerRows : [truncateToWidth(navigation, width)], truncateToWidth(this.composer.active ? this.composer.help() : inline ?? this.help(), width)], this.theme);
     this.renderedRows = lines.length;
     return lines;
   }
   handleInput(data: string): void {
+    if (this.composer.active || this.focus === 'filter' || this.reader?.searching) this.doubleLeft.reset();
     if (this.composer.handleInput(data)) { this.bar.disarm(); return; }
+    if (this.focus !== 'filter' && !this.reader?.searching && this.options.navigation && this.doubleLeft.handle(data)) {
+      this.options.navigation.close(); this.bar.disarm(); this.done(); return;
+    }
     this.update();
     const nav = [Key.up, Key.down, Key.pageUp, Key.pageDown].some(key => matchesKey(data, key));
     if (this.focus !== 'list') this.bar.disarm();
@@ -263,7 +278,12 @@ export class BrowserView implements Component {
     }
   }
   handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
-    if (this.composer.active) return {handled: true};
+    this.doubleLeft.reset();
+    if (this.composer.active) {
+      if (event.y >= this.bodyBottom + 2) this.composer.handleMouse({...event, y: event.y - this.bodyBottom - 2,
+        x: event.x - (this.composer.multiline ? 0 : visibleWidth(`${focusLabel('Input:', this.focused, this.theme)} `))});
+      return {handled: true};
+    }
     // Hover/release must not steal keyboard focus or cancel an armed action.
     if (event.type !== 'wheel' && !(event.button === 'left' && (event.type === 'press' || event.type === 'click'))) return;
     if (event.y <= 0 || event.y >= this.renderedRows - 1) return;
@@ -293,6 +313,6 @@ export class BrowserView implements Component {
 
 export async function browse(ctx: ExtensionContext, dock: Dock, options: BrowseOptions): Promise<string | undefined> {
   dock.setDetail(true);
-  try { return await ctx.ui.custom<string | undefined>((tui, theme, _keys, done) => new BrowserView(tui, options, done, theme)); }
+  try { return await ctx.ui.custom<string | undefined>((tui, theme, keys, done) => new BrowserView(tui, options, done, theme, keys)); }
   finally { dock.setDetail(false); }
 }

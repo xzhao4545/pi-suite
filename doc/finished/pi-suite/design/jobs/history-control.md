@@ -2,7 +2,7 @@
 
 目标：统一查看运行中和已结束的 job，保留可分页的输入输出及时间信息，并允许用户明确停止指定 job。
 
-归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 验收收尾](../../windows-completion.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
 
 当前状态：实施中；记录、日志、输入记录、列表与详情、停止证据及活动数量的基础实现通过两平台检查，见 [执行任务](../../../../current/jobs/index.md)。/jobs 用户入口（筛选、翻页、详情、各通道读取、确认停止、清理已结算历史）与 PTY attach/detach 已实现；有界日志窗口、实时跟随、历史翻页和列表游标通过 Linux 检查，见 [日志查看基础阶段](../../jobs/log-viewer-core.md)。Linux 已验证自然退出后 monitor 处理期间 stop 保留退出结果，见 [升级控制基础阶段](../../jobs/runtime-control-core.md)；创建归属及 child/后代级联停止已接入 agents 并通过 Linux 检查。Windows 查看流程、停止竞争与级联组合尚待验证。
 

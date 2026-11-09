@@ -1,45 +1,118 @@
-import { test } from "node:test";
-import assert from "node:assert/strict";
-import { setTimeout as sleep } from "node:timers/promises";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import type { Theme } from "@earendil-works/pi-coding-agent";
-import { TerminalView, type TerminalExit } from "../../src/ui/terminal.ts";
-import { manager, owner, settled, testShell } from "../support/jobs.ts";
-import { terminal } from "../support/terminal.ts";
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { setTimeout as sleep } from 'node:timers/promises';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { Theme } from '@earendil-works/pi-coding-agent';
+import { CURSOR_MARKER, visibleWidth } from '@earendil-works/pi-tui';
+import { TerminalView, type TerminalExit } from '../../src/ui/terminal.ts';
+import { TerminalScreen } from '../../src/jobs/terminal/screen.ts';
+import { ViewerNavigation } from '../../src/ui/viewer/navigation.ts';
+import { JobStore } from '../../src/jobs/store.ts';
+import { agentDir, manager, owner, testShell } from '../support/jobs.ts';
+import { terminal } from '../support/terminal.ts';
 
-const theme = { fg: (_color: string, text: string) => text } as unknown as Theme;
-const keys = { detachKey: "ctrl+b", returnKey: "ctrl+g", transferKey: "ctrl+t" } as const;
+const theme = {fg: (_color: string, text: string) => text, bold: (text: string) => text} as unknown as Theme;
+const keys = {detachKey: 'ctrl+j', returnKey: 'ctrl+k', transferKey: 'ctrl+l'} as const;
+async function until(check: () => boolean): Promise<void> {
+  const end = Date.now() + 5000;
+  while (!check()) { assert.ok(Date.now() < end, 'expected PTY output'); await sleep(20); }
+}
 
-test("terminal view: typing takes control from the model, ctrl+g returns it, ctrl+t sends the screen, ctrl+b leaves the job running", { timeout: 30000 }, async () => {
-  const jobs = manager();
+test('PTY browse has no input side effects; configured input/return/transfer/detach keys preserve manager ownership', {timeout: 15000}, async () => {
+  const root = agentDir(), jobs = manager(root), cwd = mkdtempSync(join(tmpdir(), 'pi-suite-term-'));
   try {
-    const { id } = await jobs.start({ command: "while read line; do echo \"got:$line\"; done", mode: "pty", cwd: mkdtempSync(join(tmpdir(), "pi-suite-term-")), ...owner }, testShell());
-    const source = jobs.terminal(id)!;
-    const exits: TerminalExit[] = [];
-    const open = () => new TerminalView(terminal(24, 60), theme, source, keys, {
-      title: () => id,
-      write: data => { jobs.write(id, data, { source: "user", kind: "keys", sensitive: true }); },
+    const {id} = await jobs.start({command: 'while read line; do echo "got:$line"; done', mode: 'pty', cwd, ...owner}, testShell());
+    const source = jobs.terminal(id)!, exits: TerminalExit[] = [], navigation = new ViewerNavigation();
+    const open = (readonly = false) => new TerminalView(terminal(24, 60), theme, source, keys, {
+      title: () => 'Console', readonly, navigation,
+      takeControl: () => jobs.takeControl(id),
+      write: data => { jobs.write(id, data, {source: 'user', kind: 'keys', sensitive: true}); },
       returnControl: () => jobs.returnControl(id), userControl: () => jobs.userControlled(id),
     }, exit => exits.push(exit));
-    const view = open();
-    await sleep(300);
-    assert.match(view.render(60)[1], /model controls input/);
-    for (const key of "abc\r") view.handleInput(key);
-    assert.equal(jobs.userControlled(id), true);
-    assert.throws(() => jobs.write(id, "x\r", { source: "model", kind: "text", text: "x" }), (error: { code?: string }) => error.code === "USER_CONTROL");
-    view.handleInput("\x07"); // ctrl+g
+    const view = open(); view.render(60);
     assert.equal(jobs.userControlled(id), false);
-    jobs.write(id, "model\r", { source: "model", kind: "text", text: "model" });
-    await sleep(500);
-    view.handleInput("\x14"); // ctrl+t
-    assert.equal(exits[0].action, "transfer");
-    assert.ok(exits[0].screen.some(line => line.includes("got:abc")) && exits[0].screen.some(line => line.includes("got:model")), exits[0].screen.join("\n"));
-    open().handleInput("\x02"); // ctrl+b
-    assert.equal(exits[1].action, "detach"); assert.equal(jobs.peek(id).state, "running", "leaving the view does not stop the job");
-    await jobs.stop(id, "user");
-    const job = await settled(jobs, id);
-    assert.equal(job.state, "stopped");
-  } finally { await jobs.shutdown(Date.now() + 5000); }
+    for (const data of ['\x1b[A', '\x1b[B', 'abc', '\x14']) view.handleInput(data);
+    assert.equal(jobs.userControlled(id), false);
+    assert.equal(readFileSync(jobs.logPath(jobs.peek(id), 'input'), 'utf8'), '');
+    view.handleInput('i'); assert.equal(jobs.userControlled(id), true);
+    for (const key of 'secret\r') view.handleInput(key);
+    assert.throws(() => jobs.write(id, 'x\r', {source: 'model', kind: 'text'}), /USER_CONTROL/);
+    await until(() => source.getViewportLines().join('\n').includes('got:secret'));
+    assert.ok(view.render(60).some(line => line.includes(CURSOR_MARKER)));
+    // Left/Esc in input mode are program keys, never browsing-chain close gestures.
+    view.handleInput('\x1b[D'); view.handleInput('\x1b[D'); assert.equal(navigation.closed, false);
+    view.handleInput('\x0b'); assert.equal(jobs.userControlled(id), false); assert.equal(view.inputMode, false);
+    jobs.write(id, '\x15model\r', {source: 'model', kind: 'text', text: 'model'});
+    await until(() => source.getViewportLines().join('\n').includes('got:model'));
+    view.handleInput('i'); view.handleInput('\x0c');
+    assert.equal(exits[0].action, 'transfer'); assert.ok(exits[0].screen.some(line => line.includes('got:model')));
+    assert.equal(jobs.userControlled(id), false);
+    const next = open(); next.handleInput('i'); next.handleInput('\n');
+    assert.equal(exits[1].action, 'detach'); assert.equal(jobs.peek(id).state, 'running');
+    await until(() => readFileSync(jobs.logPath(jobs.peek(id), 'input'), 'utf8').includes('sensitive'));
+    assert.ok(!readFileSync(jobs.logPath(jobs.peek(id), 'input'), 'utf8').includes('secret'));
+    const readonly = open(true);
+    assert.ok(!readonly.render(60).join('\n').includes('i input'));
+    readonly.handleInput('i'); assert.equal(jobs.userControlled(id), false); readonly.dispose();
+    const close = open(); close.handleInput('\x1b[D'); close.handleInput('\x1b[D');
+    assert.equal(navigation.closed, true); assert.equal(jobs.peek(id).state, 'running');
+    await jobs.stop(id);
+    assert.ok(!open().render(60).join('\n').includes('i input'));
+  } finally { await jobs.shutdown(Date.now() + 5000); rmSync(root, {recursive: true, force: true}); rmSync(cwd, {recursive: true, force: true}); }
+});
+
+test('settlement saves bounded xterm normal history, colors/CR/cursor/wide cells; another owner restores without log replay', {timeout: 15000}, async () => {
+  const root = agentDir(), jobs = manager(root), other = manager(root), store = new JobStore(root);
+  let restored: TerminalScreen | undefined;
+  try {
+    const job = await jobs.start({...owner, cwd: root, mode: 'pty', cols: 40, rows: 10,
+      command: "for i in {1..1250}; do printf 'line-%s\\n' \"$i\"; done; printf '\\033[31;1m中文\\033[0m\\r终态\\033[3;4Hcursor'; read line"}, testShell());
+    const screen = jobs.terminal(job.id)!;
+    await until(() => screen.getViewportLines().join('\n').includes('cursor'));
+    assert.equal((await store.load(job.workspace, job.id)).terminalSnapshot, undefined, 'no per-frame snapshot writes');
+    screen.scroll(8); const paused = screen.getViewportLines().join('\n');
+    jobs.write(job.id, 'done\r', {source: 'model', kind: 'text'});
+    const settled = await jobs.wait(job.id);
+    assert.ok(settled.terminalSnapshot); assert.equal(settled.error, undefined);
+    const foreign = await other.get(job.id, job.workspace); assert.equal(foreign.live, false);
+    const snapshot = await other.readTerminalSnapshot(foreign.job); assert.ok(snapshot);
+    assert.equal(snapshot.cols, 40); assert.equal(snapshot.rows, 10); assert.ok(snapshot.scrollback <= 1000);
+    assert.ok(snapshot.data.length < 4 * 1024 * 1024);
+    restored = await TerminalScreen.restore(snapshot);
+    screen.follow(); assert.deepEqual(restored.getViewportLines(), screen.getViewportLines());
+    assert.equal(restored.viewport.cursor.x, snapshot.cursor.x); assert.equal(restored.viewport.cursor.y, snapshot.cursor.y);
+    assert.match(restored.getViewportLines({ansi: true}).join('\n'), /\x1b\[/);
+    restored.scroll(10); assert.notEqual(restored.getViewportLines().join('\n'), screen.getViewportLines().join('\n'));
+    assert.ok(paused.includes('line-'), 'owner still has bounded history after disposal');
+    restored.scroll(Number.MAX_SAFE_INTEGER);
+    assert.ok(!restored.getViewportLines().some(line => line.includes('line-1 ')), 'snapshot is a bounded suffix, not all history');
+    const view = new TerminalView(terminal(24, 60), theme, restored, keys, {
+      title: () => 'Saved terminal', readonly: true, write: () => assert.fail('historical input'),
+      returnControl: () => {}, userControl: () => false,
+    }, () => {});
+    for (const width of [40, 60, 120]) assert.ok(view.render(width).every(line => visibleWidth(line) <= width));
+    view.handleInput('f'); assert.equal(restored.following, true); view.dispose();
+    await jobs.clear(job.id, job.workspace); await assert.rejects(other.get(job.id, job.workspace), /NOT_FOUND/);
+  } finally { restored?.dispose(); await jobs.shutdown(Date.now() + 5000); await other.shutdown(Date.now() + 5000); rmSync(root, {recursive: true, force: true}); }
+});
+
+test('alternate-screen settlement preserves only the true final screen and cursor visibility', {timeout: 10000}, async () => {
+  const root = agentDir(), jobs = manager(root);
+  let restored: TerminalScreen | undefined;
+  try {
+    const job = await jobs.start({...owner, cwd: root, mode: 'pty', cols: 30, rows: 8,
+      command: "printf 'normal-buffer\\n\\033[?1049h\\033[2J\\033[H\\033[32m中文\\033[0m\\033[3;5Hcursor\\033[?25l'; read line"}, testShell());
+    const screen = jobs.terminal(job.id)!;
+    await until(() => screen.getViewportLines().join('\n').includes('cursor'));
+    jobs.write(job.id, 'end\r', {source: 'model', kind: 'text'});
+    const ended = await jobs.wait(job.id), snapshot = await jobs.readTerminalSnapshot(ended); assert.ok(snapshot);
+    restored = await TerminalScreen.restore(snapshot);
+    assert.equal(snapshot.alternate, true); assert.equal(restored.viewport.alternate, true);
+    assert.equal(restored.viewport.cursor.visible, false);
+    assert.deepEqual(restored.getViewportLines(), screen.getViewportLines());
+    assert.ok(!restored.getViewportLines().join('\n').includes('normal-buffer'));
+    assert.ok(!restored.getViewportLines().join('\n').includes('Process exited'), 'viewer status must not corrupt the app screen');
+  } finally { restored?.dispose(); await jobs.shutdown(Date.now() + 5000); rmSync(root, {recursive: true, force: true}); }
 });

@@ -2,7 +2,7 @@
 
 目标：避免 retry、compact 和会话切换误中断 goal。
 
-归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 验收收尾](../windows-completion.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
 
 当前状态：目标生命周期与摘要基础阶段已实现并通过 Windows/Linux 离线验收，记录见 [已完成阶段](../goal-core.md)。真实询问、两个 child 父级问题与 pipe job 完成通知的 Linux 组合通过 [协调阶段](../ask/coordination.md) 验收；完整 Starship 发布入口的 Linux 三尺寸组合见 [footer 联动阶段](../footer-integration.md)；Windows 组合与用户实际 footer 配置仍需综合验收。
 

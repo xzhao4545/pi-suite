@@ -1,6 +1,7 @@
 import type { ExtensionUIContext } from "@earendil-works/pi-coding-agent";
 import type { DisplayMode } from "../runtime/config.ts";
 import type { Dock, DockRow } from "./dock.ts";
+import type { DisplayText } from './browser-chrome.ts';
 
 export class StatusPublisher {
   private ui?: ExtensionUIContext;
@@ -9,7 +10,7 @@ export class StatusPublisher {
   private agents = new Set<string>();
   private jobs = new Set<string>();
   private details: Record<'agents' | 'jobs', DockRow[]> = { agents: [], jobs: [] };
-  private asides: Record<'agents' | 'jobs', string> = { agents: '', jobs: '' };
+  private asides: Record<'agents' | 'jobs', DisplayText> = { agents: '', jobs: '' };
   private ownsGoal = true;
   private modes: Record<"goal" | "agents" | "jobs", DisplayMode> = { goal: "status", agents: "status", jobs: "status" };
 
@@ -18,7 +19,7 @@ export class StatusPublisher {
       ? [{ id: "goal", text: this.goal, priority: 90 }] : [] });
     for (const key of ["agents", "jobs"] as const) dock.register(key, { title: key === 'agents' ? 'Agents' : 'Jobs', rows: () => [
       // Counts are summaries, not object identities that a viewer can open.
-      ...(this.modes[key] === "dock" && this[key].size && !this.asides[key] ? [{ id: key, text: `${this[key].size} active`, priority: 70, selectable: false }] : []),
+      ...(this.modes[key] === "dock" && this[key].size && !this.asides[key].length ? [{ id: key, text: `${this[key].size} active`, priority: 70, selectable: false }] : []),
       ...(this.modes[key] === 'hidden' ? [] : this.details[key]),
     ], aside: () => this.asides[key] });
   }
@@ -40,10 +41,10 @@ export class StatusPublisher {
   }
   get goalVisible(): boolean { return Boolean(this.ui && this.modes.goal !== 'hidden'); }
   detailsVisible(kind: 'agents' | 'jobs'): boolean { return Boolean(this.ui && this.modes[kind] !== 'hidden'); }
-  setActivities(kind: "agents" | "jobs", ids: Iterable<string>, details: DockRow[] = [], aside = ''): void {
+  setActivities(kind: "agents" | "jobs", ids: Iterable<string>, details: DockRow[] = [], aside: DisplayText = ''): void {
     const next = new Set(ids), previousSize = this[kind].size;
     this[kind] = next;
-    const changed = JSON.stringify(details) !== JSON.stringify(this.details[kind]) || aside !== this.asides[kind];
+    const changed = JSON.stringify(details) !== JSON.stringify(this.details[kind]) || JSON.stringify(aside) !== JSON.stringify(this.asides[kind]);
     this.details[kind] = details; this.asides[kind] = aside;
     // Footer counts do not tick; live row metrics and state counts only redraw Dock.
     if (next.size !== previousSize) this.flush();

@@ -10,9 +10,8 @@ import { workflowToolDescription } from './tool-description.ts';
 import { workflowSummary, type WorkflowsModule } from './index.ts';
 import { decideWorkflowCollision } from './collisions.ts';
 import { WORKFLOW_ENTRY_TYPE, decodeWorkflowEntry, taskFromEntry } from './entry.ts';
-import { sanitizeText } from '../../runtime/text.ts';
 import { workflowRenderers } from './render.ts';
-import { WorkflowProgress, workflowLine, workflowLines } from './ui/progress.ts';
+import { WorkflowProgress, workflowLine, workflowToolRows } from './ui/progress.ts';
 import type { AgentType } from '../types.ts';
 
 const schema = Type.Object({script: Type.Optional(Type.String({minLength: 1})), scriptPath: Type.Optional(Type.String({minLength: 1})),
@@ -38,7 +37,7 @@ export function registerWorkflowTool(pi: ExtensionAPI, workflows: WorkflowsModul
       },
       lines: id => {
         const task = workflows.manager.tasks.get(id);
-        return task ? workflowLines(task).map(sanitizeText) : undefined;
+        return task ? workflowToolRows(task) : undefined;
       },
     }) };
   pi.registerEntryRenderer(WORKFLOW_ENTRY_TYPE, (entry, _options, theme) => {

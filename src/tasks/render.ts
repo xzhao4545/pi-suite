@@ -1,10 +1,10 @@
 import { toolRenderers, type ToolLine } from '../ui/tool-render.ts';
-import { taskRow, taskIcon, taskTone, taskHeading, receiptAction, receiptDisplay, derivedDisplay } from './presentation.ts';
+import { taskIcon, taskTone, taskHeading, receiptAction, receiptDisplay } from './presentation.ts';
 import type { EditResult, TaskView } from './types.ts';
 
 function line(task: Pick<TaskView, 'id' | 'title' | 'parentId' | 'status'>): ToolLine {
   return { icon: taskIcon(task.status), title: taskHeading(task),
-    tone: taskTone(task.status),
+    tone: taskTone(task.status), titleTone: taskTone(task.status),
     strike: task.status === 'done', indent: task.parentId ? 2 : 0 };
 }
 export const listRenderers = toolRenderers<{ state?: string; groupId?: string }, { tasks: TaskView[]; nextCursor?: string }>({
@@ -15,14 +15,15 @@ export const listRenderers = toolRenderers<{ state?: string; groupId?: string },
       `running ${tasks.filter(task => task.status === 'doing').length} · blocked ${tasks.filter(task => task.status === 'blocked').length} · completed ${tasks.filter(task => task.status === 'done').length}`,
       meta: nextCursor ? ['next page available'] : [] };
   },
-  expanded: ({ tasks, nextCursor }, _args, _text, theme) => [
-    ...tasks.map(task => taskRow(task, theme) + (task.progress ? ` ${task.progress.done}/${task.progress.total}` : '')),
-    ...nextCursor ? ['More tasks · next page available'] : [], ...tasks.length ? [] : ['No tasks'],
+  expanded: ({ tasks, nextCursor }) => [
+    ...tasks.map(task => ({ ...line(task), meta: task.progress ? [`${task.progress.done}/${task.progress.total}`] : [] })),
+    ...nextCursor ? [{ label: 'more', value: 'next page available', tone: 'warning' as const }] : [], ...tasks.length ? [] : ['No tasks'],
   ],
 });
 export const getRenderers = toolRenderers<{ id: string }, { task: TaskView }>({
   call: () => ({ icon: '⟳', tone: 'accent', title: 'Task' }),
   collapsed: ({ task }) => ({ ...line(task), meta: task.progress ? [`${task.progress.done}/${task.progress.total}`] : [] }),
+  expanded: ({ task }, _args, text) => [{ code: JSON.stringify(task, null, 2), language: 'json', label: 'task' }, text],
 });
 export const editRenderers = toolRenderers<unknown, EditResult>({
   call: () => ({ icon: '⟳', tone: 'accent', title: 'Updating tasks…' }),
@@ -41,14 +42,12 @@ export const editRenderers = toolRenderers<unknown, EditResult>({
       meta: [...data.derived.length ? [`dependency changes ${data.derived.length}`] : [],
         ...data.warnings.length ? [{ text: `⚠ ${data.warnings.length}`, tone: 'warning' as const }] : []] };
   },
-  expanded: (data, _args, _text, theme) => [
-    ...data.changes.map(change => {
-      const task = { ...change, status: change.after ?? change.before ?? 'todo' };
-      return taskRow(task, theme) + receiptDisplay(change).slice(receiptDisplay(change).indexOf(' · '));
-    }),
-    ...data.derived.map(derivedDisplay),
-    ...data.changes.filter(change => change.fields).map(change => `${change.id} ${JSON.stringify(change.fields)}`),
-    ...data.progress.map(group => `${group.id} ${group.done}/${group.total} ${group.status}`),
-    ...data.warnings.map(warning => theme.fg('warning', `⚠ ${warning}`)),
+  expanded: data => [
+    ...data.changes.map(change => ({ ...line({ ...change, status: change.after ?? change.before ?? 'todo' }),
+      summary: receiptDisplay(change).slice(receiptDisplay(change).indexOf(' · ') + 3) })),
+    ...data.derived.map(change => ({ ...line(change), summary: change.status === 'blocked' ? 'blocked' : 'dependencies cleared' })),
+    ...data.changes.filter(change => change.fields).map(change => ({ code: JSON.stringify(change.fields, null, 2), language: 'json' as const, label: `fields ${change.id}` })),
+    ...data.progress.map(group => ({ label: `group ${group.id}`, value: `${group.done}/${group.total} ${group.status}`, tone: taskTone(group.status) })),
+    ...data.warnings.map(warning => ({ label: 'warning', value: warning, tone: 'warning' as const })),
   ],
 });

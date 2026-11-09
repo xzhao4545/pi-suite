@@ -2,7 +2,7 @@
 
 目标：在 TUI 内配置 subagent 的模型和 thinking，从已配置认证的模型中直接选择，修改立即生效，不需要编辑文件或 /reload。
 
-归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 验收收尾](../../windows-completion.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
 
 当前状态：共享 agents.types 配置、逐字段写回、类型选择界面、单 agent 下一请求修改与持久恢复、模型来源和认证错误已接入；5 项 Linux 契约检查覆盖实际 SDK 请求与原生选择组件，见 [模型配置基础阶段](../../agents/models-core.md)。enabled 的配置优先级、完整类型菜单、Enable/Disable/Use definition 与即时 @类型/workflow 刷新见 [类型与回收阶段](../../agents/types-retention.md)。调度/workflow/@handle 的实际请求、配置来源及持久恢复通过 Linux [入口组合阶段](../../agents/models-entrypoints.md)，Windows 组合验收待完成。需求与取舍已由用户确认。
 

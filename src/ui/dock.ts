@@ -2,20 +2,22 @@ import type { Component, TUI } from "@earendil-works/pi-tui";
 import { isKeyRelease, matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { dockWindow } from './dock/rows.ts';
+import { executionRow } from './dock/line.ts';
+import { displayText, selectedRow, type DisplayText } from './browser-chrome.ts';
 
 const sourceOrder = ['goal', 'tasks', 'agents', 'jobs', 'workflows'];
 
 export interface DockRow {
-  id: string; text: string; priority: number; suffix?: string; parentId?: string; selectable?: boolean;
+  id: string; text: string; priority: number; suffix?: DisplayText; parentId?: string; selectable?: boolean;
   /** Less detailed suffixes, in domain-defined omission order; never change the object's identity. */
-  compactSuffixes?: string[];
+  compactSuffixes?: DisplayText[];
 }
 export interface DockSource {
   title: string;
   rows: () => DockRow[];
   summary?: () => string;
   subtitle?: () => string;
-  aside?: () => string;
+  aside?: () => DisplayText;
   footer?: () => string;
   progress?: () => number;
   open?: (rowId: string, ctx: ExtensionContext) => void | Promise<void>;
@@ -125,47 +127,38 @@ export class Dock implements Component {
     this.deactivate();
     return back ? { consume: true } : undefined;
   }
-  private highlight(text: string): string { return this.theme?.bold(this.color('accent', text)) ?? text; }
   private header(source: DockSource, width: number, selecting = false, compactHint = ''): string {
-    const aside = [compactHint, source.aside?.()].filter(Boolean).join(' · '), space = Math.max(0, width - visibleWidth(aside) - Number(!!aside));
+    const aside = [compactHint ? this.color('dim', compactHint) : '', displayText(source.aside?.() ?? '', this.theme, 'dim')].filter(Boolean).join(' · '), space = Math.max(0, width - visibleWidth(aside) - Number(!!aside));
     const fullHint = `↑↓ select · [ ] section · Enter ${source.readOnly ? 'view' : 'open'} · Esc back`;
     const label = this.title(source) + (selecting && source.readOnly ? this.color('dim', ' · read only') : '');
     const hint = selecting ? (visibleWidth(label) + 2 + visibleWidth(fullHint) <= space ? fullHint : '[ ] Enter Esc') : '';
     const title = hint ? truncateToWidth(label, Math.max(0, space - visibleWidth(hint) - 2), '…') : label;
     return this.row({id: 'header', priority: 0, text: title + (hint ? '  ' + this.color('dim', hint)
-      : source.subtitle ? '  ' + this.color('dim', source.subtitle()) : ''), suffix: aside ? this.color('dim', aside) : undefined}, width);
+      : source.subtitle ? '  ' + this.color('dim', source.subtitle()) : ''), suffix: aside || undefined}, width);
   }
   private color(kind: 'accent' | 'dim' | 'muted' | 'borderMuted', text: string): string { return this.theme?.fg(kind, text) ?? text; }
   private title(source: DockSource): string { return this.theme?.bold(this.color('accent', source.title)) ?? source.title; }
   private row(row: DockRow, width: number): string {
-    const suffixes = [row.suffix ?? '', ...row.compactSuffixes ?? []];
-    // Keep a recognizable name before dropping lower-value metrics. The domain
-    // supplies the omission order, while Dock owns the terminal-width decision.
-    const nameSpace = row.compactSuffixes ? Math.min(8, visibleWidth(row.text)) + 1 : 0;
-    const suffix = truncateToWidth(suffixes.find(text => visibleWidth(text) <= width - nameSpace) ?? suffixes.at(-1)!, width);
-    if (!suffix) return truncateToWidth(row.text, width);
-    const titleWidth = Math.max(0, width - visibleWidth(suffix) - 1);
-    const text = truncateToWidth(row.text, titleWidth, '…');
-    return (titleWidth ? text + ' '.repeat(titleWidth - visibleWidth(text) + 1) : '') + suffix;
+    return executionRow(row.text, row.suffix ?? '', row.compactSuffixes, width, this.theme);
   }
   private summary(source: DockSource, rows: DockRow[], width: number): string {
     const first = [...rows].sort((a, b) => b.priority - a.priority)[0];
     const prefix = this.title(source) + ' · ';
-    const aside = source.aside?.() ?? '';
+    const aside = displayText(source.aside?.() ?? '', this.theme, 'dim');
     const space = Math.max(0, width - visibleWidth(prefix) - (aside ? visibleWidth(aside) + 1 : 0));
     const text = prefix + (source.summary ? truncateToWidth(source.summary(), space, '…') : this.row(first, space));
-    return aside ? this.row({id: 'summary', text, priority: 0, suffix: this.color('dim', aside)}, width) : text;
+    return aside ? this.row({id: 'summary', text, priority: 0, suffix: aside}, width) : text;
   }
   private section(source: DockSource, rows: DockRow[], limit: number, width: number, selectedId?: string): string[] {
     const focus = rows.find(row => row.id === selectedId);
     if (focus && limit === 1) {
       const index = rows.indexOf(focus);
       const counts = [index ? `↑${index}` : '', rows.length - index - 1 ? `↓${rows.length - index - 1}` : ''].filter(Boolean).join(' ');
-      const title = this.title(source);
-      const full = title + ` [ ] Enter/Esc${counts ? ` ${counts}` : ''} · > `;
-      const prefix = visibleWidth(full) <= width - Math.min(8, visibleWidth(focus.text)) ? full
-        : truncateToWidth(title, Math.max(0, width - visibleWidth(` [ ] ${counts} > `) - 8)) + ` [ ] ${counts} > `;
-      return [truncateToWidth(this.highlight(prefix + this.row(focus, Math.max(0, width - visibleWidth(prefix)))), width)];
+      const title = this.title(source), room = Math.max(0, width - 2);
+      const full = title + ` [ ] Enter/Esc${counts ? ` ${counts}` : ''} · `;
+      const prefix = visibleWidth(full) <= room - Math.min(8, visibleWidth(focus.text)) ? full
+        : truncateToWidth(title, Math.max(0, room - visibleWidth(` [ ] ${counts} · `) - 8)) + ` [ ] ${counts} · `;
+      return [selectedRow(truncateToWidth('> ' + prefix + this.row(focus, Math.max(0, room - visibleWidth(prefix))), width), width, this.theme)];
     }
     if (!focus && rows.length === 1 && source.aside?.() && limit >= 2) return [this.header(source, width), this.row(rows[0], width)];
     if (!focus && (rows.length === 1 || limit <= 3)) return [this.summary(source, rows, width)];
@@ -180,7 +173,7 @@ export class Dock implements Component {
         const prefix = selected ? '> ' : tree ? branch(row.parentId ? '│    ' : '├─ ', index) : '';
         const text = row.id.startsWith('overflow:') ? this.color('muted', this.row(row, Math.max(0, width - visibleWidth(prefix))))
           : this.row(row, Math.max(0, width - visibleWidth(prefix)));
-        return selected ? this.highlight(prefix + text) : prefix + text;
+        return selected ? selectedRow(prefix + text, width, this.theme) : prefix + text;
       }), ...tail ? [truncateToWidth((tree ? branch('└─────', shown.length) : '')
         + (source.footer?.() ? ' ' + this.color('dim', source.footer!()) : ''), width)] : []];
   }

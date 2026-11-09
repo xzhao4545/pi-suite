@@ -4,6 +4,7 @@
 import { performance } from 'node:perf_hooks';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { JobStore } from './store.ts';
+import { jobName } from './launch/name.ts';
 import { resolveWorkspace } from './workspace.ts';
 import { isActive, isTerminal, settleExit } from './state.ts';
 import { stopTracked, stopTrackedSync, type Tracked } from './backends/process.ts';
@@ -120,7 +121,7 @@ export class JobManager {
     const job: JobSummary = {
       schemaVersion: 1, id, workspace, ownerRuntimeId: this.runtimeId, ownerSessionId: request.ownerSessionId,
       anchorEntryId: request.anchorEntryId,
-      name: request.name?.trim() || (request.monitor?.fileWatch ? `watch ${request.monitor.fileWatch.path}` : command.trim().split('\n')[0]).slice(0, 80),
+      name: jobName(request).slice(0, 80),
       command, cwd: request.cwd, mode, ...(request.taskId ? { taskId: request.taskId } : {}),
       ...(request.creator ? { creator: request.creator } : {}),
       ...(request.monitor ? { monitor: { config: request.monitor, events: 0, notifiedEvents: 0 } } : {}),
@@ -200,11 +201,21 @@ export class JobManager {
       // so a settled job never reports fewer events than its output holds.
       try { await item.watcher?.stop(); } catch (error) { this.setError(item, `monitor: ${String(error)}`); }
       job.fullScreen = run.terminal?.fullScreen || undefined;
+      if (run.terminal) {
+        try {
+          const snapshot = run.terminal.snapshot();
+          await this.store.saveTerminalSnapshot(job, snapshot);
+          const {data: _data, ...metadata} = snapshot; job.terminalSnapshot = metadata;
+        } catch (error) { this.setError(item, `final terminal snapshot unavailable: ${String(error)}`); }
+      }
       // The logs are flushed, but the run remains active until its final preview
       // exists. Publishing terminal state first would split output and result wakes.
       try { job.outputPreview = await outputPreview(this, job); }
       catch (error) { this.setError(item, `output preview unavailable: ${String(error)}`); }
       if (exit.error) this.setError(item, exit.error);
+      // Input and monitor events are real streams too; publish settlement only after their
+      // serialized append queue drains, so the viewer's final size read cannot miss them.
+      await item.inputQueue;
       if (job.stopReason) job.cleanup.rootExited = true;
       else { job.cleanup = { state: run.knownResidual ? 'unconfirmed' : 'not_required', scope: [], rootExited: true }; run.dispose(); }
       job.state = settleExit(exit, job.stopReason);
@@ -337,6 +348,12 @@ export class JobManager {
   }
   resize(id: string, cols: number, rows: number): void { this.owned(id).run?.resize?.(cols, rows); }
   terminal(id: string): PtyTerminalSession | undefined { return this.jobs.get(id)?.run?.terminal; }
+  /** Claiming input sends no program bytes; merely opening a readonly screen never calls this. */
+  takeControl(id: string): void {
+    const item = this.owned(id);
+    if (!item.run?.terminal || item.run.exitObserved || item.job.state !== 'running') throw new ToolError('NOT_RUNNING', `${id} has no active PTY input`, id);
+    if (!item.userControl) { item.userControl = true; item.supervisor?.pause(); item.pendingUpdate = undefined; this.changed(); }
+  }
   userControlled(id: string): boolean { return !!this.jobs.get(id)?.userControl; }
   /** Hand input back to the model (Ctrl+G or leaving the terminal view). */
   returnControl(id: string): void {
@@ -387,6 +404,7 @@ export class JobManager {
       // Retry an unsaved terminal result before removal; failed writes remain explicit.
       if (item?.dirty) await this.store.save(item.job);
       await this.store.remove(job);
+      item?.run?.terminal?.releaseScreen();
       this.jobs.delete(id); this.quietWakes.delete(id); this.changed();
     } finally { if (item) item.deleting = false; }
   }
@@ -397,6 +415,7 @@ export class JobManager {
     return { jobs: [...all.values()], errors: stored.errors };
   }
   logPath(job: JobSummary, stream: Stream): string { return this.store.logPath(job, stream); }
+  readTerminalSnapshot(job: JobSummary) { return this.store.readTerminalSnapshot(job); }
   markNotified(id: string): void {
     const item = this.jobs.get(id);
     if (!item || item.job.notified) return;

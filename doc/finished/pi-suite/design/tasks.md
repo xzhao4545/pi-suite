@@ -2,7 +2,7 @@
 
 目标：支持父任务和子任务两级管理、动态调整及自动折叠，通过精简工具参数和返回内容降低模型的 token 消耗与操作负担。
 
-归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 验收收尾](../windows-completion.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
 
 当前状态：实施中；两级结构、批量编辑、进度派生、版本化存储与锁、共享 Dock/详情、会话 fork/reload、提醒及 job 引用已实现，Linux 的 8 项检查通过，见 [两级任务基础阶段](../tasks/core.md) 与 [当前任务文档](../../../current/tasks/index.md)。多 child 共享 TaskStore、并发编辑与原 owner 的 reload/fork/回收后恢复通过两项真实 SDK 检查，见 [子代理任务集成](../tasks/agents-integration.md)；Windows的界面、并发组合继续验收。存储与会话处理以上游 @tintinweb/pi-tasks 0.9.1 导入改造，按文件处置见 [上游导入](upstream-import.md)。
 

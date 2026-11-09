@@ -2,7 +2,7 @@
 
 目标：模型能用有限 token 读到 job 输出中需要的部分：默认看到开头、结尾和错误行，按需分页或搜索，PTY 输出转为可读文本。
 
-归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 验收收尾](../../windows-completion.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
 
 当前状态：实施中；共享默认截断、offset 分页与搜索已通过两平台基础检查（含 100 MiB 日志）。关键行前后上下文、truncated.keys 原始范围、超长返回文本的字节预算及 agent_read/job_read 实际续读提示通过 Linux SDK 聚合检查；统一 job 读取位于 src/jobs/output.ts。PTY 密码提示至换行的回显隐藏、横向重绘、全屏提示与完成预览通过 [读取组合阶段](../../jobs/output-core.md) 的 Linux 真实 PTY/通知验收；垂直光标、全屏线性片段与同进程最后屏幕的支持范围已由 [屏幕范围阶段](../../jobs/screen-range.md) 明确，完整二维历史还原不在 reader 范围内。[超长逻辑行阶段](../../jobs/long-line.md) 核对了 100 MiB 单行全文匹配、线性组装和明确的正则资源失败；Windows 组合验收待完成。
 

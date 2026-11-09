@@ -2,7 +2,7 @@
 
 目标：回答时可以查阅聊天，并为询问提供可配置截止时间。
 
-归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 验收收尾](../../windows-completion.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
 
 当前状态：inline 询问、历史/回答焦点、默认与单次超时、排队及单次结算已实现；goal waiting_user、两个 child 的父级提问与真实 job 完成通知暂存通过 Linux 真实 SDK 组合验收，见 [询问与后台通知协调阶段](../../ask/coordination.md)。Windows 组合仍待验收。
 

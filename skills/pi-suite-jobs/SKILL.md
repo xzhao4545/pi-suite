@@ -37,7 +37,7 @@ job_start({agent: {preset: "codex", prompt: "Review the requested diff"}, mode: 
 job_start({command: "my-cli", mode: "pty", attach: true})
 ```
 
-`attach: true` requires a PTY and the interactive UI; it blocks until the user leaves the terminal view. The job continues afterwards. The user can reopen it through `/jobs`; leaving a view, compaction, reload and session changes do not stop it.
+`attach: true` requires a PTY and the interactive UI; it blocks until the user leaves the input view. The job continues afterwards. `/jobs`, Dock and owned Jobs open command/output directly in read-only browsing mode; use `i` to explicitly take over an active PTY. Leaving a view, compaction, reload and session changes do not stop it.
 
 Dispatch defaults to quiet termination after 8000 ms of silence and a 15000 ms startup grace. Silence requests a real stop; after exit the result is `stopped` with `completionReason: "quiet"`, never proof of success. For tests, builds or CLIs that may legitimately go quiet, set `autoExitOnQuiet: false` and choose a suitable `timeoutMs`. Hands-free defaults to no quiet termination; updates are bounded by `updateMaxChars` and `maxTotalChars`.
 
@@ -74,4 +74,4 @@ job_start({command: "./gate", timeoutMs: 1800000,
 
 Use `job_stop({id})` when the authorized work requires ending a managed job. It preserves history and returns the actual state and cleanup evidence; `pending` or `unconfirmed` is not a proven stop. Repeated stops join ongoing cleanup. Inspect exit code and logs before reporting success.
 
-History-only records cannot be attached, written to or stopped by reusing stored PIDs. `/jobs` offers user-confirmed `Clear history` for settled records with confirmed cleanup when execution is available; it removes metadata and all logs. There is no model tool for history deletion. Readonly agent history and restricted runtimes hide this action. Do not discard completed evidence or stop desired long-lived servers/watchers merely because a view closes or a turn ends.
+History-only records cannot be attached, written to or stopped by reusing stored PIDs. `/jobs` provides a twice-confirmed `Delete` action for settled records with confirmed cleanup when the control bridge supports clearing; it removes metadata, all logs and the terminal snapshot. There is no model tool for history deletion. Readonly agent history and runtimes without the clear capability hide this action. Saved PTY snapshots restore only a final read-only screen and bounded scrollback; records without a snapshot remain log-only. Esc goes back and double-Left within 300 ms closes the browsing chain; editing/search and explicit PTY input keep their own direction keys. Do not discard completed evidence or stop desired long-lived servers/watchers merely because a view closes or a turn ends.

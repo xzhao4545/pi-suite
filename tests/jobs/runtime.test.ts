@@ -108,7 +108,7 @@ test('foreign directories and unknown occupied registrations stay unavailable wi
   const registration = globals[key], bridge = registration.control;
   let h: Awaited<ReturnType<typeof host>> | undefined;
   try {
-    assert.ok(bridge?.version === 3);
+    assert.ok(bridge?.version === 4);
     const {createdBy: _createdBy, sessionJobs: _sessionJobs, ...legacyJobs} = bridge.jobs;
     registration.protocolVersion = PROTOCOL_VERSION - 1;
     registration.control = {version: 1, jobs: legacyJobs, quit: () => bridge.quit()};

@@ -8,6 +8,8 @@
 
 通用字段保存后 `/reload` 应用；保存不重新绑定会话或停止现有执行。Types 菜单保存后按其现有规则立即刷新新调用的类型设置、补全和 workflow 描述，已准入 run 保持自身契约。非 TUI 的 `/suite` 显示有效配置。
 
+`ui.highlightBuiltinCommands` 为严格布尔字段，默认 true，按默认值 → 用户层 → 项目层逐字段继承。`/suite` 展示该项的来源、默认值、用户值、项目值、有效值与保存后的 reload 提示。它只控制内置模型 `bash` / `powershell` 调用区的语法高亮：false 完整保留原生调用显示，不改变执行、结果、外壳、计时或超时；Jobs 顶部与 Suite 展开的 command 字段始终高亮，用户 `!` / `!!` 不受影响。保存不会修改当前 renderer 的选项快照，`/reload` 应用新值；childSuite 传入 `run.config.ui.highlightBuiltinCommands`，使用准入时配置目录的快照，不读取 child 执行目录的覆盖。历史与 child 的显示定义通过统一 renderer 登记/lookup 复用。
+
 `commands.exit` 默认 true，独立于业务模块开关。`/exit` 在忙碌时通过公开 abort 与 waitForIdle 等待当前操作取消，再请求宿主 shutdown；随后由原生 quit 流程恢复终端、触发 session_shutdown 并等待 jobs/agents/workflow owner 清理。设置 false 后 `/reload` 撤销本扩展的 `/exit` 注册；原生 `/quit` 始终可用。
 
 [返回公共运行时](index.md)

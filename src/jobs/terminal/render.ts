@@ -1,6 +1,7 @@
 // Split from pi-interactive-shell 0.18.0 pty-session.ts (MIT, third-party/licenses/pi-interactive-shell.txt):
 // pure cell-to-SGR rendering for the headless xterm buffer.
 import type { IBufferCell, IBufferLine } from '@xterm/headless';
+import { CURSOR_MARKER, renderFakeCursor } from '@earendil-works/pi-tui';
 
 const OSC_REGEX = /\x1b\][^\x07]*(?:\x07|\x1b\\)/g;
 const APC_REGEX = /\x1b_[^\x07\x1b]*(?:\x07|\x1b\\)/g;
@@ -48,7 +49,7 @@ function cellColor(cell: IBufferCell | undefined, fg: boolean): { mode: ColorMod
   return mode === 'palette' && (value < 0 || value > 255) ? { mode: 'default', value: 0 } : { mode, value };
 }
 
-export function renderLineFromCells(line: IBufferLine | undefined, cols: number): string {
+export function renderLineFromCells(line: IBufferLine | undefined, cols: number, cursorColumn?: number, hardwareCursor = false): string {
   let currentKey = '';
   let out = '';
   for (let x = 0; x < cols; x++) {
@@ -60,7 +61,10 @@ export function renderLineFromCells(line: IBufferLine | undefined, cols: number)
       fgMode: fg.mode, fg: fg.value, bgMode: bg.mode, bg: bg.value };
     const key = styleKey(style);
     if (key !== currentKey) { currentKey = key; out += sgrForStyle(style); }
-    out += cell?.getChars() || ' ';
+    const chars = cell?.getChars() || ' ';
+    // A cursor on the continuation cell of a wide glyph belongs to the entire glyph.
+    const cursor = cursorColumn !== undefined && cursorColumn >= x && cursorColumn < x + (cell?.getWidth() || 1);
+    out += cursor ? (hardwareCursor ? CURSOR_MARKER : '') + renderFakeCursor(chars) : chars;
   }
   return out + '\u001b[0m';
 }

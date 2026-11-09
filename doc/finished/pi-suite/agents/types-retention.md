@@ -10,4 +10,4 @@ stop 仅合并正在进行的同范围操作，完成后的请求重新查询遗
 
 Linux（Node 24.22.2）新增 5 项聚合检查通过，覆盖配置来源与字段保持、真实 SDK 准入与固定续接、原生菜单及即时补全/说明、回收引用与非持久历史、清理失败后结算与重试。既有 runtime/workflow-host 用例复核持久历史回收后恢复、遗留 job 清理和 host 清理失败释放引用；类型检查与 125 项全量检查通过，全量耗时 12.51 秒。Windows 实际 CLI 与综合竞争场景仍按对应专项验收。
 
-当前类型配置和操作维护在 [类型、模型与 thinking](../../../current/agents/models.md)，回收与历史边界维护在 [执行与记录](../../../current/agents/runtime.md)。workspace 全量持久历史发现、原生查看器快捷控制、平台与复杂竞争验收继续由 [agents 待办](../../../todo/pi-suite/index.md) 管理。
+当前类型配置和操作维护在 [类型、模型与 thinking](../../../current/agents/models.md)，回收与历史边界维护在 [执行与记录](../../../current/agents/runtime.md)。workspace 全量持久历史发现、原生查看器快捷控制、平台与复杂竞争验收继续由 [agents 验收](../windows-completion.md) 管理。

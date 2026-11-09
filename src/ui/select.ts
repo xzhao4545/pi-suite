@@ -1,11 +1,13 @@
 import { getSelectListTheme, type ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { Input, SelectList, fuzzyFilter, getSelectPageIndex, truncateToWidth, type SelectItem } from '@earendil-works/pi-tui';
+import { DoubleLeft, type ViewerNavigation } from './viewer/navigation.ts';
 import { commandFrame } from './frame.ts';
 
 /** Native input, paging and display-only truncation keep complete resource identities selectable. */
-export function selectValue(ctx: ExtensionContext, title: string, items: SelectItem[], initial?: string, options: { filter?: boolean } = {}): Promise<string | undefined> {
+export function selectValue(ctx: ExtensionContext, title: string, items: SelectItem[], initial?: string, options: { filter?: boolean; navigation?: ViewerNavigation } = {}): Promise<string | undefined> {
   return ctx.ui.custom<string | undefined>((tui, theme, keys, done) => {
     const input = options.filter ? new Input({ prompt: 'Filter: ' }) : undefined;
+    const doubleLeft = new DoubleLeft();
     let filtered = items;
     let maxVisible = Math.max(1, tui.terminal.rows - 6 - Number(Boolean(input)));
     const createList = (index: number) => {
@@ -15,7 +17,7 @@ export function selectValue(ctx: ExtensionContext, title: string, items: SelectI
     };
     let list = createList(items.findIndex(item => item.value === initial));
     const key = (action: Parameters<typeof keys.getKeys>[0]) => keys.getKeys(action).join('/');
-    const hint = `${key('tui.select.confirm')} select · ${key('tui.select.cancel')} cancel · ${key('tui.select.up')}/${key('tui.select.down')} move · ${key('tui.select.pageUp')}/${key('tui.select.pageDown')} page`;
+    const hint = `${options.navigation && !input ? '←← close · ' : ''}${key('tui.select.confirm')} select · ${key('tui.select.cancel')} cancel · ${key('tui.select.up')}/${key('tui.select.down')} move · ${key('tui.select.pageUp')}/${key('tui.select.pageDown')} page`;
     return {
       capturesViewportInput: true,
       get focused() { return input?.focused ?? false; },
@@ -30,9 +32,11 @@ export function selectValue(ctx: ExtensionContext, title: string, items: SelectI
           ...filtered.length ? list.render(width) : [theme.fg('warning', 'No matching items')], truncateToWidth(hint, width)], theme)
           .map(line => truncateToWidth(line, width));
       },
+      dispose: () => doubleLeft.reset(),
       invalidate: () => { list.invalidate(); input?.invalidate(); },
       getSelectedItem: () => list.getSelectedItem(),
       handleInput(data: string) {
+        if (!input && options.navigation && doubleLeft.handle(data)) { options.navigation.close(); done(undefined); return; }
         const selected = list.getSelectedItem(), index = filtered.indexOf(selected!);
         const page = getSelectPageIndex(keys, data, index, filtered.length, maxVisible);
         // SelectList reads a package-global key manager. Route named actions through the

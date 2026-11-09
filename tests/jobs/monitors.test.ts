@@ -44,6 +44,7 @@ test("poll-diff fires on changed output; file-watch fires on file events without
     const poll = await jobs.start({ cwd: dir, ...owner, command: "sleep 0.4; cat state", monitor: {
       strategy: "poll-diff", poll: { intervalMs: 300 }, triggers: [{ id: "changed", regex: "." }], dedupeExactLine: false,
     } }, shell);
+    assert.equal(jobs.peek(poll.id).name, 'sleep 0.4; cat state', 'the display name comes from the requested command, not the poll transport loop');
     const watch = await jobs.start({ cwd: dir, ...owner, monitor: { strategy: "file-watch", fileWatch: { path: dir }, triggers: [{ id: "touched", literal: "flag" }] } }, shell);
     assert.equal(jobs.peek(watch.id).name, `watch ${dir}`);
     const baselineDeadline = Date.now() + 10000;

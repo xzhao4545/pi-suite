@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import type { ExtensionCommandContext, ExtensionContext, ExtensionUIContext } from '@earendil-works/pi-coding-agent';
-import { visibleWidth } from '@earendil-works/pi-tui';
+import { getKeybindings, visibleWidth } from '@earendil-works/pi-tui';
 import { acquireRuntime } from '../../src/jobs/runtime.ts';
 import { BrowserView, compareActivity } from '../../src/ui/browser.ts';
 import { agentRuntime } from '../../src/agents/runtime.ts';
@@ -30,7 +30,7 @@ test('subagents navigates pages and empty filters without menu rows or model wor
     const custom: ExtensionUIContext['custom'] = async factory => new Promise((resolve, reject) => {
       let disposed: (() => void) | undefined;
       const done = (value: unknown) => { disposed?.(); resolve(value as never); };
-      Promise.resolve(factory(terminal(), ctx.ui.theme, {} as never, done)).then(view => {
+      Promise.resolve(factory(terminal(), ctx.ui.theme, getKeybindings() as never, done)).then(view => {
         assert.ok(view instanceof BrowserView); disposed = view.dispose.bind(view);
         for (const width of [40, 60, 120]) {
           const lines = view.render(width); assert.ok(lines.every(line => visibleWidth(line) <= width)); assert.ok(lines.length <= 19);
@@ -40,7 +40,7 @@ test('subagents navigates pages and empty filters without menu rows or model wor
         switch (phase++) {
           case 0:
             assert.match(text(), /All 2.*Queued 1.*Finished 0/); assert.equal(view.getSelectedItem()?.value, queued.record.runId);
-            assert.ok(view.render(120).some(line => / · running · [\d.]+s/.test(stripVTControlCharacters(line.split('│')[0]))), 'long names retain state and runtime');
+            assert.ok(view.render(120).some(line => /running · [\d.]+s/.test(stripVTControlCharacters(line.split('│')[0]))), 'long names retain state and runtime');
             view.handleInput('/'); view.handleInput('probe'); view.handleInput('\r'); view.handleInput('s'); break;
           case 1:
             assert.equal(view.getSelectedItem()?.value, queued.record.runId); assert.match(text(), /Filter: probe/);
@@ -58,7 +58,8 @@ test('subagents navigates pages and empty filters without menu rows or model wor
             assert.equal(queued.controller.signal.aborted, false); view.handleInput('x'); break;
           case 4:
             assert.match(text(), /Queued 0/); assert.match(text(), /No matches · press Esc to clear filter/);
-            assert.match(stripVTControlCharacters(view.render(120).at(-3)!), /1-4.*w scope.*s state.*\/ filter.*Tab details.*Esc clear filter/, 'empty lists retain all navigation keys');
+            const navigation = stripVTControlCharacters(view.render(600).at(-3)!);
+            for (const hint of ['←← close', 'Esc clear filter', '1-4', 'w scope', 's state', '/ filter', 'Tab details']) assert.ok(navigation.includes(hint), `empty lists retain ${hint}`);
             view.handleInput('s'); break;
           case 5:
             assert.match(text(), /Finished 1/); assert.equal(view.getSelectedItem()?.value, queued.record.runId);
@@ -97,7 +98,7 @@ test('Runs and Jobs reopen in All and keep activity ahead of newer completed rec
     let frames = 0;
     const custom: ExtensionUIContext['custom'] = async factory => new Promise((resolve, reject) => {
       let dispose: (() => void) | undefined;
-      Promise.resolve(factory(terminal(), ctx.ui.theme, {} as never, value => {dispose?.(); resolve(value);})).then(async view => {
+      Promise.resolve(factory(terminal(), ctx.ui.theme, getKeybindings() as never, value => {dispose?.(); resolve(value);})).then(async view => {
         assert.ok(view instanceof BrowserView); dispose = view.dispose.bind(view);
         const text = () => stripVTControlCharacters(view.render(120).join('\n'));
         const isJobs = text().includes('Jobs ▸ List');

@@ -11,7 +11,7 @@ import { truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
 import { sanitizeText } from '../../runtime/text.ts';
 
 export async function showAgentTypes(ctx: ExtensionContext, dock: Dock, config: () => SuiteConfig, reload: (cwd: string) => void, page: BrowsePage): Promise<void> {
-  for (;;) {
+  for (; !page.navigation?.closed;) {
     const current = config();
     const types = agentTypes(ctx.cwd, getAgentDir(), { trusted: ctx.isProjectTrusted(), packageGate: current.agents.packageAgents, typeSettings: current.agents.types });
     const items = types.map(type => {
@@ -44,7 +44,7 @@ export async function showAgentTypes(ctx: ExtensionContext, dock: Dock, config: 
           '', type.systemPrompt].join('\n') };
     });
     let action = 'model';
-    const selected = await browse(ctx, dock, { title: 'Subagents', state: page.state, pages: page.pages, items: () => items,
+    const selected = await browse(ctx, dock, { title: 'Subagents', state: page.state, pages: page.pages, navigation: page.navigation, items: () => items,
       selection: item => ({ name: item.value }),
       layout: { truncatePrimary: ({item, maxWidth}) => {
         const row = items.find(row => row.value === item.value)!;
@@ -70,10 +70,10 @@ export async function showAgentTypes(ctx: ExtensionContext, dock: Dock, config: 
           { key: 'u', label: 'Use definition', available: () => current.agents.types[type.name]?.enabled !== undefined, run: run('definition') }];
       },
     });
-    if (selected === undefined) return;
+    if (selected === undefined || page.navigation?.closed) return;
     const type = types.find(type => type.name === selected)!;
     try {
-      if (action === 'model') await editTypeModel(ctx, current, reload, type);
+      if (action === 'model') await editTypeModel(ctx, current, reload, type, page.navigation);
       else {
         try { await writeAgentTypeEnabled(ctx.cwd, type.name, action === 'definition' ? undefined : action === 'enable'); }
         finally { reload(ctx.cwd); }

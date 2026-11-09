@@ -13,7 +13,7 @@ import type { ControlBridge } from './control.ts';
  * incompatible manager keeps running; its versioned control bridge remains usable without
  * allowing the new execution implementation to drive the old manager's internals.
  */
-export const PROTOCOL_VERSION = 10;
+export const PROTOCOL_VERSION = 11;
 export type RuntimeHandle =
   | { mode: 'active'; manager: JobManager }
   | { mode: 'restricted'; reason: string; control: ControlBridge }
@@ -46,7 +46,7 @@ export function acquireRuntime(agentDir: string): RuntimeHandle {
     if (compatible(existing, root) && !existing.manager.closed) return { mode: 'active', manager: existing.manager };
     if (occupied(existing)) {
       const reason = 'Another pi-suite jobs runtime with running or unsaved jobs owns this Pi process; new execution is disabled. Finish or stop existing jobs, then reload to upgrade';
-      if (existing.agentDir === root && (existing.control?.version === 1 || existing.control?.version === 2 || existing.control?.version === 3)) return { mode: 'restricted', reason, control: existing.control };
+      if (existing.agentDir === root && (existing.control?.version === 1 || existing.control?.version === 2 || existing.control?.version === 3 || existing.control?.version === 4)) return { mode: 'restricted', reason, control: existing.control };
       return { mode: 'unavailable', reason: existing.agentDir !== root
         ? 'The occupied pi-suite jobs runtime belongs to a different agent directory; use its original directory or restart Pi for exit cleanup'
         : 'The occupied pi-suite jobs runtime has no compatible control bridge. Its owner and exit cleanup remain installed; restart Pi to upgrade' };
@@ -58,7 +58,7 @@ export function acquireRuntime(agentDir: string): RuntimeHandle {
   const manager = new JobManager({ agentDir: root, runtimeId: `rt_${randomBytes(4).toString('hex')}` });
   // Closures stay with the owner implementation across reload. The bridge exposes only
   // query/stop, so a different execution protocol cannot launch or write through it.
-  const control: ControlBridge = { version: 3, jobs: {
+  const control: ControlBridge = { version: 4, jobs: {
     peek: id => manager.peek(id), get: (id, workspace) => manager.get(id, workspace),
     list: workspace => manager.list(workspace), logPath: (job, stream) => manager.logPath(job, stream),
     subscribe: listener => manager.subscribe(listener), activeIds: sessionId => manager.activeIds(sessionId),
@@ -66,6 +66,8 @@ export function acquireRuntime(agentDir: string): RuntimeHandle {
     stop: (id, reason, deadline) => manager.stop(id, reason, deadline),
     createdBy: runIds => manager.createdBy(runIds),
     sessionJobs: sessionId => manager.sessionJobs(sessionId),
+    readTerminalSnapshot: job => manager.readTerminalSnapshot(job),
+    clear: (id, workspace) => manager.clear(id, workspace),
   }, quit: () => quitRuntime(manager) };
   const registration: Registration = { protocolVersion: PROTOCOL_VERSION, agentDir: root, manager, control, exitListener: () => manager.exitSync(Date.now() + LIMITS.exitFallbackMs) };
   process.on('exit', registration.exitListener);
@@ -84,5 +86,5 @@ export function quitExistingRuntime(agentDir: string): Promise<void> | undefined
   if (!existing || existing.agentDir !== realpathSync(agentDir)) return;
   // An occupied implementation without a supported bridge keeps its original exit
   // listener; invoking unknown manager internals would break that owner's cleanup.
-  if (existing.control?.version === 1 || existing.control?.version === 2 || existing.control?.version === 3) return existing.control.quit();
+  if (existing.control?.version === 1 || existing.control?.version === 2 || existing.control?.version === 3 || existing.control?.version === 4) return existing.control.quit();
 }

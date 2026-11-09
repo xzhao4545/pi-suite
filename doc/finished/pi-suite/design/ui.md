@@ -2,7 +2,7 @@
 
 目标：限制常驻信息占用，保留窄屏终端场景的聊天阅读空间。
 
-归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 验收收尾](../windows-completion.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
 
 当前状态：Dock 预算、状态槽位、原生历史及 ask 焦点已实现；tasks 的 blocked/选中组/压缩摘要、agents/jobs 必要详情已接入统一 Dock，Linux 组合通过 [界面协调阶段](../ui-coordination.md) 验收。真实 goal/tasks/child/jobs/ask 与完整 Starship 发布入口并存通过 [footer 联动阶段](../footer-integration.md) 验收；Windows 布局仍待验收。
 

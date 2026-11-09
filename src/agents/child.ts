@@ -18,9 +18,13 @@ import { registerAgentTools } from './tools.ts';
 import type { AgentManager } from './manager.ts';
 import type { Execution } from './types.ts';
 import { loadConfig } from '../runtime/config.ts';
+import { registerSuiteRenderers } from '../runtime/renderers.ts';
 
 /** Child tools own a private list; only an explicit assigned scope can update parent progress. */
 export function childSuite(pi: ExtensionAPI, run: Execution, manager: AgentManager): void {
+  // Child loaders exclude the main suite factory. Register display before bound tools so
+  // child/history lookup shares the same definitions without rereading an arbitrary target cwd.
+  registerSuiteRenderers(pi, run.config.ui.highlightBuiltinCommands);
   const config = run.config, binding = new SessionBinding(), dock = new Dock();
   const status = new StatusPublisher(dock), notices = new Notifications(pi, binding), waits = new WaitRegistry();
   const tasks = config.modules.tasks ? new TasksModule(binding, dock, { persisted: run.record.persisted,

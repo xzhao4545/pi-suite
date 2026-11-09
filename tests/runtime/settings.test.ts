@@ -84,7 +84,7 @@ test('reading overlays share the actual height ceiling and fullscreen viewport k
         const overlay = typeof options?.overlayOptions === 'function' ? options.overlayOptions() : options?.overlayOptions;
         assert.equal(options?.overlay, true);
         assert.deepEqual(overlay, fullscreen ? {anchor: 'top-left', width: '100%', maxHeight: '100%', margin: 0}
-          : {anchor: 'center', width: '90%', maxHeight: 16, margin: 0});
+          : {anchor: 'center', width: '90%', maxHeight: '70%', margin: 0});
         assert.ok(view instanceof DetailsView); assert.equal(view.capturesViewportInput, true);
         assert.equal(view.render(120).length, readingRows(tui), 'footer is inside the same ceiling as the overlay');
         tui.setFocus(view);
@@ -106,7 +106,7 @@ test('reading overlays share the actual height ceiling and fullscreen viewport k
 
 test('browser focus chrome distinguishes panes and text modes without repainting records or spending rows', () => {
   const theme = {fg: (tone: string, text: string) => `\x1b[${({accent: 36, muted: 90, borderMuted: 90, error: 31, syntaxKeyword: 35} as Record<string, number>)[tone] ?? 37}m${text}\x1b[39m`,
-    bg: (_tone: string, text: string) => `\x1b[44m${text}\x1b[49m`, bold: (text: string) => `\x1b[1m${text}\x1b[22m`} as Theme;
+    bg: (_tone: string, text: string) => `\x1b[44m${text}\x1b[49m`, getBgAnsi: () => '\x1b[44m', bold: (text: string) => `\x1b[1m${text}\x1b[22m`} as unknown as Theme;
   for (const width of [40, 79, 80, 120]) {
     const tui = terminal(30, width), state = browseState(); state.query = 'record';
     const view = new BrowserView(tui, {title: 'Records', state, items: () => [{value: 'record', label: 'record · failed', status: 'failed',
@@ -192,6 +192,15 @@ test('configuration edits share locks, preserve other fields and enforce layer/s
     assert.equal(loadConfig(project, root).commands.exit, false);
     assert.deepEqual(readConfig(paths.user).agents?.types?.worker, {model: 'provider/model', thinking: 'low'});
     assert.equal(readConfig(paths.user).ask?.timeout, 55);
+    assert.equal(loadConfig(project, root).ui.highlightBuiltinCommands, true);
+    await writeConfigFields(project, [{ path: ['ui', 'highlightBuiltinCommands'], value: false }], root);
+    await writeConfigFields(project, [{ path: ['ui', 'maxRows'], value: 7, layer: 'project' }], root);
+    assert.deepEqual(loadConfig(project, root).ui, { maxRows: 7, highlightBuiltinCommands: false });
+    await writeConfigFields(project, [{ path: ['ui', 'highlightBuiltinCommands'], value: true, layer: 'project' }], root);
+    assert.equal(loadConfig(project, root).ui.highlightBuiltinCommands, true);
+    await writeConfigFields(project, [{ path: ['ui', 'highlightBuiltinCommands'], value: undefined, layer: 'project' }], root);
+    assert.equal(loadConfig(project, root).ui.highlightBuiltinCommands, false);
+    await assert.rejects(writeConfigFields(project, [{ path: ['ui', 'highlightBuiltinCommands'], value: 'true' }], root), /Invalid/);
     await writeConfigFields(project, [{path: ['commands', 'exit'], value: true, layer: 'project'}], root);
     assert.equal(loadConfig(project, root).commands.exit, true);
     await writeConfigFields(project, [{path: ['commands', 'exit'], value: undefined, layer: 'project'}], root);

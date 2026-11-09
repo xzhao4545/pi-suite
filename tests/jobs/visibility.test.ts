@@ -7,10 +7,22 @@ import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { host } from '../support/host.ts';
 import { agentDir, settled, testShell } from '../support/jobs.ts';
 import { agentRuntime } from '../../src/agents/runtime.ts';
-import { JobsModule } from '../../src/jobs/index.ts';
+import { JobsModule, displayName } from '../../src/jobs/index.ts';
 import { acquireRuntime, PROTOCOL_VERSION } from '../../src/jobs/runtime.ts';
 import { loadConfig } from '../../src/runtime/config.ts';
 import type { JobSummary } from '../../src/jobs/types.ts';
+import { jobName } from '../../src/jobs/launch/name.ts';
+
+test('human Job names use explicit, command or monitor data, never machine identity', () => {
+  const job = (name: string, command: string, monitor?: JobSummary['monitor']) => ({id: 'job_12345678', name, command, monitor}) as JobSummary;
+  assert.equal(displayName(job('\x1b[31m中文工作\x1b[0m', 'echo default')), '中文工作');
+  assert.equal(displayName(job('\x1b[31m\x1b[0m\x00', '\n\x1b[31m\x1b[0m\n pnpm test\nignored')), 'pnpm test');
+  assert.equal(displayName(job('', '', {config: {strategy: 'file-watch', fileWatch: {path: '目录'}, triggers: []}, events: 0, notifiedEvents: 0})), 'watch 目录');
+  assert.equal(displayName(job('', '')), 'Command unavailable');
+  assert.equal(displayName(job('', '', {config: {strategy: 'poll-diff', triggers: []}, events: 0, notifiedEvents: 0})), 'poll-diff monitor (command unavailable)');
+  assert.equal(jobName({name: '\x1b[0m', command: 'echo original', monitor: {strategy: 'poll-diff', triggers: []}}), 'echo original');
+  assert.equal(jobName({monitor: {strategy: 'file-watch', fileWatch: {path: '\x1b[0m'}, triggers: []}}), 'File monitor (path unavailable)');
+});
 
 function promptOf(context: TranscriptContext): string {
   const content = context.messages.findLast(message => message.role === 'user')?.content;
@@ -85,7 +97,7 @@ test('SDK session list and activity share branch and creator scope across workin
     assert.deepEqual(ids((await list()).jobs), ids([childJobs[1], direct]));
     assert.equal(h.statuses.get('pi-suite:runtime'), '⚙2', 'saved visible child runs preserve leftover jobs when agents are disabled');
 
-    assert.ok(bridge.version === 3);
+    assert.ok(bridge.version === 3 || bridge.version === 4);
     const {sessionJobs: _sessionJobs, ...v2Jobs} = bridge.jobs;
     registration.protocolVersion = PROTOCOL_VERSION - 1; registration.control = {version: 2, jobs: v2Jobs, quit: () => bridge.quit()};
     await h.session.reload();

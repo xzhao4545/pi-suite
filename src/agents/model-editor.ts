@@ -11,25 +11,26 @@ import { ToolError } from '../runtime/errors.ts';
 import type { AgentManager } from './manager.ts';
 import { selectValue } from '../ui/select.ts';
 import { getAgentDir } from '@earendil-works/pi-coding-agent';
+import type { ViewerNavigation } from '../ui/viewer/navigation.ts';
 
-export async function chooseModelSettings(ctx: ExtensionContext, title: string, initial: ModelOverrides, inherited: () => Model<any> | undefined): Promise<ModelOverrides | undefined> {
+export async function chooseModelSettings(ctx: ExtensionContext, title: string, initial: ModelOverrides, inherited: () => Model<any> | undefined, navigation?: ViewerNavigation): Promise<ModelOverrides | undefined> {
   const available = ctx.modelRegistry.getAvailable().sort((a, b) => `${a.provider}/${a.id}`.localeCompare(`${b.provider}/${b.id}`));
   // ModelSelector needs the host's private ModelRuntime and cannot represent clearing an
   // override. Reuse the shared native fuzzy picker without changing the main session model.
   const items = [{ value: '', label: 'No override' }, ...available.map(model => ({
     value: `${model.provider}/${model.id}`, label: `${model.provider}/${model.id}`, description: model.name,
   }))];
-  const selected = await selectValue(ctx, `${title} · Model`, items, initial.model ?? '', { filter: true });
+  const selected = await selectValue(ctx, `${title} · Model`, items, initial.model ?? '', { filter: true, navigation });
   if (selected === undefined) return;
   const model = selected || undefined;
   const effective = model ? resolveModel(ctx, model, title) : inherited();
   const levels = ['', ...effective ? getSupportedThinkingLevels(effective) : ['off' as const]];
-  const thinking = await selectValue(ctx, `${title} · Thinking`, levels.map(value => ({ value, label: value || 'No override' })), initial.thinking ?? '');
+  const thinking = await selectValue(ctx, `${title} · Thinking`, levels.map(value => ({ value, label: value || 'No override' })), initial.thinking ?? '', {navigation});
   if (thinking === undefined) return;
   return { model, thinking: thinking ? thinking as ModelOverrides['thinking'] : undefined };
 }
 
-export async function editTypeModel(ctx: ExtensionContext, config: SuiteConfig, reload: (cwd: string) => void, selectedType?: AgentType): Promise<void> {
+export async function editTypeModel(ctx: ExtensionContext, config: SuiteConfig, reload: (cwd: string) => void, selectedType?: AgentType, navigation?: ViewerNavigation): Promise<void> {
   let type = selectedType;
   if (!type) {
     const types = agentTypes(ctx.cwd, getAgentDir(), { trusted: ctx.isProjectTrusted(), packageGate: config.agents.packageAgents });
@@ -42,7 +43,7 @@ export async function editTypeModel(ctx: ExtensionContext, config: SuiteConfig, 
   ctx.ui.notify(`${type.name} · model: ${locations.model}\nthinking: ${locations.thinking}`);
   const fallback = () => resolveSettings(ctx, type, { prompt: '' }, { ...config, agents: { ...config.agents,
     types: { [type.name]: { model: agentTypeModelAfterClear(ctx.cwd, type.name) } } } }).model;
-  const changes = await chooseModelSettings(ctx, `${type.name} · model: ${locations.model} · thinking: ${locations.thinking}`, initial, fallback);
+  const changes = await chooseModelSettings(ctx, `${type.name} · model: ${locations.model} · thinking: ${locations.thinking}`, initial, fallback, navigation);
   if (!changes) return;
   try { await writeAgentType(ctx.cwd, type.name, changes); }
   // Model and thinking may live in different files; reload also reflects any field already
@@ -77,7 +78,7 @@ export async function updateAgentModel(manager: AgentManager, ctx: ExtensionCont
   manager.changed();
 }
 
-export async function editAgentModel(ctx: ExtensionContext, manager: AgentManager, id: string, config: SuiteConfig, runId?: string): Promise<void> {
+export async function editAgentModel(ctx: ExtensionContext, manager: AgentManager, id: string, config: SuiteConfig, runId?: string, navigation?: ViewerNavigation): Promise<void> {
   const { record, run } = manager.get(id, runId);
   const inherited = () => {
     // Historical records remain editable after disabling their type; admission is enforced
@@ -86,7 +87,7 @@ export async function editAgentModel(ctx: ExtensionContext, manager: AgentManage
     if (!type) throw new ToolError('AGENT_TYPE', `Unknown agent type: ${record.type}`);
     return resolveSettings(run?.parent.ctx ?? ctx, type, run?.request ?? { prompt: '' }, run?.config ?? config).model;
   };
-  const changes = await chooseModelSettings(ctx, `${id} (${record.runId}) · next request`, record.individual ?? {}, inherited);
+  const changes = await chooseModelSettings(ctx, `${id} (${record.runId}) · next request`, record.individual ?? {}, inherited, navigation);
   if (!changes) return;
   // A selector may outlive a resume; bind the write to the run opened, never the agent's latest run.
   await updateAgentModel(manager, ctx, id, changes, record.runId);

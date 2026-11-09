@@ -1,6 +1,6 @@
 # Windows 运行时与实际终端阶段
 
-本阶段完成 Windows 常驻进程查询、ConPTY 密码回显隐藏、poll-diff 轮次采样、共享 JSON 读写竞争、实际 Pi CLI 终端缩放与原生 agents 入口，以及 Codex/Claude 受控工具执行；剩余 Windows 验收仍由 [执行待办](../../../todo/pi-suite/index.md) 管理。
+本阶段完成 Windows 常驻进程查询、ConPTY 密码回显隐藏、poll-diff 轮次采样、共享 JSON 读写竞争、实际 Pi CLI 终端缩放与原生 agents 入口，以及 Codex/Claude 受控工具执行；剩余 Windows 验收仍由 [执行验收](../windows-completion.md) 管理。
 
 ## 完成项
 

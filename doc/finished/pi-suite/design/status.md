@@ -2,7 +2,7 @@
 
 目标：统一发布 goal 状态、活动 subagent 数量和活动 job 数量，使窄屏终端能从简短状态栏了解执行情况。
 
-归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 验收收尾](../windows-completion.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
 
 当前状态：共享发布器、goal 摘要、agents/jobs 数量、显示模式和去重已实现，原生 footer 与完整 pi-starship 发布入口的 Linux 组合通过 [footer 联动阶段](../footer-integration.md) 验收；workflow 的 Dock 进度和 child/gate 普通数量过滤已接入，见 [宿主接入阶段](../agents/workflow-host.md)。当前 owner/branch 的直属 job 与可见 agent run 子树已共用完整 session 列表/数量范围，包含跨 cwd 和回收后代的遗留 job；必要详情走共享 StatusPublisher/Dock，数量变化写状态，问题、清理与选择变化单独刷新详情。Windows的可见集合、清理状态及用户实际 footer 配置继续验收。
 

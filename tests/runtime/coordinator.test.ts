@@ -3,13 +3,17 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { stripVTControlCharacters } from 'node:util';
+import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { loadConfig } from "../../src/runtime/config.ts";
 import { SessionBinding } from "../../src/runtime/binding.ts";
 import { Notifications } from "../../src/runtime/notifications.ts";
 import { Dock } from "../../src/ui/dock.ts";
 import { dockWindow } from '../../src/ui/dock/rows.ts';
 import { StatusPublisher } from "../../src/ui/status.ts";
+import { recordStyle, selectedRow, stateTone } from '../../src/ui/browser-chrome.ts';
+import { jobLabel, jobStatus } from '../../src/jobs/index.ts';
+import type { JobSummary } from '../../src/jobs/types.ts';
 import { host } from "../support/host.ts";
 import { agentRuntime } from "../../src/agents/runtime.ts";
 import { fauxAssistantMessage } from "@earendil-works/pi-ai";
@@ -104,7 +108,7 @@ test('empty editor enters Dock with left and Enter opens the selected agent thro
       onTerminalInput: handler => { input = handler; return () => {detached++;}; },
       custom: async factory => new Promise(resolve => {
         Promise.resolve(factory(tui, ui.theme, {} as never, resolve)).then(view => {
-          assert.match(view.render(120).join('\n'), /Subagents ▸ Dock contract · running/);
+          assert.match(stripVTControlCharacters(view.render(120).join('\n')), /Dock contract · running/);
           view.handleInput?.('\x1b'); opened.resolve();
         });
       }),
@@ -122,7 +126,7 @@ test('empty editor enters Dock with left and Enter opens the selected agent thro
     assert.equal(h.session.sessionManager.getBranch().length, entries, 'Dock ticking never appends session entries');
     assert.deepEqual(input('\x1b[D'), {consume: true});
     for (const width of [40, 120]) {
-      const lines = dock.render(width);
+      const lines = dock.render(width).map(stripVTControlCharacters);
       assert.ok(lines.some(line => line.includes('Enter') && line.includes('Esc')));
       assert.ok(lines.some(line => line.includes('> Dock con')));
       assert.ok(lines.some(line => line.includes('1 running')));
@@ -202,11 +206,12 @@ test('Tasks join Dock navigation and section shortcuts with read-only details an
     for (const section of ['jobs', 'agents']) dock.register(section, {title: section === 'jobs' ? 'Jobs' : 'Agents',
       rows: () => [{id: section, text: section, priority: 100}], open: () => {assert.fail('only Tasks should open');}});
     input('\x1b[D'); input('\x1b[B');
-    assert.match(dock.render(120).join('\n'), /> .*1\.1 inspect child/);
-    input(']'); assert.match(dock.render(120).join('\n'), /> agents/);
-    input(']'); assert.match(dock.render(120).join('\n'), /> jobs/);
-    input(']'); assert.match(dock.render(120).join('\n'), /> .*1 inspect group/);
-    input('['); assert.match(dock.render(120).join('\n'), /> jobs/);
+    const screen = () => dock.render(120).map(stripVTControlCharacters).join('\n');
+    assert.match(screen(), /> .*1\.1 inspect child/);
+    input(']'); assert.match(screen(), /> agents/);
+    input(']'); assert.match(screen(), /> jobs/);
+    input(']'); assert.match(screen(), /> .*1 inspect group/);
+    input('['); assert.match(screen(), /> jobs/);
     input(']'); input('\x1b[B'); input('\r');
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(views, 1); assert.deepEqual(await snapshot(), before);
@@ -217,7 +222,7 @@ test('Tasks join Dock navigation and section shortcuts with read-only details an
       input('\x1b[D');
       for (const section of ['Tasks', 'Agents', 'Jobs']) {
         for (const width of [40, 60, 120]) {
-          const lines = dock.render(width);
+          const lines = dock.render(width).map(stripVTControlCharacters);
           assert.ok(lines.length <= dock.budget() && lines.every(line => visibleWidth(line) <= width));
           const positions = ['Tasks', 'Agents', 'Jobs'].map(label => lines.findIndex(line => line.includes(label))).filter(index => index >= 0);
           assert.deepEqual(positions, [...positions].sort((a, b) => a - b), 'focus and priority never move source positions');
@@ -229,6 +234,56 @@ test('Tasks join Dock navigation and section shortcuts with read-only details an
       input('\x1b');
     }
   } finally {await h.dispose();}
+});
+
+test('structured states preserve name colors, task strike and active selection backgrounds at every Dock budget', () => {
+  const colors: Record<string, number> = {accent: 36, success: 32, warning: 33, error: 31, dim: 90, muted: 90, borderMuted: 90};
+  const theme = {fg: (tone: string, text: string) => `\x1b[${colors[tone] ?? 37}m${text}\x1b[39m`,
+    bg: (_tone: string, text: string) => `\x1b[44m${text}\x1b[49m`, getBgAnsi: () => '\x1b[44m', bold: (text: string) => `\x1b[1m${text}\x1b[22m`,
+    strikethrough: (text: string) => `\x1b[9m${text}\x1b[29m`} as unknown as Theme;
+  const roles = {starting: 'success', running: 'success', queued: 'warning', waiting: 'warning', 'waiting(parent)': 'warning', stopping: 'warning',
+    'cleanup pending': 'warning', 'cleanup unconfirmed': 'warning', failed: 'error', limited: 'error', timed_out: 'error', completed: 'dim', stopped: 'dim'};
+  for (const [state, tone] of Object.entries(roles)) assert.equal(stateTone(state), tone);
+  const job = {id: 'job_12345678', name: 'running', command: 'echo name', state: 'running', mode: 'pipe', exitCode: null,
+    cleanup: {state: 'pending'}} as JobSummary;
+  const label = recordStyle(jobLabel(job), job.state, theme);
+  assert.ok(label.startsWith('running\x1b[90m · '), 'the name is not a status even when both have identical text');
+  assert.ok(label.includes('\x1b[32mrunning\x1b[39m') && label.includes('\x1b[33mcleanup pending\x1b[39m'));
+  assert.ok(!label.includes(job.id));
+  assert.ok(selectedRow('> ' + label, 120, theme).includes('\x1b[44m'));
+  assert.ok(!selectedRow('> ' + label, 120, theme, false).includes('\x1b[44m'));
+  assert.ok(recordStyle('worker · waiting(parent)', 'waiting(parent)', theme).includes('\x1b[33mwaiting(parent)'));
+
+  const dock = new Dock(), tui = terminal(40, 120), publisher = new StatusPublisher(dock);
+  let input!: (data: string) => unknown;
+  const ctx = {mode: 'tui', ui: {getEditorText: () => '', notify() {},
+    setWidget: (_key: string, factory?: (screen: typeof tui, theme: Theme) => unknown) => factory?.(tui, theme),
+    onTerminalInput: (handler: typeof input) => {input = handler; return () => {};}}} as unknown as ExtensionContext;
+  publisher.bind({setStatus() {}} as unknown as ExtensionContext['ui'], {goal: 'hidden', agents: 'dock', jobs: 'dock'});
+  const taskText = theme.fg('dim', theme.strikethrough('done task'));
+  dock.register('tasks', {title: 'Tasks', readOnly: true, rows: () => [{id: 'task', text: taskText, priority: 30}], open() {}});
+  const cleanup = {text: 'cleanup pending', state: 'cleanup pending'};
+  publisher.setActivities('jobs', [job.id], [{id: job.id, text: job.name, suffix: jobStatus(job), compactSuffixes: [[cleanup]], priority: 100}]);
+  publisher.setActivities('agents', ['run'], [{id: 'run', text: 'worker', suffix: [{text: 'waiting(parent)', state: 'waiting(parent)'}], priority: 100}],
+    [{text: '1 waiting(parent)', state: 'waiting(parent)'}]);
+  dock.setOpen('agents', () => {}); dock.setOpen('jobs', () => {});
+  for (const budget of [1, 2, 8]) {
+    dock.bind(ctx, budget); input('\x1b[D');
+    assert.ok(dock.render(120).join('\n').includes('\x1b[9mdone task'), 'selection preserves Tasks deletion line');
+    input(']');
+    assert.ok(dock.render(120).join('\n').includes('\x1b[33mwaiting(parent)'));
+    if (budget === 8) assert.ok(dock.render(120).join('\n').includes('\x1b[33m1 waiting(parent)'));
+    input(']');
+    for (const width of [24, 40, 120]) {
+      const lines = dock.render(width), selected = lines.find(line => line.includes('\x1b[44m'))!;
+      assert.ok(selected && !selected.includes('\x1b[36mrunning'), 'only the marker/chrome use accent');
+      assert.ok(selected.includes('\x1b[33m'), `compact warning at budget ${budget}, width ${width}: ${JSON.stringify(selected)}`);
+      assert.ok(lines.length <= budget && lines.every(line => visibleWidth(line) <= width));
+    }
+    input('\x1b');
+    assert.ok(dock.render(120).every(line => !line.includes('\x1b[44m') && !line.includes('> ')), 'deactivated identities cannot paint selection');
+  }
+  dock.detach(); publisher.detach();
 });
 
 test('Dock windows keep selected rows and place exact overflow gaps before, between and after siblings', () => {

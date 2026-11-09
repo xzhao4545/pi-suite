@@ -2,7 +2,7 @@
 
 目标：统一交互和非交互任务管理，使后台执行与会话/UI 生命周期分离。
 
-归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 验收收尾](../../windows-completion.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
 
 当前状态：实施中；执行工具、长期 manager、pipe/PTY 后端、记录、通知、同进程保活、monitor、hands-free/dispatch、CLI 预设与有界实时日志查看已实现。基础后端通过 Windows/Linux 离线检查，监督、预设与日志查看通过 Linux 离线检查；各专项仍保留尚未完成的平台与综合验收。实现以上游 pi-background-jobs 与 pi-interactive-shell 源码导入改造，按文件处置见 [上游导入](../upstream-import.md)。
 

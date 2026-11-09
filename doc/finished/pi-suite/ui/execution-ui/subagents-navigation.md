@@ -1,5 +1,7 @@
 # Subagents 底部信息栏与统一导航
 
+> 本专项已完整实施并验收，结论见[专项索引](index.md#完成验收)。以下根因和实施要求保留规划时的详细记录；当前事实见对应 current 文档。
+
 ## 正式布局
 
 Subagents 会话查看器**删除顶部运行长标题，将其必要内容移到底部精简信息栏**。信息栏属于查看器布局，与正文和快捷键栏分隔，不设置或替换主会话 footer。
@@ -119,12 +121,12 @@ Subagents 会话查看器**删除顶部运行长标题，将其必要内容移�
 
 - [x] 可复用基线：Runs/Transcript 共用内联发送、提交前 run/归属校验与 ScrollView 阅读状态
 - [x] 可复用基线：共享浏览器焦点/鼠标样式、模型模糊筛选及宿主 keybindings
-- [ ] DetailsView 可选底部信息区，Subagents 顶部长标题迁入精简高亮信息栏
-- [ ] 正文/信息/操作区分隔、高度预算、底部阅读提示与鼠标坐标
-- [ ] Transcript 与 Runs 列表接入共享原生 Editor
-- [ ] 复用既有 run 校验，补齐 Editor 发送/取消/失败草稿、注入按键、焦点与中文输入
-- [ ] 统一 back/close 导航结果，Jobs/Subagents 双左退出跨层传播
-- [ ] 编辑/搜索/PTY 接管按键边界及关闭资源释放
-- [ ] 定向验证及 agents/jobs/ui 操作文档局部同步
+- [x] DetailsView 可选底部信息区，Subagents 顶部长标题迁入精简高亮信息栏
+- [x] 正文/信息/操作区分隔、高度预算、底部阅读提示与鼠标坐标
+- [x] Transcript 与 Runs 列表接入共享原生 Editor
+- [x] 复用既有 run 校验，补齐 Editor 发送/取消/失败草稿、注入按键、焦点与中文输入
+- [x] 统一 back/close 导航结果，Jobs/Subagents 双左退出跨层传播
+- [x] 编辑/搜索/PTY 接管按键边界及关闭资源释放
+- [x] 定向验证及 agents/jobs/ui 操作文档局部同步
 
 [返回专项索引](index.md)

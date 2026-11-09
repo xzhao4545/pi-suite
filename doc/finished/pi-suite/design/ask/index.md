@@ -2,7 +2,7 @@
 
 目标：在保留聊天查阅空间的前提下，支持超时、批量、多选、推荐、默认答案和长内容查阅。
 
-归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 验收收尾](../../windows-completion.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
 
 当前状态：ask_user 已注册；批量、推荐与默认答案专项已完成。交互及详情已实现，询问、goal、child 父级问题和真实 job 通知的 Linux 组合已通过 [协调阶段](../../ask/coordination.md) 验收；Windows 组合继续验收。
 

@@ -2,11 +2,14 @@ import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { browse, browseState, compareActivity, type BrowsePage, type BrowseState } from '../../ui/browser.ts';
 import { showDetails } from '../../ui/details.ts';
 import { isActive as jobActive } from '../../jobs/state.ts';
+import { displayText, type DisplayField } from '../../ui/browser-chrome.ts';
+import { executionRow } from '../../ui/dock/line.ts';
+import { sanitizeText } from '../../runtime/text.ts';
+import { ViewerNavigation } from '../../ui/viewer/navigation.ts';
 import type { SubagentsDeps } from '../commands.ts';
 import { active, recordWorkspace, type AgentRecord } from '../types.ts';
 import { agentDetails } from '../viewer-info.ts';
 import { agentControls, agentMessage, performAgentAction, showAgent } from '../viewer.ts';
-import { truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
 
 export const RUN_FILTERS = ['all', 'queued', 'finished'] as const;
 export type RunFilter = typeof RUN_FILTERS[number];
@@ -17,7 +20,7 @@ const matches = (record: AgentRecord, filter: RunFilter) => filter === 'all'
 const duration = (record: AgentRecord) => record.state === 'queued' ? `${Math.max(0, (Date.now() - Date.parse(record.createdAt)) / 1000).toFixed(1)}s wait`
   : record.elapsedMs === undefined ? 'not started' : `${(record.elapsedMs / 1000).toFixed(1)}s`;
 
-export async function showRuns(ctx: ExtensionContext, deps: SubagentsDeps, state: RunsState, navigation: BrowsePage['pages']): Promise<void> {
+export async function showRuns(ctx: ExtensionContext, deps: SubagentsDeps, state: RunsState, navigation: BrowsePage['pages'], exit = new ViewerNavigation()): Promise<void> {
   const { agents, dock, config, jobs } = deps;
   let discovered = false;
   const change = (filter: RunFilter, workspace: boolean, done: () => void) => {
@@ -28,7 +31,7 @@ export async function showRuns(ctx: ExtensionContext, deps: SubagentsDeps, state
     state.browser.selected = state.selections.get(`${workspace}:${filter}`);
     done();
   };
-  for (;;) {
+  for (; !exit.closed;) {
     const scope = agents.scope(ctx);
     if (state.workspace && !discovered) { await agents.manager.discover(scope, config()); discovered = true; }
     const records = () => agents.manager.records().filter(record => state.workspace
@@ -39,7 +42,7 @@ export async function showRuns(ctx: ExtensionContext, deps: SubagentsDeps, state
       return !agents.manager.visible(record, scope) && (!run || run.settled === true);
     };
     let action = 'transcript', changed = false, displayed = new Map<string, AgentRecord>();
-    const selected = await browse(ctx, dock, { title: 'Subagents', pages: navigation, state: state.browser,
+    const selected = await browse(ctx, dock, { title: 'Subagents', pages: navigation, navigation: exit, state: state.browser,
       total: () => records().length, selection: item => { const record = displayed.get(item.value)!; return { name: record.name, id: record.id }; },
       controls: [
         { key: 'w', label: 'Scope', items: () => [{ value: 'session', label: 'This session' }, { value: 'workspace', label: 'Workspace' }],
@@ -48,16 +51,19 @@ export async function showRuns(ctx: ExtensionContext, deps: SubagentsDeps, state
           label: `${filter[0].toUpperCase()}${filter.slice(1)}`, description: String(visible.filter(record => matches(record, filter)).length) })); },
           selected: () => state.filter, select: (value, done) => { changed = true; change(value as RunFilter, state.workspace, done); } }],
       subscribe: refresh => agents.manager.subscribe(refresh), ticking: () => records().some(record => active(record.state)),
-      layout: { truncatePrimary: ({item, text, maxWidth}) => {
-        const record = displayed.get(item.value)!, tail = `${record.state} · ${duration(record)}`;
-        const name = text.slice(0, text.lastIndexOf(` · ${record.state} · `));
-        return `${truncateToWidth(name, Math.max(0, maxWidth - visibleWidth(tail) - 3))} · ${tail}`;
+      layout: { truncatePrimary: ({item, maxWidth, theme}) => {
+        const record = displayed.get(item.value)!;
+        const state = agents.manager.get(record.id, record.runId).run?.question ? 'waiting(parent)' : record.state;
+        return executionRow(sanitizeText(record.name).replace(/[\r\n\t]/g, ' '),
+          [{text: state, state}, {text: ` · ${duration(record)}`, tone: 'muted'}], [[{text: state, state}]], maxWidth, theme);
       } },
       items: () => {
         const rows = records().filter(record => matches(record, state.filter)).sort((a, b) => compareActivity(a, b, record => active(record.state)));
         displayed = new Map(rows.map(record => [record.runId, record]));
         return rows.map(record => {
-        return { value: record.runId, status: record.state, label: `${record.name} · ${record.state} · ${duration(record)}`,
+          const state = agents.manager.get(record.id, record.runId).run?.question ? 'waiting(parent)' : record.state;
+          const display: DisplayField[] = [{text: record.name}, {text: ' · ', tone: 'muted'}, {text: state, state}, {text: ` · ${duration(record)}`, tone: 'muted'}];
+        return { value: record.runId, status: state, label: displayText(display), display,
           search: `${record.id} ${record.runId} ${record.name} ${record.type} ${record.state} ${record.model} ${record.prompt}`,
           details: () => `${readonly(record) ? 'Read only\n' : ''}${agentDetails(record)}` };
         });
@@ -80,15 +86,14 @@ export async function showRuns(ctx: ExtensionContext, deps: SubagentsDeps, state
       },
     });
     if (changed) continue;
-    if (selected === undefined) return;
+    if (selected === undefined || exit.closed) return;
     const record = records().find(record => record.runId === selected);
     if (!record) continue;
-    agents.selectRun(record.runId);
     try {
       if (action === 'transcript' && record.state === 'queued') action = 'details';
-      if (action === 'transcript') await showAgent(ctx, agents, dock, record.id, record.runId, config, readonly(record), jobs);
-      else if (action === 'details') await showDetails(ctx, dock, record.name, agentDetails(record));
-      else await performAgentAction(action, ctx, agents, record.id, record.runId, readonly(record), config, jobs);
+      if (action === 'transcript') await showAgent(ctx, agents, dock, record.id, record.runId, config, readonly(record), jobs, exit);
+      else if (action === 'details') await showDetails(ctx, dock, record.name, agentDetails(record), 'text', exit);
+      else await performAgentAction(action, ctx, agents, record.id, record.runId, readonly(record), config, jobs, exit);
     } catch (error) { ctx.ui.notify(error instanceof Error ? error.message : String(error), 'error'); }
   }
 }

@@ -6,11 +6,15 @@ import { TerminalView, type TerminalExit, type TerminalKeys } from '../ui/termin
 import { ToolError } from '../runtime/errors.ts';
 import { isActive } from './state.ts';
 import { resolveWorkspace } from './workspace.ts';
-import { JobsModule, displayName, summaryLine } from './index.ts';
-import { jobDetail, streamsOf, type ListScope } from './query.ts';
-import { showJobLog } from './log-viewer.ts';
-import type { JobSummary, Stream } from './types.ts';
+import { JobsModule, displayName, summaryLine, jobLabel } from './index.ts';
+import { jobDetail, type ListScope } from './query.ts';
+import type { JobSummary } from './types.ts';
 import { browse, browseState, compareActivity } from '../ui/browser.ts';
+import { openReading } from '../ui/reading.ts';
+import { ViewerNavigation } from '../ui/viewer/navigation.ts';
+import { TerminalScreen } from './terminal/screen.ts';
+import { JobView } from './viewer/component.ts';
+import { jobRow } from './viewer/metadata.ts';
 
 export interface ViewerDeps { jobs: JobsModule; dock: Dock; notifications: Notifications; keys: () => TerminalKeys }
 
@@ -32,7 +36,8 @@ export async function attachJob(ctx: ExtensionContext, deps: ViewerDeps, id: str
   signal?.addEventListener('abort', abort, { once: true });
   try {
     return await ctx.ui.custom<TerminalExit>((tui, theme, _keys, done) => view = new TerminalView(tui, theme, terminal, deps.keys(), {
-      title: () => { const job = manager.peek(id); return `${displayName(job)} · ${job.id} · ${job.state}`; },
+      title: () => displayName(manager.peek(id)),
+      initialInput: true, canInput: () => manager.peek(id).state === 'running', takeControl: () => manager.takeControl(id),
       // Raw keystrokes can include passwords; the input log keeps only that something was typed.
       write: data => { manager.write(id, data, { source: 'user', kind: 'keys', sensitive: true }); },
       returnControl: () => manager.returnControl(id),
@@ -56,13 +61,20 @@ type BrowseJobState = typeof STATES[number];
 
 async function pickJob(pi: ExtensionAPI, ctx: ExtensionCommandContext, deps: ViewerDeps, state: BrowseJobState, scope: ListScope): Promise<void> {
   const workspace = await resolveWorkspace(ctx.cwd);
-  const viewState = browseState();
-  for (;;) {
+  const viewState = browseState(), navigation = new ViewerNavigation();
+  while (!navigation.closed) {
     const { rows, errors } = await deps.jobs.list(workspace, { state: 'all', scope, limit: Number.MAX_SAFE_INTEGER }, ctx);
     for (const error of errors) ctx.ui.notify(`history error: ${error}`, 'warning');
     const current = () => deps.jobs.browseRows(rows, { state, scope }, ctx).sort((a, b) => compareActivity(a.job, b.job, isActive));
     let changed = false;
-    const choice = await browse(ctx, deps.dock, { title: 'Jobs', state: viewState,
+    // Native row layout runs once per visible row; index the current item snapshot instead
+    // of sorting/scanning the complete history again for each rendered name or suffix.
+    let displayed = new Map<string, JobSummary>();
+    const choice = await browse(ctx, deps.dock, { title: 'Jobs', state: viewState, navigation,
+      layout: {truncatePrimary: context => {
+        const job = displayed.get(context.item.value)!;
+        return jobRow(job, context.maxWidth, context.theme);
+      }},
       controls: [
         {key: 'w', label: 'Scope', selected: () => scope, items: () => [{value: 'session', label: 'This session'}, {value: 'workspace', label: 'Workspace'}],
           select: (value, done) => {scope = value as ListScope; changed = true; done();}},
@@ -71,54 +83,50 @@ async function pickJob(pi: ExtensionAPI, ctx: ExtensionCommandContext, deps: Vie
           select: value => {state = value as BrowseJobState;}},
       ],
       total: () => deps.jobs.browseRows(rows, {state: 'all', scope}, ctx).length,
-      selection: item => ({name: displayName(current().find(row => row.job.id === item.value)!.job), id: item.value}),
+      selection: item => ({name: displayName(displayed.get(item.value)!)}),
       subscribe: refresh => deps.jobs.control().subscribe(refresh), ticking: () => current().some(row => isActive(row.job)),
-      items: () => current().map(({ job, live, unsettled }) => ({ value: job.id, status: job.state,
-        label: `${summaryLine(job)} · ${displayName(job)}${unsettled ? ' · unsettled history' : ''}`,
+      items: () => {
+        const items = current(); displayed = new Map(items.map(({job}) => [job.id, job]));
+        return items.map(({ job, live }) => ({ value: job.id, status: job.state,
+        label: displayName(job), display: jobLabel(job),
         search: `${job.id} ${displayName(job)} ${job.state} ${job.command} ${job.cwd}`,
         details: () => [`ID: ${job.id}`, ...jobDetail(job, true), ...live ? [] : ['history only: not controlled by this Pi process']].join('\n'),
-      })),
+        }));
+      },
     });
+    if (navigation.closed) return;
     if (changed) continue;
     if (choice === undefined) return;
     const job = current().find(row => row.job.id === choice)?.job;
-    if (job) await jobActions(pi, ctx, deps, job.id, false, job.cwd);
+    if (job) await jobActions(pi, ctx, deps, job.id, false, job.cwd, navigation);
   }
 }
 
-export async function jobActions(pi: ExtensionAPI, ctx: ExtensionContext, deps: ViewerDeps, id: string, readonly = false, cwd = ctx.cwd): Promise<void> {
-  deps.jobs.selectJob(id);
-  const manager = deps.jobs.control();
+export async function jobActions(pi: ExtensionAPI, ctx: ExtensionContext, deps: ViewerDeps, id: string, readonly = false, cwd = ctx.cwd, navigation = new ViewerNavigation()): Promise<void> {
+  if (navigation.closed) return;
+  const control = deps.jobs.control();
+  const {job, live} = await control.get(id, await resolveWorkspace(cwd));
+  if (ctx.mode !== 'tui') {
+    await showDetails(ctx, deps.dock, 'Job details', [`ID: ${id}`, ...jobDetail(job, true)].join('\n'), 'text', navigation); return;
+  }
+  const manager = deps.jobs.executionAvailable ? deps.jobs.manager() : undefined;
+  const ownedScreen = live ? manager?.terminal(id) : undefined;
+  // Cross-process history restores only a saved, complete xterm state. Older records/bridges
+  // deliberately expose logs; parsing a random log tail cannot reconstruct a screen.
+  const snapshot = !ownedScreen ? await control.readTerminalSnapshot?.(job) : undefined;
+  const restored = snapshot ? await TerminalScreen.restore(snapshot) : undefined;
   const release = deps.notifications.hold();
-  try { for (;;) {
-    const { job, live } = await manager.get(id, await resolveWorkspace(cwd));
-    const attach = !readonly && deps.jobs.executionAvailable && live && job.mode === 'pty' && deps.jobs.manager().terminal(id) ? (isActive(job) ? 'Attach terminal' : 'View last screen') : undefined;
-    const stop = !readonly && live && isActive(job) ? 'Stop job' : undefined;
-    const clear = !readonly && deps.jobs.executionAvailable && !isActive(job) && !['pending', 'unconfirmed'].includes(job.cleanup.state) ? 'Clear history' : undefined;
-    const actions = [attach, 'Details', ...streamsOf(job).map(stream => `Read ${stream}`), stop, clear, 'Back'].filter(item => item !== undefined);
-    const choice = await ctx.ui.select(`${summaryLine(job)} · ${displayName(job)}`, actions);
-    if (choice === undefined || choice === 'Back') return;
-    if (choice === attach) {
-      const exit = await attachJob(ctx, deps, id);
-      if (exit.action === 'transfer') pi.sendMessage({ customType: 'pi-suite:job-screen', content: screenMessage(manager.peek(id), exit.screen), display: true },
-        { triggerTurn: true, deliverAs: 'followUp' });
-      continue;
-    }
-    if (choice === stop) {
-      if (!await ctx.ui.confirm(`Stop ${job.id}?`, `${displayName(job)}\n${job.command}\n\nThe process and its managed children are stopped; history and logs are kept.`)) continue;
-      const result = await manager.stop(id, 'user');
-      ctx.ui.notify(`${summaryLine(result.job)}${result.job.cleanup.state === 'pending' || result.job.cleanup.state === 'unconfirmed' ? ' · cleanup not confirmed' : ''}`);
-      continue;
-    }
-    if (choice === clear) {
-      if (!await ctx.ui.confirm('Delete history and logs?', `${job.id} · ${displayName(job)}\nThis permanently removes the saved record and every input/output log.`)) continue;
-      await deps.jobs.manager().clear(job.id, job.workspace);
-      ctx.ui.notify(`Deleted history and logs for ${job.id}`); return;
-    }
-    const stream = choice.startsWith('Read ') ? choice.slice(5) as Stream : undefined;
-    if (stream) await showJobLog(ctx, deps.dock, manager, job, stream, live);
-    else await showDetails(ctx, deps.dock, job.id, [...jobDetail(job), ...live ? [] : ['history only: not controlled by this Pi process']].map(line => `- ${line}`).join('\n'));
-  } } finally { release(); }
+  deps.dock.setDetail(true);
+  let view: JobView | undefined;
+  try {
+    const exit = await openReading<TerminalExit | undefined>(ctx, async (tui, theme, keys, done) => {
+      view = new JobView(tui, theme, keys, {job, live, readonly, control, manager,
+        source: ownedScreen ?? restored, keys: deps.keys(), navigation}, done);
+      await view.initialize(); return view;
+    });
+    if (exit?.action === 'transfer') pi.sendMessage({customType: 'pi-suite:job-screen', content: screenMessage(control.peek(id), exit.screen), display: true},
+      {triggerTurn: true, deliverAs: 'followUp'});
+  } finally { view?.dispose(); restored?.dispose(); deps.dock.setDetail(false); release(); }
 }
 
 /** /jobs [finished|all] [workspace]: list, details, logs, attach and stop for the user. */

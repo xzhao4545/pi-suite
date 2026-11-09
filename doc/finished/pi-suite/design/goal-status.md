@@ -2,7 +2,7 @@
 
 目标：在 Pi 原生状态栏或 pi-starship 中显示准确、简短的 goal 状态，减少常驻面板占用。
 
-归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 验收收尾](../windows-completion.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
 
 当前状态：摘要发布、配置、会话归属与完成反馈已实现；Pi 1.5.0 原生 footer 及 @narumitw/pi-starship 0.65.2 实际 extension_status 模块通过离线检查。完整发布入口与真实 goal/tasks/child/jobs/ask 并存通过 Linux SDK 三尺寸检查，见 [footer 联动阶段](../footer-integration.md)；Windows 与用户实际 footer 配置仍待验收，目标基础记录见 [已完成阶段](../goal-core.md)。
 
@@ -80,7 +80,7 @@ ctx.ui.setStatus("goal", undefined); // 当前会话没有 goal 时清除
 format = "$model$thinking$context $extension_status"
 
 [extension_status]
-format = "[$statuses](../../../todo/pi-suite/$style)"
+format = "[$statuses]($style)"
 disabled = false
 icons = { goal = "" }
 styles = { goal = "fg:pi:accent" }

@@ -1,9 +1,8 @@
-import { truncateToWidth } from '@earendil-works/pi-tui';
+import { Text, truncateToWidth } from '@earendil-works/pi-tui';
 import { toolRenderers, stateLine } from '../ui/tool-render.ts';
 import { answerText, optionRow } from './render.ts';
 import { normalize, type AskParams } from './schema.ts';
 import type { AskDetails } from './result.ts';
-import { sanitizeText } from '../runtime/text.ts';
 
 type Details = AskDetails;
 export function askRenderers(title = 'Ask') {
@@ -23,18 +22,19 @@ export function askRenderers(title = 'Ask') {
       const questions = 'questions' in data ? data.questions : normalize({ ...args, question: data.question,
         context: data.context, options: data.options });
       const responses = 'answers' in data ? data.answers.map(answer => answer.response) : [data.response];
-      return [data.status, ...'heading' in data && data.heading ? [sanitizeText(data.heading)] : [],
+      return [{ label: 'state', value: data.status, tone: stateLine(data.status).tone }, ...'heading' in data && data.heading ? [{ icon: '', title: data.heading }] : [],
         ...questions.flatMap((question, index) => {
           const response = responses[index];
           // Use the live form's markers; the transcript has no editing focus.
           const selected = new Set(response?.kind === 'selection' ? response.optionIds : []);
           const draft = { selected, text: response?.text ?? '', customSelected: Boolean(response?.text) };
-          return [sanitizeText(question.question), ...question.context ? [sanitizeText(question.context)] : [],
-            ...question.options.flatMap(option => [optionRow(theme, question, draft, option, false),
-              ...option.description ? [`    ${sanitizeText(option.description)}`] : []]),
-            ...response?.text ? [optionRow(theme, question, draft, undefined, false)] : [],
-            ...response?.comment ? [`comment: ${sanitizeText(response.comment)}`] : [],
-            ...response?.autoSelected ? ['auto-selected'] : [], ...response ? [] : ['unanswered']];
+          return [{ icon: '?', tone: 'accent' as const, title: question.question }, ...question.context ? [{ label: 'context', value: question.context }] : [],
+            ...question.options.flatMap(option => [new Text(optionRow(theme, question, draft, option, false), 0, 0),
+              ...option.description ? [{ label: 'description', value: option.description }] : []]),
+            ...response?.text ? [new Text(optionRow(theme, question, draft, undefined, false), 0, 0)] : [],
+            ...response?.comment ? [{ label: 'comment', value: response.comment }] : [],
+            ...response?.autoSelected ? [{ label: 'source', value: 'auto-selected · not consent', tone: 'warning' as const }] : [],
+            ...response ? [] : [{ label: 'answer', value: 'unanswered', tone: 'warning' as const }]];
         })];
     },
   });

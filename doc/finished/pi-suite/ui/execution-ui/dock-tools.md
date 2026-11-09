@@ -1,5 +1,7 @@
 # Dock 与工具显示
 
+> 本专项已完整实施并验收，结论见[专项索引](index.md#完成验收)。以下根因和实施要求保留规划时的详细记录；当前事实见对应 current 文档。
+
 ## 当前实现与根因
 
 - `src/ui/dock.ts` 已使用集中声明的 `sourceOrder` 固定 Goal → Tasks → Agents → Jobs → Workflows；`render()` 先按激活选择和 priority 分配预算，再按固定顺序输出，不把选中分区置顶。顺序与同序遍历已形成基线，不再是待修复根因。
@@ -136,11 +138,11 @@ Dock 已将 `selection` 身份与 `active` 分开；Enter、Esc/→、Ask/详情
 
 - [x] Dock 固定分区顺序、可见预算与同序键盘选择
 - [x] Tasks 组/子项只读查看、方括号分区切换、双向/间隙折叠与紧凑预算
-- [ ] Job 人类浏览名称精简及 Dock/Browser 统一状态角色
-- [ ] 可见选择状态归一化，清除领域文本 `>` 与持久选中优先级
-- [ ] 公共工具执行外框与调用/结果合并显示
-- [ ] 结构化展开高亮、错误与敏感内容契约
-- [ ] 共享命令高亮、renderer 组合及 Suite 配置
-- [ ] 定向验证及 ui/runtime/jobs/agents 文档局部同步
+- [x] Job 人类浏览名称精简及 Dock/Browser 统一状态角色
+- [x] 可见选择状态归一化，清除领域文本 `>` 与持久选中优先级
+- [x] 公共工具执行外框与调用/结果合并显示
+- [x] 结构化展开高亮、错误与敏感内容契约
+- [x] 共享命令高亮、renderer 组合及 Suite 配置
+- [x] 定向验证及 ui/runtime/jobs/agents 文档局部同步
 
 [返回专项索引](index.md)

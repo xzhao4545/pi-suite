@@ -4,7 +4,7 @@
 
 ## 任务索引
 
-- [执行界面与查看器优化](execution-ui/index.md)：Tasks → Agents → Jobs 固定顺序、工具外框与高亮、Jobs 直接实时查看、Subagents 底部信息栏与原生 Editor、双左退出
+当前没有未完成专项；新增需求按下方规则登记。
 
 Pi Suite Windows 验收见 [收尾记录](../finished/pi-suite/windows-completion.md)；Cursor CLI 验收按用户要求移除。
 

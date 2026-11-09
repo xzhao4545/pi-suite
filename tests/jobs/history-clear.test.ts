@@ -9,6 +9,8 @@ import { acquireRuntime } from '../../src/jobs/runtime.ts';
 import { JobStore } from '../../src/jobs/store.ts';
 import { JobsModule } from '../../src/jobs/index.ts';
 import { jobActions } from '../../src/jobs/viewer.ts';
+import { JobView } from '../../src/jobs/viewer/component.ts';
+import { terminal } from '../support/terminal.ts';
 import { SessionBinding } from '../../src/runtime/binding.ts';
 import { Notifications } from '../../src/runtime/notifications.ts';
 import { Dock } from '../../src/ui/dock.ts';
@@ -75,21 +77,31 @@ test('history clear joins saved logs, rejects occupied records and keeps late co
     await other.wait(historical.id); await other.shutdown(Date.now() + 5000);
     assert.equal((await jobs.get(historical.id, historical.workspace)).live, false);
     const deps = {jobs: view, dock, notifications, keys: () => loadConfig(root, root).jobs};
-    let confirmations = 0;
     const menuCtx = {...ctx, ui: {...ctx.ui,
-      select: async (_title: string, choices: string[]) => { assert.ok(choices.includes('Clear history')); return 'Clear history'; },
-      confirm: async (title: string) => {
-        assert.equal(title, 'Delete history and logs?'); assert.ok(existsSync(store.directory(historical)));
-        return ++confirmations === 2;
-      },
+      select: async () => assert.fail('Jobs must open directly, not select an action candidate'),
+      custom: async factory => new Promise(resolve => {
+        Promise.resolve(factory(terminal(40, 120), ctx.ui.theme, {} as never, resolve)).then(component => {
+          assert.ok(component instanceof JobView); component.render(120);
+          component.handleInput('\x1b[3~'); assert.ok(existsSync(store.directory(historical)));
+          assert.match(component.render(120).join('\n'), /history, all logs and terminal snapshot/);
+          component.handleInput('c'); // Any other key cancels the armed destructive action.
+          component.handleInput('\x1b[3~'); assert.ok(existsSync(store.directory(historical)));
+          component.handleInput('\x1b[3~');
+        });
+      }),
     }} as ExtensionContext;
     await jobActions({} as never, menuCtx, deps, historical.id);
-    assert.equal(confirmations, 2); assert.equal(existsSync(store.directory(historical)), false);
-    const readOnlyCtx = {...ctx, ui: {...ctx.ui, select: async (_title: string, choices: string[]) => {
-      assert.ok(!choices.includes('Clear history')); return 'Back';
-    }}} as ExtensionContext;
+    assert.equal(existsSync(store.directory(historical)), false);
+    const readOnlyCtx = {...ctx, ui: {...ctx.ui, custom: async factory => new Promise(resolve => {
+      Promise.resolve(factory(terminal(40, 120), ctx.ui.theme, {} as never, resolve)).then(component => {
+        assert.ok(component instanceof JobView);
+        const screen = component.render(120).join('\n');
+        assert.ok(!screen.includes('stop process') && !screen.includes('delete history'));
+        component.handleInput('\x1b');
+      });
+    })}} as ExtensionContext;
     const running = await jobs.start({...owner, command: 'read line'}, testShell());
-    await jobActions({} as never, readOnlyCtx, deps, running.id);
+    await jobActions({} as never, readOnlyCtx, deps, running.id, true);
     assert.ok(existsSync(join(store.directory(running), 'job.json')));
   } finally {
     release.resolve(); removed.resolve(); JobStore.prototype.save = save; JobStore.prototype.remove = remove;

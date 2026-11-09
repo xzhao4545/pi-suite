@@ -2,7 +2,7 @@
 
 目标：保留上游 pi-subagents 的自定义 agent 类型、@handle 提及、定时调度、SubagentWorkflow 和跨扩展 RPC，接入本包统一工具、配置与界面。
 
-归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 待办](../../../../todo/pi-suite/index.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
+归档范围：保留已实施设计及原验收证据，不表示所有平台已通过。剩余 Windows 验收统一维护在 [Windows 验收收尾](../../windows-completion.md)；Linux 后续由用户在其他设备处理，不阻塞 Windows；手机 SSH 专项已取消。
 
 当前状态：完整保留 frontmatter、类型与包发现、扩展选择/动态工具范围、技能预加载、memory、父级上下文与会话目录已接入，4 项 Linux SDK 契约检查通过，见 [资源基础阶段](../../agents/resources-core.md)。@handle 输入、补全与会话克隆启动通过 3 项 Linux 检查，见 [提及基础阶段](../../agents/mentions-core.md)。定时调度与查看取消已接入，见 [调度基础阶段](../../agents/schedules-core.md)。RPC 五通道、会话归属与结果消费已接入，见 [RPC 基础阶段](../../agents/rpc-core.md)。workflow 编排核心见 [核心阶段](../../agents/workflow-core.md)，宿主、保存资源、工具、通知/等待与原生控制入口见 [宿主接入阶段](../../agents/workflow-host.md)。类型开关菜单和 Execution 回收见 [类型与回收阶段](../../agents/types-retention.md)；Windows/MCP 和资源组合继续验收。保留范围已由用户确认，不保留 git worktree 隔离。导入文件与改造边界见 [上游导入](../upstream-import.md)。
 
