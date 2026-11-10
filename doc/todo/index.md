@@ -5,6 +5,7 @@
 ## 任务索引
 
 - [工具外观、任务 Dock 与原生会话阅读接入](./ui-native-integration/index.md) — 六项待实施问题：Pi 原生工具外壳、任务恢复反馈、等宽选中、Subagent 首次末尾定位、工具点击与历史滚动条；含根因、公共框架方案、边界、任务清单及验收要求。
+- [Responses 历史净化 fork](./responses-clean-fork/index.md) — 拟新增 `/responses fork`：无需选择提供商，一次性净化当前分支的私有 item 引用与加密推理，保留原会话、普通消息和工具配对；新会话后续正常请求，含生命周期、能力限制及验收要求。
 
 Pi Suite Windows 验收见 [收尾记录](../finished/pi-suite/windows-completion.md)；Cursor CLI 验收按用户要求移除。
 
