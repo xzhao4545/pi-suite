@@ -4,7 +4,9 @@
 
 已实施模块的完整设计与原验收契约见 [设计与实施记录](./pi-suite/design/index.md)；平台证据按各专项的实际范围读取，Windows 本轮状态见 [Windows 验收收尾](./pi-suite/windows-completion.md)。
 
-以下 patched 宿主 UI/入口记录仅证明对应开发依赖组合，不证明消费者安装后可在官方 Pi 中加载。未完成的普通插件兼容工作和已确认的 U1/T1/M1/原版 phase 边界见 [官方 Pi 插件兼容方案](../todo/official-pi-compatibility/index.md)。
+以下 patched 宿主 UI/入口记录保留迁移前开发依赖组合的审计与验收细节，不作为现状或消费者安装证明。U1/T1/M1、净化及三组补丁清理已实施，当前官方未修改 Pi 1.5.0 的加载/运行范围见 [官方 Pi 插件兼容实施](./pi-suite/official-pi-compatibility/index.md)；消费者安装按用户指示 [延期](../todo/official-pi-installation.md)，未实际 npm 发布。
+
+- [官方 Pi 插件兼容实施](./pi-suite/official-pi-compatibility/index.md) — 公开组件键盘阅读、持久 fork 首头只读与内存独立提示、统一私有 parentModelRuntime、原版 Responses 行为及三组补丁清理；三个 Pi peer/dev 精确 1.5.0、private:true 保持；stock U1 18/18、T1 16/16、全量 215/215 与 typecheck、官方原有 bin/RPC 三项及新增真实 CLI Dock/搜索/合法 child 中文 Editor 补验通过，实施与文档已提交；消费者安装按指示延期。
 
 - [Patched Node 宿主入口验收](./pi-suite/ui/cli-host-entry.md) — 定制开发依赖的 CLI bin、RPC 与 SDK 共用实际 patched 模块，真实 PTY/xterm 页面、原生工具点击及返回/resize 通过；历史全量 220/220 不作为官方兼容证据。
 - [工具外观、任务 Dock 与原生会话阅读接入](./pi-suite/ui/ui-native-integration/index.md) — 六项已实现已验证：Pi 原生工具外壳、任务恢复基线与等宽选中、首开末尾定位、偏移后工具点击及原生滚动条；真实 TuiAltScreen/SDK 与 Jobs、PTY、Ask History、workflow 共享消费者通过，failed/stopped 阅读为终态夹具，非实体失败流程验收。

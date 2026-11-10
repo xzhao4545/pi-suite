@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {type Theme} from '@earendil-works/pi-coding-agent';
-import {VStack, renderLayout, getScrollViewBox, getScrollbarGeometry} from '@earendil-works/pi-tui';
+import {VStack, visibleWidth} from '@earendil-works/pi-tui';
 import {AskView} from '../../src/ask/view.ts';
 import {AskForm} from '../../src/ask/form.ts';
 import {normalize} from '../../src/ask/schema.ts';
@@ -10,7 +10,7 @@ import {Dock} from '../../src/ui/dock.ts';
 import {Transcript} from '../../src/ui/transcript.ts';
 import {readerTerminal} from '../support/reader.ts';
 
-test('fullscreen inline Ask History exposes its native scroll node without changing the draft or answer state', async () => {
+test('fullscreen inline Ask History uses the shared keyboard window without changing its native draft or answer state', async () => {
   const native = readerTerminal(30, 80);
   const theme = globalThis[Symbol.for('@earendil-works/pi-coding-agent:theme') as unknown as keyof typeof globalThis] as unknown as Theme;
   const transcript = new Transcript(native.tui, process.cwd());
@@ -22,16 +22,17 @@ test('fullscreen inline Ask History exposes its native scroll node without chang
   native.tui.setLayoutRoot(new VStack([{component: view, basis: 0, grow: 1}])); native.tui.setFocus(view);
   try {
     native.tui.renderNow(); native.send('\x08');
-    const frame = renderLayout(view, 80, 30, () => native.tui.requestRender());
-    assert.ok(frame.primaryScrollView);
-    const scroll = frame.primaryScrollView, box = getScrollViewBox(frame, scroll)!;
-    const geometry = getScrollbarGeometry(box, true)!;
-    native.send(`\x1b[<65;2;${box.rect.y + 2}M`); assert.ok(scroll.scrollTop > 0);
-    native.send(`\x1b[<35;${geometry.column + 1};${geometry.trackTop + 1}M`);
-    assert.ok((await native.lines()).some(line => line.endsWith('█')));
+    native.send('\x1b[B'); assert.match((await native.lines())[0], /history 2\//);
+    native.send('/'); native.send('HISTORY END'); native.send('\r');
+    assert.match((await native.lines()).join('\n'), /HISTORY END/);
     native.send('\x1b[F'); assert.match((await native.lines()).join('\n'), /HISTORY END/);
-    assert.equal(form.draft.text, 'draft branch'); assert.equal(submitted, false);
+    for (const [rows, columns] of [[24, 40], [30, 80], [40, 120]]) {
+      native.resize(rows, columns);
+      const rendered = view.render(columns);
+      assert.ok(rendered.length <= rows); assert.ok(rendered.every(line => visibleWidth(line) <= columns));
+      assert.equal(form.draft.text, 'draft branch'); assert.equal(submitted, false);
+    }
     native.send('\x08'); assert.equal(form.draft.text, 'draft branch'); assert.equal(submitted, false);
-    assert.equal(renderLayout(view, 80, 30, () => native.tui.requestRender()).primaryScrollView, undefined);
+    assert.doesNotMatch(view.render(120)[0], /^history /);
   } finally {view.dispose(); native.dispose();}
 });

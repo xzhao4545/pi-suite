@@ -1,13 +1,13 @@
 import { getSelectListTheme, type ExtensionContext, type KeybindingsManager, type Theme } from '@earendil-works/pi-coding-agent';
-import { Input, Key, SelectList, Text, VStack, HStack, renderLayout, fuzzyFilter, matchesKey, truncateToWidth, visibleWidth,
-  type SelectItem, type KeyId, type SelectListLayoutOptions, type TUI, type Component, type TuiMouseEvent, type TuiMouseEventResult } from '@earendil-works/pi-tui';
+import { Container, Input, Key, SelectList, Text, VStack, HStack, fuzzyFilter, matchesKey, truncateToWidth, visibleWidth,
+  type SelectItem, type KeyId, type SelectListLayoutOptions, type TUI, type Component } from '@earendil-works/pi-tui';
 import { sanitizeText } from '../runtime/text.ts';
 import { ScrollView } from './scroll.ts';
 import type { Dock } from './dock.ts';
 import { InlineInput } from './inline-input.ts';
 import { ActionBar, type DetailAction } from './actions.ts';
 import { commandFrame } from './frame.ts';
-import { openReading, readingRows, readingText } from './reading.ts';
+import { openReading, readingRows, readingText, readingWindow } from './reading.ts';
 import { DoubleLeft, type ViewerNavigation } from './viewer/navigation.ts';
 import { controlRows, cycle, divider, displayText, emptyRow, focusLabel, keyHint, paneHeading, readerHeading, recordStyle, selectedRow, separator, statusLabels, statusRow, titleRow, type BrowseChoice, type BrowseControl, type BrowseSelection, type DisplayText } from './browser-chrome.ts';
 export type { BrowseChoice, BrowseControl, BrowseSelection } from './browser-chrome.ts';
@@ -48,7 +48,7 @@ export interface BrowseOptions {
 }
 
 /** A shared native list owns selection identities; details never become another data source. */
-export class BrowserView extends VStack {
+export class BrowserView extends Container {
   focused = true;
   readonly capturesViewportInput = true;
   private input = new Input({ prompt: '' });
@@ -64,7 +64,6 @@ export class BrowserView extends VStack {
   private actionOwner?: string;
   private reader?: ScrollView;
   private leftWidth = 0;
-  private footerTop = 0;
   private refreshTimer?: ReturnType<typeof setTimeout>;
   private clock?: ReturnType<typeof setInterval>;
   private unsubscribe?: () => void;
@@ -183,77 +182,52 @@ export class BrowserView extends VStack {
     return [keyHint('Enter', (this.options.open ?? 'open').toLowerCase(), this.theme),
       ...this.focus === 'list' ? [this.bar.render(this.theme)] : []].filter(Boolean).join(' · ');
   }
-  override render(width: number): string[] { return renderLayout(this, width, readingRows(this.tui), () => this.tui.requestRender()).lines; }
-  prepareLayout(width: number, total: number): void {
-    this.clear();
+  override render(width: number): string[] {
+    const total = readingRows(this.tui);
     this.update();
     this.composer.focused = this.focused;
     this.input.focused = this.active('filter');
     if (this.reader) this.reader.search.focused = this.focused && !this.composer.active && this.focus === 'details' && this.reader.searching;
-    const fixed = (component: Component, rows: number) => this.addChild(component, {basis: rows, shrink: 0});
-    const border = () => commandFrame(width, [], this.theme)[0];
-    fixed(readingText(() => [border()]), 1);
     const header = [titleRow(this.options.title, this.options.pages, width, this.theme, this.options.page), ...controlRows(this.options.controls ?? [], width, this.theme)];
-    fixed(readingText(() => header), header.length);
     const filter = this.focus === 'filter' || this.options.state.query;
-    if (filter) fixed(this.textInput('Filter:', this.input, 'filter'), 1);
-    fixed(readingText(room => [this.status(room)], true), 1);
     const headerRows = 2 + header.length + Number(Boolean(filter));
     const composerRows = this.composer.active && this.composer.multiline
       ? this.composer.renderRows(width, Math.max(1, total - headerRows - 5)) : [];
     const footerRows = composerRows.length || 1;
-    const height = Math.max(1, total - headerRows - footerRows - 3);
+    const height = Math.max(0, total - headerRows - footerRows - 3);
     const wide = width >= 80;
     this.leftWidth = wide ? Math.min(52, Math.floor(width * 0.45)) : width;
-    const listHeight = wide ? height : this.reader ? (this.focus === 'details' ? 2 : Math.max(2, Math.floor(height / 2))) : height;
+    const listHeight = wide ? height : this.reader ? Math.min(height, this.focus === 'details' ? 2 : Math.max(2, Math.floor(height / 2))) : height;
     this.visibleRows = Math.max(1, listHeight - 1);
     this.update();
-    const pane = (focus: 'list' | 'details', children: ConstructorParameters<typeof VStack>[0]) => Object.assign(new VStack(children), {
-      handleMouseCapture: (event: TuiMouseEvent): TuiMouseEventResult | undefined => {
-        if (event.type === 'wheel' || event.button === 'left' && (event.type === 'press' || event.type === 'click')) {
-          this.setFocus(focus); this.tui.requestRender();
-          if (event.y === 0 && event.type !== 'wheel') return {handled: true, focus: true};
-        }
-        return undefined;
-      },
-    });
-    const list = pane('list', [
-      {component: readingText(room => [paneHeading('List', room, this.active('list'), this.theme)], true), basis: 1, shrink: 0},
-      {component: this.items.length ? this.list : readingText(room => [truncateToWidth(this.empty(), room)]), basis: 0, grow: 1},
-    ]);
-    const details = pane('details', [
-      {component: readingText(room => [this.reader ? readerHeading('Details', this.reader.position, this.reader.hasNewOutput, room, this.theme, this.active('details'))
-        : paneHeading('Details', room, false, this.theme)], true), basis: 1, shrink: 0},
-      ...this.reader ? [{component: this.reader, basis: 0, grow: 1}] : [],
-    ]);
+    const listLines = readingWindow([paneHeading('List', this.leftWidth, this.active('list'), this.theme),
+      ...this.items.length ? this.list.render(this.leftWidth) : [this.empty()]], listHeight);
+    const detailsHeight = wide ? height : height - listHeight;
+    const detailsWidth = wide ? width - this.leftWidth - 3 : width;
+    const detailBody = this.reader?.viewport(detailsWidth, Math.max(0, detailsHeight - 1), () => this.tui.requestRender()) ?? [];
+    const detailLines = readingWindow([this.reader ? readerHeading('Details', this.reader.position, this.reader.hasNewOutput, detailsWidth, this.theme, this.active('details'))
+      : paneHeading('Details', detailsWidth, false, this.theme), ...detailBody], detailsHeight);
+    // HStack combines already-bounded native list/reader output. It does not measure
+    // a live ScrollView twice at different widths or maintain another scroll offset.
     const body = wide ? new HStack([
-      {component: list, basis: this.leftWidth, shrink: 0},
-      {component: readingText(() => Array.from({length: height}, () => divider(' │ ', this.theme))), basis: 3, shrink: 0},
-      {component: details, basis: 0, grow: 1},
-    ]) : new VStack([
-      {component: list, basis: listHeight, shrink: 0},
-      ...this.reader ? [{component: details, basis: 0, grow: 1}] : [],
+      {component: readingText(() => listLines), basis: this.leftWidth, shrink: 0},
+      {component: readingText(() => readingWindow([], height).map(() => divider(' │ ', this.theme))), basis: 3, shrink: 0},
+      {component: readingText(() => detailLines), basis: detailsWidth, shrink: 0},
+    ]).render(width) : [...listLines, ...this.reader ? detailLines : []];
+    const navigation = this.composer.active ? composerRows.length ? composerRows : [this.inputRow('Input', width, this.focused, space => this.composer.render(space) ?? '')]
+      : this.reader?.searching && this.focus === 'details' ? this.textInput('Search', this.reader.search, width) : [this.navigation()];
+    const border = commandFrame(width, [], this.theme)[0];
+    const frame = new VStack([
+      readingText(() => [border, ...header, ...filter ? this.textInput('Filter:', this.input, width) : [], this.status(width)]),
+      readingText(() => body), readingText(() => [separator(width, this.theme), ...navigation,
+        this.composer.active ? this.composer.help() : this.composer.render(width) ?? this.help(), border]),
     ]);
-    this.addChild(body, {basis: 0, grow: 1, minSize: 1});
-    fixed(readingText(room => [separator(room, this.theme)]), 1);
-    this.footerTop = total - footerRows - 2;
-    const navigation = this.composer.active ? readingText(room => composerRows.length ? composerRows : [this.inputRow('Input', room, this.focused, space => this.composer.render(space) ?? '')])
-      : this.reader?.searching && this.focus === 'details' ? this.textInput('Search', this.reader.search, 'details') : readingText(() => [this.navigation()]);
-    fixed(navigation, footerRows);
-    fixed(readingText(room => [this.composer.active ? this.composer.help() : this.composer.render(room) ?? this.help()]), 1);
-    fixed(readingText(() => [border()]), 1);
     this.options.state.focus = this.focus;
+    return readingWindow(frame.render(width), total);
   }
-  /** Native layout supplies row coordinates; only the textual prefix needs a column transform. */
-  private textInput(label: string, input: Input, focus: BrowseFocus): Component {
-    return {...readingText(room => [this.inputRow(label, room, Boolean(input.focused), width => input.focused ? input.render(width)[0] ?? '' : truncateToWidth(input.getValue(), width))]),
-      handleMouse: event => {
-        if (event.type !== 'press' && event.type !== 'click' || event.button !== 'left') return undefined;
-        this.setFocus(focus);
-        const prefix = visibleWidth(`${focusLabel(label, true, this.theme)} `);
-        const result = input.handleMouse({...event, x: event.x - prefix + (label === 'Filter:' ? 2 : 0)});
-        this.tui.requestRender(); return result;
-      }};
+  /** Native inputs still own keyboard editing and their cursor; labels consume only columns. */
+  private textInput(label: string, input: Input, room: number): string[] {
+    return [this.inputRow(label, room, Boolean(input.focused), width => input.focused ? input.render(width)[0] ?? '' : truncateToWidth(input.getValue(), width))];
   }
   handleInput(data: string): void {
     if (this.composer.active || this.focus === 'filter' || this.reader?.searching) this.doubleLeft.reset();
@@ -296,13 +270,6 @@ export class BrowserView extends VStack {
       if (page && page.value !== pages!.selected()) pages!.select(page.value, this.done);
       else if (control) cycle(control, this.done);
     }
-  }
-  handleMouseCapture(event: TuiMouseEvent): TuiMouseEventResult | undefined {
-    this.doubleLeft.reset();
-    if (!this.composer.active) return undefined;
-    if (event.y >= this.footerTop) this.composer.handleMouse({...event, y: event.y - this.footerTop,
-      x: event.x - (this.composer.multiline ? 0 : visibleWidth(`${focusLabel('Input', this.focused, this.theme)} `))});
-    return {handled: true};
   }
 }
 

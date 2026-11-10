@@ -1,9 +1,9 @@
 import type { KeybindingsManager, Theme } from '@earendil-works/pi-coding-agent';
-import { Key, Text, VStack, HStack, renderLayout, matchesKey, truncateToWidth, type Component, type TUI, type TuiMouseEvent } from '@earendil-works/pi-tui';
+import { Container, Key, Text, VStack, HStack, matchesKey, truncateToWidth, type TUI, type TuiMouseEvent } from '@earendil-works/pi-tui';
 import { DetailsView } from '../../ui/details.ts';
 import { ScrollView } from '../../ui/scroll.ts';
 import { separator, focusLabel } from '../../ui/browser-chrome.ts';
-import { readingRows, readingText } from '../../ui/reading.ts';
+import { readingRows, readingText, readingWindow } from '../../ui/reading.ts';
 import { commandComponent } from '../../ui/rendering/command.ts';
 import { DoubleLeft, type ViewerNavigation } from '../../ui/viewer/navigation.ts';
 import { TerminalView, type TerminalExit, type TerminalSource, type TerminalKeys } from '../../ui/terminal.ts';
@@ -23,7 +23,7 @@ export interface JobViewOptions {
 }
 
 /** Command/output is one interaction; details swap its body, not another modal/menu. */
-export class JobView extends VStack {
+export class JobView extends Container {
   focused = true;
   readonly capturesViewportInput = true;
   readonly command: ScrollView;
@@ -145,26 +145,24 @@ export class JobView extends VStack {
       if (this.options.navigation.closed) this.finish(); this.tui.requestRender();
     }, [], undefined, this.theme, {navigation: this.options.navigation, keys: this.bindings});
   }
-  override render(width: number): string[] { return renderLayout(this, width, readingRows(this.tui), () => this.tui.requestRender()).lines; }
-  prepareLayout(width: number, total: number): void {
-    this.clear();
-    if (this.details) { this.details.focused = this.focused; this.addChild(this.details, {basis: 0, grow: 1}); return; }
+  override render(width: number): string[] {
+    const total = readingRows(this.tui);
+    if (this.details) { this.details.focused = this.focused; return this.details.render(width); }
     this.commandRows = Math.max(1, Math.min(this.expanded ? Math.floor(total * 0.35) : 2, total - 10));
     this.bodyRows = Math.max(1, total - this.commandRows - 2);
     this.output.focused = this.focused && !this.commandFocus;
     this.command.search.focused = this.focused && this.commandFocus && this.command.searching;
-    this.addChild(readingText(room => [separator(room, this.theme)]), {basis: 1, shrink: 0});
-    this.addChild(this.command.searching ? this.command.search : readingText(room => {
-      const heading = this.expanded ? `command ${this.command.position} · Tab focus` : 'command · c expand';
-      return [focusLabel(heading, this.commandFocus && this.focused, this.theme)];
-    }, true), {basis: 1, shrink: 0});
-    this.addChild(new HStack([
+    const command = this.command.viewport(Math.max(1, width - 2), this.commandRows, () => this.tui.requestRender());
+    const heading = this.command.searching ? this.command.search.render(width) : [focusLabel(
+      this.expanded ? `command ${this.command.position} · Tab focus` : 'command · c expand', this.commandFocus && this.focused, this.theme)];
+    const commandPane = new HStack([
       {component: readingText(() => Array.from({length: this.commandRows}, (_, index) => index === 0 ? '$ ' : '  ')), basis: 2, shrink: 0},
-      {component: this.command, basis: 0, grow: 1},
-    ]), {basis: this.commandRows, shrink: 0});
-    // Text logs remain actual ScrollView descendants. PTY keeps its own two-dimensional
-    // screen component and process-size management, constrained only by the body budget.
-    this.addChild(this.output, {basis: 0, grow: 1, minSize: 1});
+      {component: readingText(() => command), basis: Math.max(1, width - 2), shrink: 0},
+    ]).render(width);
+    // Only the remaining body budget reaches the child's native reader or 2-D PTY.
+    // Command/chrome rows must never be advertised as process screen dimensions.
+    return readingWindow(new VStack([readingText(() => [separator(width, this.theme), ...heading]),
+      readingText(() => commandPane), this.output]).render(width), total);
   }
   handleInput(data: string): void {
     if (this.details) { this.details.handleInput(data); return; }
@@ -190,19 +188,13 @@ export class JobView extends VStack {
     }
     this.output.handleInput(data);
   }
-  handleMouseCapture(event: TuiMouseEvent) {
-    if (this.details) return undefined;
-    this.doubleLeft.reset();
-    if (this.selected === 'terminal' && this.terminal?.inputMode) return event.y < this.commandRows + 2 ? {handled: true} : undefined;
-    if (event.type !== 'wheel' && !(event.button === 'left' && (event.type === 'press' || event.type === 'click'))) return undefined;
-    if (event.y < this.commandRows + 2) {
-      if (this.output instanceof JobLogView && this.output.textInputActive) return {handled: true};
-      if (event.type !== 'wheel') {
-        this.output.handleInput('\t'); this.commandFocus = true; this.expanded = true; this.tui.requestRender();
-        if (event.y < 2) return {handled: true};
-      }
-    } else if (event.type !== 'wheel') { this.commandFocus = false; this.tui.requestRender(); }
-    return undefined;
+  override handleMouse(event: TuiMouseEvent): ReturnType<Container['handleMouse']> {
+    // Keep the terminal's own existing wheel/history behavior; U1 does not route
+    // mouse events into nested text readers, command panes or tool components.
+    if (this.details || this.selected !== 'terminal') return undefined;
+    const result = this.terminal?.handleMouse({...event, y: event.y - this.commandRows - 2});
+    return result && {handled: true, target: {component: this, originX: event.screenX - event.x,
+      originY: event.screenY - event.y, width: event.width, height: event.height}};
   }
   override invalidate(): void { this.command.invalidate(); this.details?.invalidate(); this.terminal?.invalidate(); for (const view of this.streams.values()) view.invalidate(); }
   private finish(exit?: TerminalExit): void { if (this.closed) return; this.closed = true; this.dispose(); this.done(exit); }

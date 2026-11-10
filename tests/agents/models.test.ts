@@ -11,6 +11,8 @@ import { agentDir } from '../support/jobs.ts';
 import { terminal } from '../support/terminal.ts';
 import { agentRuntime } from '../../src/agents/runtime.ts';
 import { AgentManager } from '../../src/agents/manager.ts';
+import { parentModelRuntime } from '../../src/agents/models.ts';
+import { executeAgent } from '../../src/agents/runner.ts';
 import { loadConfig } from '../../src/runtime/config.ts';
 import { agentTypeLocations, writeAgentType } from '../../src/runtime/config-edit.ts';
 import { chooseModelSettings, editTypeModel, updateAgentModel } from '../../src/agents/model-editor.ts';
@@ -24,7 +26,7 @@ async function setup() {
   const root = agentDir(), other = fauxProvider({ provider: 'suite-model-test', models: [{ id: 'reasoning', name: 'Deep analysis', reasoning: true }, { id: 'plain', reasoning: false }] });
   let ctx!: ExtensionContext, authenticated = true;
   const h = await host({ root, persisted: true, tools: ['agent_start'], extend: pi => {
-    pi.registerProvider({ ...other.provider, auth: { apiKey: { name: 'Offline auth', resolve: async () => authenticated ? { auth: {} } : undefined } } });
+    pi.registerProvider({ ...other.provider, auth: { apiKey: { name: 'Offline auth', resolve: async ({ credential }) => authenticated ? { auth: { apiKey: credential?.key } } : undefined } } });
     pi.on('session_start', (_event, context) => { ctx = context; });
   } });
   await h.session.modelRuntime.refresh({ allowNetwork: false });
@@ -32,6 +34,64 @@ async function setup() {
     async loseAuth() { authenticated = false; await h.session.modelRuntime.refresh({ allowNetwork: false }); },
     async cleanup() { await h.dispose(); rmSync(root, { recursive: true, force: true }); } };
 }
+
+test('M1 guards admission and SDK startup while preserving parent dynamic Provider/auth/router through nested and resumed children', { timeout: 15000 }, async () => {
+  const h = await setup(), runtime = h.session.modelRuntime, routes: (number | undefined)[] = [], sdkSessions = new Set<string>();
+  try {
+    assert.strictEqual(parentModelRuntime(h.ctx), runtime);
+    const registry = Object.create(h.ctx.modelRegistry);
+    for (const broken of [undefined, {}]) {
+      Object.defineProperty(registry, 'runtime', { value: broken, configurable: true });
+      await assert.rejects(h.manager.start({ prompt: 'must not allocate' }, { ctx: { ...h.ctx, modelRegistry: registry } }, h.config),
+        /Pi compatibility error: ModelRegistry.runtime.*no independent runtime/);
+      assert.equal(h.manager.runs.size, 0); assert.equal(h.other.state.callCount, 0);
+    }
+    await runtime.setRuntimeApiKey(h.other.provider.id, 'parent-only-runtime-key');
+    runtime.registerVirtualModel({ provider: 'suite-model-router', id: 'auto', name: 'Runtime-only route',
+      thinkingLevels: ['off', 'high'], route(request) {
+        const state = request.state as number | undefined;
+        routes.push(state);
+        return { model: h.other.getModel('reasoning')!, thinkingLevel: request.thinkingLevel, state: (state ?? 0) + 1 };
+      } });
+    mkdirSync(join(h.root, 'agents'), { recursive: true });
+    writeFileSync(join(h.root, 'agents', 'bridge.md'), '---\nname: bridge\nallowed_subagents: all\nmodel: suite-model-router/auto\nthinking: high\nextensions: false\nskills: false\n---\nUse the inherited runtime.');
+    const response: FauxResponseFactory = (context, options, _state, model) => {
+      for (const child of h.manager.runs.values()) if (child.session) {
+        assert.strictEqual(child.session.modelRuntime, runtime); sdkSessions.add(child.record.runId);
+      }
+      assert.equal(model.id, 'reasoning'); assert.equal(options?.apiKey, 'parent-only-runtime-key');
+      assert.equal(options?.reasoning, 'high');
+      const text = JSON.stringify(context.messages);
+      if (text.includes('BRIDGE_ROOT') && !text.includes('BRIDGE_NESTED')) {
+        return fauxAssistantMessage(fauxToolCall('agent_start', { prompt: 'BRIDGE_NESTED', background: false }));
+      }
+      return fauxAssistantMessage(text.includes('BRIDGE_RESUME') ? 'resumed' : 'completed');
+    };
+    h.other.setResponses(Array(6).fill(response));
+    const run = await h.manager.start({ type: 'bridge', prompt: 'BRIDGE_ROOT', background: false }, { ctx: h.ctx }, h.config);
+    const done = await run.done.promise;
+    assert.equal(done.state, 'completed', done.error);
+    const nested = [...h.manager.runs.values()].find(child => child.record.parentRunId === run.record.runId)!;
+    assert.ok(nested); assert.equal(nested.record.state, 'completed', nested.record.error);
+    for (const child of [run, nested]) {
+      assert.strictEqual(parentModelRuntime(child.parent.ctx), runtime); assert.ok(sdkSessions.has(child.record.runId));
+      assert.equal(child.record.model, 'suite-model-router/auto');
+    }
+    assert.equal(run.record.modelSource, 'frontmatter'); assert.equal(nested.record.modelSource, 'inherited');
+    // A retained pre-check manager can pass an existing execution to a newer runner
+    // after reload. It must reject at SDK startup without requiring a new run shape.
+    const calls = h.other.state.callCount;
+    await assert.rejects(executeAgent({ ...run, parent: { ...run.parent,
+      ctx: { ...run.parent.ctx, modelRegistry: registry } } }, () => assert.fail('must not load child resources'), () => {}, () => {}),
+    /Pi compatibility error: ModelRegistry.runtime/);
+    assert.equal(h.other.state.callCount, calls);
+    const resumed = await h.manager.resume(run, 'BRIDGE_RESUME', new AbortController().signal);
+    assert.equal((await resumed.done.promise).state, 'completed', resumed.record.error);
+    assert.strictEqual(parentModelRuntime(resumed.parent.ctx), runtime); assert.ok(sdkSessions.has(resumed.record.runId));
+    assert.ok(routes.includes(undefined) && routes.some(state => state !== undefined), 'router state remains branch-local and survives continuation');
+    assert.equal(h.session.model?.id, 'offline'); assert.equal(h.faux.state.callCount, 0, 'parent selection/request state is not replaced');
+  } finally { await h.cleanup(); }
+});
 
 /** Exercise the same native component used by the UI, keeping the complete value behind its row. */
 function picker(ctx: ExtensionContext, choices: (string | undefined)[], seen: string[] = []): ExtensionContext {

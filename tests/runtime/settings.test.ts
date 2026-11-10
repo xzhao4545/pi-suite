@@ -6,7 +6,7 @@ import {DefaultResourceLoader, SettingsManager, SessionManager, createAgentSessi
   type ExtensionCommandContext, type ExtensionContext, type ExtensionUIContext, type Theme} from '@earendil-works/pi-coding-agent';
 import {fauxProvider, fauxAssistantMessage, fauxToolCall} from '@earendil-works/pi-ai';
 import {stripVTControlCharacters} from 'node:util';
-import {CURSOR_MARKER, Text, TuiAltScreen, getKeybindings, visibleWidth, type TuiMouseEvent} from '@earendil-works/pi-tui';
+import {CURSOR_MARKER, Text, TuiAltScreen, getKeybindings, visibleWidth} from '@earendil-works/pi-tui';
 import {configPaths, writeConfigFields} from '../../src/runtime/config-fields.ts';
 import {loadConfig, readConfig} from '../../src/runtime/config.ts';
 import {prepareClipboard} from '../../src/runtime/clipboard.ts';
@@ -15,7 +15,6 @@ import {ScrollView} from '../../src/ui/scroll.ts';
 import {DetailsView} from '../../src/ui/details.ts';
 import {openReading, readingRows} from '../../src/ui/reading.ts';
 import {terminal} from '../support/terminal.ts';
-import {readerTerminal} from '../support/reader.ts';
 import {agentDir} from '../support/jobs.ts';
 
 test('browser searches full data, preserves identity and readers across resize/reopen and disposes events', () => {
@@ -40,6 +39,7 @@ test('browser searches full data, preserves identity and readers across resize/r
   const before = next.getSelectedItem()!.value; items = items.filter(item => item.value !== before); next.render(120);
   assert.equal(next.getSelectedItem()?.value, `run:${Number(before.slice(4)) + 1}`);
   next.handleInput('/'); next.handleInput('missing'); assert.match(next.render(120).join('\n'), /No matches · press Esc to clear filter/);
+  next.handleInput('\t'); next.handleInput('\t'); assert.equal(state.focus, 'list', 'empty results cannot focus an unavailable detail');
   next.dispose(); assert.equal(released, 2);
 });
 
@@ -84,7 +84,7 @@ test('reading overlays share the actual height ceiling and fullscreen viewport k
       Promise.resolve(factory(tui, {} as never, getKeybindings() as never, resolve)).then(view => {
         const overlay = typeof options?.overlayOptions === 'function' ? options.overlayOptions() : options?.overlayOptions;
         assert.equal(options?.overlay, true);
-        assert.deepEqual(overlay, fullscreen ? {anchor: 'top-left', width: '100%', height: '100%', maxHeight: '100%', margin: 0}
+        assert.deepEqual(overlay, fullscreen ? {anchor: 'top-left', width: '100%', maxHeight: '100%', margin: 0}
           : {anchor: 'center', width: '90%', maxHeight: '70%', margin: 0});
         assert.ok(view instanceof DetailsView); assert.equal(view.capturesViewportInput, true);
         assert.equal(view.render(120).length, readingRows(tui), 'footer is inside the same ceiling as the overlay');
@@ -145,45 +145,6 @@ test('browser focus chrome distinguishes panes and text modes without repainting
       assert.equal(composer.raw.split(CURSOR_MARKER).length - 1, 1);
       view.handleInput('\x1b'); assert.match(screen().plain, /▸ List/);
     } finally {view.dispose();}
-  }
-});
-
-test('browser mouse focus follows pane and native input geometry, skips unavailable details and ignores hover', () => {
-  for (const width of [40, 120]) {
-    const state = browseState(), tui = terminal(30, width);
-    let available = false;
-    const view = new BrowserView(tui, {title: 'Records', state, items: () => [{value: 'record', label: 'record',
-      ...available ? {details: () => 'line\n'.repeat(40)} : {}}]}, () => {});
-    const native = readerTerminal(30, width);
-    native.tui.showOverlay(view, {row: 0, col: 0, width, maxHeight: readingRows(tui)});
-    const screen = () => { native.tui.renderNow(); return view.render(width).map(stripVTControlCharacters); };
-    const mouse = (x: number, y: number, type: TuiMouseEvent['type'] = 'press') => {
-      const button = type === 'wheel' ? 65 : type === 'move' ? 35 : 0;
-      native.send(`\x1b[<${button};${x + 1};${y + 1}M`);
-      if (type === 'press') native.send(`\x1b[<0;${x + 1};${y + 1}m`);
-    };
-    try {
-      let lines = screen(), listTop = lines.findIndex(line => line.startsWith('▸ List'));
-      view.handleInput('\t'); assert.equal(state.focus, 'list');
-      if (width >= 80) {mouse(width - 5, listTop + 1); assert.equal(state.focus, 'list');}
-      available = true; lines = screen();
-      const detailsTop = width >= 80 ? lines.findIndex(line => line.includes('Details')) : lines.findIndex(line => line.startsWith('  Details'));
-      mouse(width - 5, detailsTop); assert.equal(state.focus, 'details');
-      mouse(0, listTop, 'move'); assert.equal(state.focus, 'details');
-      mouse(0, listTop); assert.equal(state.focus, 'list');
-      view.handleInput('/'); view.handleInput('record'); view.handleInput('\r'); lines = screen();
-      const filterTop = lines.findIndex(line => line.includes('Filter:'));
-      mouse(visibleWidth('▸ Filter: ') + 2, filterTop); assert.equal(state.focus, 'filter');
-      view.handleInput('X'); assert.equal(state.query, 'reXcord', 'native cursor positioning accounts for the separate chrome prefix');
-      view.handleInput('\x1b'); view.handleInput('\t'); view.handleInput('/'); lines = screen();
-      const searchTop = lines.findIndex(line => line.includes('▸ Search'));
-      mouse(visibleWidth('▸ Search ') + 2, searchTop); view.handleInput('line');
-      assert.equal(state.readers.get('record')!.search.getValue(), 'line');
-      const body = screen().findIndex(line => line.includes('Details')) + 1;
-      mouse(width - 5, body, 'wheel'); assert.equal(state.focus, 'details');
-      assert.ok(state.readers.get('record')!.offset > 0);
-      available = false; screen(); assert.equal(state.focus, 'list');
-    } finally {view.dispose(); native.dispose();}
   }
 });
 

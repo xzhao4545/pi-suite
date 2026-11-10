@@ -6,7 +6,7 @@ import type { SuiteConfig } from '../runtime/config.ts';
 import type { StopOutcome } from '../runtime/tools.ts';
 import { ToolError } from '../runtime/errors.ts';
 import { resolveType } from './catalog.ts';
-import { resolveSettings } from './models.ts';
+import { parentModelRuntime, resolveSettings } from './models.ts';
 import { hydrate, transcript } from './records.ts';
 import { AgentHistory } from './history.ts';
 import { answerParent } from './questions.ts';
@@ -139,6 +139,9 @@ export class AgentManager {
       if (!allowed || allowed !== 'all' && !allowed.includes(type.name)) throw new ToolError('AGENT_TYPE', `${scope.run.record.type} cannot start ${type.name}`);
       if (scope.run.record.ancestors.length + 1 >= config.agents.maxDepth) throw new ToolError('AGENT_DEPTH', 'agents.maxDepth reached');
     }
+    // Validate before task I/O or allocating a run. The runner also guards its
+    // SDK boundary because reload can retain managers from before this admission check.
+    parentModelRuntime(scope.ctx);
     const settings = continuation ? { model: continuation.model, modelSource: continuation.record.modelSource,
       thinking: continuation.record.thinking, thinkingSource: continuation.record.thinkingSource }
       : resolveSettings(scope.ctx, type, request, config, previous?.individual);

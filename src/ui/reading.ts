@@ -1,5 +1,5 @@
 import type { ExtensionContext, KeybindingsManager, Theme } from '@earendil-works/pi-coding-agent';
-import { Text, truncateToWidth, type Component, type OverlayHandle, type OverlayOptions, type TUI } from '@earendil-works/pi-tui';
+import { truncateToWidth, type Component, type OverlayHandle, type OverlayOptions, type TUI } from '@earendil-works/pi-tui';
 
 type ReadingComponent = Component & { dispose?(): void };
 export type ReadingFactory<T> = (tui: TUI, theme: Theme, keys: KeybindingsManager, done: (value: T) => void) => ReadingComponent | Promise<ReadingComponent>;
@@ -30,32 +30,43 @@ const fullScreen = (tui: TUI) => tui.mode === 'fullscreen' || fullScreens.has(tu
 export const readingRows = (tui: TUI): number => fullScreen(tui) ? tui.terminal.rows : Math.max(1, Math.floor(tui.terminal.rows * 0.7));
 export function readingOverlayOptions(tui: TUI): OverlayOptions {
   return fullScreen(tui)
-    ? {anchor: 'top-left', width: '100%', height: '100%', maxHeight: '100%', margin: 0}
+    ? {anchor: 'top-left', width: '100%', maxHeight: '100%', margin: 0}
     // Pi evaluates the custom-view options factory only on opening. Percentage values
     // are resolved by TUI on every render, keeping the ceiling aligned after resize.
     : {anchor: 'center', width: '90%', maxHeight: '70%', margin: 0};
 }
 
-/** Stateless chrome keeps theme evaluation in the frame; dependent status reads settled layout. */
-export function readingText(render: (width: number) => string[], afterLayout = false): Component {
-  return {render: width => render(width).map(line => truncateToWidth(line, width)), invalidate() {}, renderAfterLayout: afterLayout};
+/** Shared explicit window budget: short views must still occupy the whole cover. */
+export function readingWindow(lines: string[], height: number): string[] {
+  const rows = Math.max(0, Math.floor(height));
+  return [...lines.slice(0, rows), ...Array(Math.max(0, rows - lines.length)).fill('')];
+}
+
+export function readingText(render: (width: number) => string[]): Component {
+  return {render: width => render(width).map(line => truncateToWidth(line, width)), invalidate() {}};
 }
 
 /** Use Pi's focused overlay lifecycle; done() restores the previous focus and transcript viewport. */
 export async function openReading<T>(ctx: ExtensionContext, factory: ReadingFactory<T>): Promise<T> {
   let terminal: TUI, release: (() => void) | undefined;
   try {
-    return await ctx.ui.custom<T>((tui, theme, keys, done) => {
+    return await ctx.ui.custom<T>(async (tui, theme, keys, done) => {
       terminal = tui;
       if (fullScreens.has(ctx)) {
         release = fullScreenLease(tui);
         // Keep the main footer and editor covered while asynchronous child pages open.
         // A native capturing backdrop also prevents typing into an invisible main editor.
-        if (!screenCovers.has(ctx)) screenCovers.set(ctx, tui.showOverlay(Object.assign(new Text('', 0, 0), {
+        if (!screenCovers.has(ctx)) screenCovers.set(ctx, tui.showOverlay({
+          render: () => readingWindow([], tui.terminal.rows), invalidate() {},
           capturesViewportInput: true, handleInput() {},
-        }), readingOverlayOptions(tui)));
+        }, readingOverlayOptions(tui)));
       }
-      return factory(tui, theme, keys, done);
+      const component = await factory(tui, theme, keys, done);
+      // Stock overlay height follows rendered rows. Keep native input/components intact,
+      // wrapping only the output budget instead of replacing the host's footer or mode.
+      const render = component.render.bind(component);
+      component.render = width => fullScreen(tui) ? readingWindow(render(width), readingRows(tui)) : render(width);
+      return component;
     }, {overlay: true, overlayOptions: () => readingOverlayOptions(terminal)});
   } finally { release?.(); }
 }

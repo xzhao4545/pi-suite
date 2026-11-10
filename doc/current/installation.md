@@ -2,7 +2,7 @@
 
 ## GitHub 安装
 
-运行环境为 Node.js 24 或更高和 Pi 1.5.0。使用 Pi 原生包管理命令安装用户级扩展：
+运行环境为 Node.js 24 或更高和官方未修改的 Pi 1.5.0，三个 Pi peer 与开发依赖均精确固定为 `1.5.0`。官方 Node bin 的 regular/fullscreen 与 RPC 实际加载入口已通过；消费者 Git/本地包及 tarball 安装尚未验收，包保持 `private: true`，未实际 npm 发布。下列命令仅说明 Pi 的安装方式，不构成安装验收结论，支持边界见 [公共运行时](./runtime/index.md#宿主加载边界)。使用 Pi 原生包管理命令安装用户级扩展：
 
 ```sh
 pi install git:github.com/xzhao4545/pi-suite

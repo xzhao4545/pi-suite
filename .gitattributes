@@ -1,2 +1,0 @@
-# A unified diff context marker precedes upstream tabs; it is not source indentation.
-patches/*.patch whitespace=-space-before-tab

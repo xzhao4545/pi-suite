@@ -36,7 +36,7 @@ ToolView.expanded 可返回结构化 ToolLine、ToolField、ToolCode、ToolComma
 
 普通 subagent 的 agent_start/list/get/read/send/stop 以 AgentRecord.name 为主标识，ID 仅在展开正文或 dim 元信息中出现；集合折叠行保留数量/范围。启动调用以 name 或类型名显示；只有 ID 的调用通过 agents/runtime.ts 的 agentDisplayName 查询已有进程级 Manager 内存记录，可带 runId 选择执行，找不到时显示 ID，不创建运行时、不发现或读取磁盘历史。stop 的 details 保存名称，历史结果可直接显示。
 
-状态图标为 ⟳ 进行中、⧗ 排队、? 等待、✔ 完成、✘ 失败、⊘ 停止/跳过/取消、⏱ 超时/受限；tasks 使用自己的 ☐/⟳/⚠/☑ 语义。单项鼠标展开与 app.tools.expand（默认 Ctrl+O）由 Pi 宿主管理，折叠行不追加操作提示。
+状态图标为 ⟳ 进行中、⧗ 排队、? 等待、✔ 完成、✘ 失败、⊘ 停止/跳过/取消、⏱ 超时/受限；tasks 使用自己的 ☐/⟳/⚠/☑ 语义。主会话中的单项鼠标展开与 app.tools.expand（默认 Ctrl+O）由 Pi 宿主管理，折叠行不追加操作提示。复杂阅读 overlay 的鼠标能力另见 [终端交互边界](../ui/terminal.md#原生阅读与鼠标)，不根据 renderer 或原生工具实例的存在推定事件能够命中。
 
 扩展工厂通过 runtime/renderers.ts 与 Pi registerToolRenderer 在加载阶段登记所有 Suite 工具的纯展示定义；childSuite 在绑定执行工具前调用同一登记入口，并传入 run.config.ui.highlightBuiltinCommands 的准入快照。child 的显示配置归属 run.configCwd，不根据可独立指定的执行目录 record.cwd 重读设置。registerSuiteRenderers 的可选参数接受固定布尔值或归属方提供的布尔 provider；主会话使用当前配置目录的 reload 快照。历史组件在 session_start 之前重建时即可使用，reload、resume 与重启沿用相同的摘要、展开和错误显示。展示注册不启用模型工具、不创建执行模块；模块关闭或当前工具选择未包含某工具时，其历史记录仍可阅读。已注册工具或其他扩展提供的 renderer 优先于历史展示定义。
 

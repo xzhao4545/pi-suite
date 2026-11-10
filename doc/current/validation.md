@@ -1,6 +1,6 @@
 # 基线与验证
 
-开发依赖锁定 @earendil-works/pi-coding-agent、pi-ai、pi-tui 1.5.0 和 typebox 1.3.27，使用新作用域 API；调度运行依赖锁定 croner 10.0.1。Windows 实际 CLI 为 Pi 1.5.0；Linux 使用同版本 SDK。项目要求 Node.js 24+ 和 pnpm 12.6.0。Linux 按操作系统能力验证，使用已有环境，不安排发行版专项或安装新发行版。
+开发依赖和三个 Pi peer 精确锁定 @earendil-works/pi-coding-agent、pi-ai、pi-tui 1.5.0，使用官方未修改的包及新作用域 API；typebox 为 1.3.27，调度运行依赖锁定 croner 10.0.1。Windows 实际 CLI 为 Pi 1.5.0，其验证范围按各专项记录区分；Linux 使用同版本 SDK 与官方实际 Node bin/RPC。项目要求 Node.js 24+ 和 pnpm 12.6.0。Linux 按操作系统能力验证，使用已有环境，不安排发行版专项或安装新发行版。
 
 Linux 检查复用已有 Node.js/nvm 环境；非交互 shell 应先加载 nvm 初始化脚本，再解析 node 命令。pnpm-workspace.yaml 的 supportedArchitectures 为 Windows/Linux 保留平台可选依赖，使共享依赖目录包含 TypeScript 7 的两平台编译器。
 
@@ -15,6 +15,14 @@ goal 模型工具的 3 项 Linux 契约检查通过，核对空白参数 INVALID
 任务/工具协议与 Goal 交互通过 Linux SDK 验证：Provider 转换后的 object schema、查询修正、按记录字节预算分页与组上下文、单操作/原子批量、多 doing 与手动/依赖阻塞、共享目录监听、稳定浏览身份、单次通知/问题交付、真实停止清理、累计运行计时及取消/恢复交错。Pi 1.5.0 原生终端分发与焦点编辑器覆盖普通/全屏的正文和思考取消，AbortSignal 与 aborted 结算一致，取消后无新增 delta；用户复测确认现有环境 Esc 已正常中断。时钟 tick 不持久写入或发模型请求。协议内容与代表性字节/token 比较见 [专项验收](../finished/pi-suite/tool-protocol/reference-validation.md)。 两级编号/存储检查覆盖独立组号与 nextChild、不复用删除编号、version 2 内存迁移和依赖映射、编辑时发布 version 3；公共工具显示检查覆盖结果隐藏调用、partial 一行、outputPad/宽度、默认展开正文与错误全文。Linux 实际 Pi 1.5.0 CLI 在 40×24、60×30、120×40 验证全部 Suite 工具折叠、单项鼠标展开与 Ctrl+O、sensitive 隐藏、任务 Dock 与可编辑 Ask、默认 All 和完成 dim/删除线、迁移文件继续编辑，以及 Ask History/实际 child renderer 一致；范围见 [Tasks 显示](../finished/pi-suite/tasks-display.md) 与 [工具显示](../finished/pi-suite/tool-display.md)。
 
 底部布局专项通过 Linux Pi 1.5.0 实际 CLI 的 24/30/40/60 行与 40/80/120 列组合、低于 18 行摘要与低于 5 行询问预算验收。独立 Dock/Ask 预算、焦点组任务顺序与溢出、分区/询问边框、切题/筛选稳定高度、展开/全文、文本与 Review 阅读、鼠标页签/多行选项/预览滚轮、缩放草稿保持和关闭恢复通过；原生 SDK 同时核对通知协调与 footer 共存。完整范围见 [底部布局专项](../finished/pi-suite/ui/dock-ask-layout.md)。
+
+## 官方宿主与支持范围
+
+官方未修改 Pi 1.5.0 的 `dist/bundle/cli.js`、`dist/bundle/rpc-entry.js` 已通过真实加载与运行验收。Linux PTY/xterm 覆盖 regular/fullscreen 的 Tasks/Subagents/Jobs、Dock、正文搜索、工具键盘展开、合法活动 child 的中文原生 Editor、持久 clone、代表尺寸/resize、返回和自然退出；本地 HTTP SSE 验证 Responses 保存、重启 resume 与同模型/跨模型原版 phase 行为。完整逐项证据见 [官方 Pi 兼容验收](../finished/pi-suite/official-pi-compatibility/validation.md)。
+
+阅读采用 U1 公开组件、共享显式预算与唯一 scrollTop，scrollbar:hidden；复杂阅读 overlay 的区域鼠标焦点、嵌套单项工具命中和轨道/拖动不在保证范围。Tasks 采用 T1 持久源 LF/UTF-8 首头只读与完整独立快照，内存 fork 明确提示任务不自动继承。M1 保留受守卫的私有父 ModelRegistry.runtime，同一 runtime 的受控 Provider、临时 API key 和虚拟路由聚合通过，失效明确拒绝、不切换默认 runtime。操作与细节分别见 [终端交互](ui/terminal.md)、[任务存储](tasks/storage.md) 和 [模型边界](agents/models.md#模型运行时桥接)。
+
+支持声明精确限定为官方 Pi 1.5.0；消费者 Git/本地包及 tarball 安装按用户指示延期，见 [安装待办](../todo/official-pi-installation.md)，不计为通过。包保持 private:true，未实际 npm 发布。本专项不证明实体人工终端、Windows 人工交互、外网账号/组织权限、真实解密或中转粘性；既有平台专项的结论不扩大到这些范围。
 
 ## 检查
 
@@ -105,7 +113,7 @@ Workflow 宿主的 5 项 Linux（Node 24.22.2）真实 SDK/faux 与进程检查�
 
 真实 MCP 的 1 项 Linux stdio 聚合验证原生传输与 discovery、mcp__ 服务器名单和显式资源 helper 并存、禁用与非选择服务器不执行，以及 child 结束后全部服务进程退出。受控真实服务另核对原生 codemode/tool_search、晚注册工具在下一请求执行、隔离与不可信项目不连接；跨 cwd RPC 只加载用户 MCP，不加载父项目或目标项目 MCP。服务为本机协议夹具，传输范围见 [MCP 阶段](../finished/pi-suite/agents/mcp-transport.md)；Windows 实际外部服务见 [Context7 验收](../finished/pi-suite/agents/windows-context7.md)，不推及 OAuth 或其他服务。
 
-当前 Linux（Node 24.22.2）检查集共 203 项，全量检查与类型检查通过，无失败、跳过或取消项；完整测试约 45 秒，日常检查耗时在 5 分钟内。检查覆盖询问、目标、任务、执行、子代理、workflow 和共享组件的当前契约。平台适用范围按上述各专项结论区分。
+当前 Linux（Node 24.22.2、官方未修改 Pi 1.5.0）检查集共 215 项，全量检查与类型检查通过，无失败、跳过或取消项；完整测试约 51 秒，日常检查耗时在 5 分钟内。检查覆盖询问、目标、任务、执行、子代理、workflow 和共享组件的当前契约。平台及安装适用范围按上述各专项结论区分。
 
 完整 Starship 的 1 项 Linux SDK 聚合从开发依赖加载 0.65.2 实际发布入口，核对 goal_wait、tasks、运行 child、两个 job 与主询问在 40×24、60×30、120×40 并存，实际 emoji/24 位样式、max_statuses 插入顺序、disabled/缺失 extension_status、整体换行和显式 Dock 显示。询问期间实际 job 结算不增加模型调用。终端尺寸由受控 fixture 驱动；当前布局使用独立的空闲 Dock/询问预算，任意用户 footer format 无可靠公共高度反馈，Windows 原生 footer 见 [CLI/footer 验收](../finished/pi-suite/jobs/windows-cli-ui.md)，预算与焦点/鼠标/草稿见 [询问组合](../finished/pi-suite/ask/windows-combination.md)。
 
@@ -119,6 +127,6 @@ Windows 实际 Pi 1.5.0 原生组合覆盖询问/通知、两级任务、模型�
 
 ## 执行界面验收
 
-八项执行界面需求通过当前类型检查、203 项全量检查及 Linux Pi 1.5.0 实际 CLI 验收。40×24/120×40、regular/fullscreen、dark/light、原生/第三方 footer 的 16 种组合均通过，深度检查覆盖真实 PTY 屏幕/输入/尺寸/转交、独立 pipe 流及结算补读、Subagents 底部信息与中文多行 Editor、失败草稿/旧 run 拒绝、18 行编辑、嵌套 Esc/双左和主输入焦点恢复。原生百分比 overlay 与 reader 预算随 resize 一致；第三方 footer 夹具的实例、订阅和分支更新保持，实际 pi-starship 0.65.2 发布入口另在 40×24 regular/light 与 120×40 fullscreen/dark 验证查看往返、输入焦点和分支更新后继续显示。新检查使用隔离配置/cwd 和离线 Provider，不改全局设置或调用收费模型 API；跨进程终态快照及危险操作权限另由真实进程/存储契约核对。文字终端之外的图像协议、完整过去帧或跨进程输入控制不在支持范围，本轮实际 CLI 平台仅 Linux；完整需求与结论见 [执行界面专项](../finished/pi-suite/ui/execution-ui/index.md)。
+八项执行界面需求通过类型检查、全量检查及 Linux Pi 1.5.0 实际 CLI 验收。40×24/120×40、regular/fullscreen、dark/light、原生/第三方 footer 的 16 种组合均通过，深度检查覆盖真实 PTY 屏幕/输入/尺寸/转交、独立 pipe 流及结算补读、Subagents 底部信息与中文多行 Editor、失败草稿/旧 run 拒绝、18 行编辑、嵌套 Esc/双左和主输入焦点恢复。原生百分比 overlay 与 reader 预算随 resize 一致；第三方 footer 夹具的实例、订阅和分支更新保持，实际 pi-starship 0.65.2 发布入口另在 40×24 regular/light 与 120×40 fullscreen/dark 验证查看往返、输入焦点和分支更新后继续显示。新检查使用隔离配置/cwd 和离线 Provider，不改全局设置或调用收费模型 API；跨进程终态快照及危险操作权限另由真实进程/存储契约核对。文字终端之外的图像协议、完整过去帧或跨进程输入控制不在支持范围，本轮实际 CLI 平台仅 Linux；完整需求与结论见 [执行界面专项](../finished/pi-suite/ui/execution-ui/index.md)。
 
 [返回当前文档](./index.md)

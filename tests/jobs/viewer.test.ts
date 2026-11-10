@@ -4,7 +4,7 @@ import { readFileSync, rmSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { stripVTControlCharacters } from 'node:util';
 import type { Theme, ExtensionAPI, ExtensionContext, ExtensionUIContext } from '@earendil-works/pi-coding-agent';
-import { visibleWidth, Text, VStack, renderLayout, getScrollViewBox, getScrollbarGeometry } from '@earendil-works/pi-tui';
+import { visibleWidth, Text, VStack } from '@earendil-works/pi-tui';
 import { JobView } from '../../src/jobs/viewer/component.ts';
 import { JobLogView } from '../../src/jobs/log-viewer.ts';
 import { ViewerNavigation } from '../../src/ui/viewer/navigation.ts';
@@ -53,7 +53,7 @@ test('/jobs opens command/output directly, Esc preserves list identity/filter, a
 });
 
 
-test('actual /jobs outer overlay exposes command and log scroll nodes; native scrollbar and final End read use the same byte window', {timeout: 15000}, async () => {
+test('actual /jobs outer overlay budgets command and log independently; keyboard pause and final End use the same byte window', {timeout: 15000}, async () => {
   const root = agentDir(), jobs = manager(root), native = readerTerminal(30, 80);
   const base = new Text('base', 0, 0); native.tui.setLayoutRoot(new VStack([base])); native.tui.setFocus(base);
   let view: JobView | undefined, overlay: ReturnType<typeof native.tui.showOverlay> | undefined;
@@ -65,15 +65,13 @@ test('actual /jobs outer overlay exposes command and log scroll nodes; native sc
     await view.initialize(); overlay = native.tui.showOverlay(view, {row: 0, col: 0, width: '100%', maxHeight: '100%'}); native.tui.renderNow();
     const log = view.output; assert.ok(log instanceof JobLogView);
     assert.match((await native.lines()).join('\n'), /line-80/);
-    const frame = renderLayout(view, 80, 30, () => native.tui.requestRender());
-    assert.ok(getScrollViewBox(frame, view.command));
-    const box = getScrollViewBox(frame, log.reader)!; assert.ok(box, 'the log is a native descendant, not flattened output');
-    const geometry = getScrollbarGeometry(box, true)!;
-    native.send(`\x1b[<35;${geometry.column + 1};${geometry.trackTop + 1}M`);
-    assert.ok((await native.lines()).some(line => line.endsWith('█')));
-    native.send(`\x1b[<0;${geometry.column + 1};${geometry.trackTop + 1}M`);
-    native.send(`\x1b[<0;${geometry.column + 1};${geometry.trackTop + 1}m`);
-    assert.equal(log.reader.following, false); const paused = log.reader.offset;
+    assert.ok(view.command.viewportHeight > 0); assert.ok(log.reader.viewportHeight > 0);
+    assert.ok(view.command.viewportHeight + log.reader.viewportHeight < 30, 'chrome never consumes log screen rows');
+    native.send('\x1b[H'); assert.equal(log.reader.following, false); const paused = log.reader.offset;
+    assert.equal(log.reader.scrollbar, 'hidden');
+    native.send('\t'); native.send('\x1b[F');
+    assert.equal(view.command.following, true); assert.equal(log.reader.offset, paused, 'command focus cannot scroll the log');
+    native.send('\t');
     jobs.write(job.id, 'finish\n', {source: 'model', kind: 'text'}); await jobs.wait(job.id);
     await log.refresh(); assert.equal(log.reader.offset, paused);
     native.send('\x1b[F'); await until(() => view!.render(80).join('\n').includes('final-native'));

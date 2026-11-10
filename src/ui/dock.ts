@@ -86,9 +86,9 @@ export class Dock implements Component {
   }
   private deactivate(): void { if (this.active) { this.active = false; this.invalidate(); } }
   private editorHasFocus(): boolean {
-    // Pi's pluggable editor need not inherit Editor. focusedComponent has no public
-    // accessor, so use the upstream structural contract rather than an instanceof check.
-    const focused = (this.tui as unknown as { focusedComponent?: { getText?: unknown; setText?: unknown; capturesViewportInput?: boolean } })?.focusedComponent;
+    // The broad injected TUI interface omits the concrete host's public focus getter.
+    // Pluggable editors need not inherit Editor, so narrow that public structural API.
+    const focused = (this.tui as unknown as { getFocusedComponent(): { getText?: unknown; setText?: unknown; capturesViewportInput?: boolean } | null })?.getFocusedComponent();
     // The native editor exposes this flag while autocomplete owns its navigation.
     return focused == null || typeof focused.getText === 'function' && typeof focused.setText === 'function' && !focused.capturesViewportInput;
   }

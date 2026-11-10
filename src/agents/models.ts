@@ -1,9 +1,21 @@
 // Matching/priorities adapted from @tintinweb/pi-subagents 0.23.0 src/model-resolver.ts
 // and src/invocation-config.ts (MIT); explicit identities do not use its provider fallback.
-import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
+import type { ExtensionContext, ModelRuntime } from '@earendil-works/pi-coding-agent';
 import type { SuiteConfig } from '../runtime/config.ts';
 import { ToolError } from '../runtime/errors.ts';
 import type { AgentType, ModelOverrides, ModelSource, StartAgent, ParentContext } from './types.ts';
+
+export function parentModelRuntime(ctx: Pick<ExtensionContext, 'modelRegistry'>): ModelRuntime {
+  // Accepted M1 dependency: Pi 1.5.0 keeps this field private. Check the public
+  // runtime protocol, not class identity (CLI bundles and SDK modules can differ).
+  // Undefined would make createAgentSession silently create an independent runtime.
+  const runtime = (ctx.modelRegistry as unknown as { runtime?: ModelRuntime }).runtime;
+  if (!runtime || typeof runtime.getModel !== 'function' || typeof runtime.streamSimple !== 'function'
+    || typeof runtime.resolveModel !== 'function') {
+    throw new ToolError('MODEL_RUNTIME_UNAVAILABLE', 'Pi compatibility error: ModelRegistry.runtime cannot supply the parent model runtime. Child agents and type mentions require the same Provider, auth and router state; no independent runtime will be created.');
+  }
+  return runtime;
+}
 
 export function resolveModel(ctx: Pick<ExtensionContext, 'modelRegistry'>, name: string, source: string, fuzzy = false) {
   const available = ctx.modelRegistry.getAvailable();

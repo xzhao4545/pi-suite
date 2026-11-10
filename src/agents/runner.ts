@@ -1,5 +1,5 @@
 // Same-process SDK lifecycle adapted from @tintinweb/pi-subagents 0.23.0 src/agent-runner.ts (MIT).
-import { createAgentSession, getAgentDir, SessionManager, type ExtensionFactory, type ModelRuntime } from '@earendil-works/pi-coding-agent';
+import { createAgentSession, getAgentDir, SessionManager, type ExtensionFactory } from '@earendil-works/pi-coding-agent';
 import type { AgentEventKind, Execution } from './types.ts';
 import { AGENT_ENTRY, resultText } from './records.ts';
 import { childResources, resourcePath } from './resources/loader.ts';
@@ -7,19 +7,20 @@ import { installExtensionToolScope } from './resources/scope.ts';
 import { createStructuredCapture, createStructuredOutputTool, structuredRetryPrompt } from './output/tool.ts';
 import { sanitizeText } from '../runtime/text.ts';
 import { createChildSession } from './session.ts';
+import { parentModelRuntime } from './models.ts';
 
 export async function executeAgent(run: Execution, factory: ExtensionFactory, changed: () => void,
   emitEvent: (kind: AgentEventKind, details?: Record<string, unknown>) => void): Promise<void> {
   const { record, parent } = run, agentDir = getAgentDir();
+  // Reload retains global managers and old queued runs; their lazily loaded runner
+  // can be newer than admission. Read the captured source registry without extending
+  // Execution's shape, and reject a missing bridge before any SDK/resource startup.
+  const modelRuntime = parentModelRuntime(parent.ctx);
   const { settingsManager, loader, scope } = await childResources(run, factory);
   if (run.controller.signal.aborted) return;
   const manager = run.sessionManager ?? (record.sessionFile ? SessionManager.open(record.sessionFile)
     : record.persisted ? createChildSession(record.cwd, parent.ctx.sessionManager.getSessionFile(),
       run.type.sessionDir === undefined ? undefined : resourcePath(run.type.sessionDir, record.cwd)) : SessionManager.inMemory(record.cwd));
-  // Pi 1.5.0 exposes ModelRegistry to extensions but accepts only ModelRuntime in the SDK.
-  // Like upstream, bridge this single SDK boundary to retain the parent's providers, auth and
-  // virtual routers. Remove the field access when Pi exposes a public context.modelRuntime.
-  const modelRuntime = (parent.ctx.modelRegistry as unknown as { runtime: ModelRuntime }).runtime;
   const capture = createStructuredCapture();
   const { session, extensionsResult } = await createAgentSession({ cwd: record.cwd, agentDir, sessionManager: manager,
     settingsManager, resourceLoader: loader, modelRuntime, model: run.model, thinkingLevel: record.thinking,

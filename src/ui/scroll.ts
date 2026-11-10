@@ -1,8 +1,9 @@
 import { stripVTControlCharacters } from 'node:util';
-import { Container, Input, Key, ScrollView as NativeScrollView, dispatchLayoutMouse, renderLayout, matchesKey,
-  type Component, type LayoutFrame, type TuiMouseEvent } from '@earendil-works/pi-tui';
+import { Container, Input, Key, ScrollView as NativeScrollView, matchesKey,
+  type Component } from '@earendil-works/pi-tui';
+import { readingWindow } from './reading.ts';
 
-/** A real child container keeps Pi's tool regions reachable, including legacy viewport consumers. */
+/** Stable content components keep native Markdown/tool caches while the shared reader clips lines. */
 class ReadingContent extends Container {
   constructor(content: Component, private measured: (lines: string[]) => void) { super(); this.addChild(content); }
   override render(width: number): string[] { const lines = super.render(width); this.measured(lines); return lines; }
@@ -13,7 +14,6 @@ export class ScrollView extends NativeScrollView {
   private lines: string[] = [];
   private document: ReadingContent;
   private content: Component;
-  private viewportFrame?: LayoutFrame;
   readonly search = new Input();
   searching = false;
   query = '';
@@ -22,7 +22,8 @@ export class ScrollView extends NativeScrollView {
 
   constructor(content: Component, following = false) {
     const document = new ReadingContent(content, lines => this.measured(lines));
-    super(document, {follow: 'end', scrollbar: 'auto', overscroll: 'contain'});
+    // U1 uses keyboard navigation; a hidden native scrollbar creates no activity timers.
+    super(document, {follow: 'end', scrollbar: 'hidden', overscroll: 'contain'});
     this.document = document; this.content = content;
     this.scrollTo(0, {disableFollow: !following});
     this.search.onSubmit = text => { this.query = text; this.searching = false; this.find(1); };
@@ -39,7 +40,11 @@ export class ScrollView extends NativeScrollView {
     this.lines = lines;
   }
   override updateLayout(contentHeight: number, viewportHeight: number, requestRender: () => void): void {
+    const paused = !this.following;
     super.updateLayout(contentHeight, viewportHeight, requestRender);
+    // Stock Pi can enable follow when a shrinking document clamps to its end. Layout
+    // is not a navigation action: retain an explicit pause using its public API.
+    if (paused) super.scrollTo(this.offset, {disableFollow: true});
     if (this.following) this.hasNewOutput = false;
   }
   override scrollBy(lines: number): number {
@@ -58,11 +63,11 @@ export class ScrollView extends NativeScrollView {
     super.scrollToEnd();
     if (offset !== this.offset || following !== this.following) this.onScroll?.();
   }
-  prepareLayout(): void { this.viewportFrame = undefined; }
-  /** Consumers with a line-based surrounding frame still use Pi's complete native layout. */
+  /** Stock ScrollView owns the only offset; overlays supply explicit clipping and height. */
   viewport(width: number, height: number, requestRender: () => void = () => {}): string[] {
-    this.viewportFrame = renderLayout(this, width, height, requestRender);
-    return this.viewportFrame.lines;
+    const lines = super.render(width);
+    this.updateLayout(lines.length, height, requestRender);
+    return readingWindow(lines.slice(this.offset, this.offset + height), height);
   }
   get position(): string { return `${this.lines.length ? this.offset + 1 : 0}/${this.lines.length}`; }
   get atBottom(): boolean { return this.offset >= Math.max(0, this.lines.length - this.viewportHeight); }
@@ -70,7 +75,11 @@ export class ScrollView extends NativeScrollView {
     if (this.content === content) return;
     this.content = content; this.document.clear(); this.document.addChild(content);
   }
-  override dispose(): void { super.dispose(); this.viewportFrame = undefined; }
+  dispose(): void {
+    this.onScroll = undefined;
+    // Detach the public layout callback without resetting the retained reading state.
+    this.updateLayout(this.lines.length, this.viewportHeight, () => {});
+  }
   handleInput(data: string): void {
     if (this.searching) {
       if (matchesKey(data, Key.escape)) this.searching = false;
@@ -86,19 +95,6 @@ export class ScrollView extends NativeScrollView {
     else if (matchesKey(data, Key.down)) this.scroll(1);
     else if (matchesKey(data, Key.pageUp)) this.scroll(-this.viewportHeight);
     else if (matchesKey(data, Key.pageDown)) this.scroll(this.viewportHeight);
-  }
-  override handleMouse(event: TuiMouseEvent): ReturnType<NativeScrollView['handleMouse']> {
-    if (!this.viewportFrame) return undefined; // Mounted layout nodes are routed by Pi, not again here.
-    if (event.type === 'wheel') {
-      this.scroll(event.wheelDelta ?? 0);
-      return {handled: true, target: {component: this, originX: event.screenX - event.x, originY: event.screenY - event.y, width: event.width, height: event.height}};
-    }
-    const local = {...event, screenX: event.x, screenY: event.y};
-    // Skip this scroll node while forwarding the stored geometry to the actual document.
-    const result = dispatchLayoutMouse({...this.viewportFrame, root: this.viewportFrame.root.children[0]}, local);
-    return result && {...result, target: {...result.target,
-      originX: result.target.originX + event.screenX - event.x,
-      originY: result.target.originY + event.screenY - event.y}};
   }
   scroll(delta: number): void { this.scrollBy(delta); if (this.following) this.hasNewOutput = false; }
   private find(direction: number): void {

@@ -20,7 +20,7 @@ pnpm test
 pnpm exec pi -e ./src/index.ts
 ```
 
-当前开发依赖仍包含 Pi 1.5.0 宿主补丁；仓库将 Node CLI 的 `pi` bin 与 RPC 入口分别指向 `dist/cli.js`、`dist/rpc-entry.js`，与 SDK 共用实际安装的 patched 模块，而不是预构建 bundle 的内置副本。安装或升级补丁后须重启 Pi 进程；`/reload` 不替换宿主模块图。上述命令仅说明本仓库当前开发环境，**不是普通插件发布方案**：消费者安装插件不会把仓库补丁自动应用到其既有宿主，官方 Pi 1.5.0 不能满足当前扩展加载检查。已确认的公开组件替代、任务支持范围及私有 runtime 风险见 [官方 Pi 插件兼容方案](./doc/todo/official-pi-compatibility/index.md)；源码和依赖尚未迁移，不宣称官方安装链路已通过。
+开发依赖使用官方未修改的 Pi 1.5.0；Pi 包的 `pi` bin 与 `./rpc-entry` 分别使用官方 `dist/bundle/cli.js`、`dist/bundle/rpc-entry.js`。扩展复用宿主 loader 的模块解析与公开 UI 组件，不修改消费者的宿主。加载、Responses 与包安装边界见 [公共运行时](./doc/current/runtime/index.md#宿主加载边界)，子代理共享父模型运行时的私有结构依赖见 [模型运行时桥接](./doc/current/agents/models.md#模型运行时桥接)。`package.json` 保持 `private: true`，三个 Pi peer 与开发依赖均精确固定为 `1.5.0`。官方 Pi 1.5.0 的实际 Node bin（regular/fullscreen）与 RPC 加载入口已通过；消费者 Git/本地包及 tarball 安装尚未验收，本包未实际 npm 发布。依赖升级后须重启 Pi；`/reload` 只重载扩展，不替换宿主模块图。
 
 Pi 直接加载 TypeScript 扩展，因此当前不需要构建产物。
 
@@ -28,7 +28,7 @@ Pi 直接加载 TypeScript 扩展，因此当前不需要构建产物。
 
 ## 主题
 
-内置 `oh-my-pi` 深色主题，参考 Oh My Pi Titanium 的电蓝与蓝灰配色。在上述开发宿主中，将本包作为 Pi package 安装后执行 `/reload`，通过 `/settings` → **Theme** → `oh-my-pi` 选择；开发预览使用 `pnpm exec pi -e . --use-theme oh-my-pi`。主题 JSON 本身适用于原版 Pi，可单独安装而不加载 Suite 扩展；主题加载、单独安装及终端背景边界见 [主题说明](./doc/current/ui/themes.md)。
+内置 `oh-my-pi` 深色主题，参考 Oh My Pi Titanium 的电蓝与蓝灰配色。在 Pi 中，将本包作为 Pi package 加载后执行 `/reload`，通过 `/settings` → **Theme** → `oh-my-pi` 选择；开发预览使用 `pnpm exec pi -e . --use-theme oh-my-pi`。主题 JSON 本身适用于原版 Pi，可单独安装而不加载 Suite 扩展；主题加载、单独安装及终端背景边界见 [主题说明](./doc/current/ui/themes.md)。
 
 ## 目录
 
@@ -53,4 +53,4 @@ third-party/
   licenses/         上游许可证
 ```
 
-设计与实施计划见 [设计与实施记录](doc/finished/pi-suite/design/index.md)，当前项目状态见 [doc/current](./doc/current/index.md)。Pi 相关依赖以 1.5.0 为开发基线；pnpm-lock.yaml、pnpm-workspace.yaml 与 patches/ 应提交到版本控制。
+设计与实施计划见 [设计与实施记录](doc/finished/pi-suite/design/index.md)，当前项目状态见 [doc/current](./doc/current/index.md)。Pi 相关依赖以官方 1.5.0 为开发基线；pnpm-lock.yaml 与 pnpm-workspace.yaml 应提交到版本控制。

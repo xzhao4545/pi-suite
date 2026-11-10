@@ -55,8 +55,10 @@ agent_get 详情与记录操作界面显示实际模型、thinking 及来源：p
 
 ## 模型运行时桥接
 
-普通 child 启动及 `@类型` 的任务整理克隆通过类型强转读取父 `ctx.modelRegistry.runtime`，沿用同一模型运行时，而不自行重建另一份 Provider/认证/路由状态。读取位于 `src/agents/runner.ts` 与 `src/agents/mentions/clone.ts`。原版 Pi 1.5.0 将该字段声明为 private；它不是公开 SDK 契约，也不依赖将字段公开的宿主补丁。
+普通 child 启动及 `@类型` 的任务整理克隆共用 `src/agents/models.ts` 的 parentModelRuntime helper，结构化读取父 `ctx.modelRegistry.runtime`，检查 getModel、streamSimple、resolveModel 方法后将同一父 runtime 传给 createAgentSession。原版 Pi 1.5.0 将该字段声明为 private；该结构依赖不是公开 ModelRegistry SDK 契约。
 
-这一桥接存在版本兼容风险，Pi 升级可能改变字段及对象协议；不能以模型名相同、宽泛 peer 版本或 patched SDK 通过推定官方入口兼容。它与单个 child 的模型/会话选择隔离是不同边界，不承诺完整 runtime 状态独立。Provider、临时认证及虚拟路由继承仅按实际验证范围声明。
+Manager.start 在任务 I/O 和分配 run 前执行守卫；`src/agents/runner.ts` 在资源与 SDK 启动前再次检查捕获的父 registry，使 reload 保活的排队执行也遵守同一边界。`src/agents/mentions/clone.ts` 在异步克隆准备前检查并捕获父 runtime。字段或方法不可用时明确报 MODEL_RUNTIME_UNAVAILABLE，不静默创建独立 runtime；判断使用方法结构，不跨 bundle 使用 instanceof。桥接不向 Execution 增加持久字段，也不改变执行协议。
+
+共享父 runtime 使 child 与克隆使用同一 Provider、认证和路由状态；单个 child 的模型/会话选择隔离不等于完整 runtime 状态独立。Pi 升级可能改变私有字段及对象协议，当前支持与 Pi peer 均限定为精确的 `1.5.0`，版本声明不能替代升级后的兼容核实，Provider、临时认证及虚拟路由继承仅按实际验证范围声明。
 
 [返回 agents](index.md)

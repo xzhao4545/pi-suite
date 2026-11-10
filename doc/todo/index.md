@@ -4,7 +4,7 @@
 
 ## 任务索引
 
-- [官方 Pi 插件兼容方案](official-pi-compatibility/index.md) — 已确认 U1 键盘优先、T1 持久化任务继承、M1 私有 runtime 桥接及原版 phase 行为；净化暂缓。当前仅文档获准，源码、测试和依赖清理待另行授权，官方发布兼容尚未验收。
+- [官方 Pi 干净消费者安装验收](official-pi-installation.md) — 用户明确延期 Git/本地包安装及资源发现验收；官方 Pi 1.5.0 的代码实施与实际 bin/RPC 加载结果不替代安装证据，保持 private:true，不执行 npm 发布。
 
 Pi Suite Windows 验收见 [收尾记录](../finished/pi-suite/windows-completion.md)；Cursor CLI 验收按用户要求移除。
 

@@ -83,7 +83,7 @@ test('shared native Editor budgets Chinese multiline drafts, uses injected keys,
   browser.handleInput('\x1b'); assert.equal(exits, 1); assert.equal(navigation.result, 'back'); browser.dispose();
 });
 
-test('Subagent bottom metadata, native search/editor and mouse chrome share a bounded frame without repeating a top title', () => {
+test('Subagent bottom metadata and native search/editor share a bounded keyboard frame without repeating a top title', () => {
   const record: AgentRecord = {version: 1, id: 'agent_deadbeef', runId: 'run_deadbeef', type: 'general-purpose', name: 'failed 中文名称',
     prompt: 'prompt', cwd: '.', ownerSessionId: 'owner', anchorEntryId: null, ancestors: [], background: true, state: 'running',
     createdAt: new Date().toISOString(), persisted: false, model: 'provider/model', modelSource: 'type', thinking: 'high', thinkingSource: 'type',
@@ -110,8 +110,7 @@ test('Subagent bottom metadata, native search/editor and mouse chrome share a bo
   const offset = view.reader.offset;
   const native = readerTerminal(24, 40);
   native.tui.showOverlay(view, {row: 0, col: 0, width: 40, maxHeight: 16}); native.tui.renderNow();
-  native.send('\x1b[<65;1;1M'); assert.equal(view.reader.offset, offset);
-  native.send('\x1b[<65;1;2M'); assert.ok(view.reader.offset > offset);
+  native.send('\x1b[B'); assert.ok(view.reader.offset > offset);
   native.dispose();
   view.handleInput('/'); view.handleInput('BODY'); view.handleInput('\x1b[D'); view.handleInput('\x1b[D'); assert.equal(exits, 0);
   assert.equal(view.render(40).join('').split(CURSOR_MARKER).length - 1, 1);

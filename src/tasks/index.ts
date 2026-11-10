@@ -1,7 +1,8 @@
 // Session-scoped targets/fork seeding and reminder cadence adapted from
 // @tintinweb/pi-tasks 0.9.1 src/index.ts, task-paths.ts, reminder-cadence.ts (MIT).
+import { open } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { SessionManager, type ExtensionAPI, type ExtensionContext, type SessionStartEvent } from '@earendil-works/pi-coding-agent';
+import type { ExtensionAPI, ExtensionContext, SessionStartEvent } from '@earendil-works/pi-coding-agent';
 import type { SuiteConfig } from '../runtime/config.ts';
 import type { Dock, DockRow } from '../ui/dock.ts';
 import type { Binding, SessionBinding } from '../runtime/binding.ts';
@@ -14,6 +15,34 @@ import type { TaskChange, TaskData, TaskScope, TaskView } from './types.ts';
 
 export const taskPath = (cwd: string, id: string) => join(resolve(cwd), '.pi', 'tasks', `tasks-${id}.json`);
 const FEEDBACK_MS = 5000;
+
+async function sourceTaskPath(sessionFile: string): Promise<string> {
+  // SessionManager.open may initialize/repair a file. Fork seeding only needs the
+  // source header, and must not mutate source history or invent a missing identity.
+  const file = await open(sessionFile, 'r');
+  try {
+    // JSONL is delimited by LF, not Unicode line separators inside JSON strings.
+    // The stream decoder preserves UTF-8 characters across chunk boundaries.
+    let line = '';
+    readHeader: for await (const chunk of file.createReadStream({ encoding: 'utf8', autoClose: false, highWaterMark: 4096 })) {
+      line += chunk;
+      let end: number;
+      while ((end = line.indexOf('\n')) >= 0) {
+        const complete = line.slice(0, end);
+        line = line.slice(end + 1);
+        if (complete.trim()) { line = complete; break readHeader; }
+      }
+    }
+    // An EOF header without LF is valid; blank or malformed sources are not.
+    if (line.trim()) {
+      const header: unknown = JSON.parse(line);
+      if (header && typeof header === 'object' && 'type' in header && header.type === 'session'
+        && 'id' in header && typeof header.id === 'string' && header.id
+        && 'cwd' in header && typeof header.cwd === 'string' && header.cwd) return taskPath(header.cwd, header.id);
+    }
+    throw new ToolError('TASK_FORK_SOURCE', `Invalid source session header: ${sessionFile}`);
+  } finally { await file.close(); }
+}
 
 export class TasksModule {
   private store?: TaskStore;
@@ -34,7 +63,6 @@ export class TasksModule {
       progress: () => { const count = this.progress; return count.total ? count.done / count.total : 0; } });
   }
   async bind(ctx: ExtensionContext, event: Pick<SessionStartEvent, 'reason' | 'previousSessionFile'>): Promise<void> {
-    const previous = this.store;
     this.detach(); this.turn = this.lastUse = 0; this.reminded = false;
     const store = this.scope(ctx);
     this.store = store;
@@ -42,15 +70,13 @@ export class TasksModule {
     const active = () => this.store === store && this.owner === current && this.binding.isCurrent(current);
     this.unsubscribe = store.subscribe(() => { if (active()) this.refresh(); }, error => { if (active()) ctx.ui.notify(String(error), 'error'); });
     try {
-      if (event.reason === 'fork') {
-        // The SDK may rebuild the extension for a fork. Resolve the parent from its session
-        // header rather than relying on an old extension instance's in-memory pointer.
-        const parent = event.previousSessionFile ? SessionManager.open(event.previousSessionFile) : undefined;
-        const parentId = ctx.sessionManager.getHeader()?.parentSessionId;
-        const seed = parent ? await taskStore(taskPath(parent.getCwd(), parent.getSessionId()), taskPath(parent.getCwd(), parent.getSessionId())).snapshot()
-          : parentId ? await taskStore(`memory:${resolve(ctx.cwd)}:${parentId}`).snapshot() : await previous?.snapshot();
+      if (event.reason === 'fork' && event.previousSessionFile) {
+        const path = await sourceTaskPath(event.previousSessionFile);
+        const seed = await taskStore(path, path).snapshot();
         if (!active()) return;
-        if (seed) await store.seed(seed);
+        // Full snapshots retain counters even after every task was deleted. The
+        // target store performs first-use seeding under its own lock, never the parent's.
+        await store.seed(seed);
       }
       await store.snapshot();
     } catch (error) {
@@ -61,12 +87,15 @@ export class TasksModule {
       // Snapshot/seed may publish several subscription updates. All belong to recovery;
       // establish the final baseline before enabling live completion feedback.
       this.refresh(); this.restored = true;
+      if (event.reason === 'fork' && !event.previousSessionFile) {
+        ctx.ui.notify('Tasks were not inherited from the in-memory source; this fork uses an independent task list.', 'warning');
+      }
     }
   }
   detach(): void {
     this.unsubscribe?.(); this.unsubscribe = undefined; clearTimeout(this.timer); this.timer = undefined;
-    // Retain the store as a possible fork seed, but revoke its UI ownership immediately.
-    this.owner = undefined; this.restored = false;
+    // Revoke UI ownership; captured executions and session-keyed stores survive independently.
+    this.store = undefined; this.owner = undefined; this.restored = false;
     this.views = []; this.feedback.clear(); this.dock.invalidate();
     this.selectedGroup = undefined;
   }

@@ -24,7 +24,7 @@ Child Transcript 中的 Message 仅用于回答当前主会话可见的挂起问
 
 resumeFromRunId 限定当前主会话和分支，目标必须结束并具有 journal。恢复先检查文件，未完成末行的 truncated 前缀在运行日志中明确提示；中间损坏和读取错误拒绝启动。含 child 会话 resume 的 journal 按完整执行规则处理，见 [编排与 journal](index.md)。
 
-查看器复用原生 Text、DetailsView、ScrollView、阅读 overlay 和值选择，正文通过原生布局树和 scrollbar:auto 阅读；child Transcript 单项工具点击与全部工具展开沿用同一公共组件链，gate 日志仍保持独立字节窗口。列表默认列表焦点，`/` 进入过滤、Tab 进入详情、Esc 返回列表；页面标签和筛选不进入焦点环。运行详情与 child Transcript、gate 日志使用同一阅读 overlay，fullscreen 满屏、普通居中 90% 宽；从 Subagent 阅读链进入时沿用全终端覆盖与主 footer 隐藏作用域，正文和 overlay 共用高度上限。↑↓、PageUp/PageDown、Home/End 阅读；`/` 搜索，n/N 查下一/上一项；动作按其显示键直接执行，Enter 打开 Children / gates，Esc 返回。返回 child 会话、gate 日志或控制操作后保留详情阅读与搜索位置。菜单值使用运行 ID 与 agent index，长名称的显示截断不改变选择身份。浏览期间由公共通知阻塞令牌保持阅读。
+查看器复用原生 Text、DetailsView、ScrollView、阅读 overlay 和值选择，正文按共享预算显式切片/补齐，scrollbar:hidden；child Transcript 保留原生消息/工具实例，通过 `o` 展开全部工具、`h` 切换 thinking，复杂阅读 overlay 不保证单项工具鼠标命中或 scrollbar 拖动，见 [终端交互边界](../../ui/terminal.md#原生阅读与鼠标)。gate 日志仍保持独立字节窗口。列表默认列表焦点，`/` 进入过滤、Tab 进入详情、Esc 返回列表；页面标签和筛选不进入焦点环。运行详情与 child Transcript、gate 日志使用同一阅读 overlay，fullscreen 满屏、普通居中 90% 宽；从 Subagent 阅读链进入时沿用全终端覆盖与主 footer 隐藏作用域，正文和 overlay 共用高度上限。↑↓、PageUp/PageDown、Home/End 阅读；`/` 搜索，n/N 查下一/上一项；动作按其显示键直接执行，Enter 打开 Children / gates，Esc 返回。返回 child 会话、gate 日志或控制操作后保留详情阅读与搜索位置。菜单值使用运行 ID 与 agent index，长名称的显示截断不改变选择身份。浏览期间由公共通知阻塞令牌保持阅读。
 
 详情动作随当前运行状态更新：运行结束时移除 Pause、Resume、Stop 并开放 Replay journal，不需要退出详情再打开。
 

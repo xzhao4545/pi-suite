@@ -233,19 +233,20 @@ test('native workflow UI wraps phones, keeps exact phases and retains reader/sea
     const restored = taskFromEntry(workflowEntryData(task)); assert.equal(restored.doneCount, 2);
     let frames = 0, reader: unknown;
     task.status = 'running'; task.control = {pause() {}, resume() {}, isPaused: () => task.status === 'paused', skip: () => false, retry: () => false};
-    const context = {...h.ctx, ui: {...h.ctx.ui, custom: async (factory: Function) => new Promise<void>(resolve => {
-      const frame = factory(terminal(), h.ctx.ui.theme, getKeybindings() as never, resolve);
-      frame.render(40); frames++;
-      if (frames === 1) {
-        const available = () => frame.actions.filter((action: {available?: () => boolean}) => action.available?.() !== false).map((action: {label: string}) => action.label);
-        assert.deepEqual(available(), ['Open children / gates', 'Pause', 'Stop']);
-        // Settlement can occur with the same detail frame open; its action set follows it.
-        task.status = 'completed';
-        assert.deepEqual(available(), ['Open children / gates', 'Replay journal']);
-        task.status = 'running';
-        reader = frame.reader; frame.reader.scroll(3); frame.reader.query = 'literal';
-        frame.handleInput('p');
-      } else { assert.strictEqual(frame.reader, reader); assert.equal(frame.reader.query, 'literal'); frame.handleInput('\x1b'); }
+    const context = {...h.ctx, ui: {...h.ctx.ui, custom: async (factory: Function) => new Promise<void>((resolve, reject) => {
+      Promise.resolve(factory(terminal(), h.ctx.ui.theme, getKeybindings() as never, resolve)).then(frame => {
+        frame.render(40); frames++;
+        if (frames === 1) {
+          const available = () => frame.actions.filter((action: {available?: () => boolean}) => action.available?.() !== false).map((action: {label: string}) => action.label);
+          assert.deepEqual(available(), ['Open children / gates', 'Pause', 'Stop']);
+          // Settlement can occur with the same detail frame open; its action set follows it.
+          task.status = 'completed';
+          assert.deepEqual(available(), ['Open children / gates', 'Replay journal']);
+          task.status = 'running';
+          reader = frame.reader; frame.reader.scroll(3); frame.reader.query = 'literal';
+          frame.handleInput('p');
+        } else { assert.strictEqual(frame.reader, reader); assert.equal(frame.reader.query, 'literal'); frame.handleInput('\x1b'); }
+      }).catch(reject);
     })}} as unknown as ExtensionContext;
     await showWorkflow(context, {workflows: {manager: h.manager} as never, agents: {} as never, dock: new Dock(), config: () => loadConfig(h.root)}, task);
     assert.equal(frames, 2); assert.equal(task.status, 'paused');

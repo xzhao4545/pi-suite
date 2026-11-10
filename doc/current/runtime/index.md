@@ -43,7 +43,11 @@ agents.workflows 默认 true，控制主会话 agent_workflow 和 Workflows 菜�
 
 ## 宿主加载边界
 
-当前仓库开发依赖包含 Pi 1.5.0 宿主补丁；扩展入口检查新增布局根导出 `renderLayout` 和 `dispatchLayoutMouse`，官方 Pi 1.5.0 不满足该加载条件。Node bin/RPC 被指向 unbundled 入口，与 SDK 共用实际 patched 模块；这只说明当前开发模块组合，不构成普通插件发布兼容。消费者安装插件不会自动改造既有 Pi，`/reload` 也不替换宿主模块。Subagent 模型启动另有明确的私有 runtime 桥接，见 [模型运行时边界](../agents/models.md#模型运行时桥接)。
+开发依赖使用官方未修改的 Pi 1.5.0，Pi 包的 `pi` bin 与 `./rpc-entry` 分别为 `dist/bundle/cli.js`、`dist/bundle/rpc-entry.js`。官方 bundle loader 通过虚拟模块向扩展提供宿主使用的类定义，SDK 入口按原版模块解析加载；Suite 不修改宿主或另建模块身份适配层。UI 使用公开 Container、ScrollView、VStack/HStack 与 focused overlay，阅读能力见 [统一界面](../ui/index.md#原生会话查看)。子代理启动通过受守卫的私有结构读取父模型运行时，见 [模型运行时桥接](../agents/models.md#模型运行时桥接)。依赖升级后须重启宿主；`/reload` 只重载扩展，不替换已载入的宿主模块。
+
+Responses 的会话持久化、resume 与跨模型消息转换使用官方 Pi 1.5.0 的协议：同 provider/api/model 的文本签名保留 message ID 与 commentary/final_answer phase；跨模型转换按原版规则移除文本签名和不适用的 thinking，再生成请求。Suite 不注册 Responses 净化命令、不改写源会话，不注入 phase 恢复 Hook 或 API aliases。
+
+`package.json` 保持 `private: true`；`@earendil-works/pi-ai`、`@earendil-works/pi-coding-agent`、`@earendil-works/pi-tui` 的 peer 与开发依赖均精确固定为 `1.5.0`。支持范围为官方未修改的 Pi 1.5.0，实际 Node bin 的 regular/fullscreen 与 RPC 加载入口已通过。加载入口支持不等于消费者安装链路完成验收：Git/本地包及 tarball 安装尚未验收，本包未实际 npm 发布；其他 Pi 版本不在当前支持声明内。
 
 ## 加载与首次就绪
 

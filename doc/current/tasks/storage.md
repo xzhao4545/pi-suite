@@ -20,7 +20,9 @@ Windows 读取已有快照时也取得同一文件锁，使读取句柄在写入
 
 - new 使用独立会话清单。
 - resume/reload 按当前 cwd 和会话 ID 取得原清单，不重新分配 ID。
-- fork 从 previousSessionFile 的会话头定位父清单；内存 fork 依赖当前宿主补丁新增的 session header.parentSessionId 定位原内存清单，该字段不是原版 Pi 1.5.0 的公开能力。以包含 nextId 与各组 nextChild 的完整快照播种新清单，即使原任务已全部删除也保留编号计数器；子清单修改不影响父清单。已经使用过的新清单不会重新播种。
+- 持久来源的 fork 只读 previousSessionFile 的首个非空 JSONL 会话头，校验有效的 session 类型、cwd 和 id 后，按源头实际 cwd/id 定位父清单；不调用可能初始化或修复源文件的 SessionManager.open。UTF-8 流按 LF 分行，保留跨块字符及 JSON 字符串中的 U+2028/U+2029，接受 EOF 不带 LF 的会话头。读取或解析错误通过 notify 报错，不修复源文件、不播种目标，也不报告继承成功。
+- 父清单通过 snapshot 读取，以包含 nextId 与各组 nextChild 的完整快照播种独立目标，即使原任务已全部删除也保留编号计数器；seed 使用目标 Store 的串行入口，并在持久目标锁内重读、检查首次使用条件和原子提交。子清单修改不影响父清单，已经使用过的目标不会重新播种。
+- 内存来源的 fork 没有 previousSessionFile，使用独立清单并明确 warning：任务未从内存来源继承；不自动继承，也不为继承偷偷落盘。普通内存会话与 reload 仍按实际 cwd/会话 ID 复用清单。
 - cwd 改变时重新定位存储，不把另一工作区的清单写入当前文件。
 - 会话撤销时解除订阅并清除显示计时器；已经捕获的执行关联仍指向原清单，不能随会话切换转移到另一任务。
 

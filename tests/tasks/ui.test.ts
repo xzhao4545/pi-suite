@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
@@ -62,8 +62,48 @@ test('task dock and live browser share committed status; important children keep
   } finally { view.dispose(); tasks.detach(); binding.revoke(); t.mock.timers.reset(); rmSync(root, { recursive: true, force: true }); }
 });
 
+test('persisted fork reads the actual source header without repair; source errors never seed empty success', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'pi-suite-task-source-')), binding = new SessionBinding(), dock = new Dock();
+  const tasks = new TasksModule(binding, dock), sourceCwd = join(root, 'source\u2028workspace\u2029directory');
+  const sourcePath = taskPath(sourceCwd, 'source'), writer = new TaskStore(sourcePath);
+  const sourceFile = join(root, 'source.jsonl'), notices: string[] = [];
+  try {
+    await writer.edit([{ op: 'add', title: 'source', children: ['child'] }]);
+    const header = JSON.stringify({ type: 'session', id: 'source', cwd: sourceCwd });
+    writeFileSync(sourceFile, header); // No trailing newline: read-only lookup must not repair it.
+    const target = taskContext(root, 'target', text => notices.push(text));
+    binding.bind(target); await tasks.bind(target, { reason: 'fork', previousSessionFile: sourceFile });
+    assert.deepEqual(tasks.current(target), await writer.snapshot(), 'use header cwd/ID, not the target workspace');
+    assert.equal(readFileSync(sourceFile, 'utf8'), header);
+    await tasks.edit(target, [{ op: 'add', title: 'target only' }]);
+    const edited = await tasks.scope(target).snapshot();
+    await writer.edit([{ op: 'add', title: 'late source edit' }]);
+    const delimited = `\n${header}\n{not part of the header`;
+    writeFileSync(sourceFile, delimited);
+    binding.bind(target); await tasks.bind(target, { reason: 'fork', previousSessionFile: sourceFile });
+    assert.equal(readFileSync(sourceFile, 'utf8'), delimited, 'LF lookup skips blank lines and leaves trailing history unread');
+    assert.deepEqual(tasks.current(target), edited, 'binding a used target cannot overwrite its own edits');
+    assert.equal(notices.length, 0);
+
+    const invalidSources = [undefined, '', '{bad', JSON.stringify({ type: 'session', id: 'source' }), header];
+    for (const [index, text] of invalidSources.entries()) {
+      const file = join(root, `bad-${index}.jsonl`);
+      if (text !== undefined) writeFileSync(file, text);
+      if (text === header) writeFileSync(sourcePath, '{invalid tasks');
+      const ctx = taskContext(root, `bad-${index}`, message => notices.push(message));
+      binding.bind(ctx); await tasks.bind(ctx, { reason: 'fork', previousSessionFile: file });
+      assert.equal(notices.length, index + 1, 'every source failure reports an explicit error');
+      assert.equal(existsSync(taskPath(root, `bad-${index}`)), false, 'failure never commits an empty seed');
+      if (text === undefined) assert.equal(existsSync(file), false, 'missing history is not created');
+      else assert.equal(readFileSync(file, 'utf8'), text, 'invalid/empty source history is not repaired');
+    }
+    assert.match(notices.at(-1)!, /TASK_STORE_INVALID|current state is retained/);
+    assert.equal(readFileSync(sourcePath, 'utf8'), '{invalid tasks');
+  } finally { tasks.detach(); binding.revoke(); rmSync(root, { recursive: true, force: true }); }
+});
+
 const taskContext = (cwd: string, id: string, notify: (message: string, type?: string) => void = () => {}) => ({
-  cwd, mode: 'tui', sessionManager: { getSessionId: () => id, getSessionFile: () => 'persisted', getHeader: () => undefined },
+  cwd, mode: 'tui', sessionManager: { getSessionId: () => id, getSessionFile: () => 'persisted' },
   ui: { theme: { fg: (_tone: string, text: string) => text }, notify },
 }) as unknown as ExtensionContext;
 
@@ -107,10 +147,12 @@ test('task recovery suppresses every initial publication; external completion an
     t.mock.timers.tick(4999); assert.equal(tasks.rows()[0].id, 'task:3', 'recompletion receives a fresh five seconds');
     t.mock.timers.tick(1); assert.deepEqual(tasks.rows(), []);
     assert.equal(tasks.current(mixed).tasks.length, 6, 'expiry only changes Dock visibility');
+    const sourceFile = join(root, 'mixed.jsonl');
+    writeFileSync(sourceFile, `${JSON.stringify({ type: 'session', id: 'mixed', cwd: root })}\n`);
     for (const reason of ['reload', 'resume', 'fork'] as const) {
       const restored = reason === 'fork' ? taskContext(root, 'fork') : mixed;
       if (reason === 'fork') tasks.detach();
-      frames.length = 0; binding.bind(restored); await tasks.bind(restored, { reason });
+      frames.length = 0; binding.bind(restored); await tasks.bind(restored, { reason, previousSessionFile: reason === 'fork' ? sourceFile : undefined });
       assert.ok(frames.every(frame => !frame.length), `${reason} cannot replay completion feedback`);
       assert.equal(tasks.current(restored).tasks.length, 6);
     }
@@ -152,7 +194,7 @@ test('obsolete task snapshots, subscriptions and timers cannot mutate a new bind
     t.mock.timers.tick(1); assert.deepEqual(tasks.rows(), []);
     tasks.detach();
     const detachedRenders = renders; oldRefresh(); oldTimer();
-    assert.equal(renders, detachedRenders, 'detach releases UI ownership while retaining the fork seed');
+    assert.equal(renders, detachedRenders, 'detach releases UI ownership without changing captured stores');
 
     const broken = taskContext(root, 'broken', text => notices.push(text));
     writeFileSync(taskPath(root, 'broken'), '{invalid');

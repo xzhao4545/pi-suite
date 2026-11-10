@@ -18,12 +18,12 @@ Subagents 的 `m` 在原列表或会话底部打开 Pi 原生多行 Editor；默
 
 ## 原生阅读与鼠标
 
-Subagent、普通详情、workflow 与文本日志使用原生布局树和滚动区，fullscreen focused overlay 保留实际工具鼠标区域及 scrollbar:auto 的轨道/拖动；正文、底部信息、搜索和 Editor 按各自布局命中。关闭 overlay 恢复原焦点与主会话视口，释放订阅及滚动条计时器，不替换原生/第三方 footer，也不停止执行。工具鼠标事件复用 Pi 组件，不扫描文本标题、不另建复制或链接处理层。
+Subagent、普通详情、workflow 与文本日志使用公开组件和显式阅读窗口：原生 ScrollView 持有唯一 scrollTop 与跟随状态，Suite 按共享预算切片/补齐输出，scrollbar:hidden 不创建滚动条计时器。按行/页、Home/End、搜索以及工具/thinking 的键盘展开用于复杂正文阅读；该阅读 overlay 不保证嵌套工具单项鼠标命中、区域鼠标切焦点或可拖动 scrollbar，不新增模拟鼠标。主会话工具的单项鼠标展开与默认 Ctrl+O 由 Pi 原版管理；Ask 表单保留页签点击、选项点击/滚轮与 Review 选择等既有本地交互，History/全文与说明预览不承诺相同鼠标能力。Job 的 TerminalView 保留终端正文滚轮，不把事件转发到嵌套文本、命令区或工具组件。关闭 overlay 恢复原焦点与主会话视口，按自有生命周期释放订阅和回调，不替换原生/第三方 footer，也不停止执行。工具组件保留原生实例，不扫描文本标题、不另建复制或链接处理层。
 
-Subagent 阅读链无论主会话采用普通还是 fullscreen 模式，均以终端完整列/行覆盖主 footer；模型/thinking 选择、Details、所属 Jobs 及异步页面切换保持同一覆盖和输入焦点。原生 compositor 的显式 height 补齐短正文，退出或构造失败释放背景 overlay，恢复原 footer 实例和最新主状态，不改变执行 owner。其他普通阅读保留百分比预算与恢复焦点；鼠标与复制仍取决于宿主和终端实际能力，不承诺未提供的交互。OSC 8 链接、文本拖选与 clipboard 通道沿用 Pi，PTY 输入接管不使用文本 ScrollView 替代。
+Subagent 阅读链无论主会话采用普通还是 fullscreen 模式，均以终端完整列/行覆盖主 footer；模型/thinking 选择、Details、所属 Jobs 及异步页面切换保持同一覆盖和输入焦点。readingWindow 自行填足输出行数，背景 lease 在子页间隙保持覆盖；正常或异常退出释放自有背景 overlay 与作用域，恢复原焦点、原 footer 实例和最新主状态，不改变执行 owner。其他普通阅读保留百分比预算与恢复焦点；鼠标与复制仍取决于宿主和终端实际能力，不承诺未提供的交互。OSC 8 链接、文本拖选与 clipboard 通道沿用 Pi，不接管 stdout；PTY 输入接管不使用文本 ScrollView 替代。
 
-## 宿主补丁与重启
+## 宿主加载与重启
 
-运行本仓库时使用 `pnpm exec pi -e ./src/index.ts`，Node CLI/RPC 入口与 SDK 共用 patched 依赖的模块图。补丁安装或更新后须退出当前 Pi 进程并重新启动；`/reload` 只重载扩展，不能替换宿主已载入的 TUI/adapter 类与函数。保留当前会话和目标时加 `--resume` 并选择原会话，不通过新建目标或 fork 迁移运行归属。
+运行本仓库时使用 `pnpm exec pi -e ./src/index.ts`，官方 Pi 1.5.0 Node CLI/RPC 使用发布包的 `dist/bundle/cli.js`、`dist/bundle/rpc-entry.js`，模块解析由原版 loader 负责。依赖升级后须退出当前 Pi 进程并重新启动；`/reload` 只重载扩展，不能替换宿主已载入的 TUI/adapter 类与函数。保留当前会话和目标时加 `--resume` 并选择原会话，不通过新建目标或 fork 迁移运行归属。加载及安装范围见 [公共运行时](../runtime/index.md#宿主加载边界)。
 
 [返回统一界面](index.md)

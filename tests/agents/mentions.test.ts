@@ -79,13 +79,32 @@ test('handle identities persist across resume/restore; additive native completio
 test('interactive type mentions clone the selected parent conversation and reuse one ordinary launch and result notification', { timeout: 15000 }, async () => {
   const h = await setup();
   try {
+    const runtime = h.session.modelRuntime, stream = runtime.streamSimple.bind(runtime);
+    let cloneUsedParentRuntime = false, cloneRouted = false;
+    runtime.streamSimple = (model, context, options) => {
+      if (JSON.stringify(context.messages).includes('The user has expressed a desire')) cloneUsedParentRuntime = true;
+      return stream(model, context, options);
+    };
+    runtime.registerNativeProvider({ ...h.faux.provider, auth: { apiKey: { name: 'Parent runtime auth',
+      resolve: async ({ credential }) => credential?.key ? { auth: { apiKey: credential.key } } : undefined } } });
+    await runtime.setRuntimeApiKey(h.faux.provider.id, 'mention-parent-runtime-key');
+    runtime.registerVirtualModel({ provider: 'mention-runtime-route', id: 'auto', name: 'Parent-only mention route', route(request) {
+      if (JSON.stringify(request.messages).includes('The user has expressed a desire')) cloneRouted = true;
+      return { model: h.faux.getModel(), thinkingLevel: 'off' };
+    } });
+    await h.session.setModel(runtime.getModel('mention-runtime-route', 'auto')!);
     customType(h.root, 'review', 'run_in_background: false\n');
     h.faux.setResponses([fauxAssistantMessage('PARENT_DECISION')]); await h.session.prompt('PARENT_CONTEXT');
     const parentMessages = h.session.sessionManager.getBranch().filter(entry => entry.type === 'message').length;
     let cloneCalled = false, cloneFinished = false;
-    const respond: FauxResponseFactory = context => {
+    const respond: FauxResponseFactory = (context, options) => {
+      assert.equal(options?.apiKey, 'mention-parent-runtime-key');
       const text = JSON.stringify(context.messages);
-      if (getCurrentSystemPrompt(context.messages).includes('MENTION_CHILD')) return fauxAssistantMessage('review result');
+      if (getCurrentSystemPrompt(context.messages).includes('MENTION_CHILD')) {
+        const child = [...h.manager.runs.values()].find(run => run.session)!;
+        assert.ok(child); assert.strictEqual(child.session!.modelRuntime, runtime);
+        return fauxAssistantMessage('review result');
+      }
       if (text.includes('The user has expressed a desire')) {
         assert.match(text, /PARENT_CONTEXT/); assert.match(text, /PARENT_DECISION/);
         assert.deepEqual(getCurrentTools(context.messages).map(tool => tool.name), ['agent_start']);
@@ -102,6 +121,9 @@ test('interactive type mentions clone the selected parent conversation and reuse
     await until(() => cloneFinished);
     await h.idle();
     const run = [...h.manager.runs.values()][0];
+    assert.equal(cloneUsedParentRuntime, true, 'the type clone streams through the actual parent runtime');
+    assert.equal(cloneRouted, true, 'clone requests inherit the parent-only virtual route and temporary auth');
+    assert.strictEqual(run.parent.ctx.modelRegistry, h.ctx.modelRegistry, 'the child retains its source registry rather than reconstructing it');
     assert.equal(run.record.type, 'review'); assert.equal(run.record.prompt, 'CONTEXTUAL_REVIEW from PARENT_DECISION');
     assert.equal(run.record.ownerSessionId, h.ctx.sessionManager.getSessionId()); assert.equal(run.record.handle, 'review');
     assert.equal(run.record.state, 'completed', run.record.error); assert.equal(run.record.background, false);
@@ -132,6 +154,13 @@ test('non-user and headless inputs pass through; clone cancellation and failures
   const h = await setup();
   try {
     customType(h.root, 'review');
+    const descriptor = Object.getOwnPropertyDescriptor(h.ctx.modelRegistry, 'runtime')!;
+    try {
+      Object.defineProperty(h.ctx.modelRegistry, 'runtime', { ...descriptor, value: undefined });
+      assert.deepEqual(await h.session.extensionRunner.emitInput('@review explain', undefined, 'interactive'), { action: 'handled' });
+      await until(() => h.notices.some(notice => notice.type === 'error' && notice.text.includes('Pi compatibility error: ModelRegistry.runtime')));
+      assert.equal(h.manager.runs.size, 0); assert.equal(h.faux.state.callCount, 0, 'missing bridge cannot create a default clone runtime or send a request');
+    } finally { Object.defineProperty(h.ctx.modelRegistry, 'runtime', descriptor); }
     for (const input of ['@review', '@src/file.ts explain', 'text @review explain', '@unknown explain']) {
       assert.deepEqual(await h.session.extensionRunner.emitInput(input, undefined, 'interactive'), { action: 'continue' });
     }

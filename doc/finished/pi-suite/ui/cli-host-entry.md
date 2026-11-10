@@ -1,8 +1,8 @@
 # Patched Node 宿主入口验收
 
-用户实际打开 Subagents/Jobs 时出现 `renderLayout is not a function`。已定位：coding-agent 的发布 bin/RPC export 指向预构建 bundle，其内置 TUI/adapter 和静态 virtualModules 不包含单包 patch；直接 SDK/TUI 验证不能替代该发布路径。
+迁移前用户实际打开 Subagents/Jobs 时出现 `renderLayout is not a function`。已定位：coding-agent 的发布 bin/RPC export 指向预构建 bundle，其内置 TUI/adapter 和静态 virtualModules 不包含单包 patch；直接 SDK/TUI 验证不能替代该发布路径。
 
-该记录限于定制开发依赖组合；stock 入口被拒绝不是官方兼容通过，入口调整也不是普通插件发布方案。已确认的替代和重新验收范围见 [官方 Pi 插件兼容方案](../../../todo/official-pi-compatibility/index.md)。
+该记录限于迁移前的定制开发依赖组合；当时 stock 入口被拒绝不是官方兼容通过，入口调整也不是普通插件发布方案。当前已实施的替代及官方加载/运行范围见 [官方 Pi 插件兼容实施](../official-pi-compatibility/index.md)，不以本页历史证据替代；消费者安装验收仍按用户指示延期。
 
 ## 修复与验收
 

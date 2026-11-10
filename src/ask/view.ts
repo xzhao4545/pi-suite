@@ -1,12 +1,12 @@
 import { getMarkdownTheme, type Theme } from "@earendil-works/pi-coding-agent";
 import {
-  CURSOR_MARKER, Container, Editor, Input, Key, Markdown, VStack, LAYOUT_NODE, renderLayout, fuzzyFilter, matchesKey, truncateToWidth,
-  visibleWidth, type Component, type LayoutNode, type TUI, type TuiMouseEvent, type TuiMouseEventResult,
+  CURSOR_MARKER, Container, Editor, Input, Key, Markdown, fuzzyFilter, matchesKey, truncateToWidth,
+  visibleWidth, type TUI, type TuiMouseEvent, type TuiMouseEventResult,
 } from "@earendil-works/pi-tui";
 import type { SuiteConfig } from "../runtime/config.ts";
 import type { Dock } from "../ui/dock.ts";
 import { ScrollView } from "../ui/scroll.ts";
-import { readingText } from '../ui/reading.ts';
+import { readingWindow } from '../ui/reading.ts';
 import type { Transcript } from "../ui/transcript.ts";
 import { AskForm } from "./form.ts";
 import type { AskResult, Option } from "./schema.ts";
@@ -40,9 +40,6 @@ export class AskView extends Container {
   private listRegion = { y: 0, x: 0, width: 0, indices: [] as number[] };
   private tabY = 0;
   private scrollPosition = { offset: 0, total: 0, height: 0 };
-  private readingLayout?: VStack;
-  private readerRegion = { y: 0, height: 0 };
-  private previewRegion?: { x: number; y: number; width: number; height: number; view: ScrollView };
   private expanded = false;
   private collapsible = false;
   private measured = '';
@@ -239,16 +236,10 @@ export class AskView extends Container {
   override handleMouse(event: TuiMouseEvent): ReturnType<Container['handleMouse']> {
     if (this.closed) return;
     let result: TuiMouseEventResult | undefined;
-    const preview = this.previewRegion;
-    if (this.reading && event.y >= this.readerRegion.y && event.y < this.readerRegion.y + this.readerRegion.height)
-      result = this.reader.handleMouse({ ...event, y: event.y - this.readerRegion.y });
-    else if (!this.reading && event.type === "click" && event.button === "left" && event.y === this.tabY && this.tabRegions.length) {
+    if (!this.reading && event.type === "click" && event.button === "left" && event.y === this.tabY && this.tabRegions.length) {
       const tab = this.tabRegions.find(tab => event.x >= tab.start && event.x < tab.end);
       if (tab) { this.selectPage(tab.page); result = { handled: true }; }
-    } else if (!this.reading && preview && event.x >= preview.x && event.x < preview.x + preview.width
-      && event.y >= preview.y && event.y < preview.y + preview.height) result = preview.view.handleMouse({...event,
-        x: event.x - preview.x, y: event.y - preview.y, width: preview.width, height: preview.height});
-    else if (!this.reading && event.x >= this.listRegion.x && event.x < this.listRegion.x + this.listRegion.width
+    } else if (!this.reading && event.x >= this.listRegion.x && event.x < this.listRegion.x + this.listRegion.width
       && event.y >= this.listRegion.y && event.y < this.listRegion.y + this.listRegion.indices.length) {
       if (event.type === 'wheel') {
         if (this.form.reviewing) this.reviewCursor = Math.max(0, Math.min(this.form.questions.length - 1, this.reviewCursor + (event.wheelDelta ?? 0)));
@@ -310,7 +301,6 @@ export class AskView extends Container {
     if (!wide || !option) return list.lines;
     const preview = this.preview(option), previewWidth = width - listWidth - 3;
     const detail = preview.viewport(previewWidth, height, () => this.tui.requestRender());
-    this.previewRegion = { x: x + listWidth + 3, y, width: previewWidth, height, view: preview };
     return Array.from({ length: height }, (_, index) => {
       const left = list.lines[index] ?? '';
       return left + ' '.repeat(Math.max(0, listWidth - visibleWidth(left))) + ' │ ' + (detail[index] ?? '');
@@ -344,20 +334,16 @@ export class AskView extends Container {
       choiceLines(this.theme, question, this.form.draft, option, false, listWidth, false, wide).length) ||
       visibleWidth(`${this.requester} ${this.heading ?? ''}`) > width - 30;
   }
-  /** Reading exposes a native scroll tree; question/list geometry stays with the form. */
-  prepareLayout(width: number, height: number): void {
-    if (!this.reading) { this.readingLayout = undefined; this.children = []; return; }
+  /** Ask History shares U1's public native offset and explicit keyboard reading budget. */
+  private renderReader(width: number): string[] {
     const answer = this.reading === 'history' ? [truncateToWidth(this.form.question.question, width), this.answerLine(width)] : [];
-    this.readerRegion = {y: 1, height: Math.max(1, height - 2 - answer.length)};
-    this.readingLayout = new VStack([
-      {component: readingText(() => [`${this.reading} ${this.reader.position} · ${idleTime(this.deadline)} · Tab focus · / search`], true), basis: 1, shrink: 0},
-      {component: this.reader, basis: 0, grow: 1, minSize: 1},
-      {component: readingText(() => answer), basis: answer.length, shrink: 0},
-      {component: this.reader.searching ? this.reader.search : readingText(room => [this.renderActions(room)]), basis: 1, shrink: 0},
-    ]);
-    this.children = this.readingLayout.children;
+    this.reader.search.focused = this.focused && this.reader.searching;
+    const body = this.reader.viewport(width, Math.max(0, this.height - 2 - answer.length), () => this.tui.requestRender());
+    return readingWindow([
+      truncateToWidth(`${this.reading} ${this.reader.position} · ${idleTime(this.deadline)} · Tab focus · / search`, width),
+      ...body, ...answer, ...this.reader.searching ? this.reader.search.render(width) : [this.renderActions(width)],
+    ], this.height);
   }
-  [LAYOUT_NODE](): LayoutNode | undefined { return this.readingLayout?.[LAYOUT_NODE](); }
   override render(width: number): string[] {
     if (!this.started) {
       this.started = true;
@@ -371,9 +357,9 @@ export class AskView extends Container {
     const measurement = `${width}:${this.tui.terminal.rows}:${limit}:${this.expanded}`;
     if (this.measured !== measurement) { this.inlineHeight = this.measure(width, limit); this.measured = measurement; }
     this.height = this.reading ? Math.max(4, Math.floor(this.tui.terminal.rows * 0.8)) : this.inlineHeight;
-    this.tabRegions = []; this.listRegion = { y: 0, x: 0, width: 0, indices: [] }; this.previewRegion = undefined; this.scrollPosition = { offset: 0, total: 0, height: 0 };
+    this.tabRegions = []; this.listRegion = { y: 0, x: 0, width: 0, indices: [] }; this.scrollPosition = { offset: 0, total: 0, height: 0 };
     const time = idleTime(this.deadline);
-    if (this.reading) return renderLayout(this, width, this.height, () => this.tui.requestRender()).lines;
+    if (this.reading) return this.renderReader(width);
     const geometry = frame(width, limit);
     if (!geometry.bordered) {
       this.collapsible = true;
@@ -382,7 +368,7 @@ export class AskView extends Container {
       return this.height === 1 ? [truncateToWidth(answer, width)] : [truncateToWidth(answer, width), this.renderActions(width)];
     }
     const batch = this.form.questions.length > 1;
-    const lines: string[] = [], markers = new Map<number, string>();
+    const lines: string[] = [];
     if (batch && this.height >= 6) {
       const tabs = questionTabs(this.form, this.theme, geometry.width);
       this.tabRegions = tabs.regions.map(tab => ({ ...tab, start: tab.start + geometry.inset, end: tab.end + geometry.inset }));
@@ -408,19 +394,13 @@ export class AskView extends Container {
     const count = this.form.reviewing ? this.form.questions.length : this.options().length + 1;
     const cursor = this.form.reviewing ? this.reviewCursor : this.form.draft.cursor;
     const scroll = this.scrollPosition, scrolling = scroll.total > scroll.height;
-    if (geometry.inset && scrolling) {
-      const thumb = Math.round((bodyHeight - 1) * scroll.offset / (scroll.total - scroll.height));
-      markers.set(bodyY - 1 + thumb, '┃');
-      if (scroll.offset > 0 && thumb > 0) markers.set(bodyY - 1, '↑');
-      if (scroll.offset + scroll.height < scroll.total && thumb < bodyHeight - 1) markers.set(bodyY + bodyHeight - 2, '↓');
-    }
     if (geometry.separators) lines.push('\0separator');
     const status = this.notice ? this.theme.fg('warning', this.notice) + ` · ${this.escapeHint}` : this.renderActions(geometry.width);
-    lines.push(truncateToWidth((!geometry.inset && scrolling ? `${cursor + 1}/${count} · ` : '') + status, geometry.width));
+    lines.push(truncateToWidth((scrolling ? `${cursor + 1}/${count} · ` : '') + status, geometry.width));
     const kind = !this.form.question.options.length ? '✎' : this.form.question.allowMultiple
       ? `☐${this.form.draft.selected.size + Number(this.form.draft.customSelected && Boolean(this.form.draft.text.trim()))}` : '○';
     const page = this.form.reviewing ? 'Review' : `${this.form.index + 1}/${this.form.questions.length} ${kind}`;
-    return frameLines(this.theme, geometry, width, topBorder(this.theme, width, this.requester, this.heading, page, time), lines, markers)
+    return frameLines(this.theme, geometry, width, topBorder(this.theme, width, this.requester, this.heading, page, time), lines, new Map())
       .map(line => truncateToWidth(line, width));
   }
 }
