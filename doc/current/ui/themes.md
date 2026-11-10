@@ -4,12 +4,14 @@
 
 ## 加载与切换
 
-将本包作为 Pi package 安装后执行 `/reload`，再打开 `/settings` → **Theme** → `oh-my-pi`。选择由 Pi 保存到设置文件，不依赖 Suite 业务模块是否启用。
+主题 JSON 使用 Pi 原生主题协议，可单独用于原版 Pi。当前完整包同时加载 Suite 扩展，其宿主补丁及加载条件见 [运行时边界](../runtime/index.md#宿主加载边界)；完整包不能按单独主题的兼容性推定可在官方 Pi 1.5.0 中加载。
+
+在满足当前扩展加载条件的开发宿主中，将本包作为 Pi package 安装后执行 `/reload`，再打开 `/settings` → **Theme** → `oh-my-pi`。选择由 Pi 保存到设置文件，不依赖 Suite 业务模块是否启用。
 
 仅使用 `pi -e ./src/index.ts` 会加载扩展文件，不会加载包主题。开发时使用整个包：
 
 ```sh
-pi -e . --use-theme oh-my-pi
+pnpm exec pi -e . --use-theme oh-my-pi
 ```
 
 该命令只为本次启动选择主题。也可以将 JSON 单独安装到 `~/.pi/agent/themes/oh-my-pi.json`，再通过 `/settings` 选择；同名主题只保留一个加载来源，避免与已安装的本包主题发生冲突。

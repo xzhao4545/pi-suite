@@ -44,7 +44,7 @@ modules.jobs=false 关闭 job 工具注册和会话订阅；agents 保留未绑�
 
 job_list 的 session 范围、/jobs 默认列表与状态数量共用 JobsModule 的会话范围：当前 owner 且 anchor 位于当前分支（或为 null）的直属 job，以及当前可见 agent 各次 run 根通过 createdBy 匹配的子树 job。运行时的直属 job 覆盖全部 cwd，agent 后代与已回收/结束运行留下的 job 同样可见；列表在存储读取完成后补入当前 owned 副本，按 job ID 去重，再筛状态与分页。活动数量对同一集合使用公共 isActive，不持久化冗余计数。
 
-工作区列表仍限定当前 workspace；session 列表可包含实际工具 cwd 不同的可见直属/child job，归属和通知 owner 保持原值。`/responses fork` 复制可阅读的会话记录与任务引用，不迁移 job owner、anchor 或控制句柄，不停止、重启或重新执行 job；返回原会话继续观察其通知和实际状态。agents 模块关闭时，从当前分支保存的 agent 记录复用 visibleAgent 提取 run 根，不创建 AgentManager runtime。只有磁盘历史且没有运行时控制句柄的记录不计活动，不能根据历史 PID 重建进程。
+工作区列表仍限定当前 workspace；session 列表可包含实际工具 cwd 不同的可见直属/child job，归属和通知 owner 保持原值。agents 模块关闭时，从当前分支保存的 agent 记录复用 visibleAgent 提取 run 根，不创建 AgentManager runtime。只有磁盘历史且没有运行时控制句柄的记录不计活动，不能根据历史 PID 重建进程。
 
 执行协议不兼容时，v3 控制桥保留完整 session 查询与计数；v1/v2 只能显示当前分支直属活动数量并在绑定时提示其范围，完整 session 查询明确拒绝。各版本受限运行时的新启动、写入和 attach 均遵循上述受限模式。
 

@@ -4,10 +4,11 @@
 
 已实施模块的完整设计与原验收契约见 [设计与实施记录](./pi-suite/design/index.md)；平台证据按各专项的实际范围读取，Windows 本轮状态见 [Windows 验收收尾](./pi-suite/windows-completion.md)。
 
-- [Patched Node 宿主发布入口验收](./pi-suite/ui/cli-host-entry.md) — CLI bin、RPC 与 SDK 共用实际 patched 模块，真实 PTY/xterm 页面、原生工具点击、返回/resize 与 CLI/RPC prepared-fork 通过；全量 220/220。
+以下 patched 宿主 UI/入口记录仅证明对应开发依赖组合，不证明消费者安装后可在官方 Pi 中加载。未完成的普通插件兼容工作和已确认的 U1/T1/M1/原版 phase 边界见 [官方 Pi 插件兼容方案](../todo/official-pi-compatibility/index.md)。
+
+- [Patched Node 宿主入口验收](./pi-suite/ui/cli-host-entry.md) — 定制开发依赖的 CLI bin、RPC 与 SDK 共用实际 patched 模块，真实 PTY/xterm 页面、原生工具点击及返回/resize 通过；历史全量 220/220 不作为官方兼容证据。
 - [工具外观、任务 Dock 与原生会话阅读接入](./pi-suite/ui/ui-native-integration/index.md) — 六项已实现已验证：Pi 原生工具外壳、任务恢复基线与等宽选中、首开末尾定位、偏移后工具点击及原生滚动条；真实 TuiAltScreen/SDK 与 Jobs、PTY、Ask History、workflow 共享消费者通过，failed/stopped 阅读为终态夹具，非实体失败流程验收。
 - [Subagent 全屏、Dock 默认展开与文本精简](./pi-suite/ui/viewer-and-dock-polish/index.md) — 三项已实现已验证：真实 TuiAltScreen/TuiMainScreen 与 xterm ANSI 输出下 100% height、子页间隙 footer 覆盖及退出/构造失败恢复；未选优先 Tasks、选中源优先、无 Tasks 沿 priority；去除冗余 readonly，保留权限、完整错误与原文。未进行实体人工终端或 Windows 验收。
-- [Responses 历史净化 fork](./pi-suite/runtime/responses-clean-fork/index.md) — 七项已验证契约：真实 SDK 命令、持久/内存 fork 与 resume/reload、源前缀不重写、暂停 goal、独立任务编号及空清单 nextId；真实 adapter 的本地 OpenAI/Azure SSE 与 Codex 完整/cached WebSocket 两轮、连接隔离和新状态重放。无字段仍创建副本并真实提示 0；未验证外网真实账号权限、解密或中转粘性。
 - [执行界面与查看器优化](./pi-suite/ui/execution-ui/index.md) — 八项需求完整实施：名称/状态/选择、统一执行外框与命令配置、Jobs 直接查看/逐流阅读/终态快照、Subagents 底部信息/原生 Editor、显式整链退出；Linux 实际 Pi CLI 16 组合与深度验收。
 - [导航焦点、Dock 只读任务与问题标题](./pi-suite/ui/navigation-details.md) — 活动区域高亮、分区切换与双向折叠、英文提示、模型筛选及 Ask 短标题；SDK/组件验证。
 - [浏览界面可发现性与配色](./pi-suite/ui/browser-discoverability.md) — 默认 All、最近活动排序、固定导航/动作行与共享配色角色；实际 CLI 两尺寸验收。

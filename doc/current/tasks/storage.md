@@ -20,7 +20,7 @@ Windows 读取已有快照时也取得同一文件锁，使读取句柄在写入
 
 - new 使用独立会话清单。
 - resume/reload 按当前 cwd 和会话 ID 取得原清单，不重新分配 ID。
-- fork 从 previousSessionFile 的会话头定位父清单；内存 fork 通过公开 session header.parentSessionId 定位原内存清单。以包含 nextId 与各组 nextChild 的完整快照播种新清单，即使原任务已全部删除也保留编号计数器；子清单修改不影响父清单。已经使用过的新清单不会重新播种。`/responses fork` 走同一正常 fork 播种，不另造任务恢复流程。
+- fork 从 previousSessionFile 的会话头定位父清单；内存 fork 依赖当前宿主补丁新增的 session header.parentSessionId 定位原内存清单，该字段不是原版 Pi 1.5.0 的公开能力。以包含 nextId 与各组 nextChild 的完整快照播种新清单，即使原任务已全部删除也保留编号计数器；子清单修改不影响父清单。已经使用过的新清单不会重新播种。
 - cwd 改变时重新定位存储，不把另一工作区的清单写入当前文件。
 - 会话撤销时解除订阅并清除显示计时器；已经捕获的执行关联仍指向原清单，不能随会话切换转移到另一任务。
 

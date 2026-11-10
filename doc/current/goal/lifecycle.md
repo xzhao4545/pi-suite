@@ -19,7 +19,6 @@
 | goal_wait | active、waiting_jobs；外部唤醒或单次期限恢复工作 |
 | 显式暂停/完成/预算耗尽 | 对应目标状态，取消继续请求与等待期限 |
 | reload/new/resume/fork/tree | 撤销旧绑定，按当前分支记录重建目标与摘要 |
-| /responses fork | 副本保留目标身份与进度，active 变为 paused，automatic=false，清除等待/期限；源目标不变，新会话等待用户输入或 /goal resume |
 
 运行归属记录目标 ID、修订号和绑定代次；显式 resume 的控制代次保护较新恢复意图，不让旧响应 aborted 结算覆盖它；过期工具不能完成、阻塞或等待被修改或替换的目标。仅被接纳的运行注入 pi-suite-goal 系统提示节。Esc 后的其他扩展自定义运行不能恢复目标。预算只在显式配置时生效；message_end 累加宿主提供的 totalTokens，包括输入、输出与缓存用量。文本修改后同一目标的在途响应仍计入累计用量，但不能覆盖显式暂停等终态。
 

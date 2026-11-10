@@ -20,7 +20,7 @@ pnpm test
 pnpm exec pi -e ./src/index.ts
 ```
 
-Pi 1.5.0 的原生阅读布局与净化 fork 公共能力通过 `patches/` 和 lockfile 管理；仓库补丁将 Node CLI 的 `pi` bin 与 RPC 入口分别指向 `dist/cli.js`、`dist/rpc-entry.js`，与 SDK 共用实际安装的 patched 模块，而不是预构建 bundle 的内置副本。安装或升级补丁后须重启 Pi 进程；`/reload` 不替换宿主模块图。开发宿主须使用本仓库解析到的依赖，未扩展的全局 Pi 不满足本包的公共布局/协议能力要求。命令在可用宿主缺少 prepared-fork 能力时明确拒绝，不降级复制。升级时同步核查补丁和验证，详见 [净化 fork](./doc/current/runtime/responses-fork.md)。
+当前开发依赖仍包含 Pi 1.5.0 宿主补丁；仓库将 Node CLI 的 `pi` bin 与 RPC 入口分别指向 `dist/cli.js`、`dist/rpc-entry.js`，与 SDK 共用实际安装的 patched 模块，而不是预构建 bundle 的内置副本。安装或升级补丁后须重启 Pi 进程；`/reload` 不替换宿主模块图。上述命令仅说明本仓库当前开发环境，**不是普通插件发布方案**：消费者安装插件不会把仓库补丁自动应用到其既有宿主，官方 Pi 1.5.0 不能满足当前扩展加载检查。已确认的公开组件替代、任务支持范围及私有 runtime 风险见 [官方 Pi 插件兼容方案](./doc/todo/official-pi-compatibility/index.md)；源码和依赖尚未迁移，不宣称官方安装链路已通过。
 
 Pi 直接加载 TypeScript 扩展，因此当前不需要构建产物。
 
@@ -28,7 +28,7 @@ Pi 直接加载 TypeScript 扩展，因此当前不需要构建产物。
 
 ## 主题
 
-内置 `oh-my-pi` 深色主题，参考 Oh My Pi Titanium 的电蓝与蓝灰配色。将本包作为 Pi package 安装后执行 `/reload`，通过 `/settings` → **Theme** → `oh-my-pi` 选择。开发预览使用 `pi -e . --use-theme oh-my-pi`；主题加载、单独安装及终端背景边界见 [主题说明](./doc/current/ui/themes.md)。
+内置 `oh-my-pi` 深色主题，参考 Oh My Pi Titanium 的电蓝与蓝灰配色。在上述开发宿主中，将本包作为 Pi package 安装后执行 `/reload`，通过 `/settings` → **Theme** → `oh-my-pi` 选择；开发预览使用 `pnpm exec pi -e . --use-theme oh-my-pi`。主题 JSON 本身适用于原版 Pi，可单独安装而不加载 Suite 扩展；主题加载、单独安装及终端背景边界见 [主题说明](./doc/current/ui/themes.md)。
 
 ## 目录
 

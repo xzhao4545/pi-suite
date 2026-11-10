@@ -1,6 +1,6 @@
 # 验收要求与文档同步
 
-本专项六项功能已实现、已验证；下文保留完整验收契约，实际覆盖与限制见[验收结论与边界](#验收结论与边界)，不以其他专项的通过记录替代本专项证据。
+本专项六项功能在对应 patched 开发依赖组合中已实现、已验证；下文保留完整验收契约，实际覆盖与限制见[验收结论与边界](#验收结论与边界)，不以其他专项的通过记录替代本专项证据。这不是官方 Pi 插件兼容验收；U1 的键盘优先替代和独立验收要求见 [待办方案](../../../../todo/official-pi-compatibility/reading-ui.md)。
 
 ## 六项功能验收
 
@@ -49,8 +49,8 @@
 - **原生布局与鼠标链**：真实 `TuiAltScreen` 的 SGR 输入经 overlay → Details → Scroll → Transcript，在非零偏移处展开多个工具及工具高度变化后命中正确；scrollbar 已实际绘制，hover、拖动、轨道点击和 auto-hide 均有证据，不只是配置断言。40×24、80×30、120×40 及动态 resize、关闭后焦点释放均通过。
 - **SDK 阅读状态**：首开活动、completed、failed、stopped、readonly run，以及从 Details 返回后的阅读位置、暂停与搜索保持已覆盖。failed/stopped 使用终态夹具，证明对应终态的阅读行为，不是实体失败或停止流程验收。
 - **共享消费者**：Jobs 外层原生 scrollbox、stdout/stderr 逐流窗口与暂停/补读、PTY 屏幕及导航边界、Ask History、workflow 共享阅读消费者均通过；PTY 继续使用二维终端框架，不改为文本阅读器。
-- **发布入口补验**：包的实际 Node bin 与导出 RPC 入口共用 unbundled patched 模块；真实 Linux CLI 经 PTY/xterm，在 fullscreen 与 regular 模式打开 Subagents、Jobs、Tasks、返回和 resize，并验证 native host/extension 类身份、Subagent 工具点击及 CLI prepared-fork。直接 SDK/TUI 测试不替代发布入口验证，预构建 bundle 的静态模块不作为该补丁组的入口。
-- **覆盖边界**：使用真实原生 TUI/SDK 路径不等于实体人工终端验收；本专项未进行实体人工终端或 Windows 验收，不据此声明所有终端、平台或未提供的鼠标能力已验证。无外网账号凭据，不作真实账号权限、解密或中转粘性证明。
+- **发布入口补验**：包的实际 Node bin 与导出 RPC 入口共用 unbundled patched 模块；真实 Linux CLI 经 PTY/xterm，在 fullscreen 与 regular 模式打开 Subagents、Jobs、Tasks、返回和 resize，并验证 native host/extension 类身份、Subagent 工具点击。直接 SDK/TUI 测试不替代发布入口验证，预构建 bundle 的静态模块不作为该补丁组的入口。
+- **覆盖边界**：使用真实原生 TUI/SDK 路径不等于实体人工终端验收；本专项未进行实体人工终端或 Windows 验收，不据此声明所有终端、平台或未提供的鼠标能力已验证。本专项不作外部 Provider 认证证明。
 
 ## 文档同步与完成条件
 

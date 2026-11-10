@@ -26,7 +26,7 @@
 2. **UX-2 Dock 分配**：未活动选择且存在可见 Tasks 时优先 Tasks；活动选择时所选源及真实对象优先；无 Tasks 时沿原 priority 分配。三分区、紧凑预算、退出/再次选择和动态更新通过，不改变任务状态或真实完成反馈。
 3. **UX-3 文本边界**：Tasks 选择标题的 `read only` / `readonly` 已去除；真正影响许可的权限/只读信息、完整错误、用户原文和工具真实结果保留，不以缩短协议结果冒充展示精简。
 
-发布 Node bin 的实际 CLI 已通过 PTY/xterm 补验：fullscreen/regular 下 Subagent 阅读、Jobs/Tasks 列表与输出子页、返回、resize 及原生工具命中可用。宿主与扩展共用 unbundled patched 模块，不能以直接 SDK/TUI 构造代替发布入口的验收。
+发布 Node bin 的实际 CLI 已通过 PTY/xterm 补验：fullscreen/regular 下 Subagent 阅读、Jobs/Tasks 列表与输出子页、返回、resize 及原生工具命中可用。宿主与扩展共用 unbundled patched 模块，不能以直接 SDK/TUI 构造代替发布入口的验收。此结论仅适用于定制开发依赖，不证明官方 Pi 加载兼容；已确认的 U1 替代方案见 [待办阅读方案](../../../../todo/official-pi-compatibility/reading-ui.md)。
 
 结论限于真实原生 TUI/SDK、xterm ANSI 输出与组件证据；未进行实体人工终端或 Windows 验收。没有外网账号凭据，不作真实账号权限、解密或中转粘性证明；模型配置、执行 owner、任务状态与自动压缩策略均不属于本专项变更。
 

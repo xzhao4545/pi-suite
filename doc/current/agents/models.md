@@ -53,4 +53,10 @@ agent_get 详情与记录操作界面显示实际模型、thinking 及来源：p
 
 认证目录变化后，模型选择仅提供当前可用模型及 No override。新准入或普通恢复引用失去认证的显式配置时报告 MODEL_UNAVAILABLE 并指出对应字段，在建立新 run 与请求前拒绝；用户可通过类型或 individual 配置选择可用模型或取消覆盖。
 
+## 模型运行时桥接
+
+普通 child 启动及 `@类型` 的任务整理克隆通过类型强转读取父 `ctx.modelRegistry.runtime`，沿用同一模型运行时，而不自行重建另一份 Provider/认证/路由状态。读取位于 `src/agents/runner.ts` 与 `src/agents/mentions/clone.ts`。原版 Pi 1.5.0 将该字段声明为 private；它不是公开 SDK 契约，也不依赖将字段公开的宿主补丁。
+
+这一桥接存在版本兼容风险，Pi 升级可能改变字段及对象协议；不能以模型名相同、宽泛 peer 版本或 patched SDK 通过推定官方入口兼容。它与单个 child 的模型/会话选择隔离是不同边界，不承诺完整 runtime 状态独立。Provider、临时认证及虚拟路由继承仅按实际验证范围声明。
+
 [返回 agents](index.md)
