@@ -20,7 +20,7 @@ pnpm test
 pnpm exec pi -e ./src/index.ts
 ```
 
-Pi 1.5.0 的原生阅读布局与净化 fork 公共能力通过 `patches/` 和 lockfile 管理；开发宿主须使用本仓库解析到的依赖，未扩展的全局 Pi 不满足本包的公共布局/协议能力要求。命令在可用宿主缺少 prepared-fork 能力时明确拒绝，不降级复制。升级时同步核查补丁和验证，详见 [净化 fork](./doc/current/runtime/responses-fork.md)。
+Pi 1.5.0 的原生阅读布局与净化 fork 公共能力通过 `patches/` 和 lockfile 管理；仓库补丁将 Node CLI 的 `pi` bin 与 RPC 入口分别指向 `dist/cli.js`、`dist/rpc-entry.js`，与 SDK 共用实际安装的 patched 模块，而不是预构建 bundle 的内置副本。安装或升级补丁后须重启 Pi 进程；`/reload` 不替换宿主模块图。开发宿主须使用本仓库解析到的依赖，未扩展的全局 Pi 不满足本包的公共布局/协议能力要求。命令在可用宿主缺少 prepared-fork 能力时明确拒绝，不降级复制。升级时同步核查补丁和验证，详见 [净化 fork](./doc/current/runtime/responses-fork.md)。
 
 Pi 直接加载 TypeScript 扩展，因此当前不需要构建产物。
 

@@ -199,3 +199,25 @@ index ab5cfccc3a90939e533b9118122189507a7af326..ec7fd62cd4bd7a9f31286a0a66415ae2
  export { SettingsManager, } from "./core/settings-manager.js";
  // Skills
  export { formatSkillsForPrompt, loadSkills, loadSkillsFromDir, } from "./core/skills.js";
+diff --git a/package.json b/package.json
+index 705be3d3de78a185a556c1c6ed504a7de5ee84d5..a3e88965065969617445b239f3c3ef3821aab908 100644
+--- a/package.json
++++ b/package.json
+@@ -7,7 +7,7 @@
+ 		"configDir": ".pi"
+ 	},
+ 	"bin": {
+-		"pi": "dist/bundle/cli.js"
++		"pi": "dist/cli.js"
+ 	},
+ 	"main": "./dist/index.js",
+ 	"types": "./dist/index.d.ts",
+@@ -17,7 +17,7 @@
+ 			"import": "./dist/index.js"
+ 		},
+ 		"./rpc-entry": {
+-			"import": "./dist/bundle/rpc-entry.js"
++			"import": "./dist/rpc-entry.js"
+ 		}
+ 	},
+ 	"files": [

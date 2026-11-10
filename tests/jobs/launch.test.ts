@@ -83,7 +83,9 @@ export default pi => {
   }));
   pi.registerProvider(faux.provider);
 }`);
-  const cli = join(dirname(fileURLToPath(import.meta.resolve('@earendil-works/pi-coding-agent'))), 'bundle', 'cli.js');
+  // Resolve the published bin: the prebuilt bundle embeds unpatched virtual modules.
+  const packageDir = dirname(dirname(fileURLToPath(import.meta.resolve('@earendil-works/pi-coding-agent'))));
+  const cli = join(packageDir, JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8')).bin.pi);
   const base = {command: process.execPath, args: [cli, '--offline', '--no-extensions', '--no-skills', '--no-context-files', '--no-tools',
     '--provider', 'cli-offline', '--model', 'offline', '--thinking', 'off', '-e', extension, '--session-dir', target]};
   const prompt = '@literal 中文 $HOME `touch INJECTED` $(touch INJECTED) \' " \\ \nnext line';

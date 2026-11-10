@@ -4,6 +4,7 @@
 
 已实施模块的完整设计与原验收契约见 [设计与实施记录](./pi-suite/design/index.md)；平台证据按各专项的实际范围读取，Windows 本轮状态见 [Windows 验收收尾](./pi-suite/windows-completion.md)。
 
+- [Patched Node 宿主发布入口验收](./pi-suite/ui/cli-host-entry.md) — CLI bin、RPC 与 SDK 共用实际 patched 模块，真实 PTY/xterm 页面、原生工具点击、返回/resize 与 CLI/RPC prepared-fork 通过；全量 220/220。
 - [工具外观、任务 Dock 与原生会话阅读接入](./pi-suite/ui/ui-native-integration/index.md) — 六项已实现已验证：Pi 原生工具外壳、任务恢复基线与等宽选中、首开末尾定位、偏移后工具点击及原生滚动条；真实 TuiAltScreen/SDK 与 Jobs、PTY、Ask History、workflow 共享消费者通过，failed/stopped 阅读为终态夹具，非实体失败流程验收。
 - [Subagent 全屏、Dock 默认展开与文本精简](./pi-suite/ui/viewer-and-dock-polish/index.md) — 三项已实现已验证：真实 TuiAltScreen/TuiMainScreen 与 xterm ANSI 输出下 100% height、子页间隙 footer 覆盖及退出/构造失败恢复；未选优先 Tasks、选中源优先、无 Tasks 沿 priority；去除冗余 readonly，保留权限、完整错误与原文。未进行实体人工终端或 Windows 验收。
 - [Responses 历史净化 fork](./pi-suite/runtime/responses-clean-fork/index.md) — 七项已验证契约：真实 SDK 命令、持久/内存 fork 与 resume/reload、源前缀不重写、暂停 goal、独立任务编号及空清单 nextId；真实 adapter 的本地 OpenAI/Azure SSE 与 Codex 完整/cached WebSocket 两轮、连接隔离和新状态重放。无字段仍创建副本并真实提示 0；未验证外网真实账号权限、解密或中转粘性。

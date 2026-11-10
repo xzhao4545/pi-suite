@@ -23,7 +23,9 @@
 
 仓库通过 `pnpm-workspace.yaml`、lockfile 与 `patches/` 管理 Pi 1.5.0 的公开能力扩展。`SessionManager.supportsPreparedFork` 标明宿主支持 `ctx.fork(..., { position: 'at', prepare, withSession })`：prepare 接收独立的分支副本，在目标持久化和 session_start 之前完成；源变化时停止，正常 fork 生命周期负责任务播种与重新绑定。协议 phase 的解析/编码、复合工具 ID 解析由 pi-ai 公共模块 `api/responses-signatures` 提供，adapter 与净化器共用协议语义。
 
-安装使用 `pnpm install`，宿主运行使用本仓库解析到的依赖，例如 `pnpm exec pi -e ./src/index.ts`。本包要求宿主的公共布局、adapter 子路径解析与 fork 准备能力均包含同一组版本补丁；仅用未扩展的全局 Pi 加载本包不满足要求。可用宿主缺少 prepared-fork 能力时，命令明确拒绝，不先复制私有历史再追加 context_edit。升级 Pi 时必须核对并更新受版本管理的 patch 与对应验收。生成 patch 后核查其应用范围，只保留必要代码与类型声明变更，保留 CLI 可执行权限及上游示例资源；以 frozen-lockfile 安装确认补丁内容和 lockfile 一致。
+Node CLI 的 `pi` bin 使用 `dist/cli.js`，导出的 RPC 入口使用 `dist/rpc-entry.js`，SDK 使用 `dist/index.js`；三者共用实际安装的 patched coding-agent、pi-ai、pi-tui 模块图。预构建 Node bundle、Bun/SEA 的内置模块不属于这组单包补丁的运行入口，不能用其静态 virtualModules 代替公开模块。Suite 在扩展加载边界检查必需的原生布局 API；不支持的宿主明确拒绝并提示安装/重启，不等到异步页面渲染时崩溃。入口验证必须实际启动包的 bin/RPC，不能只用 `createAgentSession()` 或直接构造 TUI 替代。
+
+安装使用 `pnpm install`，宿主运行使用本仓库解析到的依赖，例如 `pnpm exec pi -e ./src/index.ts`。本包要求宿主的公共布局、adapter 子路径解析与 fork 准备能力均包含同一组版本补丁；仅用未扩展的全局 Pi 加载本包不满足要求。安装或升级补丁后须重启 Pi 进程；`/reload` 只重载扩展，不替换宿主模块图。需要保留当前目标时用该入口配合 `--resume` 恢复原会话，不新建或 fork 目标。可用宿主缺少 prepared-fork 能力时，命令明确拒绝，不先复制私有历史再追加 context_edit。升级 Pi 时必须核对并更新受版本管理的 patch 与对应验收。生成 patch 后核查其应用范围，只保留必要代码与类型声明变更，保留 CLI 可执行权限及上游示例资源；以 frozen-lockfile 安装确认补丁内容和 lockfile 一致。
 
 ## 支持与限制
 

@@ -20,11 +20,13 @@
 
 ## 验收结论与边界
 
-离线 frozen-lockfile 安装与最终 `pnpm typecheck` 通过；最新 `pnpm test` 全量 **218/218 通过，约 1 分钟**。本专项三项结论如下：
+离线 frozen-lockfile 安装与最终 `pnpm typecheck` 通过；最新 `pnpm test` 全量 **220/220 通过，约 1 分钟**。本专项三项结论如下：
 
 1. **UX-1 全终端覆盖与恢复**：真实 `TuiAltScreen`、`TuiMainScreen` 与 xterm ANSI 输出证据通过。原生 overlay 使用 **100% height**，短正文及 model picker 也覆盖完整终端；Details、Jobs、模型选择等子页加载间隙由 native 捕获背景继续覆盖 footer。40×24、80×30、120×40 和动态 resize 已覆盖。退出或构造失败时释放捕获/焦点并恢复原 footer 实例、最新主会话状态与原焦点，不替换或销毁原生/第三方 footer。
 2. **UX-2 Dock 分配**：未活动选择且存在可见 Tasks 时优先 Tasks；活动选择时所选源及真实对象优先；无 Tasks 时沿原 priority 分配。三分区、紧凑预算、退出/再次选择和动态更新通过，不改变任务状态或真实完成反馈。
 3. **UX-3 文本边界**：Tasks 选择标题的 `read only` / `readonly` 已去除；真正影响许可的权限/只读信息、完整错误、用户原文和工具真实结果保留，不以缩短协议结果冒充展示精简。
+
+发布 Node bin 的实际 CLI 已通过 PTY/xterm 补验：fullscreen/regular 下 Subagent 阅读、Jobs/Tasks 列表与输出子页、返回、resize 及原生工具命中可用。宿主与扩展共用 unbundled patched 模块，不能以直接 SDK/TUI 构造代替发布入口的验收。
 
 结论限于真实原生 TUI/SDK、xterm ANSI 输出与组件证据；未进行实体人工终端或 Windows 验收。没有外网账号凭据，不作真实账号权限、解密或中转粘性证明；模型配置、执行 owner、任务状态与自动压缩策略均不属于本专项变更。
 

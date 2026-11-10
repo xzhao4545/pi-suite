@@ -45,7 +45,7 @@
 
 ## 验收结论与边界
 
-离线 frozen-lockfile 安装与最终 `pnpm typecheck` 通过；最新 `pnpm test` 全量 **218/218 通过，约 1 分钟**。Responses 专项以下七项均有真实 SDK 或真实 adapter 的受控环境证据：
+离线 frozen-lockfile 安装与最终 `pnpm typecheck` 通过；最新 `pnpm test` 全量 **220/220 通过，约 1 分钟**。Responses 专项以下七项均有真实 SDK 或真实 adapter 的受控环境证据：
 
 1. **真实 SDK 命令**：公开命令登记与 `/responses fork` 路径通过；复制含当前叶子的分支，无提供商/账号/历史消息选择器，继承执行时模型配置，不自动发起模型请求或重新执行工具。无私有字段时仍创建副本并提示净化数量为 0；成功提示依据净化器真实 `hadPrivateState` 报告生成，已有测试覆盖，不把未净化的历史冒充已移除私有状态。
 2. **持久与内存 fork**：两种 SessionManager 路径及 resume/reload 通过，净化副本身份独立，持久历史与有效贡献正确；源文件/源前缀不重写，源分支保留，普通消息、工具参数/真实结果、调用配对和 phase 保持。
@@ -54,6 +54,8 @@
 5. **OpenAI/Azure SSE**：真实 adapter 连接本地受控 OpenAI 与 Azure Responses SSE 服务，首轮净化上下文和第二轮新状态重放通过，不凭共享转换代码推断传输成功。
 6. **Codex 完整 WebSocket**：真实 adapter 的完整 WebSocket 请求与两轮请求通过；新 fork 连接独立于旧连接，不携带源 response/continuation，旧连接的续接范围不被改写。
 7. **Codex cached 两轮**：cached WebSocket 两轮与独立新会话缓存范围通过；新生成 item 和 reasoning 在后续轮正常重放，没有持续清理器，也未永久关闭正常续接优化。
+
+Node 发布入口补验使用 package bin 和导出的 RPC 入口，而非仅直接 SDK：两者的 prepared-fork、独立身份及任务播种、持久副本无旧私有状态、等待用户后新响应正常保存通过。宿主与扩展使用同一组实际 patched 模块，不从预构建 bundle 的静态模块推断能力；离线 faux provider 只验证宿主/命令集成，不替代上述真实 adapter 的受控传输证据。
 
 以上证明真实 SDK 生命周期、请求结构和本地受控传输契约，不是外网账号成功声明。没有外网账号凭据，未验证真实账号权限、加密推理解密、账号/组织切换或中转粘性；本专项不进行实体人工终端或 Windows 验收。密文、账号专属资源和多账号路由的既有能力限制保持，不保证解决所有 400。
 

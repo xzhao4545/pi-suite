@@ -22,4 +22,8 @@ Subagent、普通详情、workflow 与文本日志使用原生布局树和滚动
 
 Subagent 阅读链无论主会话采用普通还是 fullscreen 模式，均以终端完整列/行覆盖主 footer；模型/thinking 选择、Details、所属 Jobs 及异步页面切换保持同一覆盖和输入焦点。原生 compositor 的显式 height 补齐短正文，退出或构造失败释放背景 overlay，恢复原 footer 实例和最新主状态，不改变执行 owner。其他普通阅读保留百分比预算与恢复焦点；鼠标与复制仍取决于宿主和终端实际能力，不承诺未提供的交互。OSC 8 链接、文本拖选与 clipboard 通道沿用 Pi，PTY 输入接管不使用文本 ScrollView 替代。
 
+## 宿主补丁与重启
+
+运行本仓库时使用 `pnpm exec pi -e ./src/index.ts`，Node CLI/RPC 入口与 SDK 共用 patched 依赖的模块图。补丁安装或更新后须退出当前 Pi 进程并重新启动；`/reload` 只重载扩展，不能替换宿主已载入的 TUI/adapter 类与函数。保留当前会话和目标时加 `--resume` 并选择原会话，不通过新建目标或 fork 迁移运行归属。
+
 [返回统一界面](index.md)
