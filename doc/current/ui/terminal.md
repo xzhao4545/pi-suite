@@ -22,6 +22,8 @@ Subagent、普通详情、workflow 与文本日志使用公开组件和显式阅
 
 Subagent 阅读链无论主会话采用普通还是 fullscreen 模式，均以终端完整列/行覆盖主 footer；模型/thinking 选择、Details、所属 Jobs 及异步页面切换保持同一覆盖和输入焦点。readingWindow 自行填足输出行数，背景 lease 在子页间隙保持覆盖；正常或异常退出释放自有背景 overlay 与作用域，恢复原焦点、原 footer 实例和最新主状态，不改变执行 owner。其他普通阅读保留百分比预算与恢复焦点；鼠标与复制仍取决于宿主和终端实际能力，不承诺未提供的交互。OSC 8 链接、文本拖选与 clipboard 通道沿用 Pi，不接管 stdout；PTY 输入接管不使用文本 ScrollView 替代。
 
+Subagents 的根页签切换、列表进入或返回消息历史由独立 custom 页面先关闭再打开，可能产生主会话中间帧；单个消息阅读链的全屏覆盖作用域不能保证整个根导航连续无闪屏。当前 CLI 验收覆盖最终页面、操作与恢复，不等于已检查所有切换中间帧。
+
 ## 宿主加载与重启
 
 运行本仓库时使用 `pnpm exec pi -e ./src/index.ts`，官方 Pi 1.5.0 Node CLI/RPC 使用发布包的 `dist/bundle/cli.js`、`dist/bundle/rpc-entry.js`，模块解析由原版 loader 负责。依赖升级后须退出当前 Pi 进程并重新启动；`/reload` 只重载扩展，不能替换宿主已载入的 TUI/adapter 类与函数。保留当前会话和目标时加 `--resume` 并选择原会话，不通过新建目标或 fork 迁移运行归属。加载及安装范围见 [公共运行时](../runtime/index.md#宿主加载边界)。
