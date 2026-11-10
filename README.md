@@ -17,8 +17,10 @@ pnpm test
 开发时使用本地扩展入口：
 
 ```sh
-pi -e ./src/index.ts
+pnpm exec pi -e ./src/index.ts
 ```
+
+Pi 1.5.0 的原生阅读布局与净化 fork 公共能力通过 `patches/` 和 lockfile 管理；开发宿主须使用本仓库解析到的依赖，未扩展的全局 Pi 不满足本包的公共布局/协议能力要求。命令在可用宿主缺少 prepared-fork 能力时明确拒绝，不降级复制。升级时同步核查补丁和验证，详见 [净化 fork](./doc/current/runtime/responses-fork.md)。
 
 Pi 直接加载 TypeScript 扩展，因此当前不需要构建产物。
 
@@ -51,4 +53,4 @@ third-party/
   licenses/         上游许可证
 ```
 
-设计与实施计划见 [doc/todo/pi-suite](doc/finished/pi-suite/design/index.md)，当前项目状态见 [doc/current](./doc/current/index.md)。Pi 相关依赖以 1.5.0 为开发基线；pnpm-lock.yaml 应提交到版本控制。
+设计与实施计划见 [设计与实施记录](doc/finished/pi-suite/design/index.md)，当前项目状态见 [doc/current](./doc/current/index.md)。Pi 相关依赖以 1.5.0 为开发基线；pnpm-lock.yaml、pnpm-workspace.yaml 与 patches/ 应提交到版本控制。

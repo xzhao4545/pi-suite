@@ -41,7 +41,7 @@ export class TaskBrowserView extends BrowserView {
 /** Dock opens a read-only task receipt; selection never edits or changes task status. */
 export async function showTask(ctx: ExtensionContext, tasks: TasksModule, dock: Dock, id: string): Promise<void> {
   const {task, views} = await tasks.get(ctx, id);
-  await showDetails(ctx, dock, `Tasks ▸ ${taskTitle(task)} · read only`, taskDetails(task, views).join('\n'), 'text');
+  await showDetails(ctx, dock, `Tasks ▸ ${taskTitle(task)}`, taskDetails(task, views).join('\n'), 'text');
 }
 
 export function registerTasksCommand(pi: ExtensionAPI, tasks: TasksModule, dock: Dock, notifications: Notifications): void {

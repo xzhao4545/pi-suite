@@ -12,4 +12,8 @@
 
 `commands.exit` 默认 true，独立于业务模块开关。`/exit` 在忙碌时通过公开 abort 与 waitForIdle 等待当前操作取消，再请求宿主 shutdown；随后由原生 quit 流程恢复终端、触发 session_shutdown 并等待 jobs/agents/workflow owner 清理。设置 false 后 `/reload` 撤销本扩展的 `/exit` 注册；原生 `/quit` 始终可用。
 
+## 历史净化命令
+
+`/responses fork` 无需选择提供商，一次性净化当前有效历史并进入独立副本，沿用当前模型/thinking；要求 idle 且没有排队消息。新会话等待用户输入，不自动请求模型；active goal 的副本为 paused，原目标及外部执行保持原归属。取消不创建副本，无法安全迁移的密文内容明确拒绝。宿主版本、正常后续请求与账号/文件限制见 [Responses 历史净化 fork](responses-fork.md)。
+
 [返回公共运行时](index.md)

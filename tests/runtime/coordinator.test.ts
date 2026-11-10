@@ -12,6 +12,7 @@ import { Dock } from "../../src/ui/dock.ts";
 import { dockWindow } from '../../src/ui/dock/rows.ts';
 import { StatusPublisher } from "../../src/ui/status.ts";
 import { recordStyle, selectedRow, stateTone } from '../../src/ui/browser-chrome.ts';
+import { BrowserView, browseState } from '../../src/ui/browser.ts';
 import { jobLabel, jobStatus } from '../../src/jobs/index.ts';
 import type { JobSummary } from '../../src/jobs/types.ts';
 import { host } from "../support/host.ts";
@@ -128,7 +129,7 @@ test('empty editor enters Dock with left and Enter opens the selected agent thro
     for (const width of [40, 120]) {
       const lines = dock.render(width).map(stripVTControlCharacters);
       assert.ok(lines.some(line => line.includes('Enter') && line.includes('Esc')));
-      assert.ok(lines.some(line => line.includes('> Dock con')));
+      assert.ok(lines.some(line => line.includes('Dock con')));
       assert.ok(lines.some(line => line.includes('1 running')));
       assert.ok(lines.some(line => line.includes('running · 12.3s')));
       if (width === 120) assert.match(lines.join('\n'), /↑12000 ↓3400 · 4 tools/);
@@ -147,6 +148,9 @@ test('empty editor enters Dock with left and Enter opens the selected agent thro
 
 test('Dock leaves nonempty editors and other focused components untouched; selection follows row identity', async () => {
   const dock = new Dock(), tui = terminal(40, 120), opened: string[] = [];
+  const theme = {fg: (_tone: string, text: string) => text, bold: (text: string) => text,
+    bg: (_tone: string, text: string) => `\x1b[44m${text}\x1b[49m`, getBgAnsi: () => '\x1b[44m'} as unknown as Theme;
+  const selected = () => stripVTControlCharacters(dock.render(120).find(line => line.includes('\x1b[44m')) ?? '');
   let text = 'editing', input!: (data: string) => {consume?: boolean} | undefined, detached = 0;
   const editor = {render: () => [], invalidate() {}, capturesViewportInput: false, getText: () => text, setText: (value: string) => {text = value;}};
   tui.setFocus(editor);
@@ -154,7 +158,7 @@ test('Dock leaves nonempty editors and other focused components untouched; selec
   dock.register('agents', {title: 'Agents', rows: () => rows, open: id => {opened.push(id);}});
   dock.register('tasks', {title: 'Tasks', rows: () => [{id: 'task', text: 'task', priority: 100}]});
   const ctx = {mode: 'tui', ui: {getEditorText: () => text, notify() {},
-    setWidget: (_key: string, factory?: (terminal: typeof tui) => unknown) => factory?.(tui),
+    setWidget: (_key: string, factory?: (terminal: typeof tui, palette: Theme) => unknown) => factory?.(tui, theme),
     onTerminalInput: (handler: typeof input) => {input = handler; return () => {detached++;};},
   }} as unknown as ExtensionContext;
   dock.bind(ctx, 12);
@@ -162,8 +166,8 @@ test('Dock leaves nonempty editors and other focused components untouched; selec
   text = ''; editor.capturesViewportInput = true;
   assert.equal(input('\x1b[D'), undefined, 'autocomplete retains editor navigation'); editor.capturesViewportInput = false;
   assert.deepEqual(input('\x1b[D'), {consume: true}); input('\x1b[B');
-  rows = [rows[1], rows[0]]; assert.ok(dock.render(120).some(line => line.includes('> agent b')));
-  rows = [rows[1]]; assert.ok(dock.render(120).some(line => line.includes('> agent a')));
+  rows = [rows[1], rows[0]]; assert.match(selected(), /agent b/);
+  rows = [rows[1]]; assert.match(selected(), /agent a/);
   input('\r'); await Promise.resolve(); assert.deepEqual(opened, ['a']);
   for (const hide of [(value: boolean) => dock.setAsk(value), (value: boolean) => dock.setDetail(value)]) {
     input('\x1b[D'); hide(true); assert.equal(input('\x1b[D'), undefined); hide(false);
@@ -188,7 +192,8 @@ test('Tasks join Dock navigation and section shortcuts with read-only details an
     custom: async factory => new Promise((resolve, reject) => {
       Promise.resolve(factory(tui, ui.theme, {} as never, resolve)).then(view => {
         const screen = view.render(120).join('\n');
-        assert.match(screen, /Tasks ▸ inspect child red · read only/);
+        assert.match(screen, /Tasks ▸ inspect child red/);
+        assert.doesNotMatch(screen, /read ?only/i);
         assert.ok(screen.includes('## literal *text* red'), 'task text is neither terminal control nor Markdown syntax');
         assert.deepEqual((view as {actions?: unknown[]}).actions, [], 'task reader never admits mutations');
         views++; view.handleInput?.('\x1b');
@@ -207,18 +212,18 @@ test('Tasks join Dock navigation and section shortcuts with read-only details an
       rows: () => [{id: section, text: section, priority: 100}], open: () => {assert.fail('only Tasks should open');}});
     input('\x1b[D'); input('\x1b[B');
     const screen = () => dock.render(120).map(stripVTControlCharacters).join('\n');
-    assert.match(screen(), /> .*1\.1 inspect child/);
-    input(']'); assert.match(screen(), /> agents/);
-    input(']'); assert.match(screen(), /> jobs/);
-    input(']'); assert.match(screen(), /> .*1 inspect group/);
-    input('['); assert.match(screen(), /> jobs/);
+    assert.match(screen(), /│    .*1\.1 inspect child/);
+    input(']'); assert.match(screen(), /├─ agents/);
+    input(']'); assert.match(screen(), /├─ jobs/);
+    input(']'); assert.match(screen(), /├─ .*1 inspect group/);
+    input('['); assert.match(screen(), /├─ jobs/);
     input(']'); input('\x1b[B'); input('\r');
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(views, 1); assert.deepEqual(await snapshot(), before);
     assert.ok(dock.render(120).every(line => !line.includes('> ')));
     for (const budget of [1, 2, 3, 6, 12]) {
       dock.bind(ctx, budget);
-      if (budget === 1) assert.match(dock.render(120).join('\n'), /Agents/, 'priority admits urgent content without moving sections');
+      if (budget === 1) assert.match(dock.render(120).join('\n'), /Tasks/, 'idle budget prefers visible Tasks over urgent Agents/Jobs');
       input('\x1b[D');
       for (const section of ['Tasks', 'Agents', 'Jobs']) {
         for (const width of [40, 60, 120]) {
@@ -226,13 +231,17 @@ test('Tasks join Dock navigation and section shortcuts with read-only details an
           assert.ok(lines.length <= dock.budget() && lines.every(line => visibleWidth(line) <= width));
           const positions = ['Tasks', 'Agents', 'Jobs'].map(label => lines.findIndex(line => line.includes(label))).filter(index => index >= 0);
           assert.deepEqual(positions, [...positions].sort((a, b) => a - b), 'focus and priority never move source positions');
-          assert.ok(lines.some(line => line.includes(section) || line.includes('> ')), 'tiny budgets retain the selected source/object');
-          if (section === 'Tasks' && budget > 3) assert.match(lines.join('\n'), /Tasks.*read only/, 'compact key hints cannot erase the source/read-only heading');
+          assert.ok(lines.some(line => line.includes(section)), 'tiny budgets retain the selected source/object');
+          if (section === 'Tasks') assert.doesNotMatch(lines.join('\n'), /read ?only/i, 'view action expresses the read-only task viewer without redundant labels');
         }
         input(']');
       }
       input('\x1b');
+      assert.match(dock.render(120).join('\n'), /Tasks/, 'leaving selection restores Tasks despite the retained last source');
     }
+    dock.register('tasks', {title: 'Tasks', rows: () => []});
+    dock.bind(ctx, 1);
+    assert.match(dock.render(120).join('\n'), /Agents/, 'absent Tasks retain the existing urgent section policy');
   } finally {await h.dispose();}
 });
 
@@ -250,9 +259,27 @@ test('structured states preserve name colors, task strike and active selection b
   assert.ok(label.startsWith('running\x1b[90m · '), 'the name is not a status even when both have identical text');
   assert.ok(label.includes('\x1b[32mrunning\x1b[39m') && label.includes('\x1b[33mcleanup pending\x1b[39m'));
   assert.ok(!label.includes(job.id));
-  assert.ok(selectedRow('> ' + label, 120, theme).includes('\x1b[44m'));
-  assert.ok(!selectedRow('> ' + label, 120, theme, false).includes('\x1b[44m'));
+  assert.ok(selectedRow('→ ' + label, 120, theme).includes('\x1b[36m→ \x1b[39m'));
+  assert.ok(!selectedRow('→ ' + label, 120, theme, false).includes('\x1b[44m'));
+  const ansiTree = theme.fg('borderMuted', '│    ') + theme.fg('success', 'child');
+  assert.equal(stripVTControlCharacters(selectedRow(ansiTree, 20, theme, true, '')).trimEnd(), '│    child');
+  assert.ok(selectedRow(ansiTree, 20, theme, true, '').includes(ansiTree), 'trusted tree ANSI is neither sliced nor repainted');
   assert.ok(recordStyle('worker · waiting(parent)', 'waiting(parent)', theme).includes('\x1b[33mwaiting(parent)'));
+
+  const browser = new BrowserView(terminal(), {title: 'Native contract', state: browseState(), items: () => [
+    {value: 'native', label: 'native task', status: 'doing', details: () => 'literal details'},
+  ]}, () => {}, theme);
+  try {
+    const active = browser.render(60).find(line => stripVTControlCharacters(line).includes('→ native task'))!;
+    assert.equal(browser.getSelectedItem()?.value, 'native');
+    assert.ok(active.includes('\x1b[36m→ ') && active.includes('\x1b[32mnative task'));
+    assert.ok(active.includes('\x1b[44m'), 'native list selection receives the shared background');
+    browser.handleInput('\t');
+    const inactive = browser.render(60).find(line => stripVTControlCharacters(line).includes('→ native task'))!;
+    assert.equal(browser.getSelectedItem()?.value, 'native');
+    assert.ok(inactive.includes('\x1b[90m→ ') && inactive.includes('\x1b[32mnative task'));
+    assert.ok(!inactive.includes('\x1b[44m'), 'details focus mutes only the native marker, not task state');
+  } finally { browser.dispose(); }
 
   const dock = new Dock(), tui = terminal(40, 120), publisher = new StatusPublisher(dock);
   let input!: (data: string) => unknown;
@@ -261,12 +288,36 @@ test('structured states preserve name colors, task strike and active selection b
     onTerminalInput: (handler: typeof input) => {input = handler; return () => {};}}} as unknown as ExtensionContext;
   publisher.bind({setStatus() {}} as unknown as ExtensionContext['ui'], {goal: 'hidden', agents: 'dock', jobs: 'dock'});
   const taskText = theme.fg('dim', theme.strikethrough('done task'));
-  dock.register('tasks', {title: 'Tasks', readOnly: true, rows: () => [{id: 'task', text: taskText, priority: 30}], open() {}});
+  const taskRows = [{id: 'task', text: taskText, suffix: '7/8', priority: 30},
+    {id: 'doing', parentId: 'task', text: theme.fg('success', 'doing child 中文'.repeat(10)), suffix: '2/8', priority: 30},
+    {id: 'blocked', parentId: 'task', text: theme.fg('warning', 'blocked child'), priority: 30},
+    {id: 'done', parentId: 'task', text: theme.fg('dim', theme.strikethrough('done child')), priority: 30}];
+  dock.register('tasks', {title: 'Tasks', readOnly: true, rows: () => taskRows, open() {}});
   const cleanup = {text: 'cleanup pending', state: 'cleanup pending'};
   publisher.setActivities('jobs', [job.id], [{id: job.id, text: job.name, suffix: jobStatus(job), compactSuffixes: [[cleanup]], priority: 100}]);
   publisher.setActivities('agents', ['run'], [{id: 'run', text: 'worker', suffix: [{text: 'waiting(parent)', state: 'waiting(parent)'}], priority: 100}],
     [{text: '1 waiting(parent)', state: 'waiting(parent)'}]);
   dock.setOpen('agents', () => {}); dock.setOpen('jobs', () => {});
+  // Keep idle and selected membership/row budgets identical while checking layout.
+  for (const row of taskRows) row.priority = 110;
+  dock.bind(ctx, 8);
+  const idle = new Map([24, 40, 120].map(width => [width, dock.render(width)]));
+  input('\x1b[D');
+  for (const row of taskRows) {
+    for (const width of [24, 40, 120]) {
+      const selected = dock.render(width).find(line => line.includes('\x1b[44m'))!;
+      const plain = stripVTControlCharacters(selected).trimEnd();
+      const unselected = idle.get(width)!.find(line => stripVTControlCharacters(line).trimEnd() === plain);
+      assert.ok(unselected, `selection preserves prefix, object and suffix budget: ${row.id}, width ${width}`);
+      assert.ok(selected.includes('\x1b[1m') && !stripVTControlCharacters(selected).includes('\x1b'), 'bold selection contains no broken ANSI');
+      const name = row.id === 'task' ? 'done task' : `${row.id} child`;
+      assert.equal(stripVTControlCharacters(selected).indexOf(name), width >= 40 ? row.parentId ? 5 : 3 : 0);
+      if (row.id === 'done') assert.ok(selected.includes('\x1b[9mdone child'), 'selected completed child retains strike');
+    }
+    input('\x1b[B');
+  }
+  input('\x1b');
+  for (const row of taskRows) row.priority = 30;
   for (const budget of [1, 2, 8]) {
     dock.bind(ctx, budget); input('\x1b[D');
     assert.ok(dock.render(120).join('\n').includes('\x1b[9mdone task'), 'selection preserves Tasks deletion line');

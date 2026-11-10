@@ -17,7 +17,8 @@ test('registered object schemas survive Provider conversion; query repair, group
     const converted = convertResponsesTools(names.map(name => ({name, description: tool(name).description,
       parameters: JSON.parse(JSON.stringify(tool(name).parameters))})), {strict: false});
     for (const definition of converted) {
-      assert.ok('parameters' in definition); assert.equal(definition.parameters.type, 'object');
+      assert.ok('parameters' in definition && definition.parameters && typeof definition.parameters === 'object');
+      assert.ok('type' in definition.parameters); assert.equal(definition.parameters.type, 'object');
       assert.ok(!('anyOf' in definition.parameters), 'top-level parameters must remain an object');
     }
     for (const [name, args] of [

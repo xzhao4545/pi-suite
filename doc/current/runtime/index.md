@@ -1,6 +1,6 @@
 # 公共运行时与配置
 
-唯一扩展入口为 src/index.ts；入口先注册 CLI prompt 协议，首次真实 session_start 按需加载 runtime/suite.ts，根据 ctx.cwd 读取配置并创建本次扩展激活的模块集合，工具、命令和宿主事件由公共运行时与对应模块注册。当前工具为 ask_user、goal_complete、goal_blocked、goal_wait、task_list、task_edit、job_start、job_list、job_read、job_write、job_stop、agent_start、agent_list、agent_read、agent_send、agent_stop、agent_workflow 和共享 wait，命令为 /goal、/tasks、/jobs、/subagents、/suite 和默认启用的 /exit。
+唯一扩展入口为 src/index.ts；入口先注册 CLI prompt 协议，首次真实 session_start 按需加载 runtime/suite.ts，根据 ctx.cwd 读取配置并创建本次扩展激活的模块集合，工具、命令和宿主事件由公共运行时与对应模块注册。当前工具为 ask_user、goal_complete、goal_blocked、goal_wait、task_list、task_edit、job_start、job_list、job_read、job_write、job_stop、agent_start、agent_list、agent_read、agent_send、agent_stop、agent_workflow 和共享 wait，命令为 /goal、/tasks、/jobs、/subagents、/suite、/responses fork 和默认启用的 /exit。
 
 runtime/tools.ts 的 registerBoundTool 共用 Pi 公开工具注册，刷新描述/schema 时保留当前 active-tool 选择；首次晚注册只按该入口的启用规则加入本工具。agent_start 调度 schema 与 workflow 动态类型描述复用此入口。共享 ID、列表/读取 schema、等待/停止返回类型与错误边界见 [模型工具契约](tools.md)。
 
@@ -48,6 +48,8 @@ agents.workflows 默认 true，控制主会话 agent_workflow 和 Workflows 菜�
 首次准入与绑定共享配置快照；每次绑定为 workflow 描述和 mentions 共用一次类型目录快照，关闭 mentions 或非 TUI 时省去该补全的发现工作。类型保存、显式发送刷新、reload 与会话/分支绑定更新快照；所有启用工具、调度、RPC 和首次补全在 session_start 返回前就绪。UI 时钟只读取 Manager 元数据，不扫描历史文件或日志。
 
 ## 会话和通知
+
+`/responses fork` 通过宿主公开 prepared-fork 能力一次性净化当前有效分支，在切换前完成副本准备，继承当前模型/thinking 并等待用户输入。协议、操作、版本依赖和限制见 [Responses 历史净化 fork](responses-fork.md)。
 
 SessionBinding 为当前主会话保存上下文、会话 ID 和绑定代次。session_start 建立绑定；session_shutdown 保存目标、取消询问、清除本包 UI 并撤销绑定。quit 按当前 agentDir 查询进程全局注册的既有 jobs、agents 与 workflow owner，并等待真实清理结算；模块全部关闭也适用，不依赖当前模块实例，不创建新的 owner。reload 与普通会话切换只重绑，执行 owner 保活。session_tree 在所选分支恢复目标并更换绑定，不向所选分支写入离开分支的目标。旧绑定的排队询问不得在新会话展示。
 

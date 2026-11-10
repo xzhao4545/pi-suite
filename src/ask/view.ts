@@ -1,11 +1,12 @@
 import { getMarkdownTheme, type Theme } from "@earendil-works/pi-coding-agent";
 import {
-  CURSOR_MARKER, Editor, Input, Key, Markdown, fuzzyFilter, matchesKey, truncateToWidth,
-  visibleWidth, type Component, type TUI, type TuiMouseEvent, type TuiMouseEventResult,
+  CURSOR_MARKER, Container, Editor, Input, Key, Markdown, VStack, LAYOUT_NODE, renderLayout, fuzzyFilter, matchesKey, truncateToWidth,
+  visibleWidth, type Component, type LayoutNode, type TUI, type TuiMouseEvent, type TuiMouseEventResult,
 } from "@earendil-works/pi-tui";
 import type { SuiteConfig } from "../runtime/config.ts";
 import type { Dock } from "../ui/dock.ts";
 import { ScrollView } from "../ui/scroll.ts";
+import { readingText } from '../ui/reading.ts';
 import type { Transcript } from "../ui/transcript.ts";
 import { AskForm } from "./form.ts";
 import type { AskResult, Option } from "./schema.ts";
@@ -15,7 +16,7 @@ import { answerText, idleTime, optionRow, questionTabs, type TabRegion } from ".
 import { choiceLines, frame, frameLines, listWindow, questionLines, reviewLines, topBorder, type ListPosition } from './layout.ts';
 
 type Focus = "answer" | "search" | "comment" | "actions" | "history" | "details";
-export class AskView implements Component {
+export class AskView extends Container {
   focused = true;
   private focus: Focus = "answer";
   private action = 0;
@@ -39,6 +40,7 @@ export class AskView implements Component {
   private listRegion = { y: 0, x: 0, width: 0, indices: [] as number[] };
   private tabY = 0;
   private scrollPosition = { offset: 0, total: 0, height: 0 };
+  private readingLayout?: VStack;
   private readerRegion = { y: 0, height: 0 };
   private previewRegion?: { x: number; y: number; width: number; height: number; view: ScrollView };
   private expanded = false;
@@ -59,6 +61,7 @@ export class AskView implements Component {
     private done: (result: AskResult) => void, private timeout: number,
     private signal?: AbortSignal, private allowComment = false, private requester = "main", private heading?: string,
   ) {
+    super();
     const editorTheme = { borderColor: (text: string) => theme.fg("accent", text), selectList: {
       selectedPrefix: (s: string) => theme.fg("accent", s), selectedText: (s: string) => theme.fg("accent", s),
       description: (s: string) => theme.fg("muted", s), scrollInfo: (s: string) => theme.fg("dim", s), noMatch: (s: string) => theme.fg("warning", s),
@@ -89,6 +92,7 @@ export class AskView implements Component {
   }
   dispose(): void {
     clearTimeout(this.timer); clearInterval(this.countdown);
+    this.history.dispose(); for (const reader of this.descriptions.values()) reader.dispose();
     this.signal?.removeEventListener("abort", this.abort);
     this.dock.setDetail(false);
   }
@@ -232,7 +236,7 @@ export class AskView implements Component {
     else this.pageKey(data);
     this.tui.requestRender();
   }
-  handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+  override handleMouse(event: TuiMouseEvent): ReturnType<Container['handleMouse']> {
     if (this.closed) return;
     let result: TuiMouseEventResult | undefined;
     const preview = this.previewRegion;
@@ -242,7 +246,8 @@ export class AskView implements Component {
       const tab = this.tabRegions.find(tab => event.x >= tab.start && event.x < tab.end);
       if (tab) { this.selectPage(tab.page); result = { handled: true }; }
     } else if (!this.reading && preview && event.x >= preview.x && event.x < preview.x + preview.width
-      && event.y >= preview.y && event.y < preview.y + preview.height) result = preview.view.handleMouse(event);
+      && event.y >= preview.y && event.y < preview.y + preview.height) result = preview.view.handleMouse({...event,
+        x: event.x - preview.x, y: event.y - preview.y, width: preview.width, height: preview.height});
     else if (!this.reading && event.x >= this.listRegion.x && event.x < this.listRegion.x + this.listRegion.width
       && event.y >= this.listRegion.y && event.y < this.listRegion.y + this.listRegion.indices.length) {
       if (event.type === 'wheel') {
@@ -258,7 +263,7 @@ export class AskView implements Component {
       }
     }
     if (result?.handled) { this.touch(); this.notice = ""; this.tui.requestRender(); }
-    return result;
+    return result && {target: {component: this, originX: event.screenX - event.x, originY: event.screenY - event.y, width: event.width, height: event.height}, ...result, handled: true};
   }
   private get escapeHint(): string {
     return this.reading || this.focus !== "answer" || (!this.form.reviewing && this.form.draft.editing) ? "Esc back" : "Esc skip";
@@ -304,8 +309,7 @@ export class AskView implements Component {
     const option = options[this.form.draft.cursor];
     if (!wide || !option) return list.lines;
     const preview = this.preview(option), previewWidth = width - listWidth - 3;
-    let detail = preview.viewport(previewWidth, height);
-    if (!preview.atBottom) detail = [...detail.slice(0, height - 1), this.theme.fg('dim', '↓ more · d full text')];
+    const detail = preview.viewport(previewWidth, height, () => this.tui.requestRender());
     this.previewRegion = { x: x + listWidth + 3, y, width: previewWidth, height, view: preview };
     return Array.from({ length: height }, (_, index) => {
       const left = list.lines[index] ?? '';
@@ -340,7 +344,21 @@ export class AskView implements Component {
       choiceLines(this.theme, question, this.form.draft, option, false, listWidth, false, wide).length) ||
       visibleWidth(`${this.requester} ${this.heading ?? ''}`) > width - 30;
   }
-  render(width: number): string[] {
+  /** Reading exposes a native scroll tree; question/list geometry stays with the form. */
+  prepareLayout(width: number, height: number): void {
+    if (!this.reading) { this.readingLayout = undefined; this.children = []; return; }
+    const answer = this.reading === 'history' ? [truncateToWidth(this.form.question.question, width), this.answerLine(width)] : [];
+    this.readerRegion = {y: 1, height: Math.max(1, height - 2 - answer.length)};
+    this.readingLayout = new VStack([
+      {component: readingText(() => [`${this.reading} ${this.reader.position} · ${idleTime(this.deadline)} · Tab focus · / search`], true), basis: 1, shrink: 0},
+      {component: this.reader, basis: 0, grow: 1, minSize: 1},
+      {component: readingText(() => answer), basis: answer.length, shrink: 0},
+      {component: this.reader.searching ? this.reader.search : readingText(room => [this.renderActions(room)]), basis: 1, shrink: 0},
+    ]);
+    this.children = this.readingLayout.children;
+  }
+  [LAYOUT_NODE](): LayoutNode | undefined { return this.readingLayout?.[LAYOUT_NODE](); }
+  override render(width: number): string[] {
     if (!this.started) {
       this.started = true;
       if (this.signal?.aborted) this.abort();
@@ -355,13 +373,7 @@ export class AskView implements Component {
     this.height = this.reading ? Math.max(4, Math.floor(this.tui.terminal.rows * 0.8)) : this.inlineHeight;
     this.tabRegions = []; this.listRegion = { y: 0, x: 0, width: 0, indices: [] }; this.previewRegion = undefined; this.scrollPosition = { offset: 0, total: 0, height: 0 };
     const time = idleTime(this.deadline);
-    if (this.reading) {
-      const answer = this.reading === 'history' ? [truncateToWidth(this.form.question.question, width), this.answerLine(width)] : [];
-      this.readerRegion = { y: 1, height: this.height - 2 - answer.length };
-      return [truncateToWidth(`${this.reading} ${this.reader.position} · ${time} · Tab focus · / search`, width),
-        ...this.reader.viewport(width, this.readerRegion.height), ...answer,
-        ...(this.reader.searching ? this.reader.search.render(width) : [this.renderActions(width)])];
-    }
+    if (this.reading) return renderLayout(this, width, this.height, () => this.tui.requestRender()).lines;
     const geometry = frame(width, limit);
     if (!geometry.bordered) {
       this.collapsible = true;

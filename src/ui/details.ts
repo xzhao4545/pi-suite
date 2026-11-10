@@ -1,5 +1,5 @@
 import { getMarkdownTheme, type ExtensionContext, type KeybindingsManager, type Theme } from '@earendil-works/pi-coding-agent';
-import { Key, Markdown, Text, matchesKey, truncateToWidth, type Component, type TUI, type TuiMouseEvent } from '@earendil-works/pi-tui';
+import { Key, Markdown, Text, VStack, matchesKey, renderLayout, type Component, type TUI, type TuiMouseEvent } from '@earendil-works/pi-tui';
 import type { Dock } from './dock.ts';
 import { ScrollView } from './scroll.ts';
 import { ActionBar, keyHelp, type DetailAction } from './actions.ts';
@@ -7,7 +7,7 @@ export type { DetailAction } from './actions.ts';
 import { readerHeading, keyHint, separator } from './browser-chrome.ts';
 import { InlineInput } from './inline-input.ts';
 import { commandFrame } from './frame.ts';
-import { openReading, readingRows } from './reading.ts';
+import { openReading, readingRows, readingText } from './reading.ts';
 import { sanitizeText } from '../runtime/text.ts';
 import { DoubleLeft, type ViewerNavigation } from './viewer/navigation.ts';
 
@@ -19,58 +19,60 @@ export interface DetailOptions {
 }
 
 /** A shared reading frame budgets native input, metadata and actions before laying out its body. */
-export class DetailsView implements Component {
+export class DetailsView extends VStack {
   focused = true;
   readonly capturesViewportInput = true;
   readonly reader: ScrollView;
   private bar: ActionBar;
   private composer: InlineInput;
   private doubleLeft = new DoubleLeft();
-  private bodyRows = 0;
-  private bodyStart = 0;
   private footerStart = 0;
   readonly actions: DetailAction[];
   constructor(private tui: TUI, private title: () => string, content: Component, private done: () => void, actions: DetailAction[] = [], reader?: ScrollView, private theme?: Theme, private options: DetailOptions = {}) {
+    super();
     this.reader = reader ?? new ScrollView(content);
+    this.reader.onScroll = () => this.readingChanged();
     this.actions = actions;
     this.composer = new InlineInput(() => tui.requestRender(), theme, tui, options.keys);
     this.bar = new ActionBar(() => this.actions, request => this.composer.open(request));
   }
-  render(width: number): string[] {
+  override render(width: number): string[] { return renderLayout(this, width, readingRows(this.tui), () => this.tui.requestRender()).lines; }
+  prepareLayout(width: number, total: number): void {
+    this.clear();
     this.composer.focused = this.focused;
     this.reader.search.focused = this.focused && !this.composer.active && this.reader.searching;
     const shortcuts = this.bar.render(this.theme);
     const help = this.bar.hint(this.theme) ?? [...this.options.navigation ? [keyHint('←←', 'close', this.theme)] : [],
       keyHint('Esc', 'back', this.theme), shortcuts, keyHint('↑↓ PgUp PgDn Home/End', 'scroll', this.theme),
       keyHint('/', 'search', this.theme), keyHint('n/N', 'next', this.theme)].filter(Boolean).join(' · ');
-    const total = readingRows(this.tui), topRows = Number(this.options.title !== false);
-    // Two reserved metadata rows keep changing usage/position widths from moving the transcript.
-    const informationRows = this.options.bottom ? 3 : 0;
-    const footerLimit = Math.max(1, total - 2 - topRows - informationRows - 1 - 1);
+    const topRows = Number(this.options.title !== false), informationRows = this.options.bottom ? 3 : 0;
+    const footerLimit = Math.max(1, total - 2 - topRows - informationRows - 2);
     const inline = this.composer.render(width);
     const footer = this.composer.active
-      ? [...this.composer.renderRows(width, Math.max(1, footerLimit - 1)), truncateToWidth(this.composer.help(), width)]
-      : this.reader.searching ? this.reader.search.render(width)
-        : keyHelp(inline ?? help, width).slice(0, footerLimit);
-    const height = Math.max(1, total - 2 - topRows - informationRows - 1 - footer.length);
-    const body = this.reader.viewport(width, height);
-    this.bodyRows = height; this.bodyStart = 1 + topRows;
-    const viewport = Array.from({length: height}, (_, index) => body[index] ?? '');
-    const info = this.options.bottom ? [separator(width, this.theme), ...this.options.bottom(width).slice(0, 2)] : [];
-    this.footerStart = this.bodyStart + height + info.length + 1;
-    return commandFrame(width, [...topRows ? [readerHeading(this.title(), this.reader.position, this.reader.hasNewOutput, width, this.theme)] : [],
-      ...viewport, ...info, separator(width, this.theme), ...footer], this.theme).map(line => truncateToWidth(line, width));
+      ? [...this.composer.renderRows(width, Math.max(1, footerLimit - 1)), this.composer.help()]
+      : this.reader.searching ? this.reader.search.render(width) : keyHelp(inline ?? help, width).slice(0, footerLimit);
+    const border = () => commandFrame(width, [], this.theme)[0];
+    const fixed = (component: Component, rows: number) => this.addChild(component, {basis: rows, shrink: 0});
+    fixed(readingText(() => [border()]), 1);
+    if (topRows) fixed(readingText(room => [readerHeading(this.title(), this.reader.position, this.reader.hasNewOutput, room, this.theme)], true), 1);
+    this.addChild(this.reader, {basis: 0, grow: 1, minSize: 1});
+    if (this.options.bottom) fixed(readingText(room => [separator(room, this.theme), ...this.options.bottom!(room).slice(0, 2)], true), informationRows);
+    fixed(readingText(room => [separator(room, this.theme)]), 1);
+    this.footerStart = total - footer.length - 1;
+    const footerComponent = this.composer.active ? readingText(() => footer)
+      : this.reader.searching ? this.reader.search : readingText(() => footer);
+    fixed(footerComponent, footer.length);
+    fixed(readingText(() => [border()]), 1);
   }
-  dispose(): void { this.doubleLeft.reset(); this.composer.dispose(); }
-  invalidate(): void { this.reader.invalidate(); }
-  handleMouse(event: TuiMouseEvent) {
+  get textInputActive(): boolean { return this.composer.active || this.reader.searching; }
+  protected readingChanged(): void {}
+  dispose(): void { this.doubleLeft.reset(); this.composer.dispose(); this.reader.onScroll = undefined; this.reader.dispose(); }
+  override invalidate(): void { this.reader.invalidate(); }
+  handleMouseCapture(event: TuiMouseEvent) {
     this.doubleLeft.reset();
-    if (this.composer.active) {
-      if (event.y >= this.footerStart) this.composer.handleMouse({...event, y: event.y - this.footerStart});
-      return {handled: true};
-    }
-    if (event.y < this.bodyStart || event.y >= this.bodyRows + this.bodyStart) return;
-    return this.reader.handleMouse({...event, y: event.y - this.bodyStart});
+    if (!this.composer.active) return undefined;
+    if (event.y >= this.footerStart) this.composer.handleMouse({...event, y: event.y - this.footerStart});
+    return {handled: true};
   }
   handleInput(data: string): void {
     // Text and search own all direction keys, including both Left presses.

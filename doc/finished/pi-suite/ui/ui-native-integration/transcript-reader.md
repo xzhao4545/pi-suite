@@ -1,12 +1,12 @@
 # UI-4/UI-5/UI-6：原生会话定位、交互与滚动布局
 
-## 当前状态与共同根因
+## 实施前状态与共同根因（历史）
 
-- [`src/agents/viewer.ts`](../../../src/agents/viewer.ts) 仅在没有既有 reader 且 run 为 active 时调用 follow；已结束记录首次打开采用顶部默认位置。
-- [`src/ui/transcript.ts`](../../../src/ui/transcript.ts) 复用 Pi 消息和工具组件，但以 `components.flatMap(component.render)` 拼接文本行，没有向实际子组件分发鼠标事件。
-- [`src/ui/scroll.ts`](../../../src/ui/scroll.ts) 的 handleMouse 只处理 wheel；点击在公共滚动层就中断，无法到达 Pi 工具组件内置的结果 MouseRegion。
+- [`src/agents/viewer.ts`](../../../../../src/agents/viewer.ts) 仅在没有既有 reader 且 run 为 active 时调用 follow；已结束记录首次打开采用顶部默认位置。
+- [`src/ui/transcript.ts`](../../../../../src/ui/transcript.ts) 复用 Pi 消息和工具组件，但以 `components.flatMap(component.render)` 拼接文本行，没有向实际子组件分发鼠标事件。
+- [`src/ui/scroll.ts`](../../../../../src/ui/scroll.ts) 的 handleMouse 只处理 wheel；点击在公共滚动层就中断，无法到达 Pi 工具组件内置的结果 MouseRegion。
 - 公共 ScrollView 创建原生实例时只传 `follow: 'end'`，滚动条默认 hidden；viewport 手动 updateLayout 后截取字符串行，原生滚动节点没有作为滚动区域进入宿主布局树。
-- [`src/ui/details.ts`](../../../src/ui/details.ts) 手动组合正文、信息与底部栏，正文点击转交给上述公共 ScrollView。
+- [`src/ui/details.ts`](../../../../../src/ui/details.ts) 手动组合正文、信息与底部栏，正文点击转交给上述公共 ScrollView。
 
 原生工具组件已经支持点击展开，原生 ScrollView 已提供偏移、跟随、滚动条及布局能力。问题是当前框架只组合了部分显示与状态能力，没有完整接入组件树、事件链和滚动布局。
 
@@ -71,7 +71,7 @@
 ### 目标方案
 
 - 原生 ScrollView 统一处理正文偏移、跟随、裁剪和滚动条；其布局状态由宿主真实渲染流程更新。
-- 建议滚动条策略为 `auto`：内容超出 viewport 后按原生活动策略显示；如明确要求常驻，改用 `always` 并按原生规则预留一列。两者是原生选项，不新增一套绘制逻辑；默认建议尚不等于已实施配置。
+- 原生滚动条策略采用 `auto`：内容超出 viewport 后按原生活动策略显示；如明确要求常驻，可使用 `always` 并按原生规则预留一列。两者是原生选项，不新增一套绘制逻辑。
 - 同一公共阅读框架使用一致策略，不在每个领域页重复决定颜色与延时；优先使用可获得的宿主主题/滚动条能力。
 - 内容不足一页时无需滚动；长内容的滑块位置与原生 scrollTop 一致，自动隐藏、拖动和轨道点击按所选原生策略处理。
 - 预留列、换行、中文宽字符和 resize 都按原生可用内容宽度重新布局，不让滚动条覆盖正文或推挤底部信息栏。
@@ -90,12 +90,12 @@
 
 ## 任务列表
 
-- [ ] 核对 Pi 原生布局与 custom overlay 契约，形成可复用的公共组合入口。
-- [ ] 让 Transcript 保留原生组件树，接通正文到工具组件的点击链。
-- [ ] 让公共 ScrollView 进入宿主布局，移除手动正文裁剪并接通原生滚动条。
-- [ ] 为首次打开任意可阅读 run 定位末尾，保留暂停、搜索和往返状态。
-- [ ] 核查宽度变化、工具展开、流式增长、焦点分区与释放时机。
-- [ ] 按[验收要求](validation.md)检查共享消费者及实际 TUI 模式，不把单组件测试当作完整布局验收。
-- [ ] 实施后局部更新统一界面、agents/jobs/ask/workflow 操作说明及终端能力边界。
+- [x] 核对 Pi 原生布局与 custom overlay 契约，形成可复用的公共组合入口。
+- [x] 让 Transcript 保留原生组件树，接通正文到工具组件的点击链。
+- [x] 让公共 ScrollView 进入宿主布局，移除手动正文裁剪并接通原生滚动条。
+- [x] 为首次打开任意可阅读 run 定位末尾，保留暂停、搜索和往返状态。
+- [x] 核查宽度变化、工具展开、流式增长、焦点分区与释放时机。
+- [x] 按[验收要求](validation.md)检查共享消费者及真实 TUI/SDK 路径，不把单组件测试当作完整布局验收。
+- [x] 局部更新统一界面、agents/jobs/ask/workflow 操作说明及终端能力边界。
 
 [返回专项索引](index.md)

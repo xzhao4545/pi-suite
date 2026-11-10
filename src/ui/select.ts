@@ -2,10 +2,11 @@ import { getSelectListTheme, type ExtensionContext } from '@earendil-works/pi-co
 import { Input, SelectList, fuzzyFilter, getSelectPageIndex, truncateToWidth, type SelectItem } from '@earendil-works/pi-tui';
 import { DoubleLeft, type ViewerNavigation } from './viewer/navigation.ts';
 import { commandFrame } from './frame.ts';
+import { isReadingScreen, openReading, type ReadingFactory } from './reading.ts';
 
 /** Native input, paging and display-only truncation keep complete resource identities selectable. */
 export function selectValue(ctx: ExtensionContext, title: string, items: SelectItem[], initial?: string, options: { filter?: boolean; navigation?: ViewerNavigation } = {}): Promise<string | undefined> {
-  return ctx.ui.custom<string | undefined>((tui, theme, keys, done) => {
+  const factory: ReadingFactory<string | undefined> = (tui, theme, keys, done) => {
     const input = options.filter ? new Input({ prompt: 'Filter: ' }) : undefined;
     const doubleLeft = new DoubleLeft();
     let filtered = items;
@@ -57,5 +58,6 @@ export function selectValue(ctx: ExtensionContext, title: string, items: SelectI
         tui.requestRender();
       },
     };
-  });
+  };
+  return isReadingScreen(ctx) ? openReading(ctx, factory) : ctx.ui.custom(factory);
 }

@@ -130,7 +130,7 @@ export class Dock implements Component {
   private header(source: DockSource, width: number, selecting = false, compactHint = ''): string {
     const aside = [compactHint ? this.color('dim', compactHint) : '', displayText(source.aside?.() ?? '', this.theme, 'dim')].filter(Boolean).join(' · '), space = Math.max(0, width - visibleWidth(aside) - Number(!!aside));
     const fullHint = `↑↓ select · [ ] section · Enter ${source.readOnly ? 'view' : 'open'} · Esc back`;
-    const label = this.title(source) + (selecting && source.readOnly ? this.color('dim', ' · read only') : '');
+    const label = this.title(source);
     const hint = selecting ? (visibleWidth(label) + 2 + visibleWidth(fullHint) <= space ? fullHint : '[ ] Enter Esc') : '';
     const title = hint ? truncateToWidth(label, Math.max(0, space - visibleWidth(hint) - 2), '…') : label;
     return this.row({id: 'header', priority: 0, text: title + (hint ? '  ' + this.color('dim', hint)
@@ -154,11 +154,11 @@ export class Dock implements Component {
     if (focus && limit === 1) {
       const index = rows.indexOf(focus);
       const counts = [index ? `↑${index}` : '', rows.length - index - 1 ? `↓${rows.length - index - 1}` : ''].filter(Boolean).join(' ');
-      const title = this.title(source), room = Math.max(0, width - 2);
+      const title = this.title(source), room = width;
       const full = title + ` [ ] Enter/Esc${counts ? ` ${counts}` : ''} · `;
       const prefix = visibleWidth(full) <= room - Math.min(8, visibleWidth(focus.text)) ? full
         : truncateToWidth(title, Math.max(0, room - visibleWidth(` [ ] ${counts} · `) - 8)) + ` [ ] ${counts} · `;
-      return [selectedRow(truncateToWidth('> ' + prefix + this.row(focus, Math.max(0, room - visibleWidth(prefix))), width), width, this.theme)];
+      return [selectedRow(truncateToWidth(prefix + this.row(focus, Math.max(0, room - visibleWidth(prefix))), width), width, this.theme, true, '')];
     }
     if (!focus && rows.length === 1 && source.aside?.() && limit >= 2) return [this.header(source, width), this.row(rows[0], width)];
     if (!focus && (rows.length === 1 || limit <= 3)) return [this.summary(source, rows, width)];
@@ -170,10 +170,11 @@ export class Dock implements Component {
     return [this.header(source, width, !!focus, window.compactHint),
       ...shown.map((row, index) => {
         const selected = row.id === selectedId;
-        const prefix = selected ? '> ' : tree ? branch(row.parentId ? '│    ' : '├─ ', index) : '';
+        // Selection decorates the laid-out row; ancestry and suffix budgets never depend on focus.
+        const prefix = tree ? branch(row.parentId ? '│    ' : '├─ ', index) : '';
         const text = row.id.startsWith('overflow:') ? this.color('muted', this.row(row, Math.max(0, width - visibleWidth(prefix))))
           : this.row(row, Math.max(0, width - visibleWidth(prefix)));
-        return selected ? selectedRow(prefix + text, width, this.theme) : prefix + text;
+        return selected ? selectedRow(prefix + text, width, this.theme, true, '') : prefix + text;
       }), ...tail ? [truncateToWidth((tree ? branch('└─────', shown.length) : '')
         + (source.footer?.() ? ' ' + this.color('dim', source.footer!()) : ''), width)] : []];
   }
@@ -183,9 +184,10 @@ export class Dock implements Component {
     if (!limit) return [];
     const sources = this.sections();
     const choice = this.active ? this.reconcile(this.choices(sources)) : undefined;
-    // Priority decides scarce membership and extra rows, never source position. Active
-    // selection wins admission so Enter cannot open an object cropped out of the Dock.
-    const ranked = [...sources].sort((a, b) => Number(b.id === choice?.section.id) - Number(a.id === choice?.section.id)
+    // A visible Tasks section owns the idle expansion budget. Domain urgency still
+    // ranks its rows and other sections; active selection always overrides this default.
+    const preferred = choice?.section.id ?? sources.find(section => section.id === 'tasks')?.id;
+    const ranked = [...sources].sort((a, b) => Number(b.id === preferred) - Number(a.id === preferred)
       || Math.max(...b.rows.map(row => row.priority)) - Math.max(...a.rows.map(row => row.priority)));
     const allowances = new Map(ranked.slice(0, limit).map(section => [section.id, 1]));
     const recipient = ranked[0]?.id;

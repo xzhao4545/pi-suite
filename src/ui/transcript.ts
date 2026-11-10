@@ -6,19 +6,20 @@ import {
   getMarkdownTheme, type SessionEntry, type ToolRenderers,
   truncateTail,
 } from "@earendil-works/pi-coding-agent";
-import { type Component, type TUI } from "@earendil-works/pi-tui";
+import { Container, type Component, type TUI } from "@earendil-works/pi-tui";
 
 /** Uses public Pi components, including paired calls/results, rather than extracting plain text. */
-export class Transcript implements Component {
-  private components: Component[] = [];
+export class Transcript extends Container {
   private expanded = false;
   private thinking = false;
   private entries: SessionEntry[] = [];
   private builtins: Map<string, ToolRenderers>;
   private cache = new Map<string, { entry: SessionEntry; components: Component[]; calls: Map<string, ToolExecutionComponent> }>();
   private results = new WeakMap<ToolExecutionComponent, SessionEntry>();
+  private arguments = new WeakMap<ToolExecutionComponent, unknown>();
 
   constructor(private tui: TUI, private cwd: string, private renderer?: (name: string) => ToolRenderers | undefined) {
+    super();
     this.builtins = new Map([
       createReadToolDefinition(cwd), createWriteToolDefinition(cwd), createEditToolDefinition(cwd),
       createBashToolDefinition(cwd), createPowerShellToolDefinition(cwd), createGrepToolDefinition(cwd),
@@ -27,13 +28,23 @@ export class Transcript implements Component {
     ].map(tool => [tool.name, tool as unknown as ToolRenderers]));
   }
   setEntries(entries: SessionEntry[]): void { this.entries = entries; this.rebuild(); }
-  toggleTools(): void { this.expanded = !this.expanded; this.cache.clear(); this.rebuild(); }
-  toggleThinking(): void { this.thinking = !this.thinking; this.cache.clear(); this.rebuild(); }
+  toggleTools(): void {
+    this.expanded = !this.expanded;
+    for (const component of this.children) {
+      if (component instanceof ToolExecutionComponent || component instanceof CompactionSummaryMessageComponent
+        || component instanceof BranchSummaryMessageComponent || component instanceof BashExecutionComponent) component.setExpanded(this.expanded);
+    }
+  }
+  toggleThinking(): void {
+    this.thinking = !this.thinking;
+    for (const component of this.children) if (component instanceof AssistantMessageComponent) component.setHideThinkingBlock(!this.thinking);
+  }
 
   private rebuild(): void {
     const theme = getMarkdownTheme();
     const components: Component[] = [];
     const calls = new Map<string, ToolExecutionComponent>();
+    const previousCalls = new Map([...this.cache.values()].flatMap(cached => [...cached.calls]));
     const retained = new Set<string>();
     for (const entry of this.entries) {
       retained.add(entry.id);
@@ -62,12 +73,21 @@ export class Transcript implements Component {
             .map(block => block.type === "text" ? block.text : "[image]").join("\n");
           components.push(new UserMessageComponent(text, theme, 0));
         } else if (message.role === "assistant") {
-          components.push(new AssistantMessageComponent(message, !this.thinking, theme, undefined, 0));
+          // Streaming entry replacements update native messages/tools rather than dropping
+          // renderer state and per-tool expansion on every provider event.
+          const previous = cached?.components[0];
+          const assistant = previous instanceof AssistantMessageComponent ? previous : new AssistantMessageComponent(message, !this.thinking, theme, undefined, 0);
+          if (assistant === previous) assistant.updateContent(message, entry.id.startsWith('stream:'));
+          components.push(assistant);
           for (const block of message.content) {
             if (block.type !== "toolCall") continue;
-            const tool = new ToolExecutionComponent(block.name, block.id, block.arguments, { showImages: false, outputPad: 0 }, this.renderer?.(block.name) ?? this.builtins.get(block.name), this.tui, this.cwd);
+            const retainedTool = previousCalls.get(block.id);
+            const tool = retainedTool ?? new ToolExecutionComponent(block.name, block.id, block.arguments, { showImages: false, outputPad: 0 }, this.renderer?.(block.name) ?? this.builtins.get(block.name), this.tui, this.cwd);
+            if (retainedTool && this.arguments.get(tool) !== block.arguments) tool.updateArgs(block.arguments);
+            if (!retainedTool) tool.setExpanded(this.expanded);
+            this.arguments.set(tool, block.arguments);
             if (!entry.id.startsWith('stream:')) { tool.setArgsComplete(); tool.markExecutionStarted(); }
-            tool.setExpanded(this.expanded); ownCalls.set(block.id, tool);
+            ownCalls.set(block.id, tool);
             calls.set(block.id, tool); components.push(tool);
           }
         } else if (message.role === "toolResult") {
@@ -90,8 +110,6 @@ export class Transcript implements Component {
       this.cache.set(entry.id, { entry, components: components.slice(start), calls: ownCalls });
     }
     for (const id of this.cache.keys()) if (!retained.has(id)) this.cache.delete(id);
-    this.components = components;
+    this.children = components;
   }
-  render(width: number): string[] { return this.components.flatMap(component => component.render(width)); }
-  invalidate(): void { this.components.forEach(component => component.invalidate()); }
 }

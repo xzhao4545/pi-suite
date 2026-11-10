@@ -1,0 +1,201 @@
+diff --git a/dist/core/agent-session-runtime.d.ts b/dist/core/agent-session-runtime.d.ts
+index ed573b73974d6a9fa872e38534cfcf7e2d64c01a..33ba3db393f058932ab3396026b028e7088c3292 100644
+--- a/dist/core/agent-session-runtime.d.ts
++++ b/dist/core/agent-session-runtime.d.ts
+@@ -85,6 +85,8 @@ export declare class AgentSessionRuntime {
+         cancelled: boolean;
+     }>;
+     fork(entryId: string, options?: {
++        /** Transform a detached selected branch before destination persistence and session_start. */
++        prepare?: (entries: import("./session-manager.ts").SessionEntry[]) => Promise<import("./session-manager.ts").SessionEntry[]>;
+         position?: "before" | "at";
+         withSession?: (ctx: ReplacedSessionContext) => Promise<void>;
+     }): Promise<{
+diff --git a/dist/core/agent-session-runtime.js b/dist/core/agent-session-runtime.js
+index 22aa379d8503decba0d32e1bf9c944b46a032c7e..26eb3848dbff9f1f5fd68de0caf9dd6cf3a64e2b 100644
+--- a/dist/core/agent-session-runtime.js
++++ b/dist/core/agent-session-runtime.js
+@@ -172,6 +172,8 @@ export class AgentSessionRuntime {
+         return { cancelled: false };
+     }
+     async fork(entryId, options) {
++        const sourceSession = this.session;
++        const sourceLeaf = sourceSession.sessionManager.getLeafId();
+         const position = options?.position ?? "before";
+         const beforeResult = await this.emitBeforeFork(entryId, { position });
+         if (beforeResult.cancelled) {
+@@ -193,6 +195,13 @@ export class AgentSessionRuntime {
+             targetLeafId = selectedEntry.parentId;
+             selectedText = extractUserMessageText(selectedEntry.message.content);
+         }
++        // Prepare a detached branch before writing a destination or invalidating the source.
++        const preparedEntries = options?.prepare
++            ? await options.prepare(structuredClone(sourceSession.sessionManager.getBranch(targetLeafId)))
++            : undefined;
++        if (options?.prepare && (this.session !== sourceSession || sourceSession.sessionManager.getLeafId() !== sourceLeaf)) {
++            throw new Error("Source session changed while preparing fork");
++        }
+         const previousSessionFile = this.session.sessionFile;
+         if (this.session.sessionManager.isPersisted()) {
+             const currentSessionFile = this.session.sessionFile;
+@@ -217,7 +226,7 @@ export class AgentSessionRuntime {
+                 throw new Error("This session has not been saved yet. Send a message before cloning or forking it.");
+             }
+             const sessionManager = SessionManager.open(currentSessionFile, sessionDir);
+-            const forkedSessionPath = sessionManager.createBranchedSession(targetLeafId);
++            const forkedSessionPath = sessionManager.createBranchedSession(targetLeafId, preparedEntries);
+             if (!forkedSessionPath) {
+                 throw new Error("Failed to create forked session");
+             }
+@@ -231,13 +240,16 @@ export class AgentSessionRuntime {
+             await this.finishSessionReplacement(options?.withSession);
+             return { cancelled: false, selectedText };
+         }
+-        const sessionManager = this.session.sessionManager;
++        // A prepared fork must not mutate the outgoing in-memory SessionManager either.
++        const sessionManager = options?.prepare
++            ? SessionManager.inMemory(this.cwd, undefined, [structuredClone(sourceSession.sessionManager.getHeader()), ...structuredClone(sourceSession.sessionManager.getEntries())])
++            : this.session.sessionManager;
+         await this.teardownCurrent("fork", sessionManager.getSessionFile());
+         if (!targetLeafId) {
+             sessionManager.newSession({ parentSession: previousSessionFile });
+         }
+         else {
+-            sessionManager.createBranchedSession(targetLeafId);
++            sessionManager.createBranchedSession(targetLeafId, preparedEntries);
+         }
+         this.apply(await this.createRuntime({
+             cwd: this.cwd,
+diff --git a/dist/core/extensions/loader.js b/dist/core/extensions/loader.js
+index 4bf25d50ea728ef1307c166e9f038643b474f101..3398ea39c0d43e675a100cdfa2a7a570c33844ca 100644
+--- a/dist/core/extensions/loader.js
++++ b/dist/core/extensions/loader.js
+@@ -61,11 +61,14 @@ function getAliases() {
+     const piAiModelsEntry = resolveWorkspaceOrImport("ai/dist/models.js", "@earendil-works/pi-ai/models");
+     const piAiOauthEntry = resolveWorkspaceOrImport("ai/dist/oauth.js", "@earendil-works/pi-ai/oauth");
+     const piAiProvidersEntry = resolveWorkspaceOrImport("ai/dist/providers/all.js", "@earendil-works/pi-ai/providers/all");
++    // Root compatibility aliases must not absorb public adapter subpaths into the shim filename.
++    const piAiApiDir = path.dirname(resolveWorkspaceOrImport("ai/dist/api/openai-responses-shared.js", "@earendil-works/pi-ai/api/openai-responses-shared"));
+     _aliases = {
+         "@earendil-works/pi-coding-agent": piCodingAgentEntry,
+         "@earendil-works/pi-agent-core": piAgentCoreEntry,
+         "@earendil-works/pi-tui": piTuiEntry,
+         "@earendil-works/pi-ai/providers/all": piAiProvidersEntry,
++        "@earendil-works/pi-ai/api": piAiApiDir,
+         "@earendil-works/pi-ai/compat": piAiCompatEntry,
+         "@earendil-works/pi-ai/models": piAiModelsEntry,
+         "@earendil-works/pi-ai/oauth": piAiOauthEntry,
+@@ -74,6 +77,7 @@ function getAliases() {
+         "@mariozechner/pi-agent-core": piAgentCoreEntry,
+         "@mariozechner/pi-tui": piTuiEntry,
+         "@mariozechner/pi-ai/providers/all": piAiProvidersEntry,
++        "@mariozechner/pi-ai/api": piAiApiDir,
+         "@mariozechner/pi-ai/compat": piAiCompatEntry,
+         "@mariozechner/pi-ai/models": piAiModelsEntry,
+         "@mariozechner/pi-ai/oauth": piAiOauthEntry,
+diff --git a/dist/core/extensions/types.d.ts b/dist/core/extensions/types.d.ts
+index 6b59306873b66ac54750ecde8f2036006c5fd90d..404ba4d4dc9fa15cef82621def9aa15d55e41085 100644
+--- a/dist/core/extensions/types.d.ts
++++ b/dist/core/extensions/types.d.ts
+@@ -317,6 +317,8 @@ export interface ExtensionCommandContext extends ExtensionContext {
+     }>;
+     /** Fork from a specific entry, creating a new session file. */
+     fork(entryId: string, options?: {
++        /** Prepare detached branch entries before any destination write or lifecycle binding. */
++        prepare?: (entries: SessionEntry[]) => Promise<SessionEntry[]>;
+         position?: "before" | "at";
+         withSession?: (ctx: ReplacedSessionContext) => Promise<void>;
+     }): Promise<{
+@@ -1713,6 +1715,7 @@ export interface ExtensionCommandContextActions {
+         cancelled: boolean;
+     }>;
+     fork: (entryId: string, options?: {
++        prepare?: (entries: SessionEntry[]) => Promise<SessionEntry[]>;
+         position?: "before" | "at";
+         withSession?: (ctx: ReplacedSessionContext) => Promise<void>;
+     }) => Promise<{
+diff --git a/dist/core/session-manager.d.ts b/dist/core/session-manager.d.ts
+index c042aaf3f7aff9aa8dca36a83a6d96cdbbfc949e..9a51926bec61f178baa613a86c0cd63b9197b340 100644
+--- a/dist/core/session-manager.d.ts
++++ b/dist/core/session-manager.d.ts
+@@ -9,6 +9,8 @@ export interface SessionHeader {
+     timestamp: string;
+     cwd: string;
+     parentSession?: string;
++    /** Source identity for normal fork lifecycle even when no session file exists. */
++    parentSessionId?: string;
+ }
+ export interface NewSessionOptions {
+     id?: string;
+@@ -175,7 +177,7 @@ export interface SessionInfo {
+     firstMessage: string;
+     allMessagesText: string;
+ }
+-export type ReadonlySessionManager = Pick<SessionManager, "getCwd" | "getSessionDir" | "getSessionId" | "getSessionFile" | "getLeafId" | "getLeafEntry" | "getEntry" | "getLabel" | "getBranch" | "buildContextEntries" | "buildSessionProjection" | "getHeader" | "getEntries" | "getTree" | "getSessionName">;
++export type ReadonlySessionManager = Pick<SessionManager, "getCwd" | "supportsPreparedFork" | "getSessionDir" | "getSessionId" | "getSessionFile" | "getLeafId" | "getLeafEntry" | "getEntry" | "getLabel" | "getBranch" | "buildContextEntries" | "buildSessionProjection" | "getHeader" | "getEntries" | "getTree" | "getSessionName">;
+ export declare function assertValidSessionId(id: string): void;
+ /** Exported for testing */
+ export declare function migrateSessionEntries(entries: FileEntry[]): void;
+@@ -369,7 +371,9 @@ export declare class SessionManager {
+      * Useful for extracting a single conversation path from a branched session.
+      * Returns the new session file path, or undefined if not persisting.
+      */
+-    createBranchedSession(leafId: string): string | undefined;
++    /** Detached prepared history is committed before session_start; the source is never rewritten. */
++    readonly supportsPreparedFork: true;
++    createBranchedSession(leafId: string, preparedEntries?: SessionEntry[]): string | undefined;
+     /**
+      * Create a new session.
+      * @param cwd Working directory (stored in session header)
+diff --git a/dist/core/session-manager.js b/dist/core/session-manager.js
+index 7ee05014e13c6434040bfdd7b39b455a6731a7d6..7dfef65eb5b9a50c68de0231ae3f376d2233d045 100644
+--- a/dist/core/session-manager.js
++++ b/dist/core/session-manager.js
+@@ -1214,9 +1214,12 @@ export class SessionManager {
+      * Useful for extracting a single conversation path from a branched session.
+      * Returns the new session file path, or undefined if not persisting.
+      */
+-    createBranchedSession(leafId) {
++    /** Whether this host can prepare detached fork history before persistence and lifecycle binding. */
++    get supportsPreparedFork() { return true; }
++    createBranchedSession(leafId, preparedEntries) {
+         const previousSessionFile = this.sessionFile;
+-        const path = this.getBranch(leafId);
++        const previousSessionId = this.sessionId;
++        const path = preparedEntries ?? this.getBranch(leafId);
+         if (path.length === 0) {
+             throw new Error(`Entry ${leafId} not found`);
+         }
+@@ -1258,6 +1261,7 @@ export class SessionManager {
+             timestamp,
+             cwd: this.cwd,
+             parentSession: this.persist ? previousSessionFile : undefined,
++            parentSessionId: previousSessionId,
+         };
+         // Collect labels for entries in the path
+         const pathEntryIds = new Set(pathWithoutLabels.map((e) => e.id));
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index 247233807ec7ba7b5c897b162eff9f40d0985e30..2559d9b273e02378495c01991b09ab11474c1dca 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -18,7 +18,7 @@ export { DefaultPackageManager } from "./core/package-manager.ts";
+ export type { ResourceCollision, ResourceDiagnostic, ResourceLoader } from "./core/resource-loader.ts";
+ export { DefaultResourceLoader, loadProjectContextFiles } from "./core/resource-loader.ts";
+ export { AgentSessionRuntime, type AgentSessionRuntimeDiagnostic, type AgentSessionServices, type CreateAgentSessionFromServicesOptions, type CreateAgentSessionOptions, type CreateAgentSessionResult, type CreateAgentSessionRuntimeFactory, type CreateAgentSessionRuntimeResult, type CreateAgentSessionServicesOptions, createAgentSession, createAgentSessionFromServices, createAgentSessionRuntime, createAgentSessionServices, createBashTool, createCodingTools, createEditTool, createFindTool, createGrepTool, createLsTool, createPowerShellTool, createReadOnlyTools, createReadTool, createWriteTool, type PromptTemplate, } from "./core/sdk.ts";
+-export { type BranchSummaryEntry, buildContextEntries, buildSessionContext, buildSessionProjection, type CompactionEntry, type ContextEditableContent, type ContextEditEntry, CURRENT_SESSION_VERSION, type CustomEntry, type CustomMessageEntry, type FileEntry, getLatestCompactionEntry, type ModelChangeEntry, migrateSessionEntries, type NewSessionOptions, type ProjectedSessionEntry, parseSessionEntries, type SessionContext, type SessionEntry, type SessionEntryBase, type SessionHeader, type SessionInfo, type SessionInfoEntry, SessionManager, type SessionMessageEntry, type SessionProjection, type SessionTreeNode, sessionEntryToContextMessages, type ThinkingLevelChangeEntry, } from "./core/session-manager.ts";
++export { type BranchSummaryEntry, buildContextEntries, buildSessionContext, buildSessionProjection, type CompactionEntry, type ContextEditableContent, type ContextEditEntry, CURRENT_SESSION_VERSION, type CustomEntry, type CustomMessageEntry, type FileEntry, getLatestCompactionEntry, type ModelChangeEntry, migrateSessionEntries, type NewSessionOptions, type ProjectedSessionEntry, parseSessionEntries, projectContextEntry, type SessionContext, type SessionEntry, type SessionEntryBase, type SessionHeader, type SessionInfo, type SessionInfoEntry, SessionManager, type SessionMessageEntry, type SessionProjection, type SessionTreeNode, sessionEntryToContextMessages, type ThinkingLevelChangeEntry, } from "./core/session-manager.ts";
+ export { type CacheWarmingMode, type CompactionModelOverride, type CompactionSettings, type DefaultProjectTrust, type FullscreenExitOutput, type ImageSettings, type PackageSource, type QuietStartup, type RetrySettings, SettingsManager, type SettingsManagerCreateOptions, type TuiMode, } from "./core/settings-manager.ts";
+ export { formatSkillsForPrompt, type LoadSkillsFromDirOptions, type LoadSkillsResult, loadSkills, loadSkillsFromDir, type Skill, type SkillFrontmatter, } from "./core/skills.ts";
+ export { createSyntheticSourceInfo } from "./core/source-info.ts";
+diff --git a/dist/index.js b/dist/index.js
+index ab5cfccc3a90939e533b9118122189507a7af326..ec7fd62cd4bd7a9f31286a0a66415ae28cb2a061 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -21,6 +21,6 @@ export { AgentSessionRuntime,
+ // Tool factories (for custom cwd)
+ createCodingTools, createEditTool, createFindTool, createGrepTool, createLsTool, createPowerShellTool, createReadOnlyTools, createReadTool, createWriteTool, } from "./core/sdk.js";
+-export { buildContextEntries, buildSessionContext, buildSessionProjection, CURRENT_SESSION_VERSION, getLatestCompactionEntry, migrateSessionEntries, parseSessionEntries, SessionManager, sessionEntryToContextMessages, } from "./core/session-manager.js";
++export { buildContextEntries, buildSessionContext, buildSessionProjection, CURRENT_SESSION_VERSION, getLatestCompactionEntry, migrateSessionEntries, parseSessionEntries, projectContextEntry, SessionManager, sessionEntryToContextMessages, } from "./core/session-manager.js";
+ export { SettingsManager, } from "./core/settings-manager.js";
+ // Skills
+ export { formatSkillsForPrompt, loadSkills, loadSkillsFromDir, } from "./core/skills.js";

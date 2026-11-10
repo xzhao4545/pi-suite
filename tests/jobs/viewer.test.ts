@@ -4,13 +4,14 @@ import { readFileSync, rmSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { stripVTControlCharacters } from 'node:util';
 import type { Theme, ExtensionAPI, ExtensionContext, ExtensionUIContext } from '@earendil-works/pi-coding-agent';
-import { visibleWidth } from '@earendil-works/pi-tui';
+import { visibleWidth, Text, VStack, renderLayout, getScrollViewBox, getScrollbarGeometry } from '@earendil-works/pi-tui';
 import { JobView } from '../../src/jobs/viewer/component.ts';
 import { JobLogView } from '../../src/jobs/log-viewer.ts';
 import { ViewerNavigation } from '../../src/ui/viewer/navigation.ts';
 import { readingRows } from '../../src/ui/reading.ts';
 import { agentDir, manager, owner, testShell } from '../support/jobs.ts';
 import { terminal } from '../support/terminal.ts';
+import { readerTerminal } from '../support/reader.ts';
 import { host } from '../support/host.ts';
 import { showJobs } from '../../src/jobs/viewer.ts';
 import { JobsModule } from '../../src/jobs/index.ts';
@@ -49,6 +50,37 @@ test('/jobs opens command/output directly, Esc preserves list identity/filter, a
       {jobs: module, dock, notifications: notices, keys: () => keys});
     assert.equal(steps.length, 0); assert.equal(h.faux.state.callCount, 0); assert.equal(jobs.peek(job.id).state, 'running');
   } finally { module.detach(); await h.dispose(); rmSync(root, {recursive: true, force: true}); }
+});
+
+
+test('actual /jobs outer overlay exposes command and log scroll nodes; native scrollbar and final End read use the same byte window', {timeout: 15000}, async () => {
+  const root = agentDir(), jobs = manager(root), native = readerTerminal(30, 80);
+  const base = new Text('base', 0, 0); native.tui.setLayoutRoot(new VStack([base])); native.tui.setFocus(base);
+  let view: JobView | undefined, overlay: ReturnType<typeof native.tui.showOverlay> | undefined;
+  try {
+    const job = await jobs.start({...owner, cwd: root, command: '# command\n'.repeat(30) + 'for i in {1..80}; do echo "line-$i"; done; read line; echo final-native'}, testShell());
+    await until(() => readFileSync(jobs.logPath(job, 'stdout'), 'utf8').includes('line-80'));
+    view = new JobView(native.tui, theme, {} as never, {job, live: true, readonly: false, control: jobs, keys, navigation: new ViewerNavigation()},
+      () => {overlay?.hide(); view?.dispose();});
+    await view.initialize(); overlay = native.tui.showOverlay(view, {row: 0, col: 0, width: '100%', maxHeight: '100%'}); native.tui.renderNow();
+    const log = view.output; assert.ok(log instanceof JobLogView);
+    assert.match((await native.lines()).join('\n'), /line-80/);
+    const frame = renderLayout(view, 80, 30, () => native.tui.requestRender());
+    assert.ok(getScrollViewBox(frame, view.command));
+    const box = getScrollViewBox(frame, log.reader)!; assert.ok(box, 'the log is a native descendant, not flattened output');
+    const geometry = getScrollbarGeometry(box, true)!;
+    native.send(`\x1b[<35;${geometry.column + 1};${geometry.trackTop + 1}M`);
+    assert.ok((await native.lines()).some(line => line.endsWith('█')));
+    native.send(`\x1b[<0;${geometry.column + 1};${geometry.trackTop + 1}M`);
+    native.send(`\x1b[<0;${geometry.column + 1};${geometry.trackTop + 1}m`);
+    assert.equal(log.reader.following, false); const paused = log.reader.offset;
+    jobs.write(job.id, 'finish\n', {source: 'model', kind: 'text'}); await jobs.wait(job.id);
+    await log.refresh(); assert.equal(log.reader.offset, paused);
+    native.send('\x1b[F'); await until(() => view!.render(80).join('\n').includes('final-native'));
+    native.tui.renderNow(); assert.match((await native.lines()).join('\n'), /final-native/);
+    native.send('\x1b'); assert.equal(native.tui.hasOverlay(), false);
+    assert.equal((native.tui as unknown as {getFocusedComponent(): unknown}).getFocusedComponent(), base);
+  } finally {overlay?.hide(); view?.dispose(); native.dispose(); await jobs.shutdown(Date.now() + 5000); rmSync(root, {recursive: true, force: true});}
 });
 const theme = {fg: (_color: string, text: string) => text, bold: (text: string) => text} as unknown as Theme;
 const keys = {detachKey: 'ctrl+b', returnKey: 'ctrl+g', transferKey: 'ctrl+t'} as const;

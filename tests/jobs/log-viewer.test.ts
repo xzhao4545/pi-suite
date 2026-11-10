@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { stripVTControlCharacters } from 'node:util';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -45,7 +46,7 @@ else process.stdout.write(command+'\\n');});`) }, testShell());
     view.handleInput('/'); view.handleInput('line-3');
     await view.refresh(); assert.equal(view.reader.search.getValue(), 'line-3');
     view.handleInput('\x1b'); view.handleInput('\x1b[F'); // Leave search; End resumes following.
-    await view.refresh(); assert.ok(view.render(120).some(line => line.trim() === 'new output'));
+    await view.refresh(); assert.ok(view.render(120).some(line => stripVTControlCharacters(line).trimStart().startsWith('new output')));
 
     jobs.write(job.id, 'partial\n', { source: 'model', kind: 'text' });
     await until(() => readFileSync(log).at(-1) === 0xe4);

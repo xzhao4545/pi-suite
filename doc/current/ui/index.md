@@ -1,12 +1,12 @@
 # 统一界面
 
-Dock 是本包唯一常驻 widget，键为 pi-suite:dock。来源通过 `register(id, { title, rows })` 注册分区，并可提供单行 summary、标题 subtitle、右对齐标题 aside、尾线 footer 与完成比例 progress。模块提交稳定 ID、文本、优先级及可选 parentId；priority 只决定预算不足时保留哪些行，分区固定按 Goal → Tasks → Agents → Jobs → Workflows 排列，分区内部保持来源顺序。child 连带保留父级，父子相邻。每个多行分区带粗体 accent 标题、树形竖线与尾线，标题与尾线计入预算；单行分区合并标题与正文，预算只有 1–3 行时空闲分区使用单行摘要。宽度小于 40 列省略树形字符。任务分区竖线按全部子任务完成比例沿阅读顺序染 accent，其余为 borderMuted；其他分区为 borderMuted。按保留对象在原列表中的实际位置插入英文折叠提示：`↑ … N more items/groups` 表示前段、`↓ … N more items/groups` 表示后段、`↕ … N more items/groups` 表示两段之间；任务组与子项分别计数，提示不参与选择，仅缺一项且同样占一行时直接显示该对象。预算不足以保留边界提示时，选中对象仍可见，标题用 `↑N ↓N` 表示其前后隐藏数量。行可提供受保护的 suffix，及按省略顺序排列的 compactSuffixes；Dock 为可识别名称保留最多 8 列，再选择能够容纳的指标组合。任务完成比例与状态优先保留，标题在其余宽度内截断，suffix 按可见宽度对齐右侧。纯展示截断不会修改原始数据。
+Dock 是本包唯一常驻 widget，键为 pi-suite:dock。来源通过 `register(id, { title, rows })` 注册分区，并可提供单行 summary、标题 subtitle、右对齐标题 aside、尾线 footer 与完成比例 progress。模块提交稳定 ID、文本、优先级及可选 parentId；priority 决定领域行的紧急程度与内部保留顺序；未激活选择且存在可见 Tasks 时优先给 Tasks 入场与额外展开预算，Tasks 不可见时按分区紧急程度分配，激活选择时始终优先所选分区。分区固定按 Goal → Tasks → Agents → Jobs → Workflows 排列，分区内部保持来源顺序。child 连带保留父级，父子相邻。每个多行分区带粗体 accent 标题、树形竖线与尾线，标题与尾线计入预算；单行分区合并标题与正文，预算只有 1–3 行时空闲分区使用单行摘要。宽度小于 40 列省略树形字符。任务分区竖线按全部子任务完成比例沿阅读顺序染 accent，其余为 borderMuted；其他分区为 borderMuted。按保留对象在原列表中的实际位置插入英文折叠提示：`↑ … N more items/groups` 表示前段、`↓ … N more items/groups` 表示后段、`↕ … N more items/groups` 表示两段之间；任务组与子项分别计数，提示不参与选择，仅缺一项且同样占一行时直接显示该对象。预算不足以保留边界提示时，选中对象仍可见，标题用 `↑N ↓N` 表示其前后隐藏数量。行可提供受保护的 suffix，及按省略顺序排列的 compactSuffixes；Dock 为可识别名称保留最多 8 列，再选择能够容纳的指标组合。任务完成比例与状态优先保留，标题在其余宽度内截断，suffix 按可见宽度对齐右侧。纯展示截断不会修改原始数据。
 
 ## Dock 键盘进入
 
 来源可提供 `open(rowId, ctx)`，或在分区注册后用 `setOpen(id, open)` 接入现有查看入口；有 open 的实际对象行参与选择，数量摘要用 `selectable: false` 排除；Tasks 使用 `readOnly: true`，Enter 只查看组或子任务详情，不提供编辑、状态、执行引用或删除操作。空编辑器按 ← 进入，↑↓ 按固定分区与来源顺序移动，`[`/`]` 循环切换可选分区，Enter 打开所选任务只读详情、agent transcript、workflow 运行详情或 job 命令/输出查看器；Esc 或 → 返回编辑器，其他按键退出选择并原样透传。编辑器非空、补全占用导航、询问、详情或其他组件拥有焦点时不接管按键；key release 不触发操作。监听随会话 bind/detach 注册与注销，reload、会话和树切换不保留监听或选择。
 
-选择身份为分区 ID + row ID；刷新重排保持对象，移除时选择原位置的下一项，末项移除则选择前一项。激活时以选中背景和 accent 行首标记高亮，名称、状态与指标保持各自角色，选中分区位置不变，预算优先保留所选行与必要父级，避免 Enter 打开裁剪不可见的对象；未激活时按固定分区顺序显示，不增加提示行。激活标题显示 `↑↓ select · [ ] section · Enter open · Esc back`，Tasks 显示 `read only` 与 `Enter view`；同时有右侧数量且窄屏空间不足时使用 `[ ] Enter Esc`，优先保留提示和数量、截短分区名称；预算允许时紧凑分区使用标题加所选行，只有一行预算时合并为 `分区 Enter/Esc · > 对象`，没有可见预算或可选对象时 ← 透传。打开查看器退出选择，关闭后可再按 ←，在同一绑定中保留上次对象身份。
+选择身份为分区 ID + row ID；刷新重排保持对象，移除时选择原位置的下一项，末项移除则选择前一项。激活时以选中背景和粗体高亮；层级前缀及原空格数、名称起始列与右侧指标预算不随选择改变，不用箭头替换树形缩进，不切换字号。名称、状态与指标保持各自角色，选中分区位置不变，预算优先保留所选行与必要父级，避免 Enter 打开裁剪不可见的对象；未激活时按固定分区顺序显示，不增加提示行。激活标题显示 `↑↓ select · [ ] section · Enter open · Esc back`，Tasks 使用 `Enter view` 表达查看，不追加冗余 `read only` 标签；同时有右侧数量且窄屏空间不足时使用 `[ ] Enter Esc`，优先保留提示和数量、截短分区名称；预算允许时紧凑分区使用标题加所选行，只有一行预算时合并为 `分区 Enter/Esc · 对象`，没有可见预算或可选对象时 ← 透传。打开查看器退出选择，关闭后可再按 ←，在同一绑定中保留上次对象身份。
 
 ## 高度与状态
 
@@ -22,7 +22,7 @@ Dock 每行使用 Pi 的 ANSI 安全截断与可见字符宽度，不自动换�
 
 StatusPublisher 是本包 goal 与 pi-suite:runtime 摘要的共享写入方，原生 setStatus 更新/清除摘要。只有本次激活实际创建 GoalManager 时才持有 goal 键的写入/清除权；goal 模块关闭时绑定、重绑、reload 和 quit 均保留其他扩展的 goal 状态。活动 ID 使用集合去重；goal 文本或活动数量变化时更新状态，等数量的 ID 变化只更新集合。setActivities 同时接受必要详情行与标题 aside；相同详情不刷新，运行指标、状态数量、问题、清理、选择或状态变化即使活动数量相同也更新 Dock。status 模式的摘要不在 Dock 重复展示，dock 模式清除状态槽位，hidden 隐藏该类常驻摘要和详情。绑定撤销时清除 pi-suite:runtime，并仅在本次激活持有 goal 键时清除该槽位，同时清除详情及选中执行。agents 按直接子级与分支可见记录计数，queued 不计入；jobs 的 session 列表与数量共用 [会话可见集合](../jobs/index.md#会话可见集合)，只计入当前运行时持有且活动的对象。
 
-必要详情和任务共用同一行保留优先级，但不改变固定分区顺序：待父级回答的问题、job 清理待确认优先，其后为未消费失败、停止中、激活 Dock 选择的对象与必要父级、选中任务组、doing/blocked 任务，再到普通 agent/job 活动。父级通知已读取而尚未回答的问题继续保留；workflow 可见问题也可提示，但普通 child/gate 数量仍由所属 workflow 承载。已结束的普通执行从常驻行收起，完整记录保留在既有详情与历史中。任务单行摘要保留焦点组当前子任务，组进度统计全部现存子任务；任务组选择与实时浏览器阅读使用稳定 ID，订阅更新不重置选中身份。
+必要详情和任务共用行保留优先级，但默认展开策略与行紧急程度分离，且不改变固定分区顺序：待父级回答的问题、job 清理待确认优先，其后为未消费失败、停止中、激活 Dock 选择的对象与必要父级、选中任务组、doing/blocked 任务，再到普通 agent/job 活动。父级通知已读取而尚未回答的问题继续保留；workflow 可见问题也可提示，但普通 child/gate 数量仍由所属 workflow 承载。已结束的普通执行从常驻行收起，完整记录保留在既有详情与历史中。任务单行摘要保留焦点组当前子任务，组进度统计全部现存子任务；任务组选择与实时浏览器阅读使用稳定 ID，订阅更新不重置选中身份。
 
 稳定对象身份可在同一绑定内保留，但常驻可见选中态只由激活 Dock 持有；领域模块不保留最近查看的 agent/job 优先级。Jobs 名称区及选中摘要只显示清理后的显式或命令/监控派生名称，机器 ID 留在搜索与完整详情；`executionRow()` 统一 Dock、Runs 与 Jobs 的后缀预算。结构化 DisplayField 分隔名称、状态和指标，waiting(parent) 与 cleanup pending/unconfirmed 使用 warning，不按名称中的相同单词染色。
 
@@ -36,23 +36,25 @@ pi-starship 的 `git_status` 使用 Git 上游跟踪分支的缓存差异：默�
 
 ## 原生会话查看
 
-`/tasks`、`/jobs`、`/subagents`、`/goal` 和 `/suite` 的内容块及公共选择器、详情、日志和终端接管视图，上下各有一道随宽度变化的横线，复用 Pi `/settings` 的 DynamicBorder 与 border 主题色。公共 frame.ts 统一生成边界，横线计入各视图高度预算，鼠标行坐标扣除顶部横线后交给内容组件。
+`/tasks`、`/jobs`、`/subagents`、`/goal` 和 `/suite` 的内容块及公共选择器、详情、日志和终端接管视图，上下各有一道随宽度变化的横线，使用 Pi border 主题角色。原生 DetailsView、BrowserView 与 JobView 用 VStack/HStack 组织边界和正文，鼠标坐标由同一布局映射；传统字符串组件的 frame.ts 复用 Pi `/settings` 的 DynamicBorder，调用方仍为上下边界预留两行并扣除顶部行坐标。
 
-Transcript 复用 Pi 的 UserMessageComponent、AssistantMessageComponent、ToolExecutionComponent、CustomMessageComponent 和压缩/分支摘要组件。已知内置工具采用 Pi 提供的 renderers；child 提供其实际渲染定义，结束执行释放定义后使用 Suite 登记 lookup，缺少定义的第三方扩展工具使用原生通用工具呈现。稳定消息保留组件与宽度缓存，调用方按每条 entry 的身份检测变化，并只更新变化的流式消息或工具结果。工具调用与部分/最终结果按 toolCallId 配对，不执行工具。thinking 与工具详情可切换展开，输出默认不传输终端图片。
+Transcript 以原生 Container 保留完整子组件树，复用 Pi 的 UserMessageComponent、AssistantMessageComponent、ToolExecutionComponent、CustomMessageComponent 和压缩/分支摘要组件，布局和鼠标命中到达实际工具组件，不把全文压成独立字符串窗口。已知内置工具采用 Pi 提供的 renderers；child 提供其实际渲染定义，结束执行释放定义后使用 Suite 登记 lookup，缺少定义的第三方扩展工具使用原生通用工具呈现。稳定消息保留组件与宽度缓存，调用方按每条 entry 的身份检测变化，并只更新变化的流式消息或工具结果。工具调用与部分/最终结果按 toolCallId 配对，不执行工具。thinking 与工具详情可切换展开，输出默认不传输终端图片。
 
 AskView 持有询问状态、焦点与空闲计时，ask/keys.ts 分派选项及页签按键，ask/render.ts 统一题型标记、页签与空闲时间，ask/layout.ts 处理外框、内容折叠、换行与按选项身份映射的物理行窗口。Pi Editor 的 disableSubmit 让 Ask 确认时保留原生文字、光标和撤销状态，文本编辑不占用页签方向键。
 
-ScrollView 为历史与每个选项详情分别保存滚动位置及搜索内容，支持按行、按页、Home/End、搜索和下一匹配。终端支持的鼠标滚轮通过 Pi 的标准事件增强阅读。尺寸改变不初始化回答草稿或勾选集合。
+ScrollView 为历史与每个选项详情分别保存滚动位置及搜索内容，直接继承 Pi 原生 ScrollView；只有原生 scrollTop、follow-end 和布局裁剪一份视口状态。搜索缓存仅索引正文，不维护第二个偏移或手工正文切片。支持按行、按页、Home/End、搜索和下一匹配；scrollbar:auto 在原生策略需要时显示，滑块/轨道和滚轮沿同一布局几何更新偏移。尺寸改变不初始化回答草稿或勾选集合。
 
 Linux Pi 1.5.0 实际 CLI 在 24/30/40/60 行与 40/80/120 列组合验证独立高度预算、任务 ID 顺序与溢出、询问覆盖与恢复、切题/筛选高度稳定、边框、展开与全文阅读、多行点击、页签坐标、预览滚轮、缩放草稿保持，以及低于 18 行摘要与紧凑回答。平台及验收范围见 [底部布局专项](../../finished/pi-suite/ui/dock-ask-layout.md)。
 
-DetailsView 提供统一标题、滚动正文、搜索与按键驱动的操作说明；每个 DetailAction 必须声明 key，可提供动态可用条件与二次确认。ActionBar 由详情与浏览框架共享，不持有动作光标；按显示键直接执行，确认统一使用英文 `Press <key> again to <action>`，再次同键执行，其他按键取消确认，切换记录也清除确认。搜索期间所有文字键交给搜索框，不触发控制动作。80 列起按键说明按原生宽度换行，窄屏可以截断。静态 Markdown、安全字面量任务详情、jobs 动态日志与 agents transcript 使用同一框架；showDetails 的 `text` 格式通过 Pi Text 呈现清理后的字面量，不把任务描述解释为 Markdown。ScrollView 组合 Pi 原生 ScrollView 的 `follow: "end"`、isFollowingEnd 与滚动方法，支持替换正文而不改变持续跟随状态；活动 Transcript 初始跟随，渲染始终保持最后一页。用户向上滚动、Home 或搜索离开底部取消跟随，滚动回到底部或 End 恢复；活动 Transcript 的 following/paused、阅读位置和新输出提示位于底部信息栏，普通有标题的详情仍在标题位置显示提示。尺寸变化本身不触发新输出提示。日志字节窗口仍由日志查看器管理，f 与 End 复用相同跟随状态。日志只缓存当前字节窗口，具体操作见 [执行任务](../jobs/index.md#用户操作) 与 [任务操作](../tasks/operations.md)。
+DetailsView 使用原生 VStack 提供统一标题、滚动正文、搜索与按键驱动的操作说明，正文 ScrollView 实际进入宿主布局树；共享 BrowserView 采用 VStack/HStack 组织分栏。每个 DetailAction 必须声明 key，可提供动态可用条件与二次确认。ActionBar 由详情与浏览框架共享，不持有动作光标；按显示键直接执行，确认统一使用英文 `Press <key> again to <action>`，再次同键执行，其他按键取消确认，切换记录也清除确认。搜索期间所有文字键交给搜索框，不触发控制动作。80 列起按键说明按原生宽度换行，窄屏可以截断。静态 Markdown、安全字面量任务详情、jobs 动态日志与 agents transcript 使用同一框架；showDetails 的 `text` 格式通过 Pi Text 呈现清理后的字面量，不把任务描述解释为 Markdown。ScrollView 使用 Pi 原生 ScrollView 的 `follow: "end"`、isFollowingEnd 与滚动方法，支持替换正文而不改变持续跟随状态；首次打开任何可阅读的 Subagent run（活动、终态或只读历史）均定位最后一页，只在新 reader 建立时跟随。返回子页、搜索、暂停和刷新沿用原 reader，结算不重置位置。用户向上滚动、Home 或搜索离开底部取消跟随，滚动回到底部或 End 恢复；活动 Transcript 的 following/paused、阅读位置和新输出提示位于底部信息栏，普通有标题的详情仍在标题位置显示提示。尺寸变化本身不触发新输出提示。日志字节窗口仍由日志查看器管理，f 与 End 复用相同跟随状态。日志只缓存当前字节窗口，具体操作见 [执行任务](../jobs/index.md#用户操作) 与 [任务操作](../tasks/operations.md)。
 
-公共 reading.ts 的 openReading 使用 Pi `ctx.ui.custom` 的 focused overlay，不创建第二套终端渲染器。以当前 `tui.mode` 判断：fullscreen 为 top-left、100% 宽高、margin 0，inline 为 center、90% 宽、`maxHeight: "70%"`。Pi 在打开时求值配置回调，百分比由原生 TUI 在每次渲染时按终端尺寸解析；readingRows 使用相同的向下取整 70% 预算，缩放时正文与底部栏不会被固定高度裁掉。readingRows 与 overlay 的 maxHeight 共用一处计算，DetailsView 从实际上限扣除标题、边界和按键说明；正文补齐空行使 fullscreen 覆盖整个主会话窗口。showAgent、workflow 运行详情、showJobLog 与 showDetails 统一调用，导出入口和参数保持一致；done 关闭 overlay 并恢复原焦点与主会话视口。DetailsView 与 BrowserView 声明 capturesViewportInput，Pi fullscreen 将 PgUp/PgDn 等视口键交给焦点组件；浏览列表仍在编辑器位置。
+公共 reading.ts 的 openReading 使用 Pi `ctx.ui.custom` 的 focused overlay，不创建第二套终端渲染器。Pi 1.5.0 的受版本管理 TUI patch 公开原生布局渲染/事件接口，并让 overlay 沿相同布局树绘制、命中工具与滚动条；不切换或复制主会话 layout root。以当前 `tui.mode` 和阅读链作用域判断：fullscreen 或 Subagent 全屏阅读链为 top-left、100% 宽、原生 `height: "100%"`、margin 0，其他普通阅读为 center、90% 宽、`maxHeight: "70%"`。Pi 在打开时求值配置回调，百分比由原生 TUI 在每次渲染时按终端尺寸解析；readingRows 使用一致的实际高度，缩放时正文与底部栏不会被固定高度裁掉。原生 compositor 的显式 height 同时约束和补齐短正文，不让主 footer 从模型选择或空正文下方露出。readingRows 与 overlay 的 maxHeight 共用一处计算，DetailsView 从实际上限扣除标题、边界和按键说明；正文和原生 compositor 补齐空行使 fullscreen 覆盖整个终端，包括主 footer。showAgent、workflow 运行详情、showJobLog 与 showDetails 统一调用，导出入口和参数保持一致；done 关闭 overlay 并恢复原焦点与主会话视口。DetailsView 与 BrowserView 声明 capturesViewportInput，Pi fullscreen 将 PgUp/PgDn 等视口键交给焦点组件；浏览列表使用同一阅读 overlay，不替换主编辑器。
+
+Subagent 的 withReadingScreen 作用域覆盖 Transcript、Details、Jobs 和模型/thinking 选择的整条阅读链；原生全屏背景 overlay 在子页异步加载间隙覆盖主 footer 并持有焦点，不让隐藏的主编辑器接收输入。正常或异常退出释放 overlay 与作用域，恢复原焦点和最新主状态，不清除状态数据、不替换原生/第三方 footer 实例，也不伪造底层 TUI 模式。
 
 BrowserView 是 agents/jobs/tasks 的公共列表框架，组合 Pi Input、fuzzyFilter、SelectList、Text 与 ScrollView；领域模块提供稳定身份、可搜索元数据和详情，筛选不创建独立业务数据源。标题统一为 `<命令> ▸ <页名>`，BrowsePage 提供共享页面标签栏，各页保留独立 BrowseState；数字键或 `[`/`]` 一次切页，标签不进入 Tab 焦点环。BrowseControl 必须声明 key，按键立即循环应用选项，没有独立候选光标。默认列表焦点，只有 list/details/filter：活动区域标题使用 `▸`、accent、粗体及 accent 横线，非活动标题为 muted、横线为 borderMuted；列表选中背景只在列表拥有焦点时显示，离开列表保留对象身份和状态颜色，不整块灰化正文。过滤、详情搜索和内联消息输入分别以 `▸ Filter:`、`▸ Search`、`▸ Input` 标示输入焦点，原生输入组件持有唯一光标；保留的非活动过滤查询不显示光标。鼠标点击/滚轮按所在区域更新焦点，悬停不夺焦点，无详情时不进入详情焦点。Tab 进入详情，Tab/Esc 返回列表，`/` 进入过滤，过滤内 Enter/Tab 保留查询回到列表、Esc 清空退出，直接输入字符不过滤。Enter 固定解析选中身份执行“打开”，不触发消息或停止；动作沿用共享 ActionBar。页面通过 selection 提供选中名称/ID、通过 total 提供范围内筛选前总数，scope 可提供固定范围（如 Run subtree）；状态行显示页名、范围/状态、查询、匹配数/总数与选中对象，80 列以下优先保留页名和名称/ID。SelectList 原生 layout/truncatePrimary 能力用于保留记录状态/时长，以及类型启用状态、模型名称和 thinking，完整身份与数据不被截断。80 列起使用左右布局，窄屏上下布局；重名、状态变动与显示截断不改变选中身份，每个条目保存独立阅读/搜索位置，往返时保留焦点。空结果的列表正文与底部动作行显示同一下一步提示；框架根据文本过滤、All 选项及其计数、范围或其他页面生成，例如 `No queued runs · press s for All (10)`。标题区包含状态行，列表/详情标题线随焦点强调，列表与底部使用 borderMuted 分隔线。列表正文补齐可用高度，底部始终固定两行：导航行按当前页列出数字键 / `[ ]` 切页、范围/状态等控件、`/ filter · Tab details · Esc close`，动作行显示 `Enter open` 与可用动作或空状态提示；无记录时仍显示全部导航控件，Tab 在无详情时不移动焦点。两行各自按可见宽度截断，不换行；窄屏导航优先保留切页与筛选键。事件刷新合并为短期渲染请求，仅可见活动条目使用每秒时钟；dispose 释放订阅及计时器。任务行先清理字面量数据，再由浏览框架在原生 truncatePrimary 布局之后应用公共记录角色与完成删除线。按键与范围见 [子代理操作](../agents/operations.md)、[job 操作](../jobs/index.md#用户操作) 和 [任务操作](../tasks/operations.md)。
 
-tool-render.ts 是 Suite 工具公共执行壳：复用 DynamicBorder，调用尚无结果时显示一套边界，部分/最终结果接管后隐藏调用壳；统一字面量清理、宽度、outputPad、完整错误与结构化字段/code/command 展开。只有明确语言的内容使用原生高亮，普通日志保持字面量，敏感字段在染色前隐藏。共享命令组件缓存内容/语言/宽度/主题；内置模型 bash/powershell 的增强只装饰原生调用 renderer，并由 ui.highlightBuiltinCommands 控制，Jobs 与 Suite command 字段独立默认高亮。Ask History、实际 child 和收集后 Transcript 复用同一登记 renderer，规则见 [工具契约](../runtime/tools.md)。
+tool-render.ts 是 Suite 工具公共正文层：调用尚无结果时显示调用摘要，部分/最终结果接管后隐藏调用正文；背景、执行外壳与单层 outputPad 由 Pi 默认 Box 负责，工具正文不自绘上下横线。统一字面量清理、宽度、完整错误与结构化字段/code/command 展开。只有明确语言的内容使用原生高亮，普通日志保持字面量，敏感字段在染色前隐藏。共享命令组件缓存内容/语言/宽度/主题；内置模型 bash/powershell 的增强只装饰原生调用 renderer，并由 ui.highlightBuiltinCommands 控制，Jobs 与 Suite command 字段独立默认高亮。Ask History、实际 child 和收集后 Transcript 复用同一登记 renderer，规则见 [工具契约](../runtime/tools.md)。
 
 公共 InlineInput 复用 Pi Input 与可选原生 Editor，DetailAction 通过 input 提供当前提示和异步提交函数；BrowserView 与 DetailsView 在底部打开输入，不关闭原视图、不改变原阅读焦点。Subagents 的消息使用 Editor，多行原文、光标、粘贴和撤销状态在成功发送或显式取消前保留；失败可重试，等待期间不能重复发送或用另一次打开替换请求。注入的 KeybindingsManager 处理发送/换行，原生组件持有文字和方向键；Esc 取消编辑，空白提交不发送，已经交给 Manager 的请求不因 Esc 被取消。结果/错误在本视图底部显示，下一次操作清除；领域提交函数再次核对归属与所选 run。字段与反馈先清理字面量再配色，成功发送不会把 paused reader 强制跳到底部。
 
@@ -61,6 +63,10 @@ tool-render.ts 是 Suite 工具公共执行壳：复用 DynamicBorder，调用�
 DetailsView 的可选 bottom/title 布局使 Subagents 会话直接从正文开始，底部最多两行显示所选 run 的名称、状态、运行时间、模型/thinking、token、工具次数与阅读状态；`d` 保留完整 ID、权限、来源和错误。正文/信息/操作区各有分隔线，编辑与底部栏优先计入实际高度，鼠标坐标扣除对应区域，长 Editor 围绕光标显示有界窗口。此布局不调用 setFooter，也不复制或重建第三方 footer。
 
 ViewerNavigation 通过显式 `back`/`close` 结果贯穿列表、会话、所属 Jobs、模型/调度/workflow 与详情。Esc 逐层返回，300ms 内两次无修饰 Left 关闭整个 Jobs/Subagents 浏览链；每个组件拥有自己的待判按键，其他按键或关闭重置，不继承 Dock 进入按键。可识别的 repeat/release 不计第二次，传统终端不保证识别所有长按。文字编辑/搜索优先，其后是明确接管的 PTY，最后是浏览导航；关闭只释放本视图的订阅、计时器与焦点，不停止执行。
+
+## 展示文本精简
+
+标题、导航、状态摘要和折叠工具正文通过公共展示层按实际焦点/动作生成；Tasks 的 Dock 选择与详情标题不重复只读标签，`Enter view` 保留查看语义。名称、状态、必要数量与操作优先，机器 ID 和完整配置留在可读详情中；工具摘要采用调用/结果接替，不重复输出。workspace 历史权限、危险动作确认、错误全文及用户/工具原文继续完整保留，精简不会修改协议结果、任务数据或控制准入。
 
 ## 浏览器配色角色
 

@@ -1,9 +1,9 @@
 import type { KeybindingsManager, Theme } from '@earendil-works/pi-coding-agent';
-import { Key, Text, matchesKey, truncateToWidth, type Component, type TUI, type TuiMouseEvent } from '@earendil-works/pi-tui';
+import { Key, Text, VStack, HStack, renderLayout, matchesKey, truncateToWidth, type Component, type TUI, type TuiMouseEvent } from '@earendil-works/pi-tui';
 import { DetailsView } from '../../ui/details.ts';
 import { ScrollView } from '../../ui/scroll.ts';
 import { separator, focusLabel } from '../../ui/browser-chrome.ts';
-import { readingRows } from '../../ui/reading.ts';
+import { readingRows, readingText } from '../../ui/reading.ts';
 import { commandComponent } from '../../ui/rendering/command.ts';
 import { DoubleLeft, type ViewerNavigation } from '../../ui/viewer/navigation.ts';
 import { TerminalView, type TerminalExit, type TerminalSource, type TerminalKeys } from '../../ui/terminal.ts';
@@ -23,7 +23,7 @@ export interface JobViewOptions {
 }
 
 /** Command/output is one interaction; details swap its body, not another modal/menu. */
-export class JobView implements Component {
+export class JobView extends VStack {
   focused = true;
   readonly capturesViewportInput = true;
   readonly command: ScrollView;
@@ -45,6 +45,7 @@ export class JobView implements Component {
   private job: JobSummary;
   constructor(private tui: TUI, private theme: Theme, private bindings: KeybindingsManager,
     private options: JobViewOptions, private done: (exit?: TerminalExit) => void) {
+    super();
     this.job = options.job;
     this.command = new ScrollView(commandComponent(this.job.command, 'bash', theme));
     // Details/Terminal retain their own renderer and footer budgets. A scoped TUI only
@@ -144,20 +145,26 @@ export class JobView implements Component {
       if (this.options.navigation.closed) this.finish(); this.tui.requestRender();
     }, [], undefined, this.theme, {navigation: this.options.navigation, keys: this.bindings});
   }
-  render(width: number): string[] {
-    if (this.details) { this.details.focused = this.focused; return this.details.render(width); }
-    const total = readingRows(this.tui);
+  override render(width: number): string[] { return renderLayout(this, width, readingRows(this.tui), () => this.tui.requestRender()).lines; }
+  prepareLayout(width: number, total: number): void {
+    this.clear();
+    if (this.details) { this.details.focused = this.focused; this.addChild(this.details, {basis: 0, grow: 1}); return; }
     this.commandRows = Math.max(1, Math.min(this.expanded ? Math.floor(total * 0.35) : 2, total - 10));
-    const lines = this.command.viewport(Math.max(1, width - 2), this.commandRows);
-    const heading = this.command.searching ? this.command.search.render(width)[0] : this.expanded ? `command ${this.command.position} · Tab focus` : 'command · c expand';
-    // This fixed command viewport leaves enough screen/metadata/action rows at all widths.
     this.bodyRows = Math.max(1, total - this.commandRows - 2);
     this.output.focused = this.focused && !this.commandFocus;
     this.command.search.focused = this.focused && this.commandFocus && this.command.searching;
-    return [separator(width, this.theme), truncateToWidth(this.command.searching ? heading
-      : focusLabel(heading, this.commandFocus && this.focused, this.theme), width),
-      ...Array.from({length: this.commandRows}, (_, index) => truncateToWidth(`${index === 0 ? '$ ' : '  '}${lines[index] ?? ''}`, width)),
-      ...this.output.render(width)].map(line => truncateToWidth(line, width));
+    this.addChild(readingText(room => [separator(room, this.theme)]), {basis: 1, shrink: 0});
+    this.addChild(this.command.searching ? this.command.search : readingText(room => {
+      const heading = this.expanded ? `command ${this.command.position} · Tab focus` : 'command · c expand';
+      return [focusLabel(heading, this.commandFocus && this.focused, this.theme)];
+    }, true), {basis: 1, shrink: 0});
+    this.addChild(new HStack([
+      {component: readingText(() => Array.from({length: this.commandRows}, (_, index) => index === 0 ? '$ ' : '  ')), basis: 2, shrink: 0},
+      {component: this.command, basis: 0, grow: 1},
+    ]), {basis: this.commandRows, shrink: 0});
+    // Text logs remain actual ScrollView descendants. PTY keeps its own two-dimensional
+    // screen component and process-size management, constrained only by the body budget.
+    this.addChild(this.output, {basis: 0, grow: 1, minSize: 1});
   }
   handleInput(data: string): void {
     if (this.details) { this.details.handleInput(data); return; }
@@ -183,25 +190,24 @@ export class JobView implements Component {
     }
     this.output.handleInput(data);
   }
-  handleMouse(event: TuiMouseEvent) {
-    if (this.details) return this.details.handleMouse(event);
-    if (this.selected === 'terminal' && this.terminal?.inputMode) {
-      return this.terminal.handleMouse({...event, y: event.y - this.commandRows - 2});
-    }
+  handleMouseCapture(event: TuiMouseEvent) {
+    if (this.details) return undefined;
     this.doubleLeft.reset();
+    if (this.selected === 'terminal' && this.terminal?.inputMode) return event.y < this.commandRows + 2 ? {handled: true} : undefined;
+    if (event.type !== 'wheel' && !(event.button === 'left' && (event.type === 'press' || event.type === 'click'))) return undefined;
     if (event.y < this.commandRows + 2) {
-      if (event.type === 'press' || event.type === 'click') {
-        this.output.handleInput('\t'); this.commandFocus = true; this.expanded = true; this.tui.requestRender(); return {handled: true};
+      if (this.output instanceof JobLogView && this.output.textInputActive) return {handled: true};
+      if (event.type !== 'wheel') {
+        this.output.handleInput('\t'); this.commandFocus = true; this.expanded = true; this.tui.requestRender();
+        if (event.y < 2) return {handled: true};
       }
-      return this.command.handleMouse({...event, y: event.y - 2});
-    }
-    if (event.type === 'press' || event.type === 'click') { this.commandFocus = false; this.tui.requestRender(); }
-    return this.output.handleMouse({...event, y: event.y - this.commandRows - 2});
+    } else if (event.type !== 'wheel') { this.commandFocus = false; this.tui.requestRender(); }
+    return undefined;
   }
-  invalidate(): void { this.command.invalidate(); this.details?.invalidate(); this.terminal?.invalidate(); for (const view of this.streams.values()) view.invalidate(); }
+  override invalidate(): void { this.command.invalidate(); this.details?.invalidate(); this.terminal?.invalidate(); for (const view of this.streams.values()) view.invalidate(); }
   private finish(exit?: TerminalExit): void { if (this.closed) return; this.closed = true; this.dispose(); this.done(exit); }
   dispose(): void {
-    this.closed = true; this.doubleLeft.reset(); clearInterval(this.ticking); this.unsubscribe();
+    this.closed = true; this.doubleLeft.reset(); this.command.dispose(); clearInterval(this.ticking); this.unsubscribe();
     this.details?.dispose(); this.terminal?.dispose(); for (const view of this.streams.values()) view.dispose();
   }
 }

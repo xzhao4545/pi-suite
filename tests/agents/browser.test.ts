@@ -47,11 +47,14 @@ test('subagents navigates pages and empty filters without menu rows or model wor
             assert.match(text(), /cancel queued/); assert.doesNotMatch(text(), /m message|b background/);
             view.handleInput('2'); break;
           case 2:
-            assert.match(text(), /Subagents ▸ Types.*2 Types/); assert.match(text(), /Model settings:/);
+            assert.match(text(), /Subagents ▸ Types.*2 Types/);
             assert.ok(view.render(120).some(line => { const left = line.split('│')[0]; return left.includes('not configured · not configured'); }), 'inherited type fields are not configuration pins');
             assert.match(text(), /Model: not configured \(inherited\)/); assert.match(text(), /Thinking: not configured \(inherited\)/);
-            assert.doesNotMatch(text().split('Model settings:')[0], /offline/);
-            view.handleInput('['); break;
+            assert.doesNotMatch(text(), /offline/);
+            // Native viewport bounds are independent of terminal width; complete settings
+            // remain readable by scrolling instead of leaking beyond the allocated pane.
+            view.handleInput('\t'); view.handleInput('\x1b[F'); assert.match(text(), /Model settings:/);
+            view.handleInput('\x1b'); view.handleInput('['); break;
           case 3:
             assert.equal(view.getSelectedItem()?.value, queued.record.runId); assert.match(text(), /Filter: probe/);
             chooseBrowserAction(view, 'Cancel queued'); assert.match(text(), /Press x again to cancel queued/);

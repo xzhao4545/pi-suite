@@ -1,0 +1,525 @@
+diff --git a/dist/components/scroll-view.d.ts b/dist/components/scroll-view.d.ts
+index 936778771212bc707c2a2e5470150f3bd95e38da..b81c7f81ba9e3593554db708e2ab3afe3ae9704f 100644
+--- a/dist/components/scroll-view.d.ts
++++ b/dist/components/scroll-view.d.ts
+@@ -50,6 +50,7 @@ export declare class ScrollView extends Container {
+     scrollToStart(): void;
+     scrollToEnd(): void;
+     updateLayout(contentHeight: number, viewportHeight: number, requestRender: () => void): void;
++    dispose(): void;
+     addChild(_component: Component): void;
+     removeChild(_component: Component): void;
+     clear(): void;
+diff --git a/dist/components/scroll-view.js b/dist/components/scroll-view.js
+index 0b9ef1f56155565479ac86d0ec232f51b9485d5e..4ad287b73f6289827e0a1762cca6e2633d2a755e 100644
+--- a/dist/components/scroll-view.js
++++ b/dist/components/scroll-view.js
+@@ -168,12 +168,18 @@ export class ScrollView extends Container {
+             this.currentScrollTop = Math.max(0, Math.min(this.currentScrollTop, maxScrollTop));
+         if (this.currentScrollTop < maxScrollTop)
+             this.followSuppressedAtEnd = false;
+-        if (this.followEnd && this.currentScrollTop === maxScrollTop && !this.followSuppressedAtEnd) {
+-            this.followingEnd = true;
+-        }
++        // Layout clamping is not user navigation. A paused reader remains paused when
++        // resize or tool collapse makes its offset coincide with the new end; only
++        // scrollTo/scrollBy/scrollToEnd may explicitly resume following.
+         if (this.contentHeight <= this.currentViewportHeight)
+             this.hideTransientScrollbar();
+     }
++    /** Release transient scrollbar resources without losing this reader's position. */
++    dispose() {
++        this.hideTransientScrollbar();
++        this.scrollbarActive = false;
++        this.requestRenderCallback = undefined;
++    }
+     addChild(_component) {
+         throw new Error("ScrollView has exactly one child");
+     }
+diff --git a/dist/components/stack.js b/dist/components/stack.js
+index 46c0ceb98a5d6aa8d3fa792825fd499b4424e00f..17c407d278d5bb7df58563980ba45915d93598fe 100644
+--- a/dist/components/stack.js
++++ b/dist/components/stack.js
+@@ -52,60 +52,5 @@ export class Stack extends Container {
+         };
+     }
+ }
+-export function visibleStackEntries(entries, viewport) {
+-    return entries.filter((entry) => entry.visible?.(viewport) ?? true);
+-}
+-function clampSize(size, entry) {
+-    const min = Math.max(0, Math.floor(entry.minSize ?? 0));
+-    const max = Math.max(min, Math.floor(entry.maxSize ?? Number.MAX_SAFE_INTEGER));
+-    return Math.max(min, Math.min(max, Math.max(0, Math.floor(size))));
+-}
+-function distribute(sizes, entries, amount, mode) {
+-    let remaining = amount;
+-    while (remaining > 0) {
+-        const candidates = entries
+-            .map((entry, index) => ({ entry, index }))
+-            .filter(({ entry, index }) => {
+-            if (mode === "grow") {
+-                return (entry.grow ?? 0) > 0 && sizes[index] < (entry.maxSize ?? Number.MAX_SAFE_INTEGER);
+-            }
+-            return (entry.shrink ?? 1) > 0 && sizes[index] > (entry.minSize ?? 0);
+-        });
+-        if (candidates.length === 0)
+-            return;
+-        const totalWeight = candidates.reduce((sum, { entry, index }) => {
+-            return sum + (mode === "grow" ? (entry.grow ?? 0) : (entry.shrink ?? 1) * Math.max(1, sizes[index]));
+-        }, 0);
+-        let distributed = 0;
+-        for (const { entry, index } of candidates) {
+-            if (remaining <= 0)
+-                break;
+-            const weight = mode === "grow" ? (entry.grow ?? 0) : (entry.shrink ?? 1) * Math.max(1, sizes[index]);
+-            const proposed = Math.max(1, Math.floor((remaining * weight) / totalWeight));
+-            const capacity = mode === "grow"
+-                ? (entry.maxSize ?? Number.MAX_SAFE_INTEGER) - sizes[index]
+-                : sizes[index] - (entry.minSize ?? 0);
+-            const delta = Math.min(remaining, proposed, capacity);
+-            if (delta <= 0)
+-                continue;
+-            sizes[index] = sizes[index] + (mode === "grow" ? delta : -delta);
+-            remaining -= delta;
+-            distributed += delta;
+-        }
+-        if (distributed === 0)
+-            return;
+-    }
+-}
+-export function allocateStackSizes(entries, intrinsicSizes, availableSize, gap) {
+-    const sizes = entries.map((entry, index) => clampSize(entry.basis === undefined || entry.basis === "auto" ? (intrinsicSizes[index] ?? 0) : entry.basis, entry));
+-    if (availableSize === undefined)
+-        return sizes;
+-    const contentSize = Math.max(0, Math.floor(availableSize) - Math.max(0, entries.length - 1) * gap);
+-    const total = sizes.reduce((sum, size) => sum + size, 0);
+-    if (total < contentSize)
+-        distribute(sizes, entries, contentSize - total, "grow");
+-    else if (total > contentSize)
+-        distribute(sizes, entries, total - contentSize, "shrink");
+-    return sizes;
+-}
++export { allocateStackSizes, visibleStackEntries } from '../layout-stack.js';
+ //# sourceMappingURL=stack.js.map
+\ No newline at end of file
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index b7a963c09ad68b1ad6ebf3f191c78603c5988ed2..4a89410598e1d8add6b32fedc1aa69bd9a19a315 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -34,4 +34,6 @@ export { TuiAltScreen, type TuiAltScreenOptions } from "./tui-alt-screen.ts";
+ export { TuiMainScreen, type TuiMainScreenRenderState } from "./tui-main-screen.ts";
+ export { getOsc8LinkAtColumn, replaceControlCharacters, sliceByColumn, stripTerminalSequences, truncateToWidth, visibleWidth, wrapTextWithAnsi, } from "./utils.ts";
+ export type { WheelScrollLines } from "./wheel-scroll.ts";
++export { renderLayoutFrame as renderLayout, dispatchLayoutMouse, getLayoutBoxesAt, getScrollViewBox, getScrollViewsAt, getScrollbarGeometry, type LayoutFrame, type LayoutBox } from './layout.ts';
++export { LAYOUT_NODE, getLayoutNode, type LayoutNode } from './layout-node.ts';
+ //# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
+diff --git a/dist/index.js b/dist/index.js
+index 59f005cb5972e69d173a90ce07d31199cfd4272a..cdb614cc9b7386efbcfbc56f9d737298895ed48e 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -47,4 +47,6 @@ export { TuiAltScreen } from "./tui-alt-screen.js";
+ export { TuiMainScreen } from "./tui-main-screen.js";
+ // Utilities
+ export { getOsc8LinkAtColumn, replaceControlCharacters, sliceByColumn, stripTerminalSequences, truncateToWidth, visibleWidth, wrapTextWithAnsi, } from "./utils.js";
++export { renderLayoutFrame as renderLayout, dispatchLayoutMouse, getLayoutBoxesAt, getScrollViewBox, getScrollViewsAt, getScrollbarGeometry } from './layout.js';
++export { LAYOUT_NODE, getLayoutNode } from './layout-node.js';
+ //# sourceMappingURL=index.js.map
+\ No newline at end of file
+diff --git a/dist/layout-stack.js b/dist/layout-stack.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..3241eb2560c73cacb7fc1d32d19d8056a6d7ee41
+--- /dev/null
++++ b/dist/layout-stack.js
+@@ -0,0 +1,40 @@
++/** Pure allocation shared by stacks and the renderer, without importing component classes. */
++export function visibleStackEntries(entries, viewport) {
++    return entries.filter(entry => entry.visible?.(viewport) ?? true);
++}
++function clampSize(size, entry) {
++    const min = Math.max(0, Math.floor(entry.minSize ?? 0));
++    const max = Math.max(min, Math.floor(entry.maxSize ?? Number.MAX_SAFE_INTEGER));
++    return Math.max(min, Math.min(max, Math.max(0, Math.floor(size))));
++}
++function distribute(sizes, entries, amount, mode) {
++    let remaining = amount;
++    while (remaining > 0) {
++        const candidates = entries.map((entry, index) => ({entry, index})).filter(({entry, index}) => mode === 'grow'
++            ? (entry.grow ?? 0) > 0 && sizes[index] < (entry.maxSize ?? Number.MAX_SAFE_INTEGER)
++            : (entry.shrink ?? 1) > 0 && sizes[index] > (entry.minSize ?? 0));
++        if (candidates.length === 0) return;
++        const totalWeight = candidates.reduce((sum, {entry, index}) => sum + (mode === 'grow' ? entry.grow ?? 0 : (entry.shrink ?? 1) * Math.max(1, sizes[index])), 0);
++        let distributed = 0;
++        for (const {entry, index} of candidates) {
++            if (remaining <= 0) break;
++            const weight = mode === 'grow' ? entry.grow ?? 0 : (entry.shrink ?? 1) * Math.max(1, sizes[index]);
++            const proposed = Math.max(1, Math.floor(remaining * weight / totalWeight));
++            const capacity = mode === 'grow' ? (entry.maxSize ?? Number.MAX_SAFE_INTEGER) - sizes[index] : sizes[index] - (entry.minSize ?? 0);
++            const delta = Math.min(remaining, proposed, capacity);
++            if (delta <= 0) continue;
++            sizes[index] += mode === 'grow' ? delta : -delta;
++            remaining -= delta; distributed += delta;
++        }
++        if (distributed === 0) return;
++    }
++}
++export function allocateStackSizes(entries, intrinsicSizes, availableSize, gap) {
++    const sizes = entries.map((entry, index) => clampSize(entry.basis === undefined || entry.basis === 'auto' ? intrinsicSizes[index] ?? 0 : entry.basis, entry));
++    if (availableSize === undefined) return sizes;
++    const contentSize = Math.max(0, Math.floor(availableSize) - Math.max(0, entries.length - 1) * gap);
++    const total = sizes.reduce((sum, size) => sum + size, 0);
++    if (total < contentSize) distribute(sizes, entries, contentSize - total, 'grow');
++    else if (total > contentSize) distribute(sizes, entries, total - contentSize, 'shrink');
++    return sizes;
++}
+diff --git a/dist/layout.d.ts b/dist/layout.d.ts
+index 92b48297a2a60b14201401a26b52cb7b196a82ea..670acf0bf200e10eb5a0acde4f35050ceda657b3 100644
+--- a/dist/layout.d.ts
++++ b/dist/layout.d.ts
+@@ -39,4 +39,6 @@ export declare function renderLayoutFrame(root: Component, width: number, height
+ export declare function getLayoutBoxesAt(frame: LayoutFrame, x: number, y: number): LayoutBox[];
+ export declare function getScrollViewBox(frame: LayoutFrame, scrollView: ScrollView): LayoutBox | undefined;
+ export declare function getScrollViewsAt(frame: LayoutFrame, x: number, y: number): ScrollView[];
++export declare function dispatchLayoutMouse(frame: LayoutFrame, event: import('./tui.ts').TuiMouseEvent): import('./tui.ts').TuiMouseDispatchResult | undefined;
++export declare function placeLayoutFrame(frame: LayoutFrame, x: number, y: number): LayoutFrame;
+ //# sourceMappingURL=layout.d.ts.map
+\ No newline at end of file
+diff --git a/dist/layout.js b/dist/layout.js
+index 0a50deb61a365783f324434ac51e069043a3e933..b1185757d31a6896687647ff75d35fdce9e44f94 100644
+--- a/dist/layout.js
++++ b/dist/layout.js
+@@ -1,7 +1,7 @@
+-import { allocateStackSizes, visibleStackEntries } from "./components/stack.js";
++import { allocateStackSizes, visibleStackEntries } from "./layout-stack.js";
+ import { getLayoutNode } from "./layout-node.js";
+ import { cropKittyImageLine, getKittyImageMetadata, getMaxKittyImageRows, isImageLine } from "./terminal-image.js";
+-import { CURSOR_MARKER, compositeTuiLine } from "./tui.js";
++import { CURSOR_MARKER, Container, dispatchMouseEvent, compositeTuiLine } from "./tui.js";
+ import { extractAnsiCode, getActiveBackgroundAnsi, getGraphemeCellRange, sliceByColumn, visibleWidth, } from "./utils.js";
+ const OSC133_ZONE_PREFIX = /^(?:\x1b\]133;[ABC](?:\x07|\x1b\\))+/;
+ function intersect(a, b) {
+@@ -47,6 +47,7 @@ function updateClips(box, parentClip) {
+ }
+ function layoutComponent(context, component, x, y, width, height, clip) {
+     const safeWidth = Math.max(1, Math.floor(width));
++    component.prepareLayout?.(safeWidth, height ?? context.viewport.height);
+     const node = getLayoutNode(component);
+     if (!node) {
+         const lines = renderCached(context, component, safeWidth);
+@@ -292,6 +293,12 @@ export function renderLayoutFrame(root, width, height, requestRender) {
+         width: safeWidth,
+         height: safeHeight,
+     });
++    // Position/status chrome depends on the scroll state established by this same frame.
++    const refreshChrome = box => {
++        if (box.component.renderAfterLayout && box.lines) box.lines = box.component.render(box.rect.width);
++        for (const child of box.children) refreshChrome(child);
++    };
++    refreshChrome(rootBox);
+     const lines = Array.from({ length: safeHeight }, () => "");
+     paintBox(rootBox, lines, safeWidth);
+     return {
+@@ -346,4 +353,34 @@ export function getScrollViewsAt(frame, x, y) {
+     result.sort((a, b) => b.depth - a.depth);
+     return result.map((entry) => entry.scrollView);
+ }
++/** Shared dispatch for viewport roots and overlays; structural containers must not forward twice. */
++export function dispatchLayoutMouse(frame, event) {
++    const boxes = getLayoutBoxesAt(frame, event.screenX, event.screenY);
++    for (const box of [...boxes].reverse()) {
++        const local = { ...event, x: event.screenX - box.rect.x, y: event.screenY - box.rect.y, width: box.rect.width, height: box.rect.height };
++        if (box.component.handleMouseCapture) {
++            const result = dispatchMouseEvent(box.component, local, box.component.handleMouseCapture);
++            if (result) return result;
++        }
++    }
++    const visited = new Set();
++    for (const box of boxes) {
++        if (visited.has(box.component)) continue;
++        visited.add(box.component);
++        if (getLayoutNode(box.component) && box.component.handleMouse === Container.prototype.handleMouse) continue;
++        const result = dispatchMouseEvent(box.component, { ...event, x: event.screenX - box.rect.x, y: event.screenY - box.rect.y, width: box.rect.width, height: box.rect.height });
++        if (result) return result;
++    }
++    return undefined;
++}
++/** Place an already measured overlay without rerendering its components. */
++export function placeLayoutFrame(frame, x, y) {
++    const visit = box => {
++        box.rect.x += x; box.rect.y += y;
++        box.clip.x += x; box.clip.y += y;
++        for (const child of box.children) visit(child);
++    };
++    visit(frame.root);
++    return frame;
++}
+ //# sourceMappingURL=layout.js.map
+\ No newline at end of file
+diff --git a/dist/tui-alt-screen.js b/dist/tui-alt-screen.js
+index cd41095edc02c3b6b9dc622414fd4942d095d0f6..98a6103e7c25493ef0a91fef37560ac010c18d3d 100644
+--- a/dist/tui-alt-screen.js
++++ b/dist/tui-alt-screen.js
+@@ -3,7 +3,7 @@ import { AltScreenFlashContainer } from "./components/alt-screen-flash.js";
+ import { ScrollView } from "./components/scroll-view.js";
+ import { getKeybindings } from "./keybindings.js";
+ import { isKeyRelease } from "./keys.js";
+-import { getLayoutBoxesAt, getScrollbarGeometry, getScrollViewBox, getScrollViewsAt, renderLayoutFrame, } from "./layout.js";
++import { dispatchLayoutMouse, getLayoutBoxesAt, getScrollbarGeometry, getScrollViewBox, getScrollViewsAt, renderLayoutFrame, } from "./layout.js";
+ import { getLayoutNode } from "./layout-node.js";
+ import { deleteAllKittyImages, deleteAllKittyPlacements, deleteKittyImage, getCapabilities, getKittyImagePlacement, getKittyImagePlacementRows, isImageLine, setCapabilities, } from "./terminal-image.js";
+ import { Container, CURSOR_MARKER, compositeTuiLine, dispatchMouseEvent, retargetMouseEvent, TuiBase, VIEWPORT_TUI, } from "./tui.js";
+@@ -648,25 +648,7 @@ export class TuiAltScreen extends TuiBase {
+     dispatchMouseToLayout(event) {
+         if (!this.currentLayout)
+             return undefined;
+-        const visited = new Set();
+-        const boxes = getLayoutBoxesAt(this.currentLayout, event.screenX, event.screenY);
+-        for (const box of boxes) {
+-            if (visited.has(box.component))
+-                continue;
+-            if (getLayoutNode(box.component) && box.component.handleMouse === Container.prototype.handleMouse)
+-                continue;
+-            visited.add(box.component);
+-            const result = dispatchMouseEvent(box.component, {
+-                ...event,
+-                x: event.screenX - box.rect.x,
+-                y: event.screenY - box.rect.y,
+-                width: box.rect.width,
+-                height: box.rect.height,
+-            });
+-            if (result)
+-                return result;
+-        }
+-        return undefined;
++        return dispatchLayoutMouse(this.currentLayout, event);
+     }
+     applyMouseDispatchResult(event, result) {
+         const focusTarget = this.resolveMouseFocusTarget(result.focusTarget ?? result.target.component);
+@@ -745,19 +727,11 @@ export class TuiAltScreen extends TuiBase {
+         }
+         if (this.handleSearchMouseEvent(raw))
+             return;
++        const scrollbarHandled = this.handleScrollbarMouseEvent(raw);
++        if (!this.scrollbarDrag) this.updateScrollbarHover(raw.x, raw.y);
++        if (scrollbarHandled) return;
+         const overlay = this.dispatchMouseToOverlay(event);
+-        if (!overlay.hit) {
+-            if (this.handleScrollToEndIndicatorMouseEvent(raw))
+-                return;
+-            const scrollbarHandled = this.handleScrollbarMouseEvent(raw);
+-            if (!this.scrollbarDrag)
+-                this.updateScrollbarHover(raw.x, raw.y);
+-            if (scrollbarHandled)
+-                return;
+-        }
+-        else {
+-            this.stopScrollbarHover();
+-        }
++        if (!overlay.hit && this.handleScrollToEndIndicatorMouseEvent(raw)) return;
+         const result = overlay.result ?? (overlay.hit ? undefined : this.dispatchMouseToLayout(event));
+         if (result) {
+             const render = this.applyMouseDispatchResult(event, result);
+@@ -810,14 +784,16 @@ export class TuiAltScreen extends TuiBase {
+     routeWheel(event, delta) {
+         let remaining = delta;
+         const seen = new Set();
+-        for (const scrollView of this.currentLayout ? getScrollViewsAt(this.currentLayout, event.x, event.y) : []) {
++        const overlay = this.getOverlayLayoutAt(event.x, event.y);
++        const frame = overlay ? overlay.frame : this.currentLayout;
++        for (const scrollView of frame ? getScrollViewsAt(frame, event.x, event.y) : []) {
+             seen.add(scrollView);
+             remaining = scrollView.scrollBy(remaining);
+             if (remaining === 0 || scrollView.overscroll === "contain")
+                 break;
+         }
+-        const primary = this.getPrimaryScrollView();
+-        if (remaining !== 0 && !seen.has(primary))
++        const primary = overlay ? undefined : this.getPrimaryScrollView();
++        if (primary && remaining !== 0 && !seen.has(primary))
+             primary.scrollBy(remaining);
+         this.updateScrollbarHover(event.x, event.y);
+         this.requestRender();
+@@ -859,10 +835,11 @@ export class TuiAltScreen extends TuiBase {
+         return true;
+     }
+     getScrollbarTargetAt(x, y, includeHiddenAuto = false) {
+-        if (this.hasOverlay() || !this.currentLayout)
+-            return undefined;
+-        for (const scrollView of getScrollViewsAt(this.currentLayout, x, y)) {
+-            const box = getScrollViewBox(this.currentLayout, scrollView);
++        const overlay = this.getOverlayLayoutAt(x, y);
++        const frame = overlay ? overlay.frame : this.currentLayout;
++        if (!frame) return undefined;
++        for (const scrollView of getScrollViewsAt(frame, x, y)) {
++            const box = getScrollViewBox(frame, scrollView);
+             const geometry = box ? getScrollbarGeometry(box, includeHiddenAuto) : undefined;
+             if (geometry &&
+                 x === geometry.column &&
+@@ -898,9 +875,9 @@ export class TuiAltScreen extends TuiBase {
+                 this.stopScrollbarDrag();
+                 return true;
+             }
+-            const box = this.currentLayout
++            const box = this.getOverlayScrollViewBox(this.scrollbarDrag.scrollView) ?? (this.currentLayout
+                 ? getScrollViewBox(this.currentLayout, this.scrollbarDrag.scrollView)
+-                : undefined;
++                : undefined);
+             const geometry = box ? getScrollbarGeometry(box) : undefined;
+             if (geometry) {
+                 this.scrollScrollbarToPointer(this.scrollbarDrag.scrollView, geometry, event.y, this.scrollbarDrag.grabOffset);
+diff --git a/dist/tui.d.ts b/dist/tui.d.ts
+index fd6f1cf4d56a8331ef9c128af3f3cf60e286f112..a4a5e94b9b7f449609ecd928e2541f4e96eae98e 100644
+--- a/dist/tui.d.ts
++++ b/dist/tui.d.ts
+@@ -62,7 +62,7 @@ export interface TuiMouseDispatchResult extends TuiMouseEventResult {
+  * Dispatch an event to a component and retain the exact target and coordinate
+  * transform. Containers use this when forwarding events to nested children.
+  */
+-export declare function dispatchMouseEvent(component: Component, event: TuiMouseEvent): TuiMouseDispatchResult | undefined;
++export declare function dispatchMouseEvent(component: Component, event: TuiMouseEvent, handler?: Component['handleMouse']): TuiMouseDispatchResult | undefined;
+ /** Recreate local coordinates for a previously dispatched mouse target. */
+ export declare function retargetMouseEvent(event: TuiMouseEvent, target: TuiMouseDispatchTarget): TuiMouseEvent;
+ export interface Component {
+@@ -72,6 +72,12 @@ export interface Component {
+      * @returns Array of strings, each representing a line
+      */
+     render(width: number): string[];
++    /** Fixed-size status chrome evaluated after scrolling geometry settles. */
++    renderAfterLayout?: boolean;
++    /** Prepare a dynamic tree before measurement with the allocated viewport. */
++    prepareLayout?(width: number, height: number): void;
++    /** Capture phase for focus/modal boundaries; a result stops child dispatch. */
++    handleMouseCapture?(event: TuiMouseEvent): TuiMouseEventResult | undefined;
+     /** Optional handler for keyboard input when component has focus. */
+     handleInput?(data: string): void;
+     /** Optional normalized mouse handler. */
+@@ -146,6 +152,8 @@ export interface OverlayOptions {
+     width?: SizeValue;
+     /** Minimum width in columns */
+     minWidth?: number;
++    /** Fixed height; short content is padded by the compositor, clamped by maxHeight and margins. */
++    height?: SizeValue;
+     /** Maximum height in rows, or percentage of terminal height (e.g., "50%") */
+     maxHeight?: SizeValue;
+     /** Anchor point for positioning (default: 'center') */
+@@ -340,6 +348,8 @@ export declare abstract class TuiBase extends Container implements TUI {
+     /** Keep overlay containers as keyboard focus owners when a nested control is clicked. */
+     protected resolveMouseFocusTarget(component: Component): Component;
+     /** Dispatch to the visually topmost overlay under the pointer. */
++    protected getOverlayLayoutAt(x: number, y: number): { frame?: import('./layout.ts').LayoutFrame } | undefined;
++    protected getOverlayScrollViewBox(scrollView: import('./components/scroll-view.ts').ScrollView): import('./layout.ts').LayoutBox | undefined;
+     protected dispatchMouseToOverlay(event: TuiMouseEvent): {
+         hit: boolean;
+         result?: TuiMouseDispatchResult;
+diff --git a/dist/tui.js b/dist/tui.js
+index 3fcdcf98381b1494daa786b3e283a33b4b5bacb0..fd040121b02d680d52e484f12741499a03ff4a2a 100644
+--- a/dist/tui.js
++++ b/dist/tui.js
+@@ -1,6 +1,8 @@
+ /**
+  * Minimal TUI implementation with differential rendering
+  */
++import { dispatchLayoutMouse, renderLayoutFrame, placeLayoutFrame, getScrollViewBox } from "./layout.js";
++import { getLayoutNode } from "./layout-node.js";
+ import { performance } from "node:perf_hooks";
+ import { isKeyRelease, matchesKey } from "./keys.js";
+ import { parseOscColorResponse, parseTerminalColorSchemeReport, } from "./terminal-colors.js";
+@@ -10,8 +12,8 @@ import { extractSegments, normalizeTerminalOutput, sliceByColumn, sliceWithWidth
+  * Dispatch an event to a component and retain the exact target and coordinate
+  * transform. Containers use this when forwarding events to nested children.
+  */
+-export function dispatchMouseEvent(component, event) {
+-    const result = component.handleMouse?.(event);
++export function dispatchMouseEvent(component, event, handler = component.handleMouse) {
++    const result = handler?.call(component, event);
+     if (!result)
+         return undefined;
+     if ("target" in result) {
+@@ -535,6 +537,21 @@ export class TuiBase extends Container {
+         }
+         return component;
+     }
++    /** The topmost visual overlay blocks hit testing of covered layouts. */
++    getOverlayLayoutAt(x, y) {
++        for (let index = this.renderedOverlayLayouts.length - 1; index >= 0; index--) {
++            const layout = this.renderedOverlayLayouts[index];
++            if (x >= layout.col && x < layout.col + layout.width && y >= layout.row && y < layout.row + layout.height) return layout;
++        }
++        return undefined;
++    }
++    getOverlayScrollViewBox(scrollView) {
++        for (const overlay of this.renderedOverlayLayouts) {
++            const box = overlay.frame && getScrollViewBox(overlay.frame, scrollView);
++            if (box) return box;
++        }
++        return undefined;
++    }
+     /** Dispatch to the visually topmost overlay under the pointer. */
+     dispatchMouseToOverlay(event) {
+         for (let index = this.renderedOverlayLayouts.length - 1; index >= 0; index--) {
+@@ -545,7 +562,7 @@ export class TuiBase extends Container {
+                 event.screenY >= layout.row + layout.height) {
+                 continue;
+             }
+-            const result = dispatchMouseEvent(layout.entry.component, {
++            const result = layout.frame ? dispatchLayoutMouse(layout.frame, event) : dispatchMouseEvent(layout.entry.component, {
+                 ...event,
+                 x: event.screenX - layout.col,
+                 y: event.screenY - layout.row,
+@@ -885,8 +902,11 @@ export class TuiBase extends Container {
+         if (maxHeight !== undefined) {
+             maxHeight = Math.max(1, Math.min(maxHeight, availHeight));
+         }
+-        // Effective overlay height (may be clamped by maxHeight)
+-        const effectiveHeight = maxHeight !== undefined ? Math.min(overlayHeight, maxHeight) : overlayHeight;
++        // A maximum alone cannot cover the footer when a picker/document is short.
++        // Fixed height is a native compositor boundary, not a second scrolling viewport.
++        let height = parseSizeValue(opt.height, termHeight);
++        if (height !== undefined) height = Math.max(1, Math.min(height, maxHeight ?? availHeight));
++        const effectiveHeight = height ?? (maxHeight !== undefined ? Math.min(overlayHeight, maxHeight) : overlayHeight);
+         // === Resolve position ===
+         let row;
+         let col;
+@@ -946,7 +966,7 @@ export class TuiBase extends Container {
+         // Clamp to terminal bounds (respecting margins)
+         row = Math.max(marginTop, Math.min(row, termHeight - marginBottom - effectiveHeight));
+         col = Math.max(marginLeft, Math.min(col, termWidth - marginRight - width));
+-        return { width, row, col, maxHeight };
++        return { width, row, col, maxHeight, height };
+     }
+     resolveAnchorRow(anchor, height, availHeight, marginTop) {
+         switch (anchor) {
+@@ -998,20 +1018,24 @@ export class TuiBase extends Container {
+             const { component, options } = entry;
+             // Get layout with height=0 first to determine width and maxHeight
+             // (width and maxHeight don't depend on overlay height)
+-            const { width, maxHeight } = this.resolveOverlayLayout(options, 0, termWidth, termHeight);
+-            // Render component at calculated width
+-            let overlayLines = this.resolveFakeCursors(component.render(width));
+-            // Apply maxHeight if specified
+-            if (maxHeight !== undefined && overlayLines.length > maxHeight) {
+-                overlayLines = overlayLines.slice(0, maxHeight);
++            const { width, maxHeight, height } = this.resolveOverlayLayout(options, 0, termWidth, termHeight);
++            // Native trees use one viewport; documents keep natural height unless explicitly sized.
++            const frame = getLayoutNode(component) ? renderLayoutFrame(component, width, height ?? maxHeight ?? termHeight, () => this.requestRender()) : undefined;
++            let overlayLines = this.resolveFakeCursors(frame?.lines ?? component.render(width));
++            const limit = height ?? maxHeight;
++            if (limit !== undefined && overlayLines.length > limit) overlayLines = overlayLines.slice(0, limit);
++            if (height !== undefined && overlayLines.length < height) {
++                overlayLines = overlayLines.concat(Array(height - overlayLines.length).fill(""));
+             }
+             // Get final row/col with actual overlay height
+             const { row, col } = this.resolveOverlayLayout(options, overlayLines.length, termWidth, termHeight);
+             entry.bounds = { row, col, width, height: overlayLines.length };
+-            rendered.push({ entry, overlayLines, row, col, w: width });
++            if (frame) placeLayoutFrame(frame, col, row);
++            rendered.push({ entry, overlayLines, row, col, w: width, frame });
+             minLinesNeeded = Math.max(minLinesNeeded, row + overlayLines.length);
+         }
+-        this.renderedOverlayLayouts = rendered.map(({ entry, row, col, w, overlayLines }) => ({
++        this.renderedOverlayLayouts = rendered.map(({ entry, row, col, w, overlayLines, frame }) => ({
++            frame,
+             entry,
+             row,
+             col,

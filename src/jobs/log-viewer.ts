@@ -1,5 +1,5 @@
 import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
-import { Text, type TUI, type TuiMouseEvent } from '@earendil-works/pi-tui';
+import { Text, type TUI } from '@earendil-works/pi-tui';
 import { DetailsView, type DetailOptions } from '../ui/details.ts';
 import type { DetailAction } from '../ui/actions.ts';
 import { openReading } from '../ui/reading.ts';
@@ -127,15 +127,10 @@ export class JobLogView extends DetailsView {
     this.timer = setTimeout(() => { void this.refresh().then(() => { if (!this.error) this.arm(); }); }, REFRESH_MS);
     this.timer.unref();
   }
-  override handleInput(data: string): void {
-    super.handleInput(data);
-    // A terminal job has no timer; returning to the bottom must fetch its last output too.
-    if (this.reader.following && !this.reader.searching) void this.refresh();
-  }
-  override handleMouse(event: TuiMouseEvent) {
-    const result = super.handleMouse(event);
-    if (result?.handled && this.reader.following && !this.reader.searching) void this.refresh();
-    return result;
+  protected override readingChanged(): void {
+    // Native wheel and scrollbar gestures share the same callback as End. A settled
+    // process has no polling timer, so reaching the bottom must fetch its final window.
+    if (this.page && this.active && this.reader.following && !this.reader.searching) void this.refresh();
   }
   dispose(): void { super.dispose(); this.closed = true; clearTimeout(this.timer); this.unsubscribe(); }
 }

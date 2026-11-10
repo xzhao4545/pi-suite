@@ -9,6 +9,7 @@ import { DoubleLeft, ViewerNavigation } from '../../src/ui/viewer/navigation.ts'
 import { agentInformation } from '../../src/ui/viewer/agent-information.ts';
 import type { AgentRecord } from '../../src/agents/types.ts';
 import { terminal } from '../support/terminal.ts';
+import { readerTerminal } from '../support/reader.ts';
 
 function activeTheme(): Theme {
   let result!: Theme;
@@ -107,10 +108,11 @@ test('Subagent bottom metadata, native search/editor and mouse chrome share a bo
   }
   Object.assign(tui.terminal, {rows: 24, columns: 40}); view.render(40);
   const offset = view.reader.offset;
-  const wheel = {type: 'wheel' as const, button: 'none' as const, x: 0, y: 0, screenX: 0, screenY: 0,
-    width: 40, height: 24, shift: false, alt: false, ctrl: false, wheelDelta: 3};
-  view.handleMouse(wheel); assert.equal(view.reader.offset, offset);
-  view.handleMouse({...wheel, y: 1, screenY: 1}); assert.ok(view.reader.offset > offset);
+  const native = readerTerminal(24, 40);
+  native.tui.showOverlay(view, {row: 0, col: 0, width: 40, maxHeight: 16}); native.tui.renderNow();
+  native.send('\x1b[<65;1;1M'); assert.equal(view.reader.offset, offset);
+  native.send('\x1b[<65;1;2M'); assert.ok(view.reader.offset > offset);
+  native.dispose();
   view.handleInput('/'); view.handleInput('BODY'); view.handleInput('\x1b[D'); view.handleInput('\x1b[D'); assert.equal(exits, 0);
   assert.equal(view.render(40).join('').split(CURSOR_MARKER).length - 1, 1);
   view.handleInput('\x1b'); view.handleInput('m'); view.handleInput('中文\n'.repeat(30));

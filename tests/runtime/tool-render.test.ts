@@ -27,46 +27,88 @@ function activeTheme(): Theme {
   return selected;
 }
 
-test('shared tool shell merges progress/results, pads one-line summaries and retains full expanded/error output', () => {
+test('shared tool body merges progress/results inside the native shell without borders or duplicate padding', () => {
   const theme = { fg: (_tone: string, text: string) => `\x1b[31m${text}\x1b[39m` } as Theme;
   const renderer = toolRenderers<unknown, { summary: string }>({
     call: () => ({ icon: '⟳', tone: 'accent', title: 'Call' }),
     collapsed: data => ({ icon: '✔', tone: 'success', title: 'Result\nheading', summary: data.summary, meta: ['meta\nline'] }),
   });
+  assert.equal(renderer.renderShell, undefined, 'the host selects its default Box');
   const ctx = { state: {}, args: {}, isError: false, outputPad: 2 } as Parameters<NonNullable<ToolRenderers['renderResult']>>[3];
   const call = renderer.renderCall!({}, theme, ctx);
-  assert.equal(call.render(40).length, 3);
-  const body = Array.from({length: 20}, (_, i) => `body ${i}`).join('\n');
-  const result = { content: [{type: 'text' as const, text: body}], details: { summary: 'a\nb'.repeat(100) } };
+  assert.equal(call.render(40).length, 1);
+  assert.equal(stripVTControlCharacters(call.render(40)[0]), '⟳ Call', 'body ignores outer outputPad');
+  assert.equal(renderer.renderCall!({}, theme, { ...ctx, lastComponent: call }), call);
+  const body = Array.from({ length: 20 }, (_, i) => `body ${i}`).join('\n');
+  const result = { content: [{ type: 'text' as const, text: body }], details: { summary: 'a\nb'.repeat(100) } };
+  let previous;
   for (const isPartial of [true, false]) {
-    const component = renderer.renderResult!(result, { expanded: false, isPartial }, theme, ctx);
+    const component = renderer.renderResult!(result, { expanded: false, isPartial }, theme, { ...ctx, lastComponent: previous });
+    if (previous) assert.equal(component, previous, 'final result updates the partial component');
+    previous = component;
     assert.deepEqual(call.render(40), []);
-    for (const width of [40, 60, 120]) {
+    for (const width of [1, 3, 7, 40, 60, 120]) {
       const lines = component.render(width);
-      assert.equal(lines.length, 3); assert.ok(lines.every(line => visibleWidth(line) <= width));
-      assert.ok(lines[1].startsWith('  '));
-      assert.match(stripVTControlCharacters(lines[0]), /^─+$/);
-      assert.equal(lines.at(-1), lines[0]);
+      assert.equal(lines.length, 1); assert.ok(lines.every(line => visibleWidth(line) <= width));
+      assert.ok(!stripVTControlCharacters(lines[0]).startsWith(' '));
+      assert.doesNotMatch(stripVTControlCharacters(lines[0]), /─/);
     }
   }
-  assert.match(renderer.renderResult!(result, {expanded: true, isPartial: false}, theme, ctx).render(40).join('\n'), /body 19/);
+  assert.match(renderer.renderResult!(result, { expanded: true, isPartial: false }, theme, ctx).render(40).join('\n'), /body 19/);
   ctx.isError = true;
-  const error = renderer.renderResult!(result, {expanded: false, isPartial: false}, theme, ctx).render(40).join('\n');
+  const error = renderer.renderResult!(result, { expanded: false, isPartial: false }, theme, ctx).render(40).join('\n');
   assert.match(error, /✘/); assert.match(error, /body 19/);
   assert.ok(error.split('\n').filter(line => stripVTControlCharacters(line).includes('body')).every(line => line.includes('\x1b[31m')));
-  const pending = renderer.renderCall!({}, theme, { ...ctx, state: {} });
-  for (const width of [1, 3, 7]) assert.ok(pending.render(width).every(line => visibleWidth(line) <= width));
-  initTheme('dark');
-  const host = new ToolExecutionComponent('suite-test', 'suite-test', {}, { outputPad: 2 }, renderer, terminal(), process.cwd());
-  const frames = () => host.render(40).map(stripVTControlCharacters).filter(line => /^─+$/.test(line.trim()));
-  assert.equal(frames().length, 2);
-  for (const partial of [true, false]) {
-    host.updateResult({ ...result, isError: false }, partial); assert.equal(frames().length, 2);
+
+  for (const palette of ['dark', 'light']) {
+    initTheme(palette); const hostTheme = activeTheme();
+    for (const pad of [0, 2, 4]) {
+      const host = new ToolExecutionComponent('suite-test', 'suite-test', {}, { outputPad: pad }, renderer, terminal(), process.cwd());
+      const checkShell = (caption: RegExp, bg: 'toolPendingBg' | 'toolSuccessBg' | 'toolErrorBg') => {
+        for (const width of [pad * 2 + 1, 40, 60, 120]) {
+          const lines = host.render(width), plain = lines.map(stripVTControlCharacters);
+          assert.equal(lines.length, 4, 'one host spacer + Box top/body/bottom');
+          assert.equal(plain[0], '');
+          assert.equal(lines[1], hostTheme.bg(bg, ' '.repeat(width)), 'actual execution state owns background');
+          assert.equal(lines.at(-1), lines[1]);
+          assert.ok(lines.every(line => visibleWidth(line) <= width));
+          assert.doesNotMatch(plain.join('\n'), /─/);
+          assert.equal(plain[2].search(/\S/), pad, 'outputPad is applied exactly once');
+          if (width >= 40) assert.match(plain[2], caption);
+        }
+      };
+      checkShell(/Call/, 'toolPendingBg');
+      for (const isPartial of [true, false]) {
+        host.updateResult({ ...result, isError: false, details: { summary: isPartial ? 'progress' : 'finished' } }, isPartial);
+        checkShell(isPartial ? /Result heading.*progress/ : /Result heading.*finished/, isPartial ? 'toolPendingBg' : 'toolSuccessBg');
+        assert.doesNotMatch(host.render(40).map(stripVTControlCharacters).join('\n'), /Call/);
+      }
+      const click = (x: number, y: number) => host.handleMouse({ type: 'click', button: 'left', x, y, screenX: x, screenY: y,
+        width: 40, height: host.render(40).length, shift: false, alt: false, ctrl: false });
+      // Real host dispatch translates Spacer + Box padding before the result MouseRegion.
+      assert.equal(click(pad, 1), undefined, 'Box top padding is not a tool body');
+      if (pad) assert.equal(click(pad - 1, 2), undefined, 'horizontal padding is not a tool body');
+      assert.equal(click(pad, 2)?.handled, true);
+      assert.match(host.render(40).map(stripVTControlCharacters).join('\n'), /body 19/);
+      assert.equal(click(pad, 2)?.handled, true);
+      checkShell(/Result heading.*finished/, 'toolSuccessBg');
+      host.setExpanded(true);
+      assert.match(host.render(40).map(stripVTControlCharacters).join('\n'), /body 19/);
+      host.setExpanded(false);
+      host.setOutputPad(pad + 1);
+      assert.equal(host.render(40).map(stripVTControlCharacters)[2].search(/\S/), pad + 1);
+      host.setOutputPad(pad);
+      // Even an error-shaped partial result stays pending until the host receives final state.
+      host.updateResult({ ...result, isError: true }, true);
+      assert.equal(host.render(40)[1], hostTheme.bg('toolPendingBg', ' '.repeat(40)));
+      host.updateResult({ ...result, isError: true });
+      const failed = host.render(40);
+      assert.equal(failed[1], hostTheme.bg('toolErrorBg', ' '.repeat(40)));
+      assert.match(failed.map(stripVTControlCharacters).join('\n'), /body 19/);
+      assert.doesNotMatch(failed.map(stripVTControlCharacters).join('\n'), /─/);
+    }
   }
-  const before = host.render(40).length;
-  assert.equal(host.handleMouse({ type: 'click', button: 'left', x: 3, y: 2, screenX: 3, screenY: 2,
-    width: 40, height: before, shift: false, alt: false, ctrl: false })?.handled, true);
-  assert.ok(host.render(40).length > before); assert.equal(frames().length, 2);
+  initTheme('dark');
 });
 
 test('structured expansions sanitize before styling, keep literal logs, syntax/layout caches and sensitive error redaction', () => {
@@ -176,7 +218,7 @@ test('named agent tools and wait render names without changing model IDs or init
       const collapsed = renderer.renderResult!(result, { expanded: false, isPartial: false }, theme, ctx).render(120).join('\n');
       assert.match(collapsed, expected); assert.doesNotMatch(collapsed, /agent_|run_/);
       const expanded = renderer.renderResult!(result, { expanded: true, isPartial: false }, theme, ctx).render(120).join('\n');
-      if (renderer !== agents.listRenderers) assert.match(expanded.split('\n')[1], /Review/);
+      if (renderer !== agents.listRenderers) assert.match(expanded.split('\n')[0], /Review/);
       assert.match(expanded, /Review/); assert.match(expanded, /agent_00000001/);
       assert.equal(JSON.stringify(result), before); assert.ok(result.content[0].text.startsWith(id));
     }

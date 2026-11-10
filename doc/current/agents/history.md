@@ -15,6 +15,8 @@ AgentManager 的 workspace 查询从 Pi 会话文件和既有 suite 记录发现
 | pi-suite:workflow-record.children | 保存于父级记录的 child 引用及其 SDK 会话 |
 | SDK session header.parentSession | fork 的父会话文件及其引用 |
 
+`/responses fork` 保留这些本地 child/workflow 来源引用；净化仅作用于主会话副本的 Responses 历史消息，不迁移 child 历史或执行 owner。副本读取继承记录不赋予发送、恢复或进程控制权限，返回原会话继续使用原归属。
+
 最终记录按 `configCwd ?? cwd` 归入当前配置工作区。child 的实际工具 cwd 可以是其他目标目录，查询仍按 configCwd 归属。发现范围是默认目录、当前配置目录及上述可达引用；未配置且没有持久引用的外部归档目录不参与发现。
 
 ## 读取与合并

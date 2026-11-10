@@ -1,6 +1,6 @@
 # UX-2：Dock 未选择时优先展开 Tasks
 
-## 需求与根因
+## 需求与实施前根因（历史）
 
 输入框上方的 Tasks、Agents、Jobs 列表未处于活动选择状态时，应优先展开可见 Tasks，Agents/Jobs 保留必要摘要。进入选择后，仍优先保证真实选中分区和对象可见。
 
@@ -17,9 +17,9 @@
 
 ## 任务与验收
 
-- [ ] 在共享 Dock 中统一表达默认展开策略，与行优先级及活动选择分离。
-- [ ] 合并覆盖三分区并存、Tasks 缺失、窄预算、激活 Agents/Jobs 后退出与再次进入，确保真实选中项不被默认策略裁掉。
-- [ ] 核查动态任务/运行状态更新不会抢走活动选择；完成反馈结束后不额外显示 Tasks。
-- [ ] 同步 [任务操作](../../current/tasks/operations.md)、[agents 操作](../../current/agents/operations.md)及[统一界面](../../current/ui/index.md)。
+- [x] 在共享 Dock 中统一表达默认展开策略，与行优先级及活动选择分离。
+- [x] 合并覆盖三分区并存、Tasks 缺失、窄预算、激活 Agents/Jobs 后退出与再次进入，确保真实选中项不被默认策略裁掉。
+- [x] 核查动态任务/运行状态更新不会抢走活动选择；完成反馈结束后不额外显示 Tasks。
+- [x] 同步 [任务操作](../../../../current/tasks/operations.md)、[agents 操作](../../../../current/agents/operations.md)及[统一界面](../../../../current/ui/index.md)。
 
 [返回专项索引](index.md)

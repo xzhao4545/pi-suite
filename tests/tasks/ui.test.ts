@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
@@ -8,7 +8,8 @@ import { SessionManager, type ExtensionContext } from '@earendil-works/pi-coding
 import { visibleWidth } from '@earendil-works/pi-tui';
 import { Dock } from '../../src/ui/dock.ts';
 import { SessionBinding } from '../../src/runtime/binding.ts';
-import { TasksModule } from '../../src/tasks/index.ts';
+import { TasksModule, taskPath } from '../../src/tasks/index.ts';
+import { TaskStore } from '../../src/tasks/store.ts';
 import { TaskBrowserView } from '../../src/tasks/viewer.ts';
 import { terminal } from '../support/terminal.ts';
 import { displayText } from '../../src/ui/browser-chrome.ts';
@@ -59,4 +60,107 @@ test('task dock and live browser share committed status; important children keep
     assert.deepEqual(dock.render(80), [], 'all-complete feedback expires without deleting task data');
     assert.ok(tasks.current(ctx).tasks.length > 0);
   } finally { view.dispose(); tasks.detach(); binding.revoke(); t.mock.timers.reset(); rmSync(root, { recursive: true, force: true }); }
+});
+
+const taskContext = (cwd: string, id: string, notify: (message: string, type?: string) => void = () => {}) => ({
+  cwd, mode: 'tui', sessionManager: { getSessionId: () => id, getSessionFile: () => 'persisted', getHeader: () => undefined },
+  ui: { theme: { fg: (_tone: string, text: string) => text }, notify },
+}) as unknown as ExtensionContext;
+
+test('task recovery suppresses every initial publication; external completion and reopening retain exactly five seconds', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'pi-suite-task-restore-')), binding = new SessionBinding(), dock = new Dock();
+  const tasks = new TasksModule(binding, dock), ctx = taskContext(root, 'saved'), writer = new TaskStore(taskPath(root, 'saved'));
+  const frames: string[][] = [];
+  dock.invalidate = () => { frames.push(tasks.rows().map(row => row.id)); };
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'] });
+  try {
+    await writer.edit([{ op: 'add', title: 'saved done', children: ['done child'] }, { op: 'done', id: '1.1' }]);
+    binding.bind(ctx); await tasks.bind(ctx, { reason: 'startup' });
+    assert.ok(frames.every(frame => frame.length === 0), 'cold all-done data is hidden from its first published frame');
+    assert.equal((await tasks.list(ctx, { state: 'all' })).rows.length, 2, 'All still reads retained done data');
+
+    await writer.edit([{ op: 'add', title: 'saved pending', children: ['pending child'] }]);
+    const mixed = taskContext(root, 'mixed'), mixedPath = taskPath(root, 'mixed');
+    writeFileSync(mixedPath, JSON.stringify(writer.current));
+    const external = new TaskStore(mixedPath);
+    frames.length = 0; binding.bind(mixed); await tasks.bind(mixed, { reason: 'startup' });
+    assert.ok(frames.every(frame => !frame.includes('task:1')), 'cold mixed data never shows the historical done group');
+    assert.deepEqual(tasks.rows().map(row => row.id), ['task:2', 'task:2.1']);
+    const store = tasks.scope(mixed), snapshot = store.snapshot.bind(store);
+    const loading = t.mock.method(store, 'snapshot', async () => {
+      await snapshot();
+      // Real commits during snapshot loading publish more than one update. Skipping
+      // only the first refresh would mistake the second group's done for live feedback.
+      await store.edit([{ op: 'done', id: '2.1' }]);
+      await store.edit([{ op: 'add', title: 'remaining pending', children: ['remaining child'] }]);
+      return store.current;
+    });
+    frames.length = 0; binding.bind(mixed); await tasks.bind(mixed, { reason: 'reload' }); loading.mock.restore();
+    assert.ok(frames.every(frame => !frame.includes('task:1') && !(frame.includes('task:2') && frame.includes('task:3'))));
+    assert.deepEqual(tasks.rows().map(row => row.id), ['task:3', 'task:3.1']);
+
+    await external.edit([{ op: 'done', id: '3.1' }]); await store.snapshot();
+    assert.equal(tasks.rows()[0].id, 'task:3');
+    t.mock.timers.tick(4000);
+    await external.edit([{ op: 'start', id: '3.1' }]); await store.snapshot();
+    await external.edit([{ op: 'done', id: '3.1' }]); await store.snapshot();
+    t.mock.timers.tick(4999); assert.equal(tasks.rows()[0].id, 'task:3', 'recompletion receives a fresh five seconds');
+    t.mock.timers.tick(1); assert.deepEqual(tasks.rows(), []);
+    assert.equal(tasks.current(mixed).tasks.length, 6, 'expiry only changes Dock visibility');
+    for (const reason of ['reload', 'resume', 'fork'] as const) {
+      const restored = reason === 'fork' ? taskContext(root, 'fork') : mixed;
+      if (reason === 'fork') tasks.detach();
+      frames.length = 0; binding.bind(restored); await tasks.bind(restored, { reason });
+      assert.ok(frames.every(frame => !frame.length), `${reason} cannot replay completion feedback`);
+      assert.equal(tasks.current(restored).tasks.length, 6);
+    }
+  } finally { tasks.detach(); binding.revoke(); t.mock.timers.reset(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('obsolete task snapshots, subscriptions and timers cannot mutate a new binding; failed recovery reports its error', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'pi-suite-task-fence-')), binding = new SessionBinding(), dock = new Dock();
+  const notices: string[] = [], tasks = new TasksModule(binding, dock), a = taskContext(root, 'a', text => notices.push(text)), b = taskContext(root, 'b', text => notices.push(text));
+  const store = tasks.scope(a), snapshot = store.snapshot.bind(store), gate = Promise.withResolvers<void>();
+  let oldRefresh!: () => void, oldError!: (error: unknown) => void, oldTimer!: () => void, renders = 0;
+  dock.invalidate = () => { renders++; };
+  const subscribe = store.subscribe.bind(store);
+  t.mock.method(store, 'subscribe', (refresh: () => void, error?: (error: unknown) => void) => { oldRefresh = refresh; oldError = error!; return subscribe(refresh, error); });
+  const delayed = t.mock.method(store, 'snapshot', async () => { const data = await snapshot(); await gate.promise; return data; });
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'] });
+  const schedule = globalThis.setTimeout;
+  const timeouts = t.mock.method(globalThis, 'setTimeout', (callback: (...args: unknown[]) => void, delay?: number, ...args: unknown[]) => {
+    if (delay === 5000) oldTimer = callback as () => void;
+    return schedule(callback, delay, ...args);
+  });
+  try {
+    binding.bind(a); const pending = tasks.bind(a, { reason: 'startup' });
+    await tasks.edit(a, [{ op: 'add', title: 'old', children: ['old child'] }, { op: 'done', id: '1.1' }]);
+    binding.bind(b); await tasks.bind(b, { reason: 'resume' });
+    await tasks.edit(b, [{ op: 'add', title: 'new', children: ['new child'] }, { op: 'done', id: '1.1' }]);
+    const previousTimer = oldTimer, obsoleteRefresh = oldRefresh, before = renders;
+    obsoleteRefresh(); oldError(new Error('obsolete watcher')); gate.resolve(); await pending; delayed.mock.restore();
+    assert.equal(renders, before); assert.equal(notices.length, 0);
+    assert.match(tasks.rows()[0].text, /new/);
+
+    binding.bind(a); await tasks.bind(a, { reason: 'reload' });
+    assert.deepEqual(tasks.rows(), []);
+    await tasks.edit(a, [{ op: 'start', id: '1.1' }]);
+    await tasks.edit(a, [{ op: 'done', id: '1.1' }]);
+    const currentRenders = renders; previousTimer(); obsoleteRefresh();
+    assert.equal(renders, currentRenders, 'obsolete callbacks cannot touch a replacement, even when returning to the same store');
+    t.mock.timers.tick(4999); assert.equal(tasks.rows().length, 2);
+    t.mock.timers.tick(1); assert.deepEqual(tasks.rows(), []);
+    tasks.detach();
+    const detachedRenders = renders; oldRefresh(); oldTimer();
+    assert.equal(renders, detachedRenders, 'detach releases UI ownership while retaining the fork seed');
+
+    const broken = taskContext(root, 'broken', text => notices.push(text));
+    writeFileSync(taskPath(root, 'broken'), '{invalid');
+    binding.bind(broken); await tasks.bind(broken, { reason: 'resume' });
+    assert.equal(notices.length, 1); assert.match(notices[0], /TASK_STORE_INVALID|current state is retained/);
+    assert.equal(tasks.current(broken).tasks.length, 0);
+    // Repairing storage does not retroactively turn failed initialization into a live baseline.
+    writeFileSync(taskPath(root, 'broken'), JSON.stringify(tasks.current(a)));
+    await tasks.scope(broken).snapshot(); assert.deepEqual(tasks.rows(), []);
+  } finally { gate.resolve(); tasks.detach(); binding.revoke(); timeouts.mock.restore(); t.mock.timers.reset(); rmSync(root, { recursive: true, force: true }); }
 });

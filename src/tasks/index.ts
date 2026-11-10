@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { SessionManager, type ExtensionAPI, type ExtensionContext, type SessionStartEvent } from '@earendil-works/pi-coding-agent';
 import type { SuiteConfig } from '../runtime/config.ts';
 import type { Dock, DockRow } from '../ui/dock.ts';
-import type { SessionBinding } from '../runtime/binding.ts';
+import type { Binding, SessionBinding } from '../runtime/binding.ts';
 import { ToolError } from '../runtime/errors.ts';
 import { taskStore, type TaskStore } from './store.ts';
 import { taskViews, currentChild } from './model.ts';
@@ -17,6 +17,8 @@ const FEEDBACK_MS = 5000;
 
 export class TasksModule {
   private store?: TaskStore;
+  private owner?: Binding;
+  private restored = false;
   private unsubscribe?: () => void;
   private views: TaskView[] = [];
   private feedback = new Map<string, number>();
@@ -36,21 +38,35 @@ export class TasksModule {
     this.detach(); this.turn = this.lastUse = 0; this.reminded = false;
     const store = this.scope(ctx);
     this.store = store;
-    this.unsubscribe = store.subscribe(() => this.refresh(), error => ctx.ui.notify(String(error), 'error'));
+    const current = this.owner = this.binding.current!;
+    const active = () => this.store === store && this.owner === current && this.binding.isCurrent(current);
+    this.unsubscribe = store.subscribe(() => { if (active()) this.refresh(); }, error => { if (active()) ctx.ui.notify(String(error), 'error'); });
     try {
       if (event.reason === 'fork') {
         // The SDK may rebuild the extension for a fork. Resolve the parent from its session
         // header rather than relying on an old extension instance's in-memory pointer.
         const parent = event.previousSessionFile ? SessionManager.open(event.previousSessionFile) : undefined;
-        const seed = parent ? await taskStore(taskPath(parent.getCwd(), parent.getSessionId()), taskPath(parent.getCwd(), parent.getSessionId())).snapshot() : await previous?.snapshot();
-        if (seed?.tasks.length) await store.seed(seed);
+        const parentId = ctx.sessionManager.getHeader()?.parentSessionId;
+        const seed = parent ? await taskStore(taskPath(parent.getCwd(), parent.getSessionId()), taskPath(parent.getCwd(), parent.getSessionId())).snapshot()
+          : parentId ? await taskStore(`memory:${resolve(ctx.cwd)}:${parentId}`).snapshot() : await previous?.snapshot();
+        if (!active()) return;
+        if (seed) await store.seed(seed);
       }
       await store.snapshot();
-    } catch (error) { ctx.ui.notify(error instanceof Error ? error.message : String(error), 'error'); }
-    if (this.store === store) this.refresh();
+    } catch (error) {
+      if (active()) ctx.ui.notify(error instanceof Error ? error.message : String(error), 'error');
+      return;
+    }
+    if (active()) {
+      // Snapshot/seed may publish several subscription updates. All belong to recovery;
+      // establish the final baseline before enabling live completion feedback.
+      this.refresh(); this.restored = true;
+    }
   }
   detach(): void {
-    this.unsubscribe?.(); this.unsubscribe = undefined; clearTimeout(this.timer);
+    this.unsubscribe?.(); this.unsubscribe = undefined; clearTimeout(this.timer); this.timer = undefined;
+    // Retain the store as a possible fork seed, but revoke its UI ownership immediately.
+    this.owner = undefined; this.restored = false;
     this.views = []; this.feedback.clear(); this.dock.invalidate();
     this.selectedGroup = undefined;
   }
@@ -104,18 +120,24 @@ export class TasksModule {
   current(ctx: ExtensionContext): TaskData { return this.scope(ctx).current; }
   private used(): void { this.lastUse = this.turn; this.reminded = false; }
   private refresh(): void {
+    if (!this.owner || !this.binding.isCurrent(this.owner)) return;
     const next = this.store ? taskViews(this.store.current) : [];
     const previous = new Map(this.views.map(task => [task.id, task.status])), done = new Set<string>();
     for (const task of next) if (task.status === 'done') {
       done.add(task.id);
-      if (previous.get(task.id) !== 'done') this.feedback.set(task.id, Date.now() + FEEDBACK_MS);
+      if (this.restored && previous.get(task.id) !== 'done') this.feedback.set(task.id, Date.now() + FEEDBACK_MS);
     }
     for (const id of this.feedback.keys()) if (!done.has(id)) this.feedback.delete(id);
     this.views = next;
-    clearTimeout(this.timer);
+    clearTimeout(this.timer); this.timer = undefined;
     if (this.feedback.size) {
-      const earliest = Math.min(...this.feedback.values());
-      this.timer = setTimeout(() => { for (const [id, until] of this.feedback) if (until <= Date.now()) this.feedback.delete(id); this.refresh(); }, Math.max(0, earliest - Date.now()));
+      const earliest = Math.min(...this.feedback.values()), store = this.store, current = this.owner;
+      this.timer = setTimeout(() => {
+        // A timer already queued when a binding is revoked cannot expire the new list's feedback.
+        if (this.store !== store || this.owner !== current || this.binding.current !== current) return;
+        for (const [id, until] of this.feedback) if (until <= Date.now()) this.feedback.delete(id);
+        this.refresh();
+      }, Math.max(0, earliest - Date.now()));
       this.timer.unref();
     }
     this.dock.invalidate();

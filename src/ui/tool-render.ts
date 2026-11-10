@@ -1,4 +1,4 @@
-import { DynamicBorder, getLanguageFromPath, type Theme, type ThemeColor, type ToolRenderers } from '@earendil-works/pi-coding-agent';
+import { getLanguageFromPath, type Theme, type ThemeColor, type ToolRenderers } from '@earendil-works/pi-coding-agent';
 import { Container, Text, truncateToWidth, type Component } from '@earendil-works/pi-tui';
 import { sanitizeText } from '../runtime/text.ts';
 import { stateTone } from './browser-chrome.ts';
@@ -48,17 +48,16 @@ export function stateLine(state: string): Pick<ToolLine, 'icon' | 'tone'> {
 const plainText = (theme: Theme, text: string, tone: Tone = 'toolOutput') =>
   new Text(sanitizeText(text).split('\n').map(line => theme.fg(tone, line)).join('\n'), 0, 0);
 
-/** Presentation only. ToolExecutionComponent still owns expansion, mouse regions and images. */
-class ToolShell implements Component {
+/** Body only: the host owns background, padding, expansion, mouse regions and images. */
+class ToolBody implements Component {
   private content?: Container;
   private codes = new Map<number, CodeComponent>();
   private caption!: ToolLine;
   private rows?: () => ToolExpansion;
   private theme!: Theme;
-  private pad = 0;
   private visible?: () => boolean;
-  update(caption: ToolLine, rows: (() => ToolExpansion) | undefined, theme: Theme, pad: number, visible?: () => boolean): void {
-    this.caption = caption; this.rows = rows; this.theme = theme; this.pad = pad; this.visible = visible;
+  update(caption: ToolLine, rows: (() => ToolExpansion) | undefined, theme: Theme, visible?: () => boolean): void {
+    this.caption = caption; this.rows = rows; this.theme = theme; this.visible = visible;
     this.content = undefined;
   }
   invalidate(): void { this.content?.invalidate(); this.content = undefined; for (const code of this.codes.values()) code.invalidate(); }
@@ -90,34 +89,31 @@ class ToolShell implements Component {
   }
   render(width: number): string[] {
     if (this.visible && !this.visible()) return [];
-    const pad = Math.min(this.pad, Math.floor(Math.max(0, width - 1) / 2)), inner = width - pad * 2;
-    const border = new DynamicBorder(text => this.theme.fg('borderMuted', text)).render(width);
-    const body = [...this.rows ? new Text(lineText(this.theme, this.caption), 0, 0).render(inner)
-      : [toolLine(this.theme, this.caption, inner)], ...this.body().render(inner)];
-    return [...border, ...body.map(line => ' '.repeat(pad) + line), ...border];
+    return [...this.rows ? new Text(lineText(this.theme, this.caption), 0, 0).render(width)
+      : [toolLine(this.theme, this.caption, width)], ...this.body().render(width)];
   }
 }
-/** The host shares finished across call/result updates; the result takes over the one execution shell. */
+/** Shared state hides the call body once any result arrives, leaving one summary in the native Box. */
 export function toolRenderers<A, D>(view: ToolView<A, D>): ToolRenderers {
   return {
-    renderShell: 'self',
     renderCall(args, theme, ctx) {
-      const shell = ctx.lastComponent instanceof ToolShell ? ctx.lastComponent : new ToolShell();
-      shell.update(view.call(args as A), undefined, theme, ctx.outputPad, () => !ctx.state.finished);
-      return shell;
+      const body = ctx.lastComponent instanceof ToolBody ? ctx.lastComponent : new ToolBody();
+      // The host builds the call slot before the result slot; defer visibility until render.
+      body.update(view.call(args as A), undefined, theme, () => !ctx.state.finished);
+      return body;
     },
     renderResult(result, options, theme, ctx) {
-      // A partial update replaces the call too, otherwise progress produces two execution frames.
+      // Partial output takes over immediately, not only after execution finishes.
       ctx.state.finished = true;
       const raw = sanitizeText(result.content.filter(item => item.type === 'text').map(item => item.text).join('\n'));
       const text = view.redact?.(ctx.args as A, raw, ctx.isError) ?? raw;
-      const shell = ctx.lastComponent instanceof ToolShell ? ctx.lastComponent : new ToolShell();
+      const body = ctx.lastComponent instanceof ToolBody ? ctx.lastComponent : new ToolBody();
       const caption = ctx.isError ? { icon: '✘', tone: 'error' as const, title: view.call(ctx.args as A).title }
         : view.collapsed(result.details as D, ctx.args as A, text);
-      shell.update(caption, ctx.isError ? () => [plainText(theme, text, 'error')]
+      body.update(caption, ctx.isError ? () => [plainText(theme, text, 'error')]
         : options.expanded ? () => view.expanded?.(result.details as D, ctx.args as A, text, theme) ?? [text] : undefined,
-      theme, ctx.outputPad);
-      return shell;
+      theme);
+      return body;
     },
   };
 }

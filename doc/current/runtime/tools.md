@@ -28,7 +28,7 @@ ask_user.timeoutMs 只控制询问期限；wait.timeoutMs 只控制等待调用�
 
 ## 公共工具显示
 
-ui/tool-render.ts 的 ToolView 提供 call、collapsed 与可选 expanded；统一构造 renderShell=self、renderCall/renderResult。公共 self-shell 使用 Pi DynamicBorder 绘制上下执行边界，outputPad 仅在公共组件中应用一次，正文宽度扣除两侧 padding 后交给原生 Text/Container 处理 ANSI、中文、emoji 和多行布局。有 partial 或最终结果后通过 ctx.state.finished 隐藏调用组件，由结果接管同一执行块；折叠正文固定一行，展开保留完整对象与状态概览。错误始终显示 error 图标和完整 error 正文。工具展开、鼠标区域、图片与调用/结果流式配对仍由 Pi ToolExecutionComponent 管理，不新增工具交互容器。
+ui/tool-render.ts 的 ToolView 提供 call、collapsed 与可选 expanded；统一构造 renderCall/renderResult，并使用 Pi 默认工具外壳。原生 Box 负责 pending/success/error 背景与 outputPad，Suite 正文以零 padding 的 Text/Container 处理 ANSI、中文、emoji 和多行布局，不绘制工具上下横线。有 partial 或最终结果后通过 ctx.state.finished 隐藏调用正文，由结果接管同一执行块；折叠正文固定一行，展开保留完整对象与状态概览。错误始终显示 error 图标和完整 error 正文。工具展开、鼠标区域、图片与调用/结果流式配对仍由 Pi ToolExecutionComponent 管理，不新增工具交互容器。
 
 ToolLine 清理字面字段并压平换行，折叠行按可见宽度截断；图标按 tone 着色，主要标题使用 toolTitle，titleTone 可显式保留任务状态色，summary 使用 toolOutput，meta 默认 dim 或指定语义色，任务完成标题支持删除线。stateLine 复用 Browser/Dock 的 stateTone：starting/running 为 success，queued/waiting/waiting(parent)/stopping 与清理未确认为 warning，failed/limited/timed_out 为 error，completed/stopped 为 dim。
 

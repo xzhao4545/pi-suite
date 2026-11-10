@@ -5,11 +5,46 @@ import { join, resolve } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import { fauxProvider, fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { createAgentSession, DefaultResourceLoader, SessionManager, SettingsManager, ToolExecutionComponent, highlightCode,
-  type AgentSession, type ExtensionUIContext, type SessionStartEvent } from '@earendil-works/pi-coding-agent';
+  type AgentSession, type ExtensionAPI, type ExtensionUIContext, type SessionEntry, type SessionStartEvent } from '@earendil-works/pi-coding-agent';
 import { terminal } from '../support/terminal.ts';
 import { agentDir } from '../support/jobs.ts';
 import { agentRuntime } from '../../src/agents/runtime.ts';
 import { loadConfig } from '../../src/runtime/config.ts';
+import { registerSuiteRenderers } from '../../src/runtime/renderers.ts';
+import { toolRenderer } from '../../src/runtime/tools.ts';
+import { Transcript } from '../../src/ui/transcript.ts';
+
+test('read-only Suite lookup supplies the same native body to Ask History and collected-child transcripts', () => {
+  let resolveRenderer!: Parameters<ExtensionAPI['registerToolRenderer']>[0];
+  const pi = { registerToolRenderer: (resolver: typeof resolveRenderer) => { resolveRenderer = resolver; } } as ExtensionAPI;
+  registerSuiteRenderers(pi, true);
+  const lookup = (name: string) => toolRenderer(pi, name);
+  for (const name of ['goal_complete', 'ask_user', 'task_list']) {
+    assert.equal(lookup(name), resolveRenderer(name, () => undefined));
+    assert.equal(lookup(name)?.renderShell, undefined);
+  }
+  const manager = SessionManager.inMemory(process.cwd());
+  const call = { ...fauxToolCall('goal_complete', {}), id: 'lookup-call' };
+  manager.appendMessage(fauxAssistantMessage(call));
+  manager.appendMessage({ role: 'toolResult', toolName: call.name, toolCallId: call.id, timestamp: Date.now(), isError: false,
+    content: [{ type: 'text', text: 'Full result\nRESULT_END' }], details: { summary: 'finished' } });
+  const entries = manager.getBranch(), final = entries.at(-1)!;
+  assert.ok(final.type === 'message' && final.message.role === 'toolResult');
+  const partial: SessionEntry = { ...final, id: 'stream:lookup-call', message: { ...final.message,
+    content: [{ type: 'text', text: 'progress body' }], details: { summary: 'progress' } } };
+  const history = new Transcript(terminal(), process.cwd(), lookup);
+  for (const stage of [entries.slice(0, -1), [...entries.slice(0, -1), partial], entries]) {
+    history.setEntries(stage);
+    const lines = history.render(120).map(stripVTControlCharacters);
+    assert.equal(lines.filter(line => line.includes('Goal complete')).length, 1, 'one summary through call/partial/final');
+    assert.doesNotMatch(lines.join('\n'), /^\s*─+\s*$/m);
+  }
+  history.toggleTools(); assert.match(history.render(120).map(stripVTControlCharacters).join('\n'), /RESULT_END/);
+  // A collected child has no captured map; its viewer resolves through this same read-only lookup.
+  const collected = new Transcript(terminal(), process.cwd(), lookup);
+  collected.setEntries(entries); collected.toggleTools();
+  assert.deepEqual(collected.render(120), history.render(120));
+});
 
 test('actual loader resolves historical renderers before binding, during reload and after resume/restart without admitting disabled tools', async () => {
   const root = agentDir(); process.env.PI_CODING_AGENT_DIR = root;
@@ -37,7 +72,8 @@ test('actual loader resolves historical renderers before binding, during reload 
   const checkEarly = (session: AgentSession) => {
     for (const name of names) {
       assert.equal(session.getToolDefinition(name), undefined, 'render-only registration does not admit model tools');
-      assert.equal(renderer(session, name)?.renderShell, 'self', name);
+      assert.equal(renderer(session, name)?.renderShell, undefined, name);
+      assert.equal(typeof renderer(session, name)?.renderCall, 'function', name);
       assert.equal(typeof renderer(session, name)?.renderResult, 'function', name);
     }
     assert.equal(renderer(session, 'unrelated_tool'), undefined);
@@ -58,13 +94,18 @@ test('actual loader resolves historical renderers before binding, during reload 
     }
     for (const name of ['agent_get', 'agent_stop']) {
       const agent = tools.get(`history-${name}`)!;
-      const collapsed = agent.render(120).map(stripVTControlCharacters).filter(line => line.trim() && !/^─+$/.test(line.trim()));
+      const lines = agent.render(120).map(stripVTControlCharacters);
+      assert.equal(lines.length, 4, 'replayed Suite tools use only the native shell');
+      assert.doesNotMatch(lines.join('\n'), /^\s*─+\s*$/m);
+      const collapsed = lines.filter(line => line.trim());
       assert.equal(collapsed.length, 1); assert.match(collapsed[0], /History reviewer/); assert.doesNotMatch(collapsed[0], /agent_/);
       agent.setExpanded(true);
-      const expanded = agent.render(120).map(stripVTControlCharacters).filter(line => line.trim() && !/^─+$/.test(line.trim()));
+      const expanded = agent.render(120).map(stripVTControlCharacters).filter(line => line.trim());
       assert.match(expanded[0], /History reviewer/); assert.match(expanded.join('\n'), /agent_00000001/);
     }
-    const collapsed = list.render(120).map(stripVTControlCharacters).filter(line => line.trim() && !/^─+$/.test(line.trim()));
+    const listLines = list.render(120).map(stripVTControlCharacters);
+    assert.equal(listLines.length, 4); assert.doesNotMatch(listLines.join('\n'), /^\s*─+\s*$/m);
+    const collapsed = listLines.filter(line => line.trim());
     assert.equal(collapsed.length, 1); assert.match(collapsed[0], /Tasks.*1 groups 2 items/);
     list.setExpanded(true);
     assert.match(list.render(120).map(stripVTControlCharacters).join('\n'), /History child two/);
@@ -122,7 +163,16 @@ test('actual loader resolves historical renderers before binding, during reload 
         assert.equal(run.config.ui.highlightBuiltinCommands, highlightEnabled);
         assert.equal(child.extensionRunner.getCommand('suite'), undefined, 'child does not load the main suite');
         assert.equal(child.getToolDefinition('task_list'), undefined, 'display registration does not admit disabled child tools');
-        assert.equal(renderer(child, 'task_list')?.renderShell, 'self', 'unbound child history still has Suite display definitions');
+        assert.equal(renderer(child, 'task_list')?.renderShell, undefined, 'unbound child history uses the default shell');
+        assert.equal(typeof renderer(child, 'task_list')?.renderResult, 'function');
+        const ask = run.renderers?.get('ask_user');
+        assert.ok(ask, 'the actual child captures its own Ask parent renderer');
+        assert.equal(ask.renderShell, undefined);
+        assert.equal(ask.renderResult, renderer(child, 'ask_user')?.renderResult);
+        const askCall = new ToolExecutionComponent('ask_user', 'child-ask', { question: 'Continue?' }, { outputPad: 2 }, ask,
+          terminal(30, 120), target).render(120).map(stripVTControlCharacters);
+        assert.equal(askCall.length, 4); assert.match(askCall[2], /^  .*Ask parent/);
+        assert.doesNotMatch(askCall.join('\n'), /^\s*─+\s*$/m);
         for (const [name, command] of [['bash', 'echo "$HOME" | grep value'], ['powershell', '$name = "world"']]) {
           const live = renderer(child, name!), mapped = run.renderers?.get(name!);
           assert.ok(live?.renderCall); assert.ok(live?.renderResult);

@@ -15,6 +15,7 @@ import {ScrollView} from '../../src/ui/scroll.ts';
 import {DetailsView} from '../../src/ui/details.ts';
 import {openReading, readingRows} from '../../src/ui/reading.ts';
 import {terminal} from '../support/terminal.ts';
+import {readerTerminal} from '../support/reader.ts';
 import {agentDir} from '../support/jobs.ts';
 
 test('browser searches full data, preserves identity and readers across resize/reopen and disposes events', () => {
@@ -55,7 +56,7 @@ test('shared frames keep inline input local and native follow-end persists throu
     detail.render(120); const end = reader.offset;
     lines.push('streamed tail'); assert.ok(detail.render(120).some(line => line.includes('streamed tail'))); assert.ok(reader.offset > end);
     reader.scroll(-3); const paused = reader.offset;
-    lines.push('unread tail');
+    lines.push('unread tail'); reader.markNewOutput();
     assert.match(detail.render(120).map(stripVTControlCharacters).join('\n'), /↓ new output · End to follow/); assert.equal(reader.offset, paused);
     reader.scroll(999); assert.equal(reader.following, true);
     lines.push('latest tail'); assert.ok(detail.render(120).some(line => line.includes('latest tail'))); assert.equal(reader.hasNewOutput, false);
@@ -83,7 +84,7 @@ test('reading overlays share the actual height ceiling and fullscreen viewport k
       Promise.resolve(factory(tui, {} as never, getKeybindings() as never, resolve)).then(view => {
         const overlay = typeof options?.overlayOptions === 'function' ? options.overlayOptions() : options?.overlayOptions;
         assert.equal(options?.overlay, true);
-        assert.deepEqual(overlay, fullscreen ? {anchor: 'top-left', width: '100%', maxHeight: '100%', margin: 0}
+        assert.deepEqual(overlay, fullscreen ? {anchor: 'top-left', width: '100%', height: '100%', maxHeight: '100%', margin: 0}
           : {anchor: 'center', width: '90%', maxHeight: '70%', margin: 0});
         assert.ok(view instanceof DetailsView); assert.equal(view.capturesViewportInput, true);
         assert.equal(view.render(120).length, readingRows(tui), 'footer is inside the same ceiling as the overlay');
@@ -114,7 +115,7 @@ test('browser focus chrome distinguishes panes and text modes without repainting
       actions: () => [{key: 'm', label: 'Message', input: () => ({prompt: 'Message: ', submit: async () => 'Sent'})}]}, () => {}, theme);
     const screen = () => {
       const lines = view.render(width);
-      assert.equal(lines.length, Math.floor(tui.terminal.rows * 0.8));
+      assert.equal(lines.length, readingRows(tui));
       assert.ok(lines.every(line => visibleWidth(line) <= width));
       const raw = lines.join('\n');
       assert.ok(raw.includes(theme.fg('error', 'failed')), 'record status remains colored in either focus');
@@ -153,16 +154,21 @@ test('browser mouse focus follows pane and native input geometry, skips unavaila
     let available = false;
     const view = new BrowserView(tui, {title: 'Records', state, items: () => [{value: 'record', label: 'record',
       ...available ? {details: () => 'line\n'.repeat(40)} : {}}]}, () => {});
-    const screen = () => view.render(width).map(stripVTControlCharacters);
-    const mouse = (x: number, y: number, type: TuiMouseEvent['type'] = 'press') => view.handleMouse({type, button: 'left', x, y,
-      screenX: x, screenY: y, width, height: 24, shift: false, alt: false, ctrl: false, ...type === 'wheel' ? {wheelDelta: 1} : {}});
+    const native = readerTerminal(30, width);
+    native.tui.showOverlay(view, {row: 0, col: 0, width, maxHeight: readingRows(tui)});
+    const screen = () => { native.tui.renderNow(); return view.render(width).map(stripVTControlCharacters); };
+    const mouse = (x: number, y: number, type: TuiMouseEvent['type'] = 'press') => {
+      const button = type === 'wheel' ? 65 : type === 'move' ? 35 : 0;
+      native.send(`\x1b[<${button};${x + 1};${y + 1}M`);
+      if (type === 'press') native.send(`\x1b[<0;${x + 1};${y + 1}m`);
+    };
     try {
       let lines = screen(), listTop = lines.findIndex(line => line.startsWith('▸ List'));
       view.handleInput('\t'); assert.equal(state.focus, 'list');
       if (width >= 80) {mouse(width - 5, listTop + 1); assert.equal(state.focus, 'list');}
       available = true; lines = screen();
       const detailsTop = width >= 80 ? lines.findIndex(line => line.includes('Details')) : lines.findIndex(line => line.startsWith('  Details'));
-      assert.equal(mouse(width - 5, detailsTop)?.render, true); assert.equal(state.focus, 'details');
+      mouse(width - 5, detailsTop); assert.equal(state.focus, 'details');
       mouse(0, listTop, 'move'); assert.equal(state.focus, 'details');
       mouse(0, listTop); assert.equal(state.focus, 'list');
       view.handleInput('/'); view.handleInput('record'); view.handleInput('\r'); lines = screen();
@@ -173,10 +179,11 @@ test('browser mouse focus follows pane and native input geometry, skips unavaila
       const searchTop = lines.findIndex(line => line.includes('▸ Search'));
       mouse(visibleWidth('▸ Search ') + 2, searchTop); view.handleInput('line');
       assert.equal(state.readers.get('record')!.search.getValue(), 'line');
-      mouse(width - 5, detailsTop, 'wheel'); assert.equal(state.focus, 'details');
+      const body = screen().findIndex(line => line.includes('Details')) + 1;
+      mouse(width - 5, body, 'wheel'); assert.equal(state.focus, 'details');
       assert.ok(state.readers.get('record')!.offset > 0);
       available = false; screen(); assert.equal(state.focus, 'list');
-    } finally {view.dispose();}
+    } finally {view.dispose(); native.dispose();}
   }
 });
 

@@ -2,7 +2,7 @@ import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-a
 import type { Dock } from '../ui/dock.ts';
 import type { InlineRequest } from '../ui/inline-input.ts';
 import { DetailsView } from '../ui/details.ts';
-import { openReading } from '../ui/reading.ts';
+import { openReading, withReadingScreen } from '../ui/reading.ts';
 import { Transcript } from '../ui/transcript.ts';
 import { active } from './types.ts';
 import { executionRow } from '../ui/dock/line.ts';
@@ -88,7 +88,10 @@ export async function performAgentAction(action: string, ctx: ExtensionContext, 
   }
 }
 
-export async function showAgent(ctx: ExtensionContext, agents: Pick<AgentsModule, 'manager' | 'scope' | 'renderer'>, dock: Dock, id: string, runId: string, config: () => SuiteConfig, readonly = false, jobs?: AgentJobViewer, navigation = new ViewerNavigation()): Promise<void> {
+export const showAgent = (...args: Parameters<typeof readAgent>): Promise<void> =>
+  withReadingScreen(args[0], () => readAgent(...args));
+
+async function readAgent(ctx: ExtensionContext, agents: Pick<AgentsModule, 'manager' | 'scope' | 'renderer'>, dock: Dock, id: string, runId: string, config: () => SuiteConfig, readonly = false, jobs?: AgentJobViewer, navigation = new ViewerNavigation()): Promise<void> {
   const release = agents.manager.retain(runId);
   let content: Transcript | undefined, reader: ScrollView | undefined;
   const { get, canStop, canMessage } = agentControls(ctx, agents, id, runId, readonly);
@@ -110,7 +113,7 @@ export async function showAgent(ctx: ExtensionContext, agents: Pick<AgentsModule
           { label: 'Stop subtree', key: 'x', confirm: true, available: canStop, run: () => { action = 'stop'; done(); } },
         ], reader, theme, {title: false, navigation, keys,
           bottom: width => agentInformation(get().record, Boolean(get().run?.question), readonly, view.reader, width, theme)});
-        if (!reader && active(get().record.state)) view.reader.follow();
+        if (!reader) view.reader.follow();
         view.reader.setContent(content);
         reader = view.reader;
         let revision = transcript(get().record, get().run);
@@ -120,6 +123,7 @@ export async function showAgent(ctx: ExtensionContext, agents: Pick<AgentsModule
           // since an unchanged last tool result says nothing about an earlier live tail.
           if (entries.length !== revision.length || entries.some((entry, index) => entry !== revision[index])) {
             revision = entries;
+            view.reader.markNewOutput();
             content!.setEntries(entries); view.reader.setContent(content!);
           }
           tui.requestRender();

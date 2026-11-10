@@ -19,6 +19,16 @@ export type GoalStatus = "active" | "paused" | "blocked" | "failed" | "completed
 export type Schedule = "running" | "waiting_user" | "waiting_jobs" | "waiting_host" | "detached" | "idle";
 export type Goal = Omit<Static<typeof goalSchema>, "status" | "waiting"> & { status: GoalStatus; waiting?: "user" | "jobs" };
 
+/** A manually prepared copy keeps the goal record, but never inherits automatic wakes. */
+export function pausedGoalCopy(data: unknown): Static<typeof entrySchema> {
+  if (!Value.Check(entrySchema, data)) throw new Error("Invalid persisted pi-suite goal");
+  if (!data.goal) return data;
+  const goal = { ...data.goal, automatic: false };
+  if (goal.status === 'active') goal.status = 'paused';
+  delete goal.waiting; delete goal.waitFor; delete goal.resumeAt;
+  return { version: 1, goal };
+}
+
 export function restoreGoal(ctx: ExtensionContext): Goal | undefined {
   const entry = ctx.sessionManager.getBranch().findLast(entry => entry.type === "custom" && entry.customType === GOAL_ENTRY);
   if (!entry || entry.type !== "custom") return;

@@ -1,8 +1,8 @@
 # UI-1：公共工具外观交由 Pi 原生外壳
 
-## 当前状态与根因
+## 实施前状态与根因（历史）
 
-[`src/ui/tool-render.ts`](../../../src/ui/tool-render.ts) 的公共 `toolRenderers()` 设置 `renderShell: 'self'`。`ToolShell` 使用 `DynamicBorder` 绘制上下 `borderMuted` 横线，并自行处理 `outputPad`。
+[`src/ui/tool-render.ts`](../../../../../src/ui/tool-render.ts) 的公共 `toolRenderers()` 设置 `renderShell: 'self'`。`ToolShell` 使用 `DynamicBorder` 绘制上下 `borderMuted` 横线，并自行处理 `outputPad`。
 
 Pi 内置 read、bash 等工具通常让宿主 `ToolExecutionComponent` 使用默认背景块、留白与 pending/success/error 状态背景；edit 等工具虽自行生成外观，但也采用背景块。Suite 使用相同主题并不能消除外壳结构的差异。
 
@@ -37,12 +37,12 @@ Pi 内置 read、bash 等工具通常让宿主 `ToolExecutionComponent` 使用�
 
 ## 任务列表
 
-- [ ] 收敛公共正文组件职责，移除自绘工具横线与重复外层 padding。
-- [ ] 保留调用、部分结果和最终结果的单份摘要接替机制。
-- [ ] 核查错误全文、敏感输入隐藏、结构化字段与代码/命令缓存。
-- [ ] 核查登记、恢复、child 实际 renderer 与历史 lookup 使用同一外观规则。
-- [ ] 更新已有工具外壳检查中关于 self/horizontal border 的目标断言，不保留固化自绘外壳的过时断言。
-- [ ] 实施后局部同步[统一界面](../../current/ui/index.md)与[工具契约](../../current/runtime/tools.md)。
+- [x] 收敛公共正文组件职责，移除自绘工具横线与重复外层 padding。
+- [x] 保留调用、部分结果和最终结果的单份摘要接替机制。
+- [x] 核查错误全文、敏感输入隐藏、结构化字段与代码/命令缓存。
+- [x] 核查登记、恢复、child 实际 renderer 与历史 lookup 使用同一外观规则。
+- [x] 更新已有工具外壳检查中关于 self/horizontal border 的目标断言，不保留固化自绘外壳的过时断言。
+- [x] 局部同步[统一界面](../../../../current/ui/index.md)与[工具契约](../../../../current/runtime/tools.md)。
 
 ## 验收标准
 

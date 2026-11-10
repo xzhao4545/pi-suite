@@ -43,9 +43,11 @@ export const confirmation = (key: string, action: string, theme?: Theme) =>
   `${paint(key === 'x' ? 'error' : 'warning', `Press ${keyToken(key, theme)} again to ${action}`, theme)} · ${paint('dim', 'any other key cancels', theme)}`;
 export const divider = (text: string, theme?: Theme) => paint('borderMuted', text, theme);
 export const separator = (width: number, theme?: Theme) => divider('─'.repeat(width), theme);
-export const selectedRow = (text: string, width: number, theme?: Theme, active = true) => {
-  const marker = paint(active ? 'accent' : 'muted', text.slice(0, 2), theme);
-  const row = `${marker}${text.slice(2)}${' '.repeat(Math.max(0, width - visibleWidth(text)))}`;
+/** Native SelectList supplies a literal `→ `; tree callers opt out with an empty marker. */
+export const selectedRow = (text: string, width: number, theme?: Theme, active = true, marker = '→ ') => {
+  // Only split a known literal prefix, never arbitrary characters from ANSI-styled content.
+  const marked = marker && text.startsWith(marker) ? paint(active ? 'accent' : 'muted', marker, theme) + text.slice(marker.length) : text;
+  const row = `${marked}${' '.repeat(Math.max(0, width - visibleWidth(text)))}`;
   // An inactive selection still identifies the record, but cannot compete with the focused pane.
   if (!active || !theme) return row;
   // TUI truncation emits SGR 0; restore only the selection background, never a row-wide foreground.

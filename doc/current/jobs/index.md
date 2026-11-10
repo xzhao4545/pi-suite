@@ -44,7 +44,7 @@ modules.jobs=false 关闭 job 工具注册和会话订阅；agents 保留未绑�
 
 job_list 的 session 范围、/jobs 默认列表与状态数量共用 JobsModule 的会话范围：当前 owner 且 anchor 位于当前分支（或为 null）的直属 job，以及当前可见 agent 各次 run 根通过 createdBy 匹配的子树 job。运行时的直属 job 覆盖全部 cwd，agent 后代与已回收/结束运行留下的 job 同样可见；列表在存储读取完成后补入当前 owned 副本，按 job ID 去重，再筛状态与分页。活动数量对同一集合使用公共 isActive，不持久化冗余计数。
 
-工作区列表仍限定当前 workspace；session 列表可包含实际工具 cwd 不同的可见直属/child job，归属和通知 owner 保持原值。agents 模块关闭时，从当前分支保存的 agent 记录复用 visibleAgent 提取 run 根，不创建 AgentManager runtime。只有磁盘历史且没有运行时控制句柄的记录不计活动，不能根据历史 PID 重建进程。
+工作区列表仍限定当前 workspace；session 列表可包含实际工具 cwd 不同的可见直属/child job，归属和通知 owner 保持原值。`/responses fork` 复制可阅读的会话记录与任务引用，不迁移 job owner、anchor 或控制句柄，不停止、重启或重新执行 job；返回原会话继续观察其通知和实际状态。agents 模块关闭时，从当前分支保存的 agent 记录复用 visibleAgent 提取 run 根，不创建 AgentManager runtime。只有磁盘历史且没有运行时控制句柄的记录不计活动，不能根据历史 PID 重建进程。
 
 执行协议不兼容时，v3 控制桥保留完整 session 查询与计数；v1/v2 只能显示当前分支直属活动数量并在绑定时提示其范围，完整 session 查询明确拒绝。各版本受限运行时的新启动、写入和 attach 均遵循上述受限模式。
 
@@ -106,13 +106,15 @@ PTY 行先按回车覆写转为可见文本，pipe 行去除控制字符。事�
 
 job_start 检查参数后直接执行，普通命令、CLI 预设及 monitor（含 detector）遵循同一启动流程。TUI 与非交互模式均直接启动；`attach: true` 打开 PTY 用户操作视图，要求交互终端。配置入口与默认值见 [CLI 预设与直接启动](launch.md#启动行为)。
 
-`/jobs [finished|all] [workspace]` 在编辑器位置打开 job 列表，标题为 `Jobs ▸ List`，不带参数每次默认当前会话的 All；`w` 一次循环 Scope（This session/Workspace），`s` 一次循环 State（All/Finished），显示各状态数量。活动 job（含清理未确认且公共 isActive 判定为活动的对象）排在最前，内部按现有生命周期的最近时间（启动或创建时间）倒序；其余按结束时间（无则启动或创建时间）倒序。模型工具 job_list 的筛选参数与默认值见工具表。标题区包含状态行，列表/详情标题线随焦点强调，正文与底部使用 borderMuted 分隔线；底部固定导航行与动作行，空记录也显示 `w scope · s state · / filter · Tab details · Esc close`，正文和动作行显示可操作的下一步提示。配色见 [统一界面配色角色](../ui/index.md#浏览器配色角色)。列表不含导航菜单项，默认列表焦点，先按 `/` 进入过滤再输入 ID、名称、状态、完整命令和 cwd，直接输入字符不筛选；检索覆盖当前范围完整元数据集合，↑↓ / PgUp/PgDn 选择，Tab 从列表进入详情，再次 Tab 或 Esc 回到列表；活动标题显示 `▸`、accent 与粗体，分区横线同步强调，非活动标题为 muted；离开列表时移除选中背景但保留记录状态与正文颜色。过滤/搜索有明确输入焦点和原生光标，鼠标点击/滚轮同步更新区域焦点，悬停不夺焦点。过滤内 Enter/Tab 保留查询返回列表、Esc 清空并退出。状态行只显示 job 名称，机器 ID 留在过滤元数据和完整详情；窄屏优先保留页名和选中对象。宽屏右侧显示运行时长、完整命令、cwd、模式、退出和清理信息，窄屏采用上下布局；Enter 直接打开查看器，Esc 先离开详情或清空筛选，再退出。返回列表保留查询、job ID 和详情阅读位置。运行变化通过 Manager 订阅刷新，活动时每秒更新时间，时钟不读取历史文件或完整日志。选中 Job 后立即看到实际多行命令与输出，`c` 展开/收起有界命令区，Tab/鼠标切入命令阅读，`d` 查看未截断命令、ID、cwd、归属、清理、monitor、hands-free 和全部字段；返回详情保留原输出流、搜索和跟随。底部名称/状态与流/阅读状态独立分隔，所有区块计入 readingRows，正文补齐空行。活动 PTY 默认只读，`i` 才接管；已结束或跨进程对象不提供输入/停止，但可读现有屏幕快照和日志。浏览期间暂缓结算通知，关闭后合并送达。
+`/jobs [finished|all] [workspace]` 通过共享阅读 overlay 打开 job 列表，标题为 `Jobs ▸ List`，不带参数每次默认当前会话的 All；`w` 一次循环 Scope（This session/Workspace），`s` 一次循环 State（All/Finished），显示各状态数量。活动 job（含清理未确认且公共 isActive 判定为活动的对象）排在最前，内部按现有生命周期的最近时间（启动或创建时间）倒序；其余按结束时间（无则启动或创建时间）倒序。模型工具 job_list 的筛选参数与默认值见工具表。标题区包含状态行，列表/详情标题线随焦点强调，正文与底部使用 borderMuted 分隔线；底部固定导航行与动作行，空记录也显示 `w scope · s state · / filter · Tab details · Esc close`，正文和动作行显示可操作的下一步提示。配色见 [统一界面配色角色](../ui/index.md#浏览器配色角色)。列表不含导航菜单项，默认列表焦点，先按 `/` 进入过滤再输入 ID、名称、状态、完整命令和 cwd，直接输入字符不筛选；检索覆盖当前范围完整元数据集合，↑↓ / PgUp/PgDn 选择，Tab 从列表进入详情，再次 Tab 或 Esc 回到列表；活动标题显示 `▸`、accent 与粗体，分区横线同步强调，非活动标题为 muted；离开列表时移除选中背景但保留记录状态与正文颜色。过滤/搜索有明确输入焦点和原生光标，鼠标点击/滚轮同步更新区域焦点，悬停不夺焦点。过滤内 Enter/Tab 保留查询返回列表、Esc 清空并退出。状态行只显示 job 名称，机器 ID 留在过滤元数据和完整详情；窄屏优先保留页名和选中对象。宽屏右侧显示运行时长、完整命令、cwd、模式、退出和清理信息，窄屏采用上下布局；Enter 直接打开查看器，Esc 先离开详情或清空筛选，再退出。返回列表保留查询、job ID 和详情阅读位置。运行变化通过 Manager 订阅刷新，活动时每秒更新时间，时钟不读取历史文件或完整日志。选中 Job 后立即看到实际多行命令与输出，`c` 展开/收起有界命令区，Tab/鼠标切入命令阅读，`d` 查看未截断命令、ID、cwd、归属、清理、monitor、hands-free 和全部字段；返回详情保留原输出流、搜索和跟随。底部名称/状态与流/阅读状态独立分隔，所有区块计入 readingRows，正文补齐空行。活动 PTY 默认只读，`i` 才接管；已结束或跨进程对象不提供输入/停止，但可读现有屏幕快照和日志。浏览期间暂缓结算通知，关闭后合并送达。
 
 控制桥提供 clear 时，已结算且 cleanup 不是 pending/unconfirmed 的记录提供 `Delete`，共享 ActionBar 要求同键二次确认，明确删除该 Job 元数据、全部输入/输出/monitor 日志及终态快照。JobManager 等待已有结算、输入/事件写入和保存队列，重试未保存的终态，再由 JobStore 复核磁盘状态后删除目录；删除期间拒绝重复清理，晚到的通知消费不重新创建历史，已排队的结果与事件通知一并撤销。该操作不会停止进程或使用历史 PID，活动与未确认记录、只读 agents 历史及缺少 clear 控制桥的受限 owner 不提供清理入口。
 
 agents 记录与 Transcript 的 Jobs 入口复用同一个直接命令/输出查看器，按 job 自己的 cwd 读取详情和日志，返回时刷新所属活动集合；只读 agents 历史允许读取详情、各流和已有快照，隐藏 Input、Stop 和 Delete。浏览保持公共通知阻塞令牌，退出 job 界面不停止其所属 agent。
 
-日志详情初始显示末尾最多 64 KiB 的字节窗口，使用共享 DetailsView、ScrollView 与阅读 overlay 显示安全的字面量文本。fullscreen 满屏（top-left、100% 宽高、无边距），inline 居中 90% 宽、终端 70% 高度上限；正文高度与 overlay 实际可用行数一致，声明 capturesViewportInput 使翻页作用于日志。Esc 关闭 overlay 恢复打开它的列表或提示符及主会话视口，关闭阅读不停止 job。运行中的 job 每 250 ms 检查通道大小；共享 ScrollView 使用 Pi 原生持续 follow-end，停在底部时渲染持续跟随；向上滚动或搜索时取消跟随并保留当前正文和位置，滚动回到底部或 End 恢复。暂停期间日志大小增长只更新大小与 `↓ new output · End to follow` 提示，不替换正在阅读的字节窗口。f（Follow latest）载入最新字节窗口并复用同一跟随状态。结算后停止轮询，返回底部仍会补读最终输出；关闭日志详情不停止 job。
+Subagents 所属 Jobs 沿用全终端阅读覆盖作用域，普通 Jobs 入口保留既有阅读模式；不替换主 footer，也不把文本滚动区用于 PTY 二维屏幕。
+
+日志详情初始显示末尾最多 64 KiB 的字节窗口，使用共享 DetailsView、原生 ScrollView 与阅读 overlay 显示安全的字面量文本；scrollbar:auto、轨道/拖动、键盘和滚轮使用同一偏移，不改变逐流字节窗口或 PTY 二维屏幕。fullscreen 满屏（top-left、100% 宽高、无边距），inline 居中 90% 宽、终端 70% 高度上限；正文高度与 overlay 实际可用行数一致，声明 capturesViewportInput 使翻页作用于日志。Esc 关闭 overlay 恢复打开它的列表或提示符及主会话视口，关闭阅读不停止 job。运行中的 job 每 250 ms 检查通道大小；共享 ScrollView 使用 Pi 原生持续 follow-end，停在底部时渲染持续跟随；向上滚动或搜索时取消跟随并保留当前正文和位置，滚动回到底部或 End 恢复。暂停期间日志大小增长只更新大小与 `↓ new output · End to follow` 提示，不替换正在阅读的字节窗口。f（Follow latest）载入最新字节窗口并复用同一跟随状态。结算后停止轮询，返回底部仍会补读最终输出；关闭日志详情不停止 job。
 
 | 日志详情操作 | 行为 |
 | --- | --- |
