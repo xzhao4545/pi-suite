@@ -4,7 +4,7 @@
 
 ## 任务索引
 
-当前没有未完成专项；新增需求按下方规则登记。
+- [工具外观、任务 Dock 与原生会话阅读接入](./ui-native-integration/index.md) — 六项待实施问题：Pi 原生工具外壳、任务恢复反馈、等宽选中、Subagent 首次末尾定位、工具点击与历史滚动条；含根因、公共框架方案、边界、任务清单及验收要求。
 
 Pi Suite Windows 验收见 [收尾记录](../finished/pi-suite/windows-completion.md)；Cursor CLI 验收按用户要求移除。
 
