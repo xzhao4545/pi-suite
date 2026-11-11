@@ -4,6 +4,7 @@
 
 ## 任务索引
 
+- [命令结构高亮与语法配色优化](command-highlighting.md) — 已确认方案，待实施；增强共享命令模式的执行位置、选项、变量与结构识别，优化原生语法角色配色，保留代码／日志边界、原生工具组合与缓存。
 - [官方 Pi 干净消费者安装验收](official-pi-installation.md) — 用户明确延期 Git/本地包安装及资源发现验收；官方 Pi 1.5.0 的代码实施与实际 bin/RPC 加载结果不替代安装证据，保持 private:true，不执行 npm 发布。
 
 Pi Suite Windows 验收见 [收尾记录](../finished/pi-suite/windows-completion.md)；Cursor CLI 验收按用户要求移除。
