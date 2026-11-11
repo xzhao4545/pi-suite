@@ -1,6 +1,6 @@
 {
   "name": "pi-suite",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Custom modular Pi extension suite",
   "type": "module",

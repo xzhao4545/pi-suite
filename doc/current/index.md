@@ -4,7 +4,7 @@
 
 ## 项目状态
 
-- 项目是单个 pnpm 包，包名为 pi-suite，package.json 设置 private: true。
+- 项目是单个 pnpm 包，包名为 pi-suite，当前版本为 0.1.1，对应 Git tag 为 v0.1.1；package.json 设置 private: true。
 - Node.js 要求为 24 或更高，包管理器固定为 pnpm 12.6.0。
 - 源码使用 TypeScript 和 ESM；Pi 通过 package.json 的 pi.extensions 加载 src/index.ts。
 - src/index.ts 是唯一扩展入口，在首次真实 session_start 按 ctx.cwd 准入本次激活的模块，注册 ask_user、goal_complete/goal_blocked/goal_wait、task_list/task_get/task_edit、job_start/job_list/job_get/job_read/job_write/job_stop、agent_start/agent_list/agent_get/agent_read/agent_send/agent_stop/agent_workflow、共享 wait、/goal、/tasks、/jobs、/subagents、/suite、默认启用的 /exit 及会话生命周期事件。
