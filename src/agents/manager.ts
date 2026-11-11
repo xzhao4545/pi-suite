@@ -4,6 +4,7 @@ import { performance } from 'node:perf_hooks';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { SuiteConfig } from '../runtime/config.ts';
 import type { StopOutcome } from '../runtime/tools.ts';
+import { requireGeneration } from '../tasks/types.ts';
 import { ToolError } from '../runtime/errors.ts';
 import { resolveType } from './catalog.ts';
 import { parentModelRuntime, resolveSettings } from './models.ts';
@@ -146,9 +147,13 @@ export class AgentManager {
       thinking: continuation.record.thinking, thinkingSource: continuation.record.thinkingSource }
       : resolveSettings(scope.ctx, type, request, config, previous?.individual);
     const taskStore = scope.taskStore, taskId = previous?.taskId ?? request.taskId;
+    // A restored execution's origin is authoritative. Missing legacy metadata cannot
+    // be borrowed from the new request/current list, even when numeric IDs collide.
+    const taskGeneration = previous?.taskId ? previous.taskGeneration : request.taskGeneration;
     if (taskId) {
+      requireGeneration(taskGeneration);
       if (!taskStore) throw new ToolError('TASK_SCOPE', 'taskId requires the direct parent’s task list to be enabled');
-      const task = (await taskStore.snapshot()).tasks.find(task => task.id === taskId);
+      const task = (await taskStore.snapshot(taskGeneration)).tasks.find(task => task.id === taskId);
       if (!task?.parentId) throw new ToolError('NOT_FOUND', `No execution task ${taskId}`);
     }
     // Recheck after task I/O: stop closes subtree admission before awaiting any abort/job cleanup.
@@ -176,7 +181,7 @@ export class AgentManager {
       model: `${settings.model.provider}/${settings.model.id}`, modelSource: settings.modelSource,
       thinking: settings.thinking, thinkingSource: settings.thinkingSource,
       persisted: previous?.persisted ?? type.persistSession ?? (!scope.run && config.agents.persistSessions), sessionFile: previous?.sessionFile,
-      taskId, individual: previous?.individual, toolUses: 0, turns: 0 };
+      taskId, taskGeneration, individual: previous?.individual, toolUses: 0, turns: 0 };
     const run: Execution = { record, type, model: settings.model, parent: scope, controller: new AbortController(),
       done: Promise.withResolvers(), pendingMessages: [], consumed: false, notifyResult: options.detached, maxTurns: type.maxTurns ?? request.maxTurns, request, config,
       isolated: type.isolated ?? request.isolated, bypassQueue: options.bypassQueue, configCwd, configTrusted, options,
@@ -204,7 +209,7 @@ export class AgentManager {
       catch (error) { await this.stop(id, record.runId); throw error; }
     }
     if (taskId && taskStore) {
-      try { await taskStore.link(taskId, { agentId: id }); }
+      try { await taskStore.link(taskId, { agentId: id }, taskGeneration!); }
       catch (error) { throw new ToolError('TASK_LINK_FAILED', `${id} started but task ${taskId} could not be linked: ${String(error)}`, id); }
     }
     return run;

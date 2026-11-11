@@ -118,7 +118,7 @@ test('actual child any/all waits preserve pending runs and an unrelated direct q
     if (prompt.includes('QUESTION')) {
       const result = context.messages.findLast(message => message.role === 'toolResult');
       if (!result) return fauxAssistantMessage(fauxToolCall('ask_user', { question: 'QUESTION_FOR_PARENT', options: [{ id: 'yes', title: 'Proceed' }], timeoutMs: 0 }));
-      assert.equal(output(result), 'answered: Proceed (yes)\nsource: parent'); return fauxAssistantMessage('question answered');
+      assert.equal(output(result), 'answered\n1. QUESTION_FOR_PARENT → Proceed\nsource: parent'); return fauxAssistantMessage('question answered');
     }
     await gates.get(prompt)?.promise;
     return fauxAssistantMessage(`finished ${prompt}`);
@@ -170,7 +170,8 @@ test('nested questions stay with the direct parent for both launch modes and par
     if (prompt.includes('NESTED_CHILD') || prompt.includes('ROOT_ASK')) {
       if (!result) return fauxAssistantMessage(fauxToolCall('ask_user', { question: prompt.includes('ROOT_ASK') ? 'ROOT_QUESTION' : `NESTED_SECRET_${prompt.includes('BG') ? 'BG' : 'FG'}`,
         options: [{ id: 'confirm', title: 'Continue' }], timeoutMs: 0 }));
-      assert.equal(output(result), 'answered: Continue (confirm)\nsource: parent'); return fauxAssistantMessage('child answered');
+      const question = prompt.includes('ROOT_ASK') ? 'ROOT_QUESTION' : `NESTED_SECRET_${prompt.includes('BG') ? 'BG' : 'FG'}`;
+      assert.equal(output(result), `answered\n1. ${question} → Continue\nsource: parent`); return fauxAssistantMessage('child answered');
     }
     if (getCurrentSystemPrompt(context.messages).includes('<active_agent name="delegator"/>')) {
       // A boundary notification becomes the newest user-shaped model message. Identify

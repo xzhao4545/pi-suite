@@ -4,7 +4,7 @@ import type { Execution } from './types.ts';
 
 export function questionText(run: Execution): string {
   return [`${run.record.id} ${run.record.name} waiting(parent)`,
-    ...run.question!.questions.flatMap(question => [question.question, question.context ?? '', ...question.options.map(option => `${option.id}: ${option.title}`)]),
+    ...run.question!.questions.flatMap(question => [question.question, ...question.options.map(option => `${option.id}: ${option.title}`)]),
     `answer: agent_send({"id":"${run.record.id}","message":"…"})`].filter(Boolean).join('\n');
 }
 export async function askParent(run: Execution, params: AskParams, timeoutMs: number, changed: () => void, signal?: AbortSignal): Promise<{ result: AskResult; questions: Question[] }> {
@@ -41,8 +41,10 @@ function answer(question: Question, text: string | string[]): Response {
   const inputs = Array.isArray(text) ? text : [text];
   const selected = inputs.map(input => question.options.filter(option => option.id === input || option.title === input));
   if (selected.every(matches => matches.length === 1) && inputs.length) {
-    const options = selected.map(matches => matches[0]);
-    return { kind: 'selection', selections: options.map(option => option.title), optionIds: [...new Set(options.map(option => option.id))] };
+    // Selection titles and IDs are positional pairs in the model's compact result.
+    // Repeated IDs from a parent's array must not leave duplicate titles without IDs.
+    const options = [...new Map(selected.map(matches => matches[0]).map(option => [option.id, option])).values()];
+    return { kind: 'selection', selections: options.map(option => option.title), optionIds: options.map(option => option.id) };
   }
   if (Array.isArray(text)) throw new ToolError('INVALID_ANSWER', 'Every selection must match an option ID or title');
   return { kind: 'freeform', text };

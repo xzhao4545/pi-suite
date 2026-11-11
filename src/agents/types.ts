@@ -33,14 +33,14 @@ export interface AgentRecord {
   result?: string; error?: string; usage?: Pick<SessionStats, 'tokens' | 'cost'>;
   /** Last SDK context estimate for this run; null tokens mean compaction has no new usage yet. */
   contextUsage?: ContextUsage;
-  taskId?: string; handle?: string; alias?: string; scheduleId?: string; workflowId?: string; description?: string;
+  taskId?: string; taskGeneration?: string; handle?: string; alias?: string; scheduleId?: string; workflowId?: string; description?: string;
   structuredJson?: string; structuredRetried?: boolean; compactionCount?: number;
   turns?: number; toolUses?: number; activity?: string; lastUpdateAt?: string;
   individual?: ModelOverrides;
 }
 export type StartAgent = {
   type?: string; prompt: string; name?: string; background?: boolean; model?: string; thinking?: Thinking;
-  maxTurns?: number; taskId?: string; inheritContext?: boolean; isolated?: boolean;
+  maxTurns?: number; taskId?: string; taskGeneration?: string; inheritContext?: boolean; isolated?: boolean;
 };
 export type ParentContext = Pick<ExtensionContext, 'cwd' | 'model' | 'modelRegistry' | 'thinkingLevel' | 'sessionManager' | 'isProjectTrusted' | 'getSystemPrompt'>;
 export interface ParentScope {

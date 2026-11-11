@@ -4,21 +4,24 @@ import { BrowserView, browseState } from '../ui/browser.ts';
 import { showDetails } from '../ui/details.ts';
 import type { Dock } from '../ui/dock.ts';
 import type { Notifications } from '../runtime/notifications.ts';
-import type { TasksModule } from './index.ts';
+import { parseTaskReference, taskReferenceKey, type TasksModule } from './index.ts';
+import { checkGeneration } from './types.ts';
 import { queryTasks, taskDetails, taskTitle, type TaskFilter } from './query.ts';
 import { taskViews } from './model.ts';
 import { taskRow } from './presentation.ts';
 import type { TaskData, TaskView } from './types.ts';
 
-/** Selection and readers belong to stable task IDs; data stays in the shared store. */
+/** Selection keys include the source generation; numeric IDs are reusable. */
 export class TaskBrowserView extends BrowserView {
   constructor(tui: TUI, data: () => TaskData, done: (value?: string) => void, groupId?: string, state: TaskFilter = 'all',
     subscribe?: (refresh: () => void) => () => void, theme?: Theme) {
-    const groups = () => taskViews(data()).filter(task => !task.parentId);
+    let generation = data().generation;
+    const current = () => { const value = data(); if (value.generation !== generation) { generation = value.generation; groupId = undefined; } return value; };
+    const groups = () => taskViews(current()).filter(task => !task.parentId);
     let views = new Map<string, TaskView>();
     super(tui, { title: 'Tasks', state: browseState(), subscribe,
-      total: () => queryTasks(data(), {parentId: groupId, state: 'all'}).length,
-      selection: item => ({name: views.get(item.value)!.title, id: item.value}),
+      total: () => queryTasks(current(), {parentId: groupId, state: 'all'}).length,
+      selection: item => ({name: views.get(item.value)!.title, id: views.get(item.value)!.id}),
       layout: { truncatePrimary: ({text, maxWidth}) => truncateToWidth(text, maxWidth, '') },
       controls: [
         { key: 'g', label: 'Group', selected: () => groupId ?? 'all', items: () => [{ value: 'all', label: 'All' },
@@ -28,19 +31,21 @@ export class TaskBrowserView extends BrowserView {
           { value: 'done', label: 'Completed' }, { value: 'all', label: 'All' }], select: value => { state = value as TaskFilter; } },
       ], items: () => {
         if (groupId && !groups().some(group => group.id === groupId)) groupId = undefined;
-        const current = data(); views = new Map(taskViews(current).map(task => [task.id, task]));
-        return queryTasks(current, { parentId: groupId, state }).map(task => ({ value: task.id, status: task.status,
+        const snapshot = current(); views = new Map(taskViews(snapshot).map(task => [taskReferenceKey(snapshot.generation, task.id), task]));
+        const byId = new Map([...views.values()].map(task => [task.id, task]));
+        return queryTasks(snapshot, { parentId: groupId, state }).map(task => ({ value: taskReferenceKey(snapshot.generation, task.id), status: task.status,
           label: taskRow(task),
           description: task.progress ? `${task.progress.done}/${task.progress.total}` : '',
           search: `${task.id} ${task.title} ${task.description ?? ''} ${task.blockedReason ?? ''} ${task.status}`,
-          details: () => taskDetails(task, views).join('\n') }));
+          details: () => taskDetails(task, byId).join('\n') }));
       } }, done, theme);
   }
 }
 
 /** Dock opens a read-only task receipt; selection never edits or changes task status. */
-export async function showTask(ctx: ExtensionContext, tasks: TasksModule, dock: Dock, id: string): Promise<void> {
-  const {task, views} = await tasks.get(ctx, id);
+export async function showTask(ctx: ExtensionContext, tasks: TasksModule, dock: Dock, reference: string): Promise<void> {
+  const { id, generation } = parseTaskReference(reference);
+  const {task, views} = await tasks.get(ctx, id, generation);
   await showDetails(ctx, dock, `Tasks ▸ ${taskTitle(task)}`, taskDetails(task, views).join('\n'), 'text');
 }
 
@@ -51,7 +56,8 @@ export function registerTasksCommand(pi: ExtensionAPI, tasks: TasksModule, dock:
       const words = args.trim().split(/\s+/).filter(Boolean);
       if (words.length > 1 || words.some(word => !/^[1-9][0-9]*$/.test(word))) throw new Error('Use /tasks [group ID]');
       const groupId = words[0], state = 'all';
-      const { data, rows } = await tasks.list(ctx, { parentId: groupId, state });
+      const generation = (await tasks.scope(ctx).snapshot()).generation;
+      const { data, rows } = await tasks.list(ctx, { parentId: groupId, state }, generation);
       tasks.selectGroup(groupId);
       if (ctx.mode !== 'tui') {
         const views = new Map(taskViews(data).map(task => [task.id, task]));
@@ -66,5 +72,9 @@ export function registerTasksCommand(pi: ExtensionAPI, tasks: TasksModule, dock:
 async function showTasks(ctx: ExtensionContext, tasks: TasksModule, groupId: string | undefined, state: TaskFilter): Promise<void> {
   const selected = await ctx.ui.custom<string | undefined>((tui, theme, _keys, done) =>
     new TaskBrowserView(tui, () => tasks.current(ctx), done, groupId, state, refresh => tasks.subscribe(ctx, refresh), theme));
-  if (selected) { const task = taskViews(tasks.current(ctx)).find(task => task.id === selected); tasks.selectGroup(task?.parentId ?? task?.id); }
+  if (selected) {
+    const { id, generation } = parseTaskReference(selected), data = tasks.current(ctx);
+    checkGeneration(data, generation);
+    const task = taskViews(data).find(task => task.id === id); tasks.selectGroup(task?.parentId ?? task?.id);
+  }
 }

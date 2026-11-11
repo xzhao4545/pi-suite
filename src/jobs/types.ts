@@ -24,7 +24,7 @@ export type JobSummary = {
   schemaVersion: 1; id: string; workspace: Workspace;
   ownerRuntimeId: string; ownerSessionId: string; anchorEntryId: string | null;
   name: string; command: string; cwd: string; mode: JobMode;
-  taskId?: string; creator?: Creator; monitor?: MonitorState; handsFree?: HandsFreeState;
+  taskId?: string; taskGeneration?: string; creator?: Creator; monitor?: MonitorState; handsFree?: HandsFreeState;
   completionReason?: 'exited' | 'quiet' | 'timeout' | 'stopped';
   state: JobState; createdAt: string; startedAt?: string; endedAt?: string; elapsedMs?: number;
   timeoutMs?: number; exitCode: number | null; signal?: string | null;
@@ -38,7 +38,7 @@ export type JobSummary = {
 };
 export type StartRequest = {
   /** Omitted only for a file-watch monitor, which generates its own command. */
-  command?: string; name?: string; cwd: string; mode?: JobMode; timeoutMs?: number; taskId?: string;
+  command?: string; name?: string; cwd: string; mode?: JobMode; timeoutMs?: number; taskId?: string; taskGeneration?: string;
   ownerSessionId: string; anchorEntryId: string | null; creator?: Creator; cols?: number; rows?: number;
   monitor?: MonitorInput; handsFree?: HandsFreeInput;
   /** Noninteractive pipe callers close stdin during launch, before a short command can exit. */

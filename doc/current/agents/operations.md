@@ -2,7 +2,7 @@
 
 | 入口 | 当前行为 |
 | --- | --- |
-| agent_start | prompt、type?、name?、background?、model?、thinking?、maxTurns?、taskId?、inheritContext?、isolated?、schedule?；普通执行 background 默认 true，类型 run_in_background 优先；schedule 登记未来后台任务 |
+| agent_start | prompt、type?、name?、background?、model?、thinking?、maxTurns?、taskId?、taskGeneration?、inheritContext?、isolated?、schedule?；普通执行 background 默认 true，类型 run_in_background 优先；schedule 登记未来后台任务 |
 | agent_list | state 为 active/queued/finished/all，默认 active；scope 为 session/workspace，默认 session；agentId 可组合筛选某 agent 的执行历史；cursor/limit 分页，默认 10、最多 100、约 4 KiB，返回准确 runId |
 | agent_get | id、runId?、detail?；查看指定或当前 run 的状态、活动、模型/thinking 和任务，保留完整待答问题；detail:true 增加来源、上下文、用量及所属活动 jobs，字段见 [进度与通知](progress.md) |
 | agent_read | id、runId?；活动默认 transcript，结束默认 result；offset/limitBytes/search/context 使用 [共享读取规则](../jobs/index.md) |
@@ -13,7 +13,7 @@
 
 模型工具默认返回摘要，完整输入、thinking、工具调用和输出通过 agent_read 或原生 transcript 按需读取。workspace 列表发现当前配置工作区的持久历史并合并本进程记录；session 列表与状态数量使用同一直接子级和分支归属过滤。未知 ID 的 agent_get/read/send/stop 先发现并核对当前配置工作区，发送仍需直接父级与分支准入；分页 more 保留 scope。实际目录与引用范围、读取和合并规则见 [持久历史](history.md)。
 
-工具默认折叠为一行，普通 subagent 以名称为主标识（AgentRecord.name，默认类型 displayName/name），ID 只在展开或 dim 元信息中显示；只有 ID 的调用按进程级 Manager 内存记录查名，可带 runId，未找到时显示 ID，展示不读取磁盘或创建运行时。start 区分后台状态、前台时长、转后台与调度，list 显示数量/范围，get 显示状态或待答问题，read 显示流与字节区间，send 显示真实 action，stop 显示结算/清理与级联数量，并在 details 保存名称供历史回放。展开以名称开头，保留完整 prompt、model/thinking、用量、模型返回摘要、待答问题和本页正文；list 逐项显示名称与状态，ID/runId 为 dim 信息。wait 折叠保留结算比例，展开的普通 agent 摘要与 pending 按内存记录显示名称，未知记录保留 ID；模型正文与通知仍使用 agent_/run_ ID，read/send 参数不改写。taskId 使用 `1.2` 形式的直接父级子任务 ID；child 默认维护私有清单，对分配任务须显式使用 task_get/task_edit 的 `scope:"assigned"`，只允许读取或 start/done/block/unblock，默认 local 下的同名 ID 不指向父级。所有结果使用公共 renderer，主会话工具结果点击切换单项，默认 Ctrl+O 切换全部，错误完整显示；child Transcript 使用实际 run.renderers。
+工具默认折叠为一行，普通 subagent 以名称为主标识（AgentRecord.name，默认类型 displayName/name），ID 只在展开或 dim 元信息中显示；只有 ID 的调用按进程级 Manager 内存记录查名，可带 runId，未找到时显示 ID，展示不读取磁盘或创建运行时。start 区分后台状态、前台时长、转后台与调度，list 显示数量/范围，get 显示状态或待答问题，read 显示流与字节区间，send 显示真实 action，stop 显示结算/清理与级联数量，并在 details 保存名称供历史回放。展开以名称开头，保留完整 prompt、model/thinking、用量、模型返回摘要、待答问题和本页正文；list 逐项显示名称与状态，ID/runId 为 dim 信息。wait 折叠保留结算比例，展开的普通 agent 摘要与 pending 按内存记录显示名称，未知记录保留 ID；模型正文与通知仍使用 agent_/run_ ID，read/send 参数不改写。taskId 使用 `1.2` 形式的直接父级子任务 ID，须同时提供源 taskGeneration；清空后旧关联失效，不恢复或重绑同名新任务。child 默认维护私有清单，对分配任务须显式使用 task_get/task_edit 的 `scope:"assigned"`，只允许读取或 start/done/block/unblock，默认 local 下的同名 ID 不指向父级。所有结果使用公共 renderer，主会话工具结果点击切换单项，默认 Ctrl+O 切换全部，错误完整显示；child Transcript 使用实际 run.renderers。
 
 ## Dock 键盘进入
 
@@ -37,7 +37,7 @@ Schedules 与 `/subagents schedules` 查看当前会话的调度，右侧显示�
 
 Workflows 与 `/subagents workflows` 查看当前会话与分支的编排、保存资源、阶段、日志和结果；顶部 `s` 一次切换 Runs/Saved，右侧显示运行进度或保存脚本。Enter 打开运行详情或源码，底部按状态提供 `p` 暂停/恢复、`x` 两次停止和 `r` journal 重放，保存资源提供 `n Start`。child 会话、gate 日志和跳过/重试在运行详情操作；控制条件、开关和按键见 [Workflow 操作](workflow/operations.md)。
 
-查看器复用共享 Transcript、DetailsView 和阅读 overlay；首次打开可阅读的活动、已结束、失败、停止或只读历史 run 均显示最后一页，返回子页沿用原 reader 的暂停、搜索与阅读位置，结算不重置。Subagent 阅读链在普通与 fullscreen 主会话模式下均覆盖终端完整列/行，不显示主 footer；Transcript、Details、所属 Jobs 和模型/thinking 选择共用可恢复的全屏作用域，异步子页加载间隙由自有背景 overlay 填行并保持覆盖与输入焦点。正文和子代理底部栏使用同一实际高度预算，不清除主状态、不替换原生/第三方 footer。退出整条阅读链后恢复打开它的列表或提示符、原 footer 实例及最新状态。关闭 overlay 恢复打开它的列表或提示符及主会话视口，不滚动主会话。Markdown、thinking、工具调用/结果由 Pi 原生组件渲染，使用所选 child 的实际工作目录。工具优先使用对应 child 的渲染定义，已回收定义的历史使用 Suite 登记 lookup，未知第三方工具使用 Pi 通用渲染；调用、流式部分输出和最终结果按 toolCallId 配对。稳定消息缓存组件及宽度渲染，每条变化的流式消息和工具部分输出随事件更新；在底部时持续跟随新输出，即使同一组件流式增长也保持最后一页；向上阅读、Home 或搜索离开底部时取消跟随。滚动回到底部或 End 恢复跟随；查看器顶部只保留外边界，不显示运行长标题。所选 run 的名称、状态、耗时、模型/thinking、token、工具次数与阅读状态精简到独立底部信息栏，宽屏尽量一行、普通宽度最多两行；窄屏先省略次要指标，`d` 查看 ID、runId、cwd、完整来源、权限、用量与错误。正文、信息、操作/Editor 区用分隔线区分，预算与原生百分比 overlay 同步缩放，不替换主会话或第三方 footer。暂停阅读期间新输出与 End 恢复提示位于底部，恢复跟随后消失。
+查看器复用共享 Transcript、DetailsView 和阅读 overlay；首次打开可阅读的活动、已结束、失败、停止或只读历史 run 均显示最后一页，返回子页沿用原 reader 的暂停、搜索与阅读位置，结算不重置。Subagents 根页签、列表和子页共用 withReadingSession 导航交接：旧页完成选择后只保留冻结显示帧并吞掉输入，新页构造并挂载后才释放该帧；最终关闭恢复主会话，异步加载保持旧页可见，不显示空白或主会话中间帧。根浏览器保持普通百分比预算，消息阅读链通过 withReadingScreen 覆盖终端完整列/行；Transcript、Details、所属 Jobs 和模型/thinking 选择继承该范围。正文和子代理底部栏使用同一实际高度预算，不清除主状态、不替换原生/第三方 footer。退出整条阅读链后恢复打开它的列表或提示符、原 footer 实例及最新状态。关闭 overlay 恢复打开它的列表或提示符及主会话视口，不滚动主会话。Markdown、thinking、工具调用/结果由 Pi 原生组件渲染，使用所选 child 的实际工作目录。工具优先使用对应 child 的渲染定义，已回收定义的历史使用 Suite 登记 lookup，未知第三方工具使用 Pi 通用渲染；调用、流式部分输出和最终结果按 toolCallId 配对。稳定消息缓存组件及宽度渲染，每条变化的流式消息和工具部分输出随事件更新；在底部时持续跟随新输出，即使同一组件流式增长也保持最后一页；向上阅读、Home 或搜索离开底部时取消跟随。滚动回到底部或 End 恢复跟随；查看器顶部只保留外边界，不显示运行长标题。所选 run 的名称、状态、耗时、模型/thinking、token、工具次数与阅读状态精简到独立底部信息栏，宽屏尽量一行、普通宽度最多两行，DetailsView 按实际信息行数预算，只有必要的第二行占用正文高度，分隔线仍保留；窄屏先省略次要指标，`d` 查看 ID、runId、cwd、完整来源、权限、用量与错误。正文、信息、操作/Editor 区用分隔线区分，预算与原生百分比 overlay 同步缩放，不替换主会话或第三方 footer。暂停阅读期间新输出与 End 恢复提示位于底部，恢复跟随后消失。
 
 - ↑↓、PageUp/PageDown、Home/End 滚动，原生 scrollTop 为唯一偏移；正文按实际预算渲染一次、updateLayout 后切片/补齐，scrollbar:hidden 无滚动条计时器。复杂阅读 overlay 不保证工具单项鼠标操作或 scrollbar 轨道/拖动，鼠标边界见 [终端交互](../ui/terminal.md#原生阅读与鼠标)。
 - `o` 切换全部工具展开；Transcript 保留原生消息/工具实例与缓存，展开、流式刷新和 resize 保留组件身份及显式暂停位置，不重放工具执行。

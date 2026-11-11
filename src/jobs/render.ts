@@ -17,7 +17,7 @@ function jobFields(job: JobSummary, text: string): ToolExpandedRow[] {
     // Jobs execute through Pi's Bash selection (including Git Bash/WSL on Windows).
     { command: job.command, shell: 'bash', label: 'command' }, { label: 'cwd', value: job.cwd },
     ...job.timeoutMs ? [{ label: 'timeout', value: `${job.timeoutMs}ms` }] : [],
-    ...job.taskId ? [{ label: 'task', value: job.taskId }] : [],
+    ...job.taskId ? [{ label: 'task', value: `${job.taskId} · source generation: ${job.taskGeneration ?? 'unavailable (legacy link expired)'}` }] : [],
     { label: 'state', value: job.state, tone: stateLine(job.state).tone },
     { label: 'cleanup', value: job.cleanup.state, tone: cleanupTone(job.cleanup.state) },
     ...job.cleanup.error ? [{ label: 'cleanup error', value: job.cleanup.error, tone: 'warning' as const }] : [],

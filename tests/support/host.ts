@@ -88,7 +88,8 @@ export async function host(options: {
 export function goalId(context: TranscriptContext): string {
   const sections: Record<string, string | null> = {};
   for (const message of context.messages) if (message.role === "system") Object.assign(sections, message.sections);
-  const id = /Active goal ([^:]+):/.exec(sections["pi-suite-goal"] ?? "")?.[1];
+  // Completion-only turns expose the same ID under a "Goal" heading, not "Active goal".
+  const id = /(?:Active goal|Goal) ([^:]+):/.exec(sections["pi-suite-goal"] ?? "")?.[1];
   assert.ok(id, "admitted goal must reach the provider's system contract");
   return id;
 }

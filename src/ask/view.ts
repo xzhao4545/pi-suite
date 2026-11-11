@@ -144,7 +144,7 @@ export class AskView extends Container {
     const question = this.form.questions[index];
     const option = this.form.reviewing || this.form.draft.editing ? undefined : this.options()[this.form.draft.cursor];
     const response = this.form.reviewing ? this.form.response(index) : undefined;
-    const text = [this.requester, this.heading, question.question, question.context, option?.title, option?.description,
+    const text = [this.requester, this.heading, question.question, option?.title, option?.description,
       ...!this.form.reviewing && !option && this.form.draft.text ? [`✎ ${this.form.draft.text}`] : [],
       response ? answerText(response) : undefined, response?.comment].filter(Boolean).join("\n\n");
     this.detailKey = `details:${index}:${option?.id ?? 'question'}`;

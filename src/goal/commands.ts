@@ -26,11 +26,11 @@ export function registerGoalCommand(pi: ExtensionAPI, manager: GoalManager, dock
     try {
       await showDetails(ctx, dock, "Goal", `# ${goal.text}\n\nStatus: ${goal.status} · ${manager.schedule}\n\n` +
         `ID: ${goal.id}\n\nTokens: ${goal.usedTokens}${goal.budget ? `/${goal.budget}` : " (no limit)"} · Turns: ${goal.turns} · Active elapsed: ${goalDuration(manager.elapsedMs)}\n\n` +
-        `Progress: ${goal.progress || "not yet recorded"}${goal.error ? `\n\nError: ${goal.error}` : ""}`);
+        `Progress: ${goal.progress || "not yet recorded"}${goal.stoppedFrom ? `\n\nStopped from: ${goal.stoppedFrom}` : ""}${goal.error ? `\n\nError: ${goal.error}` : ""}`);
     } finally { release(); }
   };
   pi.registerCommand("goal", {
-    description: "Manage goal: [--tokens 100k] <objective>, status, edit, pause, resume, clear",
+    description: "Manage goal: [--tokens 100k] <objective>, status, edit, pause, resume, stop (keep), clear (delete)",
     handler: async (args, ctx) => {
       const trimmed = args.trim();
       if (!trimmed || trimmed === "status") { await details(ctx); return; }
@@ -39,7 +39,8 @@ export function registerGoalCommand(pi: ExtensionAPI, manager: GoalManager, dock
         if (manager.resume() === 'waiting_host') ctx.ui.notify('Goal resumed; waiting for the current response, cancellation or host operation to finish.');
         return;
       }
-      if (trimmed === "clear" || trimmed === "stop") { manager.clear(ctx); return; }
+      if (trimmed === "stop") { manager.stopGoal(ctx); return; }
+      if (trimmed === "clear") { manager.clear(ctx); return; }
       if (trimmed === "edit" || trimmed.startsWith("edit ")) {
         const input = parseGoalArgs(trimmed.slice(4));
         if (input.text === undefined && input.budget === undefined) throw new Error("Supply an objective or --tokens budget to edit");

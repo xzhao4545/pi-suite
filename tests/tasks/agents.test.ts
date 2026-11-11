@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { AgentSessionRuntime, type ExtensionAPI, type ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { fauxAssistantMessage, fauxToolCall, type TranscriptContext } from '@earendil-works/pi-ai';
 import { host } from '../support/host.ts';
+import { listTasks, taskCall } from '../support/tasks.ts';
 import { agentDir } from '../support/jobs.ts';
 import { agentRuntime } from '../../src/agents/runtime.ts';
 import { loadConfig } from '../../src/runtime/config.ts';
@@ -28,23 +29,25 @@ test('two SDK children update only their assigned progress concurrently without 
     new AbortController().signal, undefined, ctx as never);
   try {
     h.faux.setResponses([fauxAssistantMessage('parent seed')]); await h.session.prompt('seed durable owner');
-    await invoke('task_edit', {op: 'batch', changes: [{op: 'add', title: 'parallel work', children: ['first', 'second']}]});
     const path = taskPath(root, ctx.sessionManager.getSessionId()), store = taskStore(path, path);
+    await store.snapshot();
+    const ownerGeneration = store.current.generation;
+    await invoke('task_edit', {generation: ownerGeneration, op: 'batch', changes: [{op: 'add', title: 'parallel work', children: ['first', 'second']}]});
     const response = async (context: TranscriptContext) => {
       const id = JSON.stringify(context.messages.find(message => message.role === 'user')).includes('first child') ? '1.1' : '1.2';
       const result = lastTool(context);
-      if (!result) return fauxAssistantMessage(fauxToolCall('task_get', {scope: 'assigned', id}));
+      if (!result) return fauxAssistantMessage(fauxToolCall('task_get', {generation: ownerGeneration, scope: 'assigned', id}));
       if (result.toolName === 'task_get') {
         assert.match(JSON.stringify(result.content), /parallel work|first|second/);
         // Both children read their assigned task before either issues a progress write.
         if (++arrived === 2) barrier.resolve();
         await barrier.promise;
-        return fauxAssistantMessage(fauxToolCall('task_edit', {scope: 'assigned', op: 'start', id}));
+        return fauxAssistantMessage(fauxToolCall('task_edit', {generation: ownerGeneration, scope: 'assigned', op: 'start', id}));
       }
       return fauxAssistantMessage(`child ${id} finished`);
     };
     h.faux.setResponses(Array(6).fill(response));
-    const calls = ['first child', 'second child'].map(prompt => invoke('agent_start', {prompt, taskId: prompt === 'first child' ? '1.1' : '1.2', background: false}));
+    const calls = ['first child', 'second child'].map(prompt => invoke('agent_start', {prompt, taskId: prompt === 'first child' ? '1.1' : '1.2', taskGeneration: ownerGeneration, background: false}));
     await Promise.all(calls);
     assert.equal(arrived, 2);
     const runs = [...manager.runs.values()]; assert.equal(runs.length, 2);
@@ -80,16 +83,18 @@ test('SDK child retains private and assigned stores across parent reload/fork an
     first.faux.setResponses([fauxAssistantMessage('parent seed')]); await first.session.prompt('seed durable owner');
     const originalFile = first.session.sessionFile!, originalId = ctx.sessionManager.getSessionId();
     const originalPath = taskPath(root, originalId), originalStore = taskStore(originalPath, originalPath);
-    await first.session.getToolDefinition('task_edit')!.execute('tasks-lifecycle', {op: 'batch', changes: [{op: 'add', title: 'owned work', children: ['execution']},
+    await originalStore.snapshot();
+    const ownerGeneration = originalStore.current.generation;
+    await first.session.getToolDefinition('task_edit')!.execute('tasks-lifecycle', {generation: ownerGeneration, op: 'batch', changes: [{op: 'add', title: 'owned work', children: ['execution']},
       {op: 'update', id: '1.1', status: 'doing'}]}, new AbortController().signal, undefined, ctx as never);
     first.faux.setResponses([async () => {
-      entered.resolve(); await continueChild.promise;
-      return fauxAssistantMessage(fauxToolCall('task_edit', {op: 'batch', changes: [
+      entered.resolve(); await continueChild.promise; return listTasks();
+    }, taskCall('task_edit', generation => ({generation, op: 'batch', changes: [
         {op: 'add', title: 'private work', children: ['private execution']},
-        {op: 'update', id: '1.1', description: 'original child after fork'}]}));
-    }, context => { lastTool(context); return fauxAssistantMessage(fauxToolCall('task_edit', {scope: 'assigned', op: 'block', id: '1.1', reason: 'parent input needed'})); },
+        {op: 'update', id: '1.1', description: 'original child after fork'}]})),
+    context => { lastTool(context); return fauxAssistantMessage(fauxToolCall('task_edit', {generation: ownerGeneration, scope: 'assigned', op: 'block', id: '1.1', reason: 'parent input needed'})); },
     context => { lastTool(context); return fauxAssistantMessage('original child completed'); }]);
-    const run = await manager.start({prompt: 'continue owner task', taskId: '1.1', background: false}, {ctx, taskStore: originalStore}, loadConfig(root, root));
+    const run = await manager.start({prompt: 'continue owner task', taskId: '1.1', taskGeneration: ownerGeneration, background: false}, {ctx, taskStore: originalStore}, loadConfig(root, root));
     await entered.promise;
     await first.session.reload();
     assert.strictEqual(agentRuntime(), manager); assert.strictEqual(run.parent.taskStore, originalStore);
@@ -111,7 +116,7 @@ test('SDK child retains private and assigned stores across parent reload/fork an
     assert.equal(manager.get(run.record.id).run, undefined);
     await runtime.switchSession(originalFile);
     assert.equal(ctx.sessionManager.getSessionId(), originalId);
-    current.faux.setResponses([fauxAssistantMessage(fauxToolCall('task_edit', {op: 'batch', changes: [{op: 'update', id: '1.1', description: 'resumed child progress'}]})),
+    current.faux.setResponses([listTasks(), taskCall('task_edit', generation => ({generation, op: 'batch', changes: [{op: 'update', id: '1.1', description: 'resumed child progress'}]})),
       async context => { lastTool(context); resumedEntered.resolve(); await finishResume.promise; return fauxAssistantMessage('resume interrupted'); }]);
     const resumed = await current.session.getToolDefinition('agent_send')!.execute('tasks-resume', {id: run.record.id, message: 'resume owner task'},
       new AbortController().signal, undefined, ctx as never);

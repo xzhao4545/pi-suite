@@ -12,7 +12,7 @@ export function fold(lines: string[], width: number, cap: number, hint = ''): st
   return [...lines.slice(0, cap - 1), truncateToWidth(lines[cap - 1], Math.max(0, width - visibleWidth(`… ${hint}`)), '') + `… ${hint}`];
 }
 export function questionLines(question: Question, theme: Theme, width: number, cap: number, expanded: boolean): string[] {
-  const lines = [...wrap(question.question, width), ...question.context ? wrap(question.context, width).map(line => theme.fg('muted', line)) : []];
+  const lines = wrap(question.question, width);
   return fold(lines, width, cap, expanded ? 'd full text' : 'e expand');
 }
 export function choiceLines(theme: Theme, question: Question, draft: Draft, option: Option | undefined, focused: boolean,

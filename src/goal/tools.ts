@@ -6,43 +6,44 @@ import type { GoalManager } from "./manager.ts";
 
 import { completeRenderers, blockedRenderers, waitRenderers } from './render.ts';
 
-const goalId = Type.String({ minLength: 1, description: "The exact goalId in the current active goal contract" });
+const goalId = Type.String({ minLength: 1, description: "The exact goalId in the current owned goal contract" });
 export function registerGoalTools(pi: ExtensionAPI, manager: GoalManager): void {
   registerBoundTool(pi, {
     name: "goal_complete",
     ...completeRenderers, label: "Goal Complete", executionMode: "sequential",
-    description: "Complete the active goal only after verifying every original requirement. Include the completion evidence in summary; partial or unverified work stays active.",
+    description: "Complete the current owned goal after auditing every original requirement with verification evidence. A new user-driven audit may close failed, paused, blocked, budget_limited or stopped goals without resume or automatic execution. Completed is idempotent: original evidence, completion time and feedback are preserved. Partial or unverified work must not be completed.",
     parameters: Type.Object({ goalId, summary: Type.String({ minLength: 1, maxLength: 4000 }) }),
-    async execute(_id, params, _signal, _update, ctx) {
+    async execute(_id, params, signal, _update, ctx) {
       if (!params.summary.trim()) throw new ToolError("INVALID_ARGS", "Completion summary must include verification evidence", params.goalId);
-      manager.complete(params.goalId, params.summary, ctx);
-      return { content: [{ type: "text", text: `Goal complete: ${params.summary}` }],
-        details: { goalId: params.goalId, summary: params.summary }, terminate: true };
+      const changed = manager.complete(params.goalId, params.summary, ctx, signal);
+      const summary = manager.goal!.progress;
+      return { content: [{ type: "text", text: `${changed ? "Goal complete" : "Goal already completed"}: ${summary}` }],
+        details: { goalId: params.goalId, summary }, terminate: true };
     },
   }, 'initial');
   registerBoundTool(pi, {
     name: "goal_blocked",
     ...blockedRenderers, label: "Goal Blocked", executionMode: "sequential",
-    description: "Stop only for the same evidenced external blocker repeated for at least three consecutive goal turns. Incomplete work and ordinary clarification are not blockers.",
+    description: "For an active owned execution turn only: stop for the same evidenced external blocker repeated for at least three consecutive goal turns. Incomplete work and ordinary clarification are not blockers.",
     parameters: Type.Object({ goalId, reason: Type.String({ minLength: 1, maxLength: 1000 }),
       evidence: Type.String({ minLength: 1, maxLength: 4000 }), repeatedTurns: Type.Integer({ minimum: 3 }) }),
-    async execute(_id, params, _signal, _update, ctx) {
+    async execute(_id, params, signal, _update, ctx) {
       if (!params.reason.trim() || !params.evidence.trim()) throw new ToolError("INVALID_ARGS", "Blocking requires a reason and concrete evidence", params.goalId);
-      manager.block(params.goalId, params.reason, params.evidence, ctx);
+      manager.block(params.goalId, params.reason, params.evidence, ctx, signal);
       return { content: [{ type: "text", text: `Goal blocked: ${params.reason}` }], details: params, terminate: true };
     },
   }, 'initial');
   registerBoundTool(pi, {
     name: "goal_wait",
     ...waitRenderers, label: "Goal Wait", executionMode: "sequential",
-    description: "Wait for an arranged external job/agent/event, with an optional single wake deadline. waitFor lists job_/agent_ IDs: the goal resumes only when all of them settle (or one asks a question) or the deadline passes; other notices do not end the wait. " +
+    description: "For an active owned execution turn only: wait for an arranged external job/agent/event, with an optional single wake deadline. waitFor lists job_/agent_ IDs: the goal resumes only when all of them settle (or one asks a question) or the deadline passes; other notices do not end the wait. " +
       "Without waitFor any external wake resumes it. Call alone; ordinary unfinished work should continue instead.",
     parameters: Type.Object({ goalId, reason: Type.String({ minLength: 1, maxLength: 1000 }),
       waitFor: Type.Optional(Type.Array(Type.String({ pattern: WAIT_ID_PATTERN }), { minItems: 1, maxItems: 50 })),
       resumeAfterMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 2147483647 })) }, { additionalProperties: false }),
-    async execute(_id, params, _signal, _update, ctx) {
+    async execute(_id, params, signal, _update, ctx) {
       if (!params.reason.trim()) throw new ToolError("INVALID_ARGS", "Waiting requires an external wake reason", params.goalId);
-      const { waiting, settled } = manager.wait(params.goalId, params.reason, params.resumeAfterMs, ctx, params.waitFor);
+      const { waiting, settled } = manager.wait(params.goalId, params.reason, params.resumeAfterMs, ctx, params.waitFor, signal);
       const note = settled.length ? `already settled: ${settled.join(", ")}` : undefined;
       if (!waiting) {
         return { content: [{ type: "text", text: `Not waiting: every waitFor object has already settled (${settled.join(", ")}). Read their results and continue.` }],

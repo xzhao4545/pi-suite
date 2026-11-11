@@ -39,7 +39,7 @@ export function jobDetail(job: JobSummary, fullCommand = false): string[] {
     ...(job.handsFree ? [`supervision: ${job.handsFree.config.mode} · updates ${job.handsFree.updates} · output budget ${job.handsFree.totalCharsSent}/${job.handsFree.config.maxTotalChars} chars`] : []),
     `cleanup: ${job.cleanup.state}${job.cleanup.error ? ` (${job.cleanup.error})` : ''}`,
     ...(job.error ? [`error: ${job.error}`] : []),
-    ...(job.taskId ? [`task: ${job.taskId}`] : []),
+    ...(job.taskId ? [`task: ${job.taskId} · source generation: ${job.taskGeneration ?? 'unavailable (legacy link expired)'}`] : []),
     ...(job.creator ? [`created by ${job.creator.agentId ?? job.creator.workflowId} ${job.creator.runId}`] : []),
   ];
 }

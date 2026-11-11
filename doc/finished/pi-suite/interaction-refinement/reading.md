@@ -27,10 +27,10 @@
 
 ## 任务列表
 
-- [ ] 在共享 reading 导航实现连续交接，选择器继承同一作用域，不用页面私有绕行或宿主 patch。
-- [ ] 验证页间间隙、异常/正常退出、当前输入/焦点与旧/新组件 dispose 的边界。
-- [ ] 动态预算元信息行数，保留分隔线与窄屏必要的第二行，将余行回收为正文。
-- [ ] 验证真实 CLI 中间帧以及首次末尾/暂停/End/搜索/Editor/resize，复用现有聚合。
-- [ ] 同步 UI、Agents 和终端操作说明，实施后归档结论。
+- [x] 在共享 reading 导航实现连续交接，选择器继承同一作用域，不用页面私有绕行或宿主 patch。
+- [x] 验证页间间隙、异常/正常退出、当前输入/焦点与旧/新组件 dispose 的边界。
+- [x] 动态预算元信息行数，保留分隔线与窄屏必要的第二行，将余行回收为正文。
+- [x] 验证真实 CLI 中间帧以及首次末尾/暂停/End/搜索/Editor/resize，复用现有聚合。
+- [x] 同步 UI、Agents 和终端操作说明，实施后归档结论。
 
-[当前 UI](../../current/ui/index.md) · [子代理操作](../../current/agents/operations.md) · [终端边界](../../current/ui/terminal.md) · [返回专项](index.md)
+[当前 UI](../../../current/ui/index.md) · [子代理操作](../../../current/agents/operations.md) · [终端边界](../../../current/ui/terminal.md) · [返回专项](index.md)

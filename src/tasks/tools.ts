@@ -3,29 +3,31 @@ import { Type } from 'typebox';
 import { registerBoundTool, checkedArguments, LIST_LIMITS, paginate, textResult } from '../runtime/tools.ts';
 import { boundedText } from '../runtime/read.ts';
 import type { TasksModule } from './index.ts';
-import { taskId, taskScope, groupId, type TaskScope, type TaskView } from './types.ts';
+import { taskId, taskScope, groupId, generationSchema, type TaskScope, type TaskView } from './types.ts';
 import { taskDetails, taskLabel, type TaskFilter } from './query.ts';
 import { taskViews } from './model.ts';
 import { editSchema, editArguments, editChanges } from './schema.ts';
+import { requireGeneration } from './types.ts';
 import { editLines } from './presentation.ts';
 
 import { listRenderers, getRenderers, editRenderers } from './render.ts';
 
-const listSchema = Type.Object({ groupId: Type.Optional(groupId),
+const listSchema = Type.Object({ generation: Type.Optional(generationSchema), groupId: Type.Optional(groupId),
   state: Type.Optional(Type.Union([Type.Literal('unfinished'), Type.Literal('doing'), Type.Literal('blocked'), Type.Literal('done'), Type.Literal('all')])),
   cursor: Type.Optional(Type.String({ maxLength: 200 })), limit: Type.Optional(Type.Integer({ minimum: 1, maximum: LIST_LIMITS.maxLimit })) }, { additionalProperties: false });
-const getSchema = Type.Object({ id: taskId, scope: Type.Optional(taskScope) }, { additionalProperties: false });
-const queryHint = 'List a group: task_list({"groupId":"1","state":"all"}); one task: task_get({"id":"1.2"}).';
+const getSchema = Type.Object({ generation: generationSchema, id: taskId, scope: Type.Optional(taskScope) }, { additionalProperties: false });
+const queryHint = 'Discover generation with task_list({}); supply that source generation to task_get/task_edit and task_list with groupId or cursor.';
 
 export function registerTaskTools(pi: ExtensionAPI, tasks: TasksModule): void {
   const scopeHint = tasks.scopeHint;
   // Assignment is fixed at admission. Omit drops object options; retain strict validation.
   const getParameters = scopeHint ? getSchema : Type.Omit(getSchema, ['scope'], { additionalProperties: false });
   const editParameters = scopeHint ? editSchema : Type.Omit(editSchema, ['scope'], { additionalProperties: false });
-  registerBoundTool(pi, { name: 'task_list', label: 'Tasks', description: 'List unfinished tasks (default), optionally filter groupId/state and page with cursor/limit. Group counts include all children. One task detail uses task_get({id}).' + scopeHint,
+  registerBoundTool(pi, { name: 'task_list', label: 'Tasks', description: 'List unfinished tasks (default), optionally filter groupId/state and page with cursor/limit. task_list({}) discovers generation; groupId/cursor and task_get/task_edit must quote their source generation. Group counts include all children. One task detail uses task_get({id,generation}).' + scopeHint,
     parameters: listSchema, prepareArguments: checkedArguments(listSchema, queryHint),
     async execute(_id, params, _signal, _update, ctx) {
-      const { rows, data } = await tasks.list(ctx, { parentId: params.groupId, state: params.state as TaskFilter | undefined });
+      if (params.groupId || params.cursor) requireGeneration(params.generation);
+      const { rows, data } = await tasks.list(ctx, { parentId: params.groupId, state: params.state as TaskFilter | undefined }, params.generation);
       const views = new Map(taskViews(data).map(task => [task.id, task]));
       const label = (task: TaskView) => taskLabel({ ...task, title: boundedText(task.title, 200) });
       const { page, nextCursor } = paginate(rows, task => {
@@ -37,10 +39,10 @@ export function registerTaskTools(pi: ExtensionAPI, tasks: TasksModule): void {
       // A page may start mid-group. Reinsert organization context without advancing its cursor.
       const shown = new Map<string, TaskView>();
       for (const task of page) { if (task.parentId) shown.set(task.parentId, views.get(task.parentId)!); shown.set(task.id, task); }
-      const more = nextCursor ? `more: task_list(${JSON.stringify({ ...params, cursor: nextCursor })})` : undefined;
-      return textResult([`tasks ${page.length}/${rows.length} ${params.state ?? 'unfinished'}${params.groupId ? ` group ${params.groupId}` : ''}`,
+      const more = nextCursor ? `more: task_list(${JSON.stringify({ ...params, generation: data.generation, cursor: nextCursor })})` : undefined;
+      return textResult([`generation: ${data.generation}`, `tasks ${page.length}/${rows.length} ${params.state ?? 'unfinished'}${params.groupId ? ` group ${params.groupId}` : ''}`,
         ...[...shown.values()].map(task => `${label(task)}${task.blockedReason ? ` · ${boundedText(task.blockedReason, 200)}` : ''}`), more],
-      { tasks: [...shown.values()], nextCursor });
+      { tasks: [...shown.values()], generation: data.generation, nextCursor });
     },
     ...listRenderers,
   }, 'initial');
@@ -48,18 +50,19 @@ export function registerTaskTools(pi: ExtensionAPI, tasks: TasksModule): void {
     parameters: getParameters, prepareArguments: checkedArguments(getParameters, queryHint),
     async execute(_id, params, _signal, _update, ctx) {
       const scope = (params as { scope?: TaskScope }).scope;
-      const { task, views } = await tasks.get(ctx, params.id, scope);
-      return textResult([scope === 'assigned' ? `assigned task ${params.id} (parent list)` : undefined, ...taskDetails(task, views)], { task });
+      const { task, views } = await tasks.get(ctx, params.id, params.generation, scope);
+      return textResult([`generation: ${params.generation}`, scope === 'assigned' ? `assigned task ${params.id} (parent list)` : undefined, ...taskDetails(task, views)], { task, generation: params.generation });
     },
     ...getRenderers,
   }, 'initial');
   registerBoundTool(pi, { name: 'task_edit', label: 'Tasks',
-    description: 'Update progress with {op:"start"|"done"|"block"|"unblock",id}; block accepts reason. add creates a group with children titles, or a child with parentId. Child IDs use group.ordinal, e.g. 1.2. update changes fields; moving requires delete then add; delete needs cascade:true for a nonempty group. Batch: {op:"batch",changes:[operations]}; all or none commit. Multiple tasks may run. Dependencies still block after unblock. Changes never stop jobs/agents or complete goal.' + scopeHint,
+    description: 'All edits require the source generation from task_list({}); task IDs may be reused after clear. Top-level {op:"clear",generation} deletes your entire owner list/dependencies/execution links and resets numbering, without stopping executions; not allowed in assigned scope or batch. Nonempty all-complete lists clear automatically. Update progress with {op:"start"|"done"|"block"|"unblock",id}; block accepts reason. add creates a group with children titles, or a child with parentId. Child IDs use group.ordinal, e.g. 1.2. update changes fields; moving requires delete then add; delete needs cascade:true for a nonempty group. Batch: {op:"batch",changes:[operations]}; all or none commit. Multiple tasks may run. Dependencies still block after unblock. Changes never stop jobs/agents or complete goal.' + scopeHint,
     parameters: editParameters, prepareArguments: editArguments,
     async execute(_id, params, signal, _update, ctx) {
       const scope = (params as { scope?: TaskScope }).scope;
-      const result = await tasks.edit(ctx, editChanges(params), signal, scope);
-      return textResult([scope === 'assigned' ? 'assigned task progress (parent list)' : undefined, ...editLines(result)], result);
+      const result = await tasks.edit(ctx, editChanges(params), params.generation, signal, scope);
+      return textResult([`generation: ${result.generation}`, scope === 'assigned' ? 'assigned task progress (parent list)' : undefined,
+        result.cleared ? `tasks cleared (${result.cleared}); numbering restarts at 1, old references expired` : undefined, ...editLines(result)], result);
     },
     ...editRenderers,
   }, 'initial');

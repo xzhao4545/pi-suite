@@ -17,8 +17,9 @@ import type { Creator, InputRecord, Stream } from './types.ts';
 import type { SuiteConfig } from '../runtime/config.ts';
 import { agentSchema, agentCommand } from './launch/presets.ts';
 import type { TasksModule } from '../tasks/index.ts';
-import { childId as taskIdSchema } from '../tasks/types.ts';
+import { childId as taskIdSchema, generationSchema } from '../tasks/types.ts';
 
+import { requireGeneration } from '../tasks/types.ts';
 import { startRenderers, listRenderers, getRenderers, readRenderers, writeRenderers, stopRenderers } from './render.ts';
 
 const id = objectId('job', 'job_3fa1c2d0');
@@ -33,7 +34,7 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: Vie
       'The job keeps running across turns, compaction and reload; when it settles one notice is sent to this session. Read output with job_read, send input with job_write, wait with wait. Do not background commands yourself with & or nohup. ' +
       'monitor wakes you when output matches a trigger (stream: each line; poll-diff: rerun command and compare; file-watch: watch a path, no command); events are read with job_read stream events. ' +
       'handsFree (pty only) sends bounded progress updates; handsFree.mode=dispatch sends only a result and requests termination after startup grace and output silence. Quiet termination is stopped, never proof of success. User control pauses updates and quiet termination. ' +
-      'Instead of command, agent supplies a CLI preset and literal prompt (pi/codex/claude/cursor or configured key); pi can fork a persisted session.',
+      'Instead of command, agent supplies a CLI preset and literal prompt (pi/codex/claude/cursor or configured key); pi can fork a persisted session. taskId requires taskGeneration from the source task_list; clear never stops the job but expires its task link.',
     parameters: Type.Object({
       command: Type.Optional(Type.String({ minLength: 1, maxLength: 32768, description: 'Give command or agent, except for file-watch which generates its own command' })),
       agent: Type.Optional(agentSchema),
@@ -41,7 +42,7 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: Vie
       name: Type.Optional(Type.String({ maxLength: 80 })),
       cwd: Type.Optional(Type.String({ description: 'Resolved against the session cwd' })),
       timeoutMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 86400000, description: 'Omit for no limit; on expiry the job settles as timed_out' })),
-      taskId: Type.Optional(taskIdSchema),
+      taskId: Type.Optional(taskIdSchema), taskGeneration: Type.Optional(generationSchema),
       attach: Type.Optional(Type.Boolean({ description: 'pty only: open the terminal view now because the user must operate the program (login, prompts). The call returns when the user leaves the view; the job keeps running' })),
       monitor: Type.Optional(monitorSchema),
       handsFree: Type.Optional(handsFreeSchema),
@@ -59,12 +60,16 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: Vie
       const shell = resolvePiShell(ctx.cwd, ctx.isProjectTrusted());
       const cwd = resolve(ctx.cwd, params.cwd ?? '.');
       const command = agent ? agentCommand(agent, config.jobs.agents, ctx.sessionManager.getSessionFile()) : params.command;
-      const taskStore = params.taskId && launch.tasks ? await launch.tasks.executionTask(ctx, params.taskId) : undefined;
+      if (params.taskId) {
+        requireGeneration(params.taskGeneration);
+        if (!launch.tasks) throw new ToolError('TASK_SCOPE', 'Task tools are disabled for this job owner');
+      }
+      const taskStore = params.taskId ? await launch.tasks!.executionTask(ctx, params.taskId, params.taskGeneration!) : undefined;
       // Pi waits for piped stdin EOF before its initial prompt; PTY keeps interactive input.
       const job = await manager.start({ ...request, command, cwd, ...owner, creator: launch.creator,
         closeInput: agent?.preset === 'pi' && params.mode !== 'pty' }, shell, signal);
       if (taskStore && params.taskId) {
-        try { await taskStore.link(params.taskId, { jobId: job.id }); }
+        try { await taskStore.link(params.taskId, { jobId: job.id }, params.taskGeneration!); }
         catch (error) { throw new ToolError('TASK_LINK_FAILED', `${job.id} started but task ${params.taskId} could not be linked: ${String(error)}; inspect with job_get`, job.id); }
       }
       if (!attach) return text([summaryLine(job) + (job.timeoutMs ? ` · timeout ${job.timeoutMs}ms` : ''), job.error], { job });
@@ -102,7 +107,7 @@ export function registerJobTools(pi: ExtensionAPI, jobs: JobsModule, viewer: Vie
       const { job, live } = await jobs.control().get(params.id, await resolveWorkspace(ctx.cwd));
       return text([`${summaryLine(job)} · ${displayName(job)}${live ? '' : ' · read-only history'}`,
         ...params.detail ? jobDetail(job, true) : [`command: ${boundedText(job.command, 256)}`,
-          `cleanup: ${job.cleanup.state}${job.cleanup.error ? ` · ${job.cleanup.error}` : ''}${job.taskId ? ` · task ${job.taskId}` : ''}`, job.error],
+          `cleanup: ${job.cleanup.state}${job.cleanup.error ? ` · ${job.cleanup.error}` : ''}${job.taskId ? ` · task ${job.taskId} @ ${job.taskGeneration ?? 'unavailable (legacy link expired)'}` : ''}`, job.error],
         !params.detail && Buffer.byteLength(job.command) > 256 ? `full: job_get({"id":"${job.id}","detail":true})` : undefined], { job, live });
     } }, 'initial');
 

@@ -16,7 +16,7 @@ runtime/tools.ts 提供 objectId、listFields、paginate、readFields、WAIT_ID_
 | 等待 | wait.ids 为 1–50 个 job/agent/workflow ID，mode 默认 all；timeoutMs 默认 300000、最大 3600000，只结束此次调用，不停止对象 |
 | 停止 | requested/state/cleanup/affected，affected 列出真实受影响对象；清理尚未确认时不报告全部停止 |
 
-单对象操作首行显示对象摘要，列表与 wait 显示集合摘要，goal 显示目标动作；其后提供实际变化、失败、问题与必要读取入口，固定操作说明位于工具描述。普通回执目标 1–3 行、约 512 B；批量新 ID、父级待答问题/选项、真实答案与评论、错误与清理结果优先于预算。details 保存同一结果的结构化字段，用于本地显示和控制，Provider 的模型正文使用 content。ask_user 主会话与 child 共用文本结果格式：单题只含状态与答案，批量含作答计数、编号、截断题干与逐题答案；context、完整 questions/options 和响应结构只保存在 details。timed_out 与 skipped 的答案不得视为同意，正文通过 not consent 或 unanswered 明确标记；child 追加 source: parent。完整输出与日志通过 read 按需读取，规则见 [jobs 读取与操作](../jobs/index.md)。
+单对象操作首行显示对象摘要，列表与 wait 显示集合摘要，goal 显示目标动作；其后提供实际变化、失败、问题与必要读取入口，固定操作说明位于工具描述。普通回执目标 1–3 行、约 512 B；批量新 ID、父级待答问题/选项、真实答案与评论、错误与清理结果优先于预算。details 保存同一结果的结构化字段，用于本地显示和控制，Provider 的模型正文使用 content。ask_user 主会话与 child 共用文本结果格式：状态、逐题编号、≤24 Unicode 码点短题干和真实答案，同名选项按原列表 #N 消歧；所选答案、评论、自定义输入不截断，完整 questions/options 和响应结构保存在 details。题目不提供 context，选项保留 description；历史记录只读展示，不回写。timed_out/skipped 明确 not consent，自动选择逐题标记 auto-selected；skipped 保留部分作答，未答项为 unanswered；cancelled 保留取消状态，不提供授权；child 追加 source: parent。完整输出与日志通过 read 按需读取，规则见 [jobs 读取与操作](../jobs/index.md)。
 
 runtime/read.ts 的 readContinuation 共用 offset/search/context/limitBytes 续读字段，job_read 与 agent_read 的 more 提示保留当前读取方式。默认截断的 keys 数组记录所选匹配行及上下文原始范围；正文明确标注遗漏，full 提示使用 offset:0 进入连续读取；搜索正文、上下文和标注共同计入字节预算，超长返回行显式截断，boundedText 也供结算预览复用。
 

@@ -37,9 +37,9 @@ export function taskViews(data: TaskData): TaskView[] {
 }
 
 /** Pick actual execution work, independent of the group's derived status. */
-export function currentChild(group: TaskView, views: TaskView[]): TaskView | undefined {
+export function currentChild<T extends Pick<TaskView, 'id' | 'parentId' | 'status' | 'updatedAt'>>(group: Pick<TaskView, 'id'>, views: T[]): T | undefined {
   const children = views.filter(task => task.parentId === group.id);
-  return children.reduce<TaskView | undefined>((latest, task) => task.status === 'doing' && (!latest || task.updatedAt > latest.updatedAt) ? task : latest, undefined)
+  return children.reduce<T | undefined>((latest, task) => task.status === 'doing' && (!latest || task.updatedAt > latest.updatedAt) ? task : latest, undefined)
     ?? children.find(task => task.status === 'blocked') ?? children.find(task => task.status === 'todo');
 }
 

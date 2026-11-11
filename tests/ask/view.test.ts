@@ -166,7 +166,7 @@ test("idle expiry keeps draft/recommended/first choices and unanswered slots; ac
 
 test("multi-line choices, tabs, preview and Review details retain identity through expansion and resizing", () => {
   const { view, form, tui } = fixture({ questions: [
-    { question: 'Question '.repeat(30), context: 'Background '.repeat(80), allowMultiple: true,
+    { question: 'Question '.repeat(30), allowMultiple: true,
       options: [{ id: 'first', title: 'First', description: 'description line one\ndescription line two' },
         { id: 'second', title: 'Second '.repeat(12), description: 'Preview '.repeat(100) + 'PREVIEW_END' }], defaultOptionIds: ['first'] },
     { question: 'Text question', defaultAnswer: 'Answer '.repeat(30) + 'ANSWER_END' },
@@ -179,7 +179,7 @@ test("multi-line choices, tabs, preview and Review details retain identity throu
   view.handleMouse(mouse(8, description));
   assert.equal(form.draft.selected.has('first'), false, 'clicking a continuation row chooses its actual option');
   view.handleInput('e'); const expanded = view.render(80);
-  assert.ok(expanded.some(line => line.includes('d full text')));
+  assert.ok(expanded.some(line => line.includes('e collapse')));
   const expandedHeight = expanded.length;
   view.handleInput('\x1b[C'); assert.equal(view.render(80).length, expandedHeight, 'page changes retain height');
   assert.equal(form.draft.text.endsWith('ANSWER_END'), true);

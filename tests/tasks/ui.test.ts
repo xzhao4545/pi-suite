@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import { SessionManager, type ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { visibleWidth } from '@earendil-works/pi-tui';
@@ -20,6 +20,9 @@ test('task dock and live browser share committed status; important children keep
     ui: { onTerminalInput() { return () => {}; }, getEditorText: () => '', theme: {fg: (_tone: string, text: string) => text}, notify() {}, setWidget(_key: string, factory: (tui: ReturnType<typeof terminal>) => unknown) { factory?.(tui); } },
   } as unknown as ExtensionContext;
   const tasks = new TasksModule(binding, dock); binding.bind(ctx); dock.bind(ctx, 6); await tasks.bind(ctx, { reason: 'startup' });
+  // Dock row keys carry the source generation; compare logical IDs.
+  const rows = () => tasks.rows().map(row => ({...row, id: row.id.replace(/^task:[^:]+:/, 'task:'),
+    ...row.parentId ? {parentId: row.parentId.replace(/^task:[^:]+:/, 'task:')} : {}}));
   t.mock.timers.enable({ apis: ['Date', 'setTimeout'] });
   const view = new TaskBrowserView(tui, () => tasks.current(ctx), () => {}, undefined, 'all', refresh => tasks.subscribe(ctx, refresh));
   try {
@@ -27,11 +30,11 @@ test('task dock and live browser share committed status; important children keep
     for (const hint of ['g group', 's state', '/ filter', 'Tab details', 'Esc close']) assert.ok(empty.at(-3)!.includes(hint));
     assert.match(empty.at(-2)!, /No tasks · press s for Unfinished/);
     await tasks.edit(ctx, [{ op: 'add', title: '中文长标题'.repeat(30), children: ['执行'.repeat(40), '验收'] },
-      {op: 'add', title: 'Blocked group', children: ['blocked execution']}, {op: 'add', title: 'Future group', children: ['future execution']}]);
-    await tasks.edit(ctx, [{ op: 'start', id: '1.1' }, {op: 'block', id: '2.1', reason: 'waiting for server'}]);
+      {op: 'add', title: 'Blocked group', children: ['blocked execution']}, {op: 'add', title: 'Future group', children: ['future execution']}], tasks.current(ctx).generation);
+    await tasks.edit(ctx, [{ op: 'start', id: '1.1' }, {op: 'block', id: '2.1', reason: 'waiting for server'}], tasks.current(ctx).generation);
     t.mock.timers.tick(1);
-    await tasks.edit(ctx, [{op: 'start', id: '1.2'}]);
-    assert.equal(tasks.rows().filter(row => row.parentId === 'task:1')[0].id, 'task:1.1', 'task ID determines reading order, priority determines retention');
+    await tasks.edit(ctx, [{op: 'start', id: '1.2'}], tasks.current(ctx).generation);
+    assert.equal(rows().filter(row => row.parentId === 'task:1')[0].id, 'task:1.1', 'task ID determines reading order, priority determines retention');
     tasks.selectGroup('2');
     for (const width of [40, 60, 120]) {
       const rows = dock.render(width);
@@ -42,23 +45,23 @@ test('task dock and live browser share committed status; important children keep
       assert.ok(lines.length <= Math.floor(24 * 0.8)); assert.ok(lines.every(line => visibleWidth(line) <= width));
     }
     view.handleInput('/'); view.handleInput('1.1'); view.handleInput('\r'); view.render(120);
-    assert.equal(view.getSelectedItem()?.value, '1.1');
+    assert.match(view.getSelectedItem()!.value, /:1\.1$/);
     view.handleInput('\t'); // details focus
     const selected = view.getSelectedItem()?.value;
-    await tasks.edit(ctx, [{ op: 'done', id: '1.1' }, {op: 'done', id: '1.2'}]);
+    await tasks.edit(ctx, [{ op: 'done', id: '1.1' }, {op: 'done', id: '1.2'}], tasks.current(ctx).generation);
     assert.equal(view.getSelectedItem()?.value, selected);
     assert.match(view.render(120).join('\n'), /done/);
     t.mock.timers.tick(5001);
-    assert.equal(tasks.rows().some(row => row.id === 'task:1'), false);
+    assert.equal(rows().some(row => row.id === 'task:1'), false);
     assert.ok(dock.render(80).some(row => row.includes('1 completed groups')));
-    await tasks.edit(ctx, [{op: 'unblock', id: '2.1'}]);
+    await tasks.edit(ctx, [{op: 'unblock', id: '2.1'}], tasks.current(ctx).generation);
     assert.equal(tasks.rows().length, 4, 'all visible groups offer their children for read-only Dock navigation');
     assert.match(displayText(tasks.rows()[0].suffix!), /0\/1/);
     dock.setAsk(true); assert.equal(dock.render(40).length, 0); dock.setAsk(false);
-    await tasks.edit(ctx, [{op: 'done', id: '2.1'}, {op: 'done', id: '3.1'}]);
+    await tasks.edit(ctx, [{op: 'done', id: '2.1'}, {op: 'done', id: '3.1'}], tasks.current(ctx).generation);
     t.mock.timers.tick(5001);
-    assert.deepEqual(dock.render(80), [], 'all-complete feedback expires without deleting task data');
-    assert.ok(tasks.current(ctx).tasks.length > 0);
+    assert.deepEqual(dock.render(80), [], 'all-complete feedback expires');
+    assert.deepEqual(tasks.current(ctx).tasks, [], 'all-complete lists are cleared instead of retaining finished work');
   } finally { view.dispose(); tasks.detach(); binding.revoke(); t.mock.timers.reset(); rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -68,16 +71,18 @@ test('persisted fork reads the actual source header without repair; source error
   const sourcePath = taskPath(sourceCwd, 'source'), writer = new TaskStore(sourcePath);
   const sourceFile = join(root, 'source.jsonl'), notices: string[] = [];
   try {
-    await writer.edit([{ op: 'add', title: 'source', children: ['child'] }]);
+    await writer.edit([{ op: 'add', title: 'source', children: ['child'] }], writer.current.generation);
     const header = JSON.stringify({ type: 'session', id: 'source', cwd: sourceCwd });
     writeFileSync(sourceFile, header); // No trailing newline: read-only lookup must not repair it.
     const target = taskContext(root, 'target', text => notices.push(text));
     binding.bind(target); await tasks.bind(target, { reason: 'fork', previousSessionFile: sourceFile });
-    assert.deepEqual(tasks.current(target), await writer.snapshot(), 'use header cwd/ID, not the target workspace');
+    const strip = ({generation: _generation, ...data}: {generation?: string}) => data;
+    assert.deepEqual(strip(tasks.current(target)), strip(await writer.snapshot()), 'use header cwd/ID, not the target workspace');
+    assert.notEqual(tasks.current(target).generation, (await writer.snapshot()).generation, 'the fork list has its own generation');
     assert.equal(readFileSync(sourceFile, 'utf8'), header);
-    await tasks.edit(target, [{ op: 'add', title: 'target only' }]);
+    await tasks.edit(target, [{ op: 'add', title: 'target only' }], tasks.current(target).generation);
     const edited = await tasks.scope(target).snapshot();
-    await writer.edit([{ op: 'add', title: 'late source edit' }]);
+    await writer.edit([{ op: 'add', title: 'late source edit' }], writer.current.generation);
     const delimited = `\n${header}\n{not part of the header`;
     writeFileSync(sourceFile, delimited);
     binding.bind(target); await tasks.bind(target, { reason: 'fork', previousSessionFile: sourceFile });
@@ -107,54 +112,68 @@ const taskContext = (cwd: string, id: string, notify: (message: string, type?: s
   ui: { theme: { fg: (_tone: string, text: string) => text }, notify },
 }) as unknown as ExtensionContext;
 
-test('task recovery suppresses every initial publication; external completion and reopening retain exactly five seconds', async t => {
+const persistedTasks = (path: string, generation: string, nextId: number, tasks: Record<string, unknown>[]) => {
+  mkdirSync(dirname(path), {recursive: true});
+  writeFileSync(path, JSON.stringify({version: 4, generation, nextId, tasks}));
+};
+const savedTask = (id: string, title: string, extra: Record<string, unknown> = {}) =>
+  ({id, title, blockedBy: [], jobIds: [], createdAt: 1, updatedAt: 1, ...extra});
+const logicalIds = (rows: {id: string}[]) => rows.map(row => row.id.replace(/^task:[^:]+:/, 'task:'));
+
+test('task recovery clears finished lists silently and keeps exactly five seconds of live completion feedback', async t => {
   const root = mkdtempSync(join(tmpdir(), 'pi-suite-task-restore-')), binding = new SessionBinding(), dock = new Dock();
-  const tasks = new TasksModule(binding, dock), ctx = taskContext(root, 'saved'), writer = new TaskStore(taskPath(root, 'saved'));
-  const frames: string[][] = [];
-  dock.invalidate = () => { frames.push(tasks.rows().map(row => row.id)); };
+  const tasks = new TasksModule(binding, dock), frames: string[][] = [];
+  dock.invalidate = () => { frames.push(tasks.rows().map(row => row.text)); };
   t.mock.timers.enable({ apis: ['Date', 'setTimeout'] });
   try {
-    await writer.edit([{ op: 'add', title: 'saved done', children: ['done child'] }, { op: 'done', id: '1.1' }]);
+    // A finished list can only reach the file from an older build: live edits clear it in
+    // the same commit, so recovery is the only path that still has to clean it up.
+    const donePath = taskPath(root, 'saved'), ctx = taskContext(root, 'saved');
+    persistedTasks(donePath, 'saved-generation', 2, [savedTask('1', 'saved done', {nextChild: 2}),
+      savedTask('1.1', 'done child', {parentId: '1', status: 'done'})]);
     binding.bind(ctx); await tasks.bind(ctx, { reason: 'startup' });
-    assert.ok(frames.every(frame => frame.length === 0), 'cold all-done data is hidden from its first published frame');
-    assert.equal((await tasks.list(ctx, { state: 'all' })).rows.length, 2, 'All still reads retained done data');
+    assert.ok(frames.every(frame => frame.every(text => !text.includes('☑'))), 'cold all-done data never publishes completion feedback');
+    assert.deepEqual(tasks.current(ctx).tasks, [], 'cold all-done data is cleaned instead of retained');
+    assert.equal(JSON.parse(readFileSync(donePath, 'utf8')).resetReason, 'completed');
+    assert.equal((await tasks.list(ctx, {state: 'all'})).rows.length, 0);
 
-    await writer.edit([{ op: 'add', title: 'saved pending', children: ['pending child'] }]);
     const mixed = taskContext(root, 'mixed'), mixedPath = taskPath(root, 'mixed');
-    writeFileSync(mixedPath, JSON.stringify(writer.current));
-    const external = new TaskStore(mixedPath);
+    persistedTasks(mixedPath, 'mixed-generation', 3, [savedTask('1', 'saved done', {nextChild: 2}),
+      savedTask('1.1', 'done child', {parentId: '1', status: 'done'}),
+      savedTask('2', 'pending group', {nextChild: 2}), savedTask('2.1', 'pending child', {parentId: '2', status: 'todo'})]);
     frames.length = 0; binding.bind(mixed); await tasks.bind(mixed, { reason: 'startup' });
-    assert.ok(frames.every(frame => !frame.includes('task:1')), 'cold mixed data never shows the historical done group');
-    assert.deepEqual(tasks.rows().map(row => row.id), ['task:2', 'task:2.1']);
+    assert.deepEqual(logicalIds(tasks.rows()), ['task:2', 'task:2.1'], 'cold mixed data never shows the historical done group');
+    assert.ok(frames.every(frame => frame.every(text => !text.includes('☑'))), 'cold recovery never replays historical completion');
+
     const store = tasks.scope(mixed), snapshot = store.snapshot.bind(store);
+    let loaded = false;
     const loading = t.mock.method(store, 'snapshot', async () => {
       await snapshot();
-      // Real commits during snapshot loading publish more than one update. Skipping
-      // only the first refresh would mistake the second group's done for live feedback.
-      await store.edit([{ op: 'done', id: '2.1' }]);
-      await store.edit([{ op: 'add', title: 'remaining pending', children: ['remaining child'] }]);
+      if (loaded) return store.current;
+      loaded = true;
+      // Real commits during snapshot loading publish more than one update; none of them is live work.
+      await store.edit([{op: 'add', title: 'later group', children: ['later child']}], store.current.generation);
+      await store.edit([{op: 'done', id: '2.1'}], store.current.generation);
       return store.current;
     });
     frames.length = 0; binding.bind(mixed); await tasks.bind(mixed, { reason: 'reload' }); loading.mock.restore();
-    assert.ok(frames.every(frame => !frame.includes('task:1') && !(frame.includes('task:2') && frame.includes('task:3'))));
-    assert.deepEqual(tasks.rows().map(row => row.id), ['task:3', 'task:3.1']);
+    assert.ok(frames.every(frame => frame.every(text => !text.includes('☑'))), 'recovery publications never become live feedback');
+    assert.deepEqual(logicalIds(tasks.rows()), ['task:3', 'task:3.1']);
 
-    await external.edit([{ op: 'done', id: '3.1' }]); await store.snapshot();
-    assert.equal(tasks.rows()[0].id, 'task:3');
-    t.mock.timers.tick(4000);
-    await external.edit([{ op: 'start', id: '3.1' }]); await store.snapshot();
-    await external.edit([{ op: 'done', id: '3.1' }]); await store.snapshot();
-    t.mock.timers.tick(4999); assert.equal(tasks.rows()[0].id, 'task:3', 'recompletion receives a fresh five seconds');
+    const external = new TaskStore(mixedPath);
+    await external.snapshot();
+    await external.edit([{op: 'done', id: '3.1'}], external.current.generation); await store.snapshot();
+    assert.ok(tasks.rows().some(row => row.text.includes('☑')), 'live completion shows its just-finished list');
+    t.mock.timers.tick(4999); assert.ok(tasks.rows().length > 0);
     t.mock.timers.tick(1); assert.deepEqual(tasks.rows(), []);
-    assert.equal(tasks.current(mixed).tasks.length, 6, 'expiry only changes Dock visibility');
+    assert.deepEqual(tasks.current(mixed).tasks, [], 'the cleared list is gone, not merely hidden');
     const sourceFile = join(root, 'mixed.jsonl');
-    writeFileSync(sourceFile, `${JSON.stringify({ type: 'session', id: 'mixed', cwd: root })}\n`);
+    writeFileSync(sourceFile, `${JSON.stringify({type: 'session', id: 'mixed', cwd: root})}\n`);
     for (const reason of ['reload', 'resume', 'fork'] as const) {
       const restored = reason === 'fork' ? taskContext(root, 'fork') : mixed;
       if (reason === 'fork') tasks.detach();
       frames.length = 0; binding.bind(restored); await tasks.bind(restored, { reason, previousSessionFile: reason === 'fork' ? sourceFile : undefined });
-      assert.ok(frames.every(frame => !frame.length), `${reason} cannot replay completion feedback`);
-      assert.equal(tasks.current(restored).tasks.length, 6);
+      assert.ok(frames.every(frame => frame.every(text => !text.includes('☑'))), `${reason} cannot replay completion feedback`);
     }
   } finally { tasks.detach(); binding.revoke(); t.mock.timers.reset(); rmSync(root, { recursive: true, force: true }); }
 });
@@ -176,22 +195,19 @@ test('obsolete task snapshots, subscriptions and timers cannot mutate a new bind
   });
   try {
     binding.bind(a); const pending = tasks.bind(a, { reason: 'startup' });
-    await tasks.edit(a, [{ op: 'add', title: 'old', children: ['old child'] }, { op: 'done', id: '1.1' }]);
+    // A pending sibling keeps the list alive: an all-done list is cleared by the same commit.
+    await tasks.edit(a, [{ op: 'add', title: 'old', children: ['old child', 'old pending'] }, { op: 'done', id: '1.1' }], tasks.current(a).generation);
     binding.bind(b); await tasks.bind(b, { reason: 'resume' });
-    await tasks.edit(b, [{ op: 'add', title: 'new', children: ['new child'] }, { op: 'done', id: '1.1' }]);
+    await tasks.edit(b, [{ op: 'add', title: 'new', children: ['new child', 'new pending'] }, { op: 'done', id: '1.1' }], tasks.current(b).generation);
     const previousTimer = oldTimer, obsoleteRefresh = oldRefresh, before = renders;
     obsoleteRefresh(); oldError(new Error('obsolete watcher')); gate.resolve(); await pending; delayed.mock.restore();
     assert.equal(renders, before); assert.equal(notices.length, 0);
     assert.match(tasks.rows()[0].text, /new/);
 
     binding.bind(a); await tasks.bind(a, { reason: 'reload' });
-    assert.deepEqual(tasks.rows(), []);
-    await tasks.edit(a, [{ op: 'start', id: '1.1' }]);
-    await tasks.edit(a, [{ op: 'done', id: '1.1' }]);
+    assert.deepEqual(logicalIds(tasks.rows()), ['task:1', 'task:1.1', 'task:1.2']);
     const currentRenders = renders; previousTimer(); obsoleteRefresh();
     assert.equal(renders, currentRenders, 'obsolete callbacks cannot touch a replacement, even when returning to the same store');
-    t.mock.timers.tick(4999); assert.equal(tasks.rows().length, 2);
-    t.mock.timers.tick(1); assert.deepEqual(tasks.rows(), []);
     tasks.detach();
     const detachedRenders = renders; oldRefresh(); oldTimer();
     assert.equal(renders, detachedRenders, 'detach releases UI ownership without changing captured stores');
@@ -202,7 +218,10 @@ test('obsolete task snapshots, subscriptions and timers cannot mutate a new bind
     assert.equal(notices.length, 1); assert.match(notices[0], /TASK_STORE_INVALID|current state is retained/);
     assert.equal(tasks.current(broken).tasks.length, 0);
     // Repairing storage does not retroactively turn failed initialization into a live baseline.
-    writeFileSync(taskPath(root, 'broken'), JSON.stringify(tasks.current(a)));
-    await tasks.scope(broken).snapshot(); assert.deepEqual(tasks.rows(), []);
+    persistedTasks(taskPath(root, 'broken'), 'repaired', 2, [savedTask('1', 'repaired', {nextChild: 2}),
+      savedTask('1.1', 'repaired child', {parentId: '1', status: 'todo'})]);
+    await tasks.scope(broken).snapshot();
+    assert.deepEqual(logicalIds(tasks.rows()), ['task:1', 'task:1.1']);
+    assert.ok(tasks.rows().every(row => !row.text.includes('☑')), 'recovered data never fabricates completion');
   } finally { gate.resolve(); tasks.detach(); binding.revoke(); timeouts.mock.restore(); t.mock.timers.reset(); rmSync(root, { recursive: true, force: true }); }
 });

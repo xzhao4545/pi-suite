@@ -24,14 +24,15 @@ Suite 在 session_shutdown 对 Goal 调用无 reason 的 shutdown，它只保存
 
 停止时保留目标文本、进度、用量、耗时与错误。推荐仅把 active/自动等待转换为 stopped，failed/blocked/paused/budget_limited 保留其原因；若用户要求所有未完成目标都写 stopped，需同时保留停止前状态/错误，不能抹掉故障信息。completed 不应被退出改为未完成。
 
-`/goal stop` 当前是 clear 的别名，需要确认是否改成“停止并保留目标”，将删除仅留给 `/goal clear`。
+用户已确认 `/goal stop` 改为“停止并保留目标”，不再作为 clear 别名；`/goal clear` 负责删除目标。两个入口仍复用 GoalManager 的状态/保存/撤权转换，不增加第二套生命周期。
 
 ## 待确认与任务
 
-- [ ] 确认非运行目标的结案由用户审计轮直接调用工具，还是还需要显式 complete 命令。
-- [ ] 确认退出统一 stopped 的状态范围，以及 stop/clear 命令语义。
-- [ ] 在现有 Manager/状态 schema/生命周期实现权限和 reason-aware 转换；旧记录不得校验失败后静默当空数据。
-- [ ] 验证正常 quit、强杀冷恢复不续跑、reload 保持原合同、显式 resume、旧请求完成拒绝及迟到结算。
-- [ ] 同步状态摘要、参数指引和操作说明，不绕过 ownership 或修改宿主。
+- [x] 用户确认新的用户驱动审计轮直接调用 goal_complete，无需新增 complete 命令或先 resume。
+- [x] 用户确认 stop 停止并保留、clear 删除的命令语义。
+- [x] 用户确认退出时全部未完成状态保存为 stopped，保留 stoppedFrom、错误与进度；completed 不受影响。
+- [x] 在现有 Manager/状态 schema/生命周期实现权限和 reason-aware 转换；旧记录不得校验失败后静默当空数据。
+- [x] 验证正常 quit、强杀冷恢复不续跑、reload 保持原合同、显式 resume、旧请求完成拒绝及迟到结算。
+- [x] 同步状态摘要、参数指引和操作说明，不绕过 ownership 或修改宿主。
 
-[当前 Goal 生命周期](../../current/goal/lifecycle.md) · [操作与接口](../../current/goal/operations.md) · [返回专项](index.md)
+[当前 Goal 生命周期](../../../current/goal/lifecycle.md) · [操作与接口](../../../current/goal/operations.md) · [返回专项](index.md)

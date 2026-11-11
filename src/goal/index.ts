@@ -8,7 +8,7 @@ export function registerGoalLifecycle(pi: ExtensionAPI, manager: GoalManager): v
     if (admitted && manager.goal) event.systemPromptOptions.sections["pi-suite-goal"] = goalContract(manager.goal);
     else delete event.systemPromptOptions.sections["pi-suite-goal"];
   });
-  pi.on("agent_start", () => manager.startRun());
+  pi.on("agent_start", (_event, ctx) => manager.startRun(ctx));
   pi.on("agent_end", event => {
     const message = event.messages.findLast(message => message.role === "assistant");
     manager.endRun(message?.role === "assistant" && message.stopReason === "error" ? message.errorMessage : undefined);

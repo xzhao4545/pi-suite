@@ -9,37 +9,57 @@ import xterm from '@xterm/headless';
 import {RpcClient} from '@earendil-works/pi-coding-agent';
 import {createPtyProcess} from '../../src/jobs/backends/pty.ts';
 import {agentDir, bashPath} from '../support/jobs.ts';
+import {GOAL_ENTRY, type Goal} from '../../src/goal/state.ts';
+
+const storedGoal = (file: string): Goal | undefined => readFileSync(file, 'utf8').split('\n').filter(Boolean)
+  .map(line => JSON.parse(line)).findLast(entry => entry.type === 'custom' && entry.customType === GOAL_ENTRY)?.data.goal ?? undefined;
 
 const packageDir = dirname(dirname(fileURLToPath(import.meta.resolve('@earendil-works/pi-coding-agent'))));
 const bin = resolve(packageDir, JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8')).bin.pi);
 const fixtureArgs = ['-ns', '-np', '-nc', '--no-mcp', '-e', resolve('tests/support/fixtures/cli-host.ts'),
   '--provider', 'cli-proof', '--model', 'offline'];
 const args = ['-ne', '-e', resolve('src/index.ts'), ...fixtureArgs];
-type Snapshot = {sessionId: string; sessionFile: string; calls: number; api: string; idle: boolean; reason?: string};
+type Snapshot = {pid: number; sessionId: string; sessionFile: string; calls: number; api: string; idle: boolean; reason?: string};
 function setup(mode: 'fullscreen' | 'regular') {
   const root = agentDir(), user = join(root, 'user'); mkdirSync(user);
   writeFileSync(join(user, 'settings.json'), JSON.stringify({tuiMode: mode, quietStartup: true,
     defaultProjectTrust: 'always', retry: {enabled: false}, compaction: {enabled: false}, shellPath: bashPath()}));
   const env = {...process.env, PI_CODING_AGENT_DIR: user, PI_SKIP_VERSION_CHECK: '1', PI_OFFLINE: '1', TERM: 'xterm-256color'} as Record<string, string>;
   for (const key of ['PI_SESSION_ID', 'PI_SESSION_FILE', 'PI_PROVIDER', 'PI_MODEL', 'PI_REASONING_LEVEL', 'TMUX', 'STY', 'PI_TUI_WRITE_LOG',
-    'PI_SUITE_TEST_RESPONSES_URL']) delete env[key];
+    'PI_SUITE_TEST_RESPONSES_URL', 'PI_SUITE_TEST_GOAL_MODE']) delete env[key];
   const snapshot = () => existsSync(join(root, 'cli-state.json')) ? JSON.parse(readFileSync(join(root, 'cli-state.json'), 'utf8')) as Snapshot : undefined;
   return {root, user, env, snapshot};
 }
 const pause = () => new Promise(resolve => setTimeout(resolve, 20));
 
 // The actual official bin has its own bundled classes/virtual modules; SDK-only checks miss this boundary.
-test('official published CLI renders keyboard Subagents/Jobs/Tasks with shared native classes and ordinary clone', {timeout: 60000}, async () => {
+test('official CLI keeps reading frames continuous, adapts metadata, forks tasks and quits Goals stopped', {timeout: 90000}, async () => {
   assert.equal(JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8')).bin.pi, 'dist/bundle/cli.js');
   for (const mode of ['fullscreen', 'regular'] as const) {
     const {root, env, snapshot} = setup(mode);
     const screen = new xterm.Terminal({cols: 80, rows: 30, allowProposedApi: true});
     const pty = createPtyProcess(process.execPath, [bin, ...args], {cwd: root, env, cols: 80, rows: 30, name: 'xterm-256color'});
-    let output = '', exited = false, exitCode: number | undefined;
-    const data = pty.onData(chunk => {output = (output + chunk).slice(-64000); screen.write(chunk);});
+    let output = '', exited = false, exitCode: number | undefined, pendingFrame = '', frameId = 0;
+    const frames: {id: number; lines: string[]}[] = [];
+    const lines = () => Array.from({length: screen.rows}, (_, row) => screen.buffer.active.getLine(screen.buffer.active.viewportY + row)?.translateToString(true) ?? '');
+    const data = pty.onData(chunk => {
+      output = (output + chunk).slice(-64000);
+      pendingFrame += chunk;
+      // PTY chunks can coalesce a root frame and its successor. Segment the stock
+      // host's synchronized commits, or a final-screen check would miss the flash.
+      const end = '\x1b[?2026l';
+      let boundary: number;
+      while ((boundary = pendingFrame.indexOf(end)) >= 0) {
+        const frame = pendingFrame.slice(0, boundary + end.length);
+        pendingFrame = pendingFrame.slice(boundary + end.length);
+        screen.write(frame, () => {
+          frames.push({id: ++frameId, lines: lines()});
+          if (frames.length > 100) frames.shift();
+        });
+      }
+    });
     const exit = pty.onExit(event => {exited = true; exitCode = event.exitCode;});
     const responses = screen.onData(data => pty.write(data));
-    const lines = () => Array.from({length: screen.rows}, (_, row) => screen.buffer.active.getLine(screen.buffer.active.viewportY + row)?.translateToString(true) ?? '');
     const visible = (text: string) => lines().some(line => line.includes(text));
     const waitFor = async (label: string, predicate: () => boolean) => {
       const deadline = Date.now() + 15000;
@@ -47,6 +67,17 @@ test('official published CLI renders keyboard Subagents/Jobs/Tasks with shared n
         assert.equal(exited, false, `${mode}: exited waiting for ${label}\n${output.slice(-6000)}`);
         assert.ok(Date.now() < deadline, `${mode}: timed out waiting for ${label}\n${lines().join('\n')}\n${output.slice(-2000)}`);
         await pause();
+      }
+    };
+    const checkReadingFrames = async (after: number) => {
+      await new Promise<void>(done => screen.write('', done));
+      const commits = frames.filter(frame => frame.id > after);
+      assert.ok(commits.length, 'navigation must paint at least one committed frame');
+      for (const frame of commits) {
+        const browser = frame.lines.some(line => line.includes('Subagents ▸'));
+        const reader = frame.lines.some(line => line.includes('CLI_CHILD') && line.includes('completed'))
+          && frame.lines.some(line => line.includes('following') || line.includes('paused'));
+        assert.ok(browser || reader, `${mode}: root/blank flash in navigation frame ${frame.id}\n${frame.lines.join('\n')}`);
       }
     };
     try {
@@ -58,13 +89,27 @@ test('official published CLI renders keyboard Subagents/Jobs/Tasks with shared n
         const header = `${title} ▸`;
         pty.write(`/${command}\r`); await waitFor(command, () => visible(header));
         if (command === 'subagents') {
+          for (const [key, page] of [[']', 'Types'], ['[', 'Runs']] as const) {
+            const before = frameId;
+            pty.write(key); await waitFor(`tab ${page}`, () => visible(`Subagents ▸ ${page}`));
+            await checkReadingFrames(before);
+          }
+          const entering = frameId;
           pty.write('\r'); await waitFor('child transcript tail', () => visible('Child history paragraph'));
+          await checkReadingFrames(entering);
+          screen.resize(120, 40); pty.resize(120, 40);
+          await waitFor('single-line reader metadata', () => lines().some(line => line.includes('CLI_CHILD') && line.includes('completed') && line.includes('following')));
+          const information = lines().findIndex(line => line.includes('CLI_CHILD') && line.includes('completed') && line.includes('following'));
+          assert.ok(lines()[information + 1]?.trim(), 'one-line information must be followed by actions, not a reserved blank');
+          screen.resize(80, 30); pty.resize(80, 30); await waitFor('reader resize', () => visible('Child history paragraph'));
           pty.write('/'); await waitFor('native reader search', () => lines().some(line => line.trim() === '>'));
           pty.write('CLI_CHILD_DONE\r'); await waitFor('search result', () => visible('CLI_CHILD_DONE') && !lines().some(line => line.startsWith('>')));
           pty.write('\x1b[H'); await waitFor('tool at top', () => visible('printf'));
           pty.write('o'); await waitFor('keyboard tool expansion', () => visible('CLI_TOOL_LINE_13'));
           assert.equal(visible('new output'), false, 'tool expansion is not provider output');
+          const returning = frameId;
           pty.write('\x1b'); await waitFor('return to run list', () => visible(header));
+          await checkReadingFrames(returning);
         } else if (command === 'jobs') {
           pty.write('\r'); await waitFor('job output viewer', () => !visible(header) && visible('previous bytes') && visible('CLI_STDOUT'));
           pty.write('\x1b'); await waitFor('return to jobs list', () => visible(header));
@@ -88,9 +133,47 @@ test('official published CLI renders keyboard Subagents/Jobs/Tasks with shared n
       pty.write('\x1b'); await waitFor('cancelled Editor', () => !visible('中文 editor draft'));
       pty.write('\x1b'); await waitFor('return from active run', () => visible('Subagents ▸'));
       pty.write('\x1b'); await waitFor('closed active run list', () => !visible('Subagents ▸'));
+      pty.write('/cli-goal-setup\r'); await waitFor('controlled Goal responses', () => snapshot()?.reason === 'goal-ready');
+      pty.write('/goal CLI_QUIT_GOAL\r');
+      const goalFile = snapshot()!.sessionFile;
+      await waitFor('active Goal waiting on external deadline', () => storedGoal(goalFile)?.status === 'active' && !!storedGoal(goalFile)?.resumeAt);
       pty.write('/exit\r'); const deadline = Date.now() + 5000; while (!exited && Date.now() < deadline) await pause();
       assert.equal(exited, true, 'native host exits normally');
       assert.equal(exitCode, 0, 'native quit completes child/job cleanup without a failing exit');
+      assert.equal(storedGoal(goalFile)?.status, 'stopped');
+      assert.equal(storedGoal(goalFile)?.automatic, false);
+      assert.equal(storedGoal(goalFile)?.resumeAt, undefined, 'quit revokes the scheduled wake');
+      const rpcOptions = {cwd: root, env: {...env, PI_SUITE_TEST_GOAL_MODE: '1'},
+        cliPath: fileURLToPath(import.meta.resolve('@earendil-works/pi-coding-agent/rpc-entry')), args: [...args, '--session', goalFile]};
+      let resumed = new RpcClient(rpcOptions);
+      try {
+        await resumed.start(); await resumed.getState(); await new Promise(done => setTimeout(done, 250));
+        assert.equal(snapshot()?.calls, 0, 'cold startup must not request the provider');
+        assert.equal(storedGoal(goalFile)?.status, 'stopped');
+        await resumed.promptAndWait('CLI_ORDINARY_INPUT');
+        assert.equal(snapshot()?.calls, 1);
+        assert.equal(storedGoal(goalFile)?.status, 'stopped', 'ordinary input is not resume');
+        const resumedIdle = resumed.waitForIdle(15000);
+        await resumed.prompt('/goal resume');
+        await resumedIdle;
+        const until = Date.now() + 15000;
+        while (!storedGoal(goalFile)?.resumeAt) { assert.ok(Date.now() < until, 'explicit resume did not restore execution'); await pause(); }
+        assert.equal(storedGoal(goalFile)?.status, 'active');
+        // SIGKILL cannot run Suite's quit hook: recovery must revoke the persisted active
+        // lease itself, rather than relying on graceful shutdown to have saved stopped.
+        const beforeCrash = readFileSync(goalFile, 'utf8');
+        process.kill(snapshot()!.pid, 'SIGKILL');
+        await resumed.stop();
+        assert.equal(readFileSync(goalFile, 'utf8'), beforeCrash, 'forced exit does not rewrite the active snapshot');
+        resumed = new RpcClient(rpcOptions);
+        await resumed.start(); await resumed.getState();
+        assert.equal(storedGoal(goalFile)?.status, 'stopped', 'cold recovery also revokes any unsaved active lease');
+        assert.equal(snapshot()?.calls, 0);
+        await resumed.promptAndWait('CLI_AUDIT');
+        assert.equal(storedGoal(goalFile)?.status, 'completed', 'completion-only audit does not need resume');
+        assert.equal(storedGoal(goalFile)?.progress, 'CLI completed-work audit');
+        assert.doesNotMatch(resumed.getStderr(), /TypeError|Extension errors/);
+      } finally { await resumed.stop(); }
       assert.doesNotMatch(output, /TypeError|Extension errors/);
     } finally {
       if (!exited) {
@@ -118,8 +201,20 @@ test('official RPC export loads Suite without cleansing command and uses normal 
     const after = await client.getState(); assert.notEqual(after.sessionId, before.sessionId);
     assert.equal(snapshot()!.calls, 0);
     const sourceTasks = readFileSync(join(root, '.pi', 'tasks', `tasks-${before.sessionId}.json`), 'utf8');
-    assert.equal(readFileSync(join(root, '.pi', 'tasks', `tasks-${after.sessionId}.json`), 'utf8'), sourceTasks);
+    const {generation: sourceGeneration, ...sourceData} = JSON.parse(sourceTasks);
+    const {generation: targetGeneration, ...targetData} = JSON.parse(readFileSync(join(root, '.pi', 'tasks', `tasks-${after.sessionId}.json`), 'utf8'));
+    assert.deepEqual(targetData, sourceData, 'ordinary fork keeps the complete task/counter snapshot');
+    assert.notEqual(targetGeneration, sourceGeneration, 'the fork has its own task reference generation');
     await client.promptAndWait('after clone'); assert.equal(snapshot()!.calls, 1);
+    const resetCalls = snapshot()!.calls;
+    await client.prompt('/cli-task-reset');
+    await client.promptAndWait('reset and verify stale references');
+    assert.equal(snapshot()!.calls - resetCalls, 9, 'real model tool chain performed clear/reuse/stale read/start guards');
+    const reset = JSON.parse(readFileSync(join(root, '.pi', 'tasks', `tasks-${after.sessionId}.json`), 'utf8'));
+    assert.deepEqual(reset.tasks, []); assert.equal(reset.nextId, 1);
+    assert.notEqual(reset.generation, JSON.parse(sourceTasks).generation);
+    assert.equal(readFileSync(join(root, '.pi', 'tasks', `tasks-${before.sessionId}.json`), 'utf8'), sourceTasks,
+      'target reset must not alter the fork source');
     assert.doesNotMatch(client.getStderr(), /TypeError|Extension errors/);
   } finally {await client.stop(); rmSync(root, {recursive: true, force: true});}
 });

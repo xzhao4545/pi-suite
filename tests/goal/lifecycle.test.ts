@@ -32,6 +32,41 @@ test("real host rejects invalid goal evidence, continues unfinished work once, t
   } finally { await h.dispose(); }
 });
 
+test('real host user audits close stopped and non-active goals without resume or budget execution, with idempotent completion', { timeout: 15000 }, async () => {
+  const h = await host();
+  try {
+    for (const state of ['failed', 'paused', 'blocked', 'budget_limited', 'stopped'] as const) {
+      h.faux.setResponses([state === 'failed' ? fauxAssistantMessage('', { stopReason: 'error', errorMessage: 'Original provider failure' }) :
+        state === 'budget_limited' ? fauxAssistantMessage('Budget spent') :
+        context => fauxAssistantMessage(fauxToolCall(state === 'blocked' ? 'goal_blocked' : 'goal_wait', state === 'blocked' ?
+          { goalId: goalId(context), reason: 'External obstacle', evidence: 'Repeated obstacle', repeatedTurns: 3 } :
+          { goalId: goalId(context), reason: 'Arranged deadline', resumeAfterMs: 10000 }))]);
+      await h.session.prompt(`/goal ${state === 'budget_limited' ? '--tokens 1 ' : ''}Audit every original requirement`); await h.idle();
+      if (state === 'paused' || state === 'stopped') await h.session.prompt(`/goal ${state === 'paused' ? 'pause' : 'stop'}`);
+      assert.equal(h.goal()?.status, state); assert.equal(h.goal()?.automatic, false);
+      const before = h.goal()!, calls = h.faux.state.callCount;
+      h.faux.setResponses([context => {
+        assert.equal(h.goal()?.status, state); assert.equal(h.goal()?.automatic, false);
+        const sections = JSON.stringify(context.messages.filter(message => message.role === 'system'));
+        assert.match(sections, /completion-only permission/);
+        return complete(context);
+      }]);
+      await h.session.prompt('Audit existing work and close this goal only if every requirement is verified.'); await h.idle();
+      assert.equal(h.faux.state.callCount, calls + 1); assert.equal(h.goal()?.status, 'completed');
+      assert.equal(h.goal()?.id, before.id); assert.equal(h.goal()?.elapsedMs, before.elapsedMs);
+      assert.equal(h.goal()?.error, before.error); assert.equal(h.goal()?.turns, before.turns + 1);
+      const at = h.goal()!.completedAt, progress = h.goal()!.progress;
+      h.faux.setResponses([context => fauxAssistantMessage(fauxToolCall('goal_complete', { goalId: goalId(context), summary: 'Do not replace evidence' }))]);
+      await h.session.prompt('Confirm the existing completed goal.'); await h.idle();
+      assert.equal(h.goal()?.completedAt, at); assert.equal(h.goal()?.progress, progress);
+      const result = h.session.messages.findLast(message => message.role === 'toolResult');
+      assert.match(JSON.stringify(result), /Goal already completed/); assert.ok(!JSON.stringify(result).includes('Do not replace evidence'));
+      await h.session.prompt('/goal stop'); assert.equal(h.goal()?.status, 'completed');
+      await h.session.prompt('/goal clear'); assert.equal(h.goal(), undefined);
+    }
+  } finally { await h.dispose(); }
+});
+
 test("host retry succeeds without suite retry; exhausted retries persist final failure", { timeout: 15000 }, async () => {
   const h = await host({ retry: true });
   try {
@@ -75,7 +110,8 @@ test("Esc skips a native ask without consent and the same goal turn continues", 
       context => {
         const message = context.messages.findLast(message => message.role === "toolResult");
         assert.ok(message?.role === "toolResult");
-        assert.equal(message.content.map(part => part.type === "text" ? part.text : "").join(""), "skipped: unanswered");
+        assert.equal((message.details as { status: string }).status, 'skipped');
+        assert.match(message.content.map(part => part.type === "text" ? part.text : "").join(""), /skipped.*not consent[\s\S]*unanswered/);
         return complete(context);
       },
     ]);

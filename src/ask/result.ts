@@ -6,20 +6,32 @@ export function askDetails(params: AskParams, questions: Question[], result: Ask
   const common = { status: result.status, cancelled: result.status === "skipped" || result.status === "cancelled" };
   return params.questions ? {
     ...common, kind: "batch", heading: params.question, questions,
-    answers: result.responses.map(response => response ? { status: "answered", response } : { status: "unanswered" }),
-  } : { ...common, question: params.question, context: params.context, options: questions[0].options, response: result.responses[0] ?? null };
+    answers: result.status === 'cancelled' ? [] : questions.map((_, index) => {
+      const response = result.responses[index];
+      return response ? { status: "answered", response } : { status: "unanswered" };
+    }),
+  } : { ...common, question: params.question, options: questions[0].options, response: result.responses[0] ?? null };
 }
 export type AskDetails = ReturnType<typeof askDetails>;
 
-const QUESTION_WIDTH = 60;
+const QUESTION_WIDTH = 24;
 const clip = (text: string) => {
   const chars = [...text.replace(/\s+/g, ' ').trim()];
   return chars.length > QUESTION_WIDTH ? chars.slice(0, QUESTION_WIDTH - 1).join('') + '…' : chars.join('');
 };
-const selection = (response: Extract<Response, { kind: 'selection' }>) =>
-  `${response.selections.join(', ')} (${response.optionIds.join(', ')})${response.text ? ` + custom: ${response.text}` : ''}`;
-const answer = (response?: Response) => !response ? 'unanswered'
-  : response.kind === 'selection' ? selection(response) : `custom: ${response.text}`;
+function selection(question: Question, response: Extract<Response, { kind: 'selection' }>): string {
+  const counts = new Map<string, number>();
+  const positions = new Map(question.options.map((option, index) => [option.id, index + 1]));
+  for (const option of question.options) counts.set(option.title, (counts.get(option.title) ?? 0) + 1);
+  // A title alone is enough unless another offered option has the same title.
+  // Number by the original list, never the selected subset; IDs remain in details.
+  const titles = response.selections.map((title, index) => counts.get(title)! > 1
+    ? `#${positions.get(response.optionIds[index])} ${title}` : title);
+  return titles.join(', ') + (response.text ? ` + custom: ${response.text}` : '');
+}
+const answer = (question: Question, response?: Response) => !response ? 'unanswered'
+  : (response.kind === 'selection' ? selection(question, response) : `custom: ${response.text}`) +
+    (response.autoSelected ? ' (auto-selected)' : '');
 const comment = (response: Response | undefined, indent = '') => response?.comment ? [`${indent}comment: ${response.comment}`] : [];
 
 /**
@@ -31,23 +43,14 @@ const comment = (response: Response | undefined, indent = '') => response?.comme
 export function askToolResult(params: AskParams, questions: Question[], result: AskResult, source?: 'parent') {
   const record = askDetails(params, questions, result);
   const details = source ? { ...record, source } : record;
-  const responses = result.responses, answered = responses.filter(Boolean).length;
-  const flags: string[] = [];
-  if (!params.questions && responses[0]?.kind === 'freeform') flags.push('custom');
-  if (result.status === 'timed_out') {
-    if (answered) flags.push('auto-selected');
-    // Parent protocol timeouts have no answers; absence of a default is still not consent.
-    flags.push('not consent');
-  } else if (result.status === 'skipped' && (answered || params.questions)) flags.push('not consent');
-  const head = result.status + (flags.length ? ` (${flags.join(', ')})` : '');
-  let lines: string[];
-  if (result.status === 'cancelled') lines = ['cancelled'];
-  else if (params.questions) lines = [
-    `${head} · ${answered}/${questions.length} answered`,
-    // Timed-out and skipped batches keep empty slots, so indices stay aligned with questions.
-    ...questions.flatMap((question, index) => [`${index + 1}. ${clip(question.question)} → ${answer(responses[index])}`,
+  const responses = result.responses;
+  const head = result.status + (result.status === 'timed_out' || result.status === 'skipped' ? ' (not consent)' : '');
+  const lines = result.status === 'cancelled' ? ['cancelled'] : [
+    head,
+    // Both shapes keep question positions. Mark automation per answer so mixed
+    // drafts and parent timeouts cannot imply that every slot was auto-selected.
+    ...questions.flatMap((question, index) => [`${index + 1}. ${clip(question.question)} → ${answer(question, responses[index])}`,
       ...comment(responses[index], '   ')]),
   ];
-  else lines = [`${head}: ${responses[0]?.kind === 'freeform' ? responses[0].text : answer(responses[0])}`, ...comment(responses[0])];
   return textResult([...lines, source && `source: ${source}`], details);
 }

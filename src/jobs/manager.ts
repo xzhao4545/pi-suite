@@ -11,6 +11,7 @@ import { stopTracked, stopTrackedSync, type Tracked } from './backends/process.t
 import { launchPipe } from './backends/pipe.ts';
 import type { ResolvedShellConfig } from './terminal/shell.ts';
 import type { PtyTerminalSession } from './terminal/session.ts';
+import { requireGeneration } from '../tasks/types.ts';
 import { ToolError } from '../runtime/errors.ts';
 import { compileMonitor, type CompiledMonitor } from './monitors/compile.ts';
 import { JobMonitor, type MonitorEvent } from './monitors/runtime.ts';
@@ -102,6 +103,7 @@ export class JobManager {
   }
 
   async start(request: StartRequest, shell: ResolvedShellConfig, signal?: AbortSignal): Promise<JobSummary> {
+    if (request.taskId) requireGeneration(request.taskGeneration);
     const mode = request.mode ?? 'pipe';
     const handsFree = request.handsFree ? compileHandsFree(request.handsFree, mode) : undefined;
     // A monitor decides the command the job runs: its poll loop, or a generated file watcher.
@@ -122,7 +124,7 @@ export class JobManager {
       schemaVersion: 1, id, workspace, ownerRuntimeId: this.runtimeId, ownerSessionId: request.ownerSessionId,
       anchorEntryId: request.anchorEntryId,
       name: jobName(request).slice(0, 80),
-      command, cwd: request.cwd, mode, ...(request.taskId ? { taskId: request.taskId } : {}),
+      command, cwd: request.cwd, mode, ...(request.taskId ? { taskId: request.taskId, taskGeneration: request.taskGeneration } : {}),
       ...(request.creator ? { creator: request.creator } : {}),
       ...(request.monitor ? { monitor: { config: request.monitor, events: 0, notifiedEvents: 0 } } : {}),
       ...(handsFree ? { handsFree: { config: handsFree, updates: 0, notifiedUpdates: 0, totalCharsSent: 0 } } : {}),

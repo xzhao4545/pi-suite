@@ -13,7 +13,7 @@ export function agentDetails(record: AgentRecord, permissions?: {readonly: boole
     `Runtime: ${record.elapsedMs === undefined ? 'not started' : `${(record.elapsedMs / 1000).toFixed(1)}s`}`,
     ...(record.state === 'queued' ? [`Queued: ${Math.max(0, Date.now() - Date.parse(record.createdAt)) / 1000}s`] : []),
     `Created: ${record.createdAt}`, ...record.startedAt ? [`Started: ${record.startedAt}`] : [],
-    ...record.taskId ? [`Task: ${record.taskId}`] : [], ...record.workflowId ? [`Workflow: ${record.workflowId}`] : [],
+    ...record.taskId ? [`Task: ${record.taskId} · source generation: ${record.taskGeneration ?? 'unavailable (legacy link expired)'}`] : [], ...record.workflowId ? [`Workflow: ${record.workflowId}`] : [],
     ...record.endedAt ? [`Ended: ${record.endedAt}`] : [], `Cwd: ${record.cwd}`, '', record.prompt,
     ...record.error ? ['', `Error: ${record.error}`] : []].join('\n');
 }

@@ -1,10 +1,13 @@
 import { Text, truncateToWidth } from '@earendil-works/pi-tui';
 import { toolRenderers, stateLine } from '../ui/tool-render.ts';
 import { answerText, optionRow } from './render.ts';
-import { normalize, type AskParams } from './schema.ts';
+import { normalize, type AskParams, type Question } from './schema.ts';
 import type { AskDetails } from './result.ts';
 
-type Details = AskDetails;
+// Compatibility is display-only: persisted context can be read here without
+// widening the current schema/Question or normalizing it back into a live request.
+type HistoricalQuestion = Question & { context?: string };
+type Details = AskDetails & { context?: string; source?: 'parent' };
 export function askRenderers(title = 'Ask') {
   return toolRenderers<AskParams, Details>({
     call: args => ({ icon: '?', tone: 'warning', title,
@@ -16,19 +19,24 @@ export function askRenderers(title = 'Ask') {
         summary: data.status === 'cancelled' ? data.status : data.status === 'skipped'
           ? `skipped · ${batch ? `${answers.length - unanswered} answered` : answerText(data.response ?? undefined) ?? 'unanswered'}` : batch
           ? `${answers.length - unanswered} answered` : `${truncateToWidth(data.question ?? '', 40)} → ${answerText(data.response ?? undefined) ?? 'unanswered'}`,
-        meta: data.status === 'timed_out' ? ['auto-selected', ...unanswered ? [`${unanswered} unanswered`] : []] : [] };
+        meta: [...answers.some(answer => answer.response?.autoSelected) ? ['auto-selected'] : [],
+          ...data.status === 'timed_out' || data.status === 'skipped' ? ['not consent'] : [],
+          ...unanswered ? [`${unanswered} unanswered`] : [], ...data.source ? [`source: ${data.source}`] : []] };
     },
     expanded: (data, args, _text, theme) => {
-      const questions = 'questions' in data ? data.questions : normalize({ ...args, question: data.question,
-        context: data.context, options: data.options });
+      const questions: HistoricalQuestion[] = 'questions' in data ? data.questions : normalize({ ...args, question: data.question,
+        options: data.options });
       const responses = 'answers' in data ? data.answers.map(answer => answer.response) : [data.response];
-      return [{ label: 'state', value: data.status, tone: stateLine(data.status).tone }, ...'heading' in data && data.heading ? [{ icon: '', title: data.heading }] : [],
+      return [{ label: 'state', value: data.status, tone: stateLine(data.status).tone },
+        ...data.status === 'timed_out' || data.status === 'skipped' ? [{ label: 'consent', value: 'not consent', tone: 'warning' as const }] : [],
+        ...data.source ? [{ label: 'source', value: data.source }] : [], ...'heading' in data && data.heading ? [{ icon: '', title: data.heading }] : [],
         ...questions.flatMap((question, index) => {
           const response = responses[index];
           // Use the live form's markers; the transcript has no editing focus.
           const selected = new Set(response?.kind === 'selection' ? response.optionIds : []);
           const draft = { selected, text: response?.text ?? '', customSelected: Boolean(response?.text) };
-          return [{ icon: '?', tone: 'accent' as const, title: question.question }, ...question.context ? [{ label: 'context', value: question.context }] : [],
+          const context = 'questions' in data ? question.context : data.context;
+          return [{ icon: '?', tone: 'accent' as const, title: question.question }, ...context ? [{ label: 'context', value: context }] : [],
             ...question.options.flatMap(option => [new Text(optionRow(theme, question, draft, option, false), 0, 0),
               ...option.description ? [{ label: 'description', value: option.description }] : []]),
             ...response?.text ? [new Text(optionRow(theme, question, draft, undefined, false), 0, 0)] : [],

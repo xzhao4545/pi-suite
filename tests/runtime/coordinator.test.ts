@@ -202,7 +202,9 @@ test('Tasks join Dock navigation and section shortcuts with read-only details an
   })});
   try {
     const tool = (name: string) => h.session.getToolDefinition(name)!;
-    await tool('task_edit').execute('create', {op: 'batch', changes: [
+    const discovery = await tool('task_list').execute('discover', {}, undefined, undefined, ctx as never);
+    const generation = (discovery.details as {generation: string}).generation;
+    await tool('task_edit').execute('create', {generation, op: 'batch', changes: [
       {op: 'add', title: 'inspect group', children: ['inspect child \x1b[31mred\x1b[0m', 'second child']},
       {op: 'update', id: '1.1', description: '## literal *text* \x1b[31mred\x1b[0m'},
     ]}, undefined, undefined, ctx as never);

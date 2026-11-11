@@ -114,8 +114,8 @@ test('native asks hold real child questions and job completion; only system canc
       }
       await childReady.promise;
       assert.equal(h.goal()?.automatic, true); assert.equal(h.goal()?.waiting, undefined);
-      assert.equal(gateResult, { answered: 'answered (custom): approved', skipped: 'skipped (custom, not consent): approved',
-        timed_out: 'timed_out (custom, auto-selected, not consent): approved', cancelled: 'cancelled' }[outcome]);
+      assert.equal(gateResult, { answered: 'answered\n1. gate → custom: approved', skipped: 'skipped (not consent)\n1. gate → custom: approved',
+        timed_out: 'timed_out (not consent)\n1. gate → custom: approved (auto-selected)', cancelled: 'cancelled' }[outcome]);
       assert.ok(wake.includes(`${jobId} completed`));
       for (const run of runs) assert.ok(wake.includes(run.record.id) && wake.includes(run.record.prompt));
       assert.ok(wake.indexOf('CHILD_A') < wake.indexOf('CHILD_B'));
@@ -129,7 +129,7 @@ test('native asks hold real child questions and job completion; only system canc
       answer(forms.get('child A')!); await resumed; await h.idle(); await Promise.all(runs.map(run => run.done.promise));
       assert.deepEqual(shown, ['gate', 'child A', 'child B']);
       assert.equal(h.goal()?.status, 'completed'); assert.equal(rootCalls, 7);
-      assert.equal(childResults.length, 2); for (const result of childResults) assert.equal(result, 'answered (custom): approved\nsource: parent');
+      assert.deepEqual(childResults.slice().sort(), ['CHILD_A', 'CHILD_B'].map(question => `answered\n1. ${question} → custom: approved\nsource: parent`));
       for (const run of runs) { assert.equal(run.record.state, 'completed'); await invoke('agent_read', { id: run.record.id }); }
       assert.equal(notices().length, 2); agents.changed(); await h.idle(); assert.equal(rootCalls, 7);
     } finally {

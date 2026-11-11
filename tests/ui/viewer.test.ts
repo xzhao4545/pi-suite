@@ -5,6 +5,7 @@ import { ToolExecutionComponent, initTheme, type Theme } from '@earendil-works/p
 import { CURSOR_MARKER, KeybindingsManager, TUI_KEYBINDINGS, Text, visibleWidth } from '@earendil-works/pi-tui';
 import { BrowserView, browseState } from '../../src/ui/browser.ts';
 import { DetailsView } from '../../src/ui/details.ts';
+import { readingRows } from '../../src/ui/reading.ts';
 import { DoubleLeft, ViewerNavigation } from '../../src/ui/viewer/navigation.ts';
 import { agentInformation } from '../../src/ui/viewer/agent-information.ts';
 import type { AgentRecord } from '../../src/agents/types.ts';
@@ -101,8 +102,13 @@ test('Subagent bottom metadata and native search/editor share a bounded keyboard
       const lines = view.render(width), information = agentInformation(record, false, false, view.reader, width, theme);
       assert.match(stripVTControlCharacters(lines[1]), /BODY/);
       assert.doesNotMatch(plain(lines), /MUST_NOT_BE_TOP|agent_deadbeef|run_deadbeef/);
-      assert.ok(lines.length <= Math.floor(rows * 0.7)); assert.ok(lines.every(line => visibleWidth(line) <= width));
+      assert.equal(lines.length, Math.floor(rows * 0.7)); assert.ok(lines.every(line => visibleWidth(line) <= width));
       assert.ok(information.length <= 2);
+      const start = lines.findIndex(line => stripVTControlCharacters(line) === stripVTControlCharacters(information[0]));
+      assert.ok(start > 1);
+      assert.equal(plain(lines.slice(start, start + information.length)), plain(information));
+      assert.equal(stripVTControlCharacters(lines[start + information.length]), '─'.repeat(width), 'no blank metadata row precedes the footer separator');
+      assert.equal(view.reader.viewportHeight, start - 2, 'the reclaimed information row belongs to the body');
       if (width === 200) assert.equal(information.length, 1);
     }
   }
@@ -119,4 +125,41 @@ test('Subagent bottom metadata and native search/editor share a bounded keyboard
   view.handleInput('\x1b[D'); view.handleInput('\x1b[D'); assert.equal(exits, 0);
   view.handleInput('\x1b'); view.handleInput('\x1b[D'); view.handleInput('\x1b[D'); assert.equal(exits, 1);
   assert.equal(navigation.result, 'close'); view.dispose(); initTheme('dark');
+});
+
+test('Details metadata settles follow/clamp before slicing, measures its document once and leaves replacement reader callbacks intact', () => {
+  const tui = terminal(24, 10);
+  let measures = 0, document = Array.from({length: 100}, (_, i) => `BODY ${i}`);
+  const content = {render: () => {measures++; return document;}, invalidate() {}};
+  const view = new DetailsView(tui, () => '', content, () => {}, [], undefined, undefined, {title: false,
+    bottom: width => {
+      const information = `META ${view.reader.position}`;
+      return information.length <= width ? [information] : ['META', view.reader.position];
+    }});
+  view.reader.follow();
+  const render = (width: number) => {
+    const before = measures, lines = view.render(width);
+    assert.equal(measures - before, 1, 'metadata rebudgeting must not rerender the native document');
+    assert.equal(lines.length, readingRows(tui));
+    assert.match(plain(lines), new RegExp(view.reader.position));
+    return lines;
+  };
+  const first = render(10);
+  assert.equal(view.reader.following, true); assert.equal(view.reader.atBottom, true);
+  assert.match(plain(first), /BODY 99/);
+  const position = view.reader.offset; render(10); assert.equal(view.reader.offset, position);
+  view.handleInput('\x1b[H'); render(10); assert.equal(view.reader.offset, 0); assert.equal(view.reader.following, false);
+  view.reader.offset = 95; document = document.slice(0, 9); render(10); render(40);
+  assert.equal(view.reader.atBottom, true); assert.equal(view.reader.following, false, 'layout clamp cannot resume a paused reader');
+  document = Array.from({length: 100}, (_, i) => `BODY ${i}`); render(40);
+  assert.equal(view.reader.following, false);
+  view.handleInput('\x1b[F'); render(40); assert.equal(view.reader.following, true); assert.equal(view.reader.atBottom, true);
+  const replacement = new DetailsView(tui, () => 'new owner', content, () => {}, [], view.reader);
+  replacement.render(40);
+  const callback = replacement.reader.onScroll;
+  view.dispose();
+  assert.equal(replacement.reader.onScroll, callback);
+  assert.ok(callback);
+  replacement.handleInput('\x1b[H'); assert.equal(replacement.reader.offset, 0);
+  replacement.dispose(); assert.equal(replacement.reader.onScroll, undefined);
 });

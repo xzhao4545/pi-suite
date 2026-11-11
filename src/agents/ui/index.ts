@@ -1,12 +1,16 @@
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { browseState, type BrowseChoice } from '../../ui/browser.ts';
 import { ViewerNavigation } from '../../ui/viewer/navigation.ts';
+import { withReadingSession } from '../../ui/reading.ts';
 import type { SubagentsDeps } from '../commands.ts';
 import { showSchedules } from '../schedules/menu.ts';
 import { showAgentTypes } from './types.ts';
 import { RUN_FILTERS, runsState, showRuns, type RunFilter } from './runs.ts';
 
-export async function showSubagents(args: string, ctx: ExtensionContext, deps: SubagentsDeps): Promise<void> {
+export const showSubagents = (...args: Parameters<typeof readSubagents>): Promise<void> =>
+  withReadingSession(args[1], () => readSubagents(...args));
+
+async function readSubagents(args: string, ctx: ExtensionContext, deps: SubagentsDeps): Promise<void> {
   if (ctx.mode !== 'tui') { ctx.ui.notify('Use agent_list and agent_read outside the terminal UI'); return; }
   const words = args.trim().split(/\s+/).filter(Boolean), command = words[0] ?? 'all';
   const pages = ['runs', 'types', ...deps.scheduler?.isActive ? ['schedules'] : [], ...deps.workflows?.available() ? ['workflows'] : []];

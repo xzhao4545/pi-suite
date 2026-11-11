@@ -1,6 +1,8 @@
 // Adapted from @tintinweb/pi-tasks 0.9.1 src/types.ts (MIT, third-party/licenses/pi-tasks.txt).
 // Groups organize direct children; execution status is stored only on children.
+import { randomUUID } from 'node:crypto';
 import { Type, type Static } from 'typebox';
+import { ToolError } from '../runtime/errors.ts';
 
 export const groupId = Type.String({ pattern: '^[1-9][0-9]*$' });
 export const childId = Type.String({ pattern: '^[1-9][0-9]*\\.[1-9][0-9]*$' });
@@ -24,8 +26,11 @@ export const changeSchema = Type.Union([mutationSchema,
   Type.Object({ op: Type.Literal('block'), id: childId, reason: Type.Optional(reason) }, { additionalProperties: false }),
 ]);
 export type TaskChange = Static<typeof changeSchema>;
+export const generationSchema = Type.String({ minLength: 1, maxLength: 100 });
 export const storeSchema = Type.Object({
-  version: Type.Literal(3), nextId: Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }),
+  version: Type.Literal(4), generation: generationSchema,
+  resetReason: Type.Optional(Type.Union([Type.Literal('completed'), Type.Literal('clear')])),
+  nextId: Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }),
   tasks: Type.Array(Type.Object({
     id: taskId, nextChild: Type.Optional(Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER })), title, description: Type.Optional(description), parentId: Type.Optional(groupId), status: Type.Optional(status),
     blockedBy: dependencies, owner: Type.Optional(Type.String()), jobIds: Type.Array(Type.String()),
@@ -40,4 +45,17 @@ export type TaskView = Omit<Task, 'status'> & { status: TaskStatus; blocks: stri
 export type EditReceipt = { op: TaskChange['op']; id: string; title: string; parentId?: string; fields?: Record<string, unknown>; before?: TaskStatus; after?: TaskStatus };
 export type DerivedChange = { id: string; title: string; parentId: string; before: TaskStatus; status: TaskStatus };
 export type EditResult = { changes: EditReceipt[]; derived: DerivedChange[]; progress: { id: string; status: TaskStatus; done: number; total: number }[]; warnings: string[] };
-export const emptyTasks = (): TaskData => ({ version: 3, nextId: 1, tasks: [] });
+export type TaskDisplay = Pick<TaskView, 'id' | 'title' | 'parentId' | 'status' | 'updatedAt' | 'progress'>;
+export type TaskEditResult = EditResult & { generation: string; cleared?: 'completed' | 'clear' };
+export const emptyTasks = (generation: string = randomUUID(), resetReason?: TaskData['resetReason']): TaskData =>
+  ({ version: 4, generation, ...resetReason ? { resetReason } : {}, nextId: 1, tasks: [] });
+
+// Generation guards live with the data contract so agents/jobs can validate references
+// without importing the persistence layer.
+export function requireGeneration(generation: unknown): asserts generation is string {
+  if (typeof generation !== 'string' || !generation) throw new ToolError('TASK_GENERATION_REQUIRED', 'Task references require their source generation; discover your local generation with task_list({}).');
+}
+export function checkGeneration(data: TaskData, generation: unknown): void {
+  requireGeneration(generation);
+  if (data.generation !== generation) throw new ToolError('TASK_STALE', 'Task generation expired; no changes committed. Read task_list({}) for the current list; never reuse an old ID automatically.');
+}

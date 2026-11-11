@@ -16,7 +16,7 @@ jobs 模块在同一 Pi 进程内管理 pipe 与 PTY 两种后台执行。实现
 记录保存在 `<agentDir>/pi-suite/jobs/<workspaceHash>/<jobId>/`：job.json 每次以原子重命名写入；pipe 有 stdout.log、stderr.log，PTY 有 output.log；两种模式都有 input.jsonl，带 monitor 的 job 另有 events.jsonl，PTY 结算时可另存 terminal.json 并在 job.json 记录快照尺寸/光标元信息。workspace 为 git 顶层目录，非仓库时为 cwd。
 
 - ID 为 job_ 加 8 位十六进制。
-- 记录含命令、cwd、mode、ownerSession、启动时的分支叶子、可选 taskId 与创建归属（agentId 或 workflowId、runId、祖先 run/workflow ID）、起止时间、退出码或信号、停止原因、清理证据与错误。workflow gate 使用同一执行和日志存储，普通 jobs 列表、状态与通知按归属隐藏，查看入口见 [Workflow 操作](../agents/workflow/operations.md)。
+- 记录含命令、cwd、mode、ownerSession、启动时的分支叶子、可选 taskId/taskGeneration 与创建归属（agentId 或 workflowId、runId、祖先 run/workflow ID）、起止时间、退出码或信号、停止原因、清理证据与错误。workflow gate 使用同一执行和日志存储，普通 jobs 列表、状态与通知按归属隐藏，查看入口见 [Workflow 操作](../agents/workflow/operations.md)。
 - elapsedMs 使用单调计时，运行中随查询更新，退出时固定；未启动的失败不记录耗时。
 - 输入记录只表示已发送；sensitive 输入只保存时间、来源、方式和字节数。
 - 单个 job 日志达到 100 MiB 时以 log_limit 停止；workspace 历史达到 1 GiB 时拒绝新 job。没有工作区独占锁。
@@ -52,7 +52,7 @@ job_list 的 session 范围、/jobs 默认列表与状态数量共用 JobsModule
 
 | 工具 | 参数与行为 |
 | --- | --- |
-| job_start | command 或 agent、mode?（pipe 默认、pty）、name?、cwd?、timeoutMs?（省略不限时）、taskId?、attach?、monitor?、handsFree?；检查参数后直接启动并返回 ID。taskId 使用 `1.2` 形式，tasks 启用时须对应当前清单的子任务，job ID 写回其执行引用；任务与 job 状态分别管理。agent 指定 preset、prompt、fork?，见 [CLI 预设与直接启动](launch.md)。attach 只用于需要用户直接操作程序的 PTY job（登录、交互提示），立即打开终端视图，用户离开视图后返回；非 PTY 或非交互界面在启动前返回 INVALID_ARGS。monitor 见下节；file-watch 不传 command 或 agent；handsFree 仅用于 PTY，见 [监督与委派](hands-free.md) |
+| job_start | command 或 agent、mode?（pipe 默认、pty）、name?、cwd?、timeoutMs?（省略不限时）、taskId?、taskGeneration?、attach?、monitor?、handsFree?；检查参数后直接启动并返回 ID。taskId 使用 `1.2` 形式，同时引用源 taskGeneration；tasks 启用时须对应当前清单的子任务且代次有效，job ID 在锁内校验代次后写回其执行引用。清空不停止 job，但过期任务关联不能写入重用编号，缺少或过期代次明确报错；任务与 job 状态分别管理。agent 指定 preset、prompt、fork?，见 [CLI 预设与直接启动](launch.md)。attach 只用于需要用户直接操作程序的 PTY job（登录、交互提示），立即打开终端视图，用户离开视图后返回；非 PTY 或非交互界面在启动前返回 INVALID_ARGS。monitor 见下节；file-watch 不传 command 或 agent；handsFree 仅用于 PTY，见 [监督与委派](hands-free.md) |
 | job_list | state?（active 默认、finished、all）、scope?（session 默认、workspace）、cursor?、limit?（默认 10，最大 100）；同时使用约 4 KiB 预算按记录分页，长名称明确缩略；历史只读和错误保持可见，其他或已崩溃 Pi 进程未结算记录只在 all 中显示为 unsettled |
 | job_get | id、detail?；默认状态、名称、短命令、任务和清理结果，长命令提供 full 入口；detail:true 返回完整命令、cwd、时间、归属和监督信息。没有本进程控制句柄时标明 read-only history |
 | job_read | id、stream?、offset?、limitBytes?、search?、context?；pipe 为 stdout（默认）、stderr、input，PTY 为 output（默认）、input，带 monitor 的 job 另有 events，其他组合返回 UNSUPPORTED_STREAM；PTY 输出转为可见文本，偏移仍指原始字节 |

@@ -53,7 +53,7 @@ test("published pi-starship footer coexists with real suite execution and ask at
   const base = 'format = "会话模块共存目标验收 $model$thinking$context $extension_status"\n';
   const options = '[extension_status]\nseparator = " · "\nicons = {"pi-suite:runtime" = "", fallback = ""}\n';
   writeFileSync(join(root, "pi-starship.toml"), base + options);
-  const h = await host({root, tools: ["task_edit"], additionalExtensionPaths: [join(dirname(release), "dist/index.ts")],
+  const h = await host({root, tools: ["task_edit", "task_list"], additionalExtensionPaths: [join(dirname(release), "dist/index.ts")],
     extend: pi => { pi.on("session_start", (_event, context) => { ctx = context; }); },
     ui: ui => ({...ui,
       setStatus(key, value) { ui.setStatus(key, value); if (value === undefined) statuses.delete(key); else statuses.set(key, value); },
@@ -84,7 +84,9 @@ test("published pi-starship footer coexists with real suite execution and ask at
       async () => { entered.resolve(); await gate.promise; return fauxAssistantMessage("child done"); },
       fauxAssistantMessage(fauxToolCall("ask_user", {question: "是否继续当前任务？", options: ["继续", "等待"], timeoutMs: 0}))]);
     await h.session.prompt("/goal Footer coexistence"); await h.idle();
-    await h.session.getToolDefinition("task_edit")!.execute("tasks", {op: 'batch', changes: [
+    const discovery = await h.session.getToolDefinition("task_list")!.execute("discover", {}, undefined, undefined, ctx as never);
+    const generation = (discovery.details as {generation: string}).generation;
+    await h.session.getToolDefinition("task_edit")!.execute("tasks", {generation, op: 'batch', changes: [
       {op: "add", title: "当前任务中文长标题".repeat(7), children: ["执行任务一", "执行任务二"]},
       {op: "update", id: "1.1", status: "doing"},
     ]}, new AbortController().signal, undefined, ctx as never);

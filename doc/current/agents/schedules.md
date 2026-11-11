@@ -1,6 +1,6 @@
 # 定时调度
 
-agents.scheduling 默认 true。顶级 agent_start 的 schedule 登记未来任务并立即返回 schedule ID、类型与下一次时间；参数与 background:false、inheritContext（包括 false）互斥。创建时校验类型与时间格式，保留显式模型、thinking、maxTurns、isolated、taskId 和 name，触发时重新解析类型与模型配置。新调用的 taskId 使用子任务 `组.序号`；存储 schema 接受组/子两种任务 ID，历史纯数字引用可读取，触发时按当前任务清单验证执行子项，不存在时明确报错。
+agents.scheduling 默认 true。顶级 agent_start 的 schedule 登记未来任务并立即返回 schedule ID、类型与下一次时间；参数与 background:false、inheritContext（包括 false）互斥。创建时校验类型与时间格式，保留显式模型、thinking、maxTurns、isolated、taskId、taskGeneration 和 name，触发时重新解析类型与模型配置。新调用的 taskId 使用子任务 `组.序号` 并提供源 taskGeneration；存储 schema 接受组/子两种任务 ID，历史纯数字引用可读取。触发时校验来源清单代次和执行子项，缺少代次、过期或不存在时明确报错，不把清空前任务绑定同名新任务。
 
 ## 时间规则
 

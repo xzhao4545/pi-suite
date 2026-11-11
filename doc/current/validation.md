@@ -8,11 +8,11 @@ Linux 检查复用已有 Node.js/nvm 环境；非交互 shell 应先加载 nvm �
 
 goal 参考 @narumitw/pi-goal 0.54.15 的工具契约与控制语义，生命周期接入 Pi 1.5.0 的公共最终结算接口，许可证见 [pi-goal MIT](../../third-party/licenses/pi-goal.txt)。
 
-goal 模型工具的 3 项 Linux 契约检查通过，核对空白参数 INVALID_ARGS、错误或缺失 goalId 的 NOT_FOUND、非 active 目标的 NOT_RUNNING，以及失效修订/绑定或非所属会话的 STALE_BINDING；工具错误通过共享 ToolError 保留代码与调用 goalId，操作边界见 [目标接口](goal/operations.md)。
+goal 模型工具的 Linux 契约检查通过，核对空白参数 INVALID_ARGS、错误或缺失 goalId 的 NOT_FOUND、wait/block 非 active 或仅结案轮的 NOT_RUNNING，以及失效修订/绑定/请求取消代次或非所属会话的 STALE_BINDING。新的用户审计轮可直接完成 failed/paused/blocked/budget_limited/stopped，completed 幂等；工具错误通过共享 ToolError 保留代码与调用 goalId，操作边界见 [目标接口](goal/operations.md)。
 
 交互与启动专项通过真实 Pi TypeScript 加载、完整集合筛选/稳定身份/窄屏阅读、配置锁与两层覆盖、设置保存及 reload 准入验证。Linux 实际 CLI 覆盖 /exit 的空闲、生成、工具及压缩取消、PTY 清理与终端恢复；独立 tmux 验证 Pi 原生 OSC 52 在 external 阻断、on 转发中文多行内容，用户确认其 Linux/SSH/tmux 全屏拖选可在本机粘贴。性能结论与范围见 [交互与启动专项](../finished/pi-suite/interaction-improvements/index.md)。
 
-任务/工具协议与 Goal 交互通过 Linux SDK 验证：Provider 转换后的 object schema、查询修正、按记录字节预算分页与组上下文、单操作/原子批量、多 doing 与手动/依赖阻塞、共享目录监听、稳定浏览身份、单次通知/问题交付、真实停止清理、累计运行计时及取消/恢复交错。Pi 1.5.0 原生终端分发与焦点编辑器覆盖普通/全屏的正文和思考取消，AbortSignal 与 aborted 结算一致，取消后无新增 delta；用户复测确认现有环境 Esc 已正常中断。时钟 tick 不持久写入或发模型请求。协议内容与代表性字节/token 比较见 [专项验收](../finished/pi-suite/tool-protocol/reference-validation.md)。 两级编号/存储检查覆盖独立组号与 nextChild、不复用删除编号、version 2 内存迁移和依赖映射、编辑时发布 version 3；公共工具显示检查覆盖结果隐藏调用、partial 一行、outputPad/宽度、默认展开正文与错误全文。Linux 实际 Pi 1.5.0 CLI 在 40×24、60×30、120×40 验证全部 Suite 工具折叠、单项鼠标展开与 Ctrl+O、sensitive 隐藏、任务 Dock 与可编辑 Ask、默认 All 和完成 dim/删除线、迁移文件继续编辑，以及 Ask History/实际 child renderer 一致；范围见 [Tasks 显示](../finished/pi-suite/tasks-display.md) 与 [工具显示](../finished/pi-suite/tool-display.md)。
+任务/工具协议与 Goal 交互通过 Linux SDK 验证：Provider 转换后的 object schema、查询修正、按记录字节预算分页与组上下文、单操作/原子批量、多 doing 与手动/依赖阻塞、共享目录监听、稳定浏览身份、单次通知/问题交付、真实停止清理、累计运行计时及取消/恢复交错。Pi 1.5.0 原生终端分发与焦点编辑器覆盖普通/全屏的正文和思考取消，AbortSignal 与 aborted 结算一致，取消后无新增 delta；用户复测确认现有环境 Esc 已正常中断。时钟 tick 不持久写入或发模型请求。协议内容与代表性字节/token 比较见 [专项验收](../finished/pi-suite/tool-protocol/reference-validation.md)。 两级编号/存储检查覆盖独立组号与 nextChild、同代次不复用 delete 编号、version 2/3 校验与内存迁移和依赖映射、提交时发布 version 4；全完成/owner clear 原子清空后重置编号并轮换 generation，旧排队写入/link 与 child assigned 恢复明确拒绝。公共工具显示检查覆盖结果隐藏调用、partial 一行、outputPad/宽度、默认展开正文与错误全文。Linux 实际 Pi 1.5.0 CLI 在 40×24、60×30、120×40 验证全部 Suite 工具折叠、单项鼠标展开与 Ctrl+O、sensitive 隐藏、任务 Dock 与可编辑 Ask、默认 All 和完成 dim/删除线、迁移文件继续编辑，以及 Ask History/实际 child renderer 一致；范围见 [Tasks 显示](../finished/pi-suite/tasks-display.md) 与 [工具显示](../finished/pi-suite/tool-display.md)。
 
 底部布局专项通过 Linux Pi 1.5.0 实际 CLI 的 24/30/40/60 行与 40/80/120 列组合、低于 18 行摘要与低于 5 行询问预算验收。独立 Dock/Ask 预算、焦点组任务顺序与溢出、分区/询问边框、切题/筛选稳定高度、展开/全文、文本与 Review 阅读、鼠标页签/多行选项/预览滚轮、缩放草稿保持和关闭恢复通过；原生 SDK 同时核对通知协调与 footer 共存。完整范围见 [底部布局专项](../finished/pi-suite/ui/dock-ask-layout.md)。
 
@@ -23,6 +23,10 @@ goal 模型工具的 3 项 Linux 契约检查通过，核对空白参数 INVALID
 阅读采用 U1 公开组件、共享显式预算与唯一 scrollTop，scrollbar:hidden；复杂阅读 overlay 的区域鼠标焦点、嵌套单项工具命中和轨道/拖动不在保证范围。Tasks 采用 T1 持久源 LF/UTF-8 首头只读与完整独立快照，内存 fork 明确提示任务不自动继承。M1 保留受守卫的私有父 ModelRegistry.runtime，同一 runtime 的受控 Provider、临时 API key 和虚拟路由聚合通过，失效明确拒绝、不切换默认 runtime。操作与细节分别见 [终端交互](ui/terminal.md)、[任务存储](tasks/storage.md) 和 [模型边界](agents/models.md#模型运行时桥接)。
 
 支持声明精确限定为官方 Pi 1.5.0；消费者 Git/本地包及 tarball 安装按用户指示延期，见 [安装待办](../todo/official-pi-installation.md)，不计为通过。包保持 private:true，未实际 npm 发布。本专项不证明实体人工终端、Windows 人工交互、外网账号/组织权限、真实解密或中转粘性；既有平台专项的结论不扩大到这些范围。
+
+## 七项交互与生命周期
+
+[交互细化逐项验收](../finished/pi-suite/interaction-refinement/validation.md) 核对 Ask 模型 content/details 分离、24 Unicode 码点短题/重名 #N、仅删除题目 context；Goal 独立结案权限、stop/clear、quit 与真实 SIGKILL 冷恢复手动 resume；Tasks v4 自动/主动清空、代次及过期引用、当前恢复基线和五秒反馈；Subagents 根导航连续交接与实际一/两行信息预算。官方 CLI 对 regular/fullscreen 的同步绘制输出逐帧检查 tabs、进入历史和返回，原生 TUI 聚合另覆盖延迟/resize/构造失败/输入焦点与旧新 reader dispose。完整套件 222/222、typecheck 与 diff 检查通过，约一分钟；没有新增消费者安装或宿主补丁。
 
 ## 检查
 

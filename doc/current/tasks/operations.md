@@ -1,6 +1,6 @@
 # 任务操作与显示
 
-`/tasks [group ID]` 通过共享阅读 overlay 打开浏览器，标题为 `Tasks ▸ List`。默认 State 为 All，包含已完成组与子任务；指定组 ID 查看该组，State 可切换为 Unfinished、Running、Blocked、Completed。非 TUI 模式通过通知展示对应文本。
+`/tasks [group ID]` 通过共享 BrowserView 打开 Pi custom 浏览器，标题为 `Tasks ▸ List`。默认 State 为 All，包含已完成组与子任务；指定组 ID 查看该组，State 可切换为 Unfinished、Running、Blocked、Completed。非 TUI 模式通过通知展示对应文本。
 
 | 详情操作 | 行为 |
 | --- | --- |
@@ -14,7 +14,7 @@
 
 默认焦点在列表；活动区域标题使用 `▸`、accent、粗体及 accent 横线，非活动标题为 muted；离开列表时移除选中背景，任务状态色与完成删除线保持不变。过滤/详情搜索有明确输入焦点与原生光标，Tab 与搜索按键切换焦点；嵌套阅读区域不保证鼠标点击/滚轮分派。状态行显示 List、组/状态筛选、匹配数/范围总数、选中标题与任务 ID；窄屏优先保留页名和选中对象。过滤内 Esc 清空并退出，详情搜索内 Esc 仅退出搜索。BrowserView 声明 capturesViewportInput，使 fullscreen 的翻页键作用于当前列表或详情而非主会话。阅读使用显式窗口与隐藏 scrollbar，鼠标能力边界见 [终端交互](../ui/terminal.md#原生阅读与鼠标)。
 
-宽屏左侧显示 `图标 ID 标题` 与组进度，右侧显示说明、依赖和执行引用，窄屏改为上下布局。浏览器订阅同一 TaskStore，提交后更新正文，选中任务 ID、各项搜索和阅读位置保持稳定；删除所选任务时定位相邻项。任务标题和说明显示为安全字面量文本。浏览期间收起 Dock 并暂缓结算通知，关闭后恢复。
+宽屏左侧显示 `图标 ID 标题` 与组进度，右侧显示说明、依赖和执行引用，窄屏改为上下布局。浏览器订阅同一 TaskStore，提交后更新正文，同一代次的选中任务、搜索和阅读位置保持稳定；删除所选任务时定位相邻项。清空后选择键随 generation 变化，组筛选复位，旧 ID 不指向新同名任务。任务标题和说明显示为安全字面量文本。浏览期间收起 Dock 并暂缓结算通知，关闭后恢复。
 
 主会话编辑器为空时按 ← 进入 Dock；Tasks 与 Agents、Jobs 均参与 ↑↓ 选择，`[`/`]` 循环切换可选分区。Tasks 使用 `Enter view` 提示查看，标题不重复只读标签；Enter 打开组或子任务的只读详情，支持滚动、搜索与返回，不提供修改操作；查看不改变焦点组、任务状态、依赖或执行引用。退出查看器后再次按 ← 可回到上次对象；选中只增加背景与粗体，保留层级前缀的原空格数、文字起始列和后缀预算，不切换字号。主编辑器非空或其他组件占用焦点时不接管按键。框架生成的提示使用英文，用户提交的标题、说明和阻塞理由保持原文。
 
@@ -24,7 +24,7 @@ tasks 向共享 Dock 提交 Tasks 分区，标题显示全部子任务完成数/
 
 焦点组依次取选中组、doing、blocked、最近更新；父级依赖或 blocked 子项提高阻塞优先级，同级以最近变更和稳定 ID 排序。全部可见组的子任务均作为候选，组内始终按任务 ID 顺序显示；预算不足时优先保留焦点组当前子任务、doing/blocked、当前项之后的待办、最近一个已完成项及其余对象。当前子任务取最近 updatedAt 的 doing，其次首个 blocked、首个 todo。↑↓ 可到达其他组的子任务与列表末项；折叠的子项与组分别计数，`↑/↓/↕ … N more items/groups` 放在真实隐藏片段位置，只缺一项且同样占一行时直接显示该项。空闲预算为 1–3 行时使用 `Tasks 完成数/总数 · 当前子任务` 单行摘要，不画树形线；激活选择优先保留真实选中对象，放不下方向提示时标题显示 `↑N ↓N`。宽度不足 40 列省略树形线，保留标题。
 
-部分组完成时，数量并入尾线 `└───── ☑ N completed groups`。冷加载、reload/resume/fork 与树重绑的初始快照和订阅刷新只建立恢复基线，已有 done 项不触发完成反馈。绑定就绪后的真实完成反馈保留 5 秒；全部组完成且反馈结束后隐藏整个 tasks 分区，任务数据仍可通过 `/tasks` 查看。回调按 Store 与 Binding 身份隔离，离开会话后的通知或计时器不影响新清单。当前查看的组可通过 `/tasks` 的组 ID 选择并提高显示优先级，其他任务最近更新不会改变所选稳定 ID。
+部分组完成时，数量并入尾线 `└───── ☑ N completed groups`。冷加载、reload/resume/fork 与树重绑的初始快照和订阅刷新只建立恢复基线，已有 done 项不触发完成反馈；当前目标已全部完成时静默清空。绑定就绪后的真实完成反馈保留 5 秒；整清单完成的持久清空在提交时立即执行，反馈只保留必要显示行，不保留任务历史。反馈期间的旧选择带源代次，不能打开或操作新同名任务。反馈结束后隐藏整个 tasks 分区。回调按 Store 与 Binding 身份隔离，离开会话后的通知或计时器不影响新清单。当前查看的组可通过 `/tasks` 的组 ID 选择并提高显示优先级，其他任务最近更新不会改变同代次的选中对象。
 
 
 task_edit 调用中显示 `Updating tasks`，结果折叠为一行：单回执为任务与动作，多回执按动作分别统计组与子项，并附依赖变化和警告数；展开显示全部回执、派生变化、字段、组进度与警告。task_list 折叠为筛选、组/子数量、状态计数与下一页摘要，展开显示两级任务行；task_get 折叠为任务行，展开显示完整详情。主会话工具结果的鼠标左键点击切换该项，Pi 的 app.tools.expand（默认 Ctrl+O）切换全部；工具失败正文始终完整可见。显示采用 Pi 原生 renderer，真实工具结果和会话记录继续保留。
@@ -33,9 +33,15 @@ task_edit 调用中显示 `Updating tasks`，结果折叠为一行：单回执�
 
 持久来源的 fork 从 previousSessionFile 会话头对应的清单复制完整快照到独立目标；源文件只读，读取或校验失败通知错误，不报告继承成功。内存来源的 fork 明确 warning 并使用独立清单，不自动继承或为继承落盘；普通内存会话与 reload 复用原目标。存活 child 的 assigned 任务与执行 owner 保持捕获的原清单，详细计数器和锁边界见 [存储与会话](storage.md#会话边界)。
 
+## 清单代次与主动清空
+
+先用 task_list({}) 取得 generation；task_get、task_edit 和按组/游标翻页须引用源代次。全部非空任务完成自动清空；`task_edit({"generation":"<source>","op":"clear"})` 主动清空 owner 的全部任务、依赖和执行关联，编号从 1 重新开始并更新 generation。clear 只允许顶层调用，不混入 batch，不允许 assigned；空清单 clear 也轮换代次。返回正文首行提供当前 generation，自动/手动清空明确报告 cleared 原因；不回传已删除的完整任务。
+
+清空不停止 child/job、不完成 Goal。TASK_STALE 表示旧引用失效，须重新读取清单并根据真实任务重新决策，不能自动将旧工作绑定新 1.1；缺少代次拒绝调用。执行准入使用 agent_start/job_start 的 taskGeneration，恢复过期 assigned child 明确失败，历史详情保留源代次供区分。
+
 ## child 任务范围
 
-child 的 task_list 与默认 scope:local 的 task_get/task_edit 操作自己的私有清单，私有项不显示在主会话 Dock；可在 `/subagents` Transcript 查看工具调用与结果。agent_start(taskId) 分配的父级任务用 `task_get({"scope":"assigned","id":"1.2"})` 读取，用 `task_edit({"scope":"assigned","op":"done","id":"1.2"})` 更新，仅允许 start/done/block/unblock。assigned 批次的所有操作须作用于同一分配任务，不接受 CRUD 或其他父级 ID，越权返回 TASK_SCOPE；scope 作用于整批，不在 changes 内设置。同名的私有 `1.2` 仍由省略 scope 或 scope:local 操作，编号不会隐式切换清单。
+child 的 task_list 与默认 scope:local 的 task_get/task_edit 操作自己的私有清单，私有项不显示在主会话 Dock；可在 `/subagents` Transcript 查看工具调用与结果。agent_start(taskId, taskGeneration) 分配的父级任务用 `task_get({"generation":"<assigned source>","scope":"assigned","id":"1.2"})` 读取，用 `task_edit({"generation":"<assigned source>","scope":"assigned","op":"done","id":"1.2"})` 更新，仅允许 start/done/block/unblock。assigned 批次的所有操作须作用于同一分配任务，不接受 CRUD、clear 或其他父级 ID，越权返回 TASK_SCOPE；scope/generation 作用于整批，不在 changes 内设置。同名的私有 `1.2` 仍由省略 scope 或 scope:local 配合私有 generation 操作，编号不会隐式切换清单。
 
 ## 提醒
 

@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
-import type { AgentBeforeSettleEvent, ExtensionAPI, ExtensionContext, MessageEndEvent, SessionStartEvent } from "@earendil-works/pi-coding-agent";
+import type { AgentBeforeSettleEvent, ExtensionAPI, ExtensionContext, MessageEndEvent, SessionStartEvent, SessionShutdownEvent } from "@earendil-works/pi-coding-agent";
 import type { SessionBinding, Binding } from "../runtime/binding.ts";
 import { isQuestion, type Notifications } from "../runtime/notifications.ts";
 import type { StatusPublisher } from "../ui/status.ts";
 import type { AskResult } from "../ask/schema.ts";
 import type { WaitRegistry } from "../runtime/wait.ts";
 import { ToolError } from "../runtime/errors.ts";
-import { GOAL_ENTRY, goalContract, goalSummary, restoreGoal, type Goal, type GoalStatus, type Schedule } from "./state.ts";
+import { GOAL_ENTRY, goalContract, goalSummary, goalRequiresResume, restoreGoal, type Goal, type GoalStatus, type Schedule } from "./state.ts";
 
 export class GoalManager {
   goal?: Goal;
@@ -14,6 +14,8 @@ export class GoalManager {
   private runGoalId?: string;
   private runRevision?: number;
   private runBinding?: Binding;
+  private runAccess?: "execute" | "complete";
+  private runSignal?: AbortSignal;
   private runningSince?: number;
   private lastError?: string;
   private waitTimer?: NodeJS.Timeout;
@@ -36,6 +38,7 @@ export class GoalManager {
   private get owned(): boolean {
     return Boolean(this.goal && this.runGoalId === this.goal.id && this.runRevision === this.goal.revision && this.runBinding && this.binding.isCurrent(this.runBinding));
   }
+  private get executing(): boolean { return this.owned && this.runAccess === "execute" && this.goal?.status === "active"; }
   private cancelRequest(): void {
     if (this.goal && this.binding.current) this.notifications.cancel(this.binding.current.sessionId, this.requestId);
   }
@@ -70,8 +73,14 @@ export class GoalManager {
       this.clock.unref();
     }
   }
-  restore(ctx: ExtensionContext, _reason: SessionStartEvent["reason"]): void {
+  restore(ctx: ExtensionContext, reason: SessionStartEvent["reason"] | "tree"): void {
     this.detach(); this.goal = restoreGoal(ctx);
+    // Startup cannot know whether the previous process quit or was killed. Revoke active
+    // snapshots before requests/deadlines are armed; reload and branch operations are distinct.
+    if (this.goal?.status === "active" && (reason === "startup" || goalRequiresResume(ctx, this.goal))) {
+      this.goal.resumeRequired = true;
+      this.stop("stopped");
+    }
     this.transition(this.goal?.waiting === "user" ? "waiting_user" : this.goal?.waiting === "jobs" ? "waiting_jobs" : "idle");
     if (this.goal?.status === "active" && this.goal.automatic) {
       if (this.goal.budget !== undefined && this.goal.usedTokens >= this.goal.budget) this.stop("budget_limited");
@@ -84,11 +93,17 @@ export class GoalManager {
     this.cancelRequest(); this.elapsed(); this.disarmWait();
     clearTimeout(this.completedTimer); this.completedTimer = undefined;
     clearInterval(this.clock); this.clock = undefined;
-    this.runGoalId = undefined; this.runBinding = undefined;
+    this.runGoalId = undefined; this.runRevision = undefined; this.runBinding = undefined; this.runAccess = undefined; this.runSignal = undefined;
     this.schedule = "detached";
     this.status.setGoal(undefined);
   }
-  shutdown(): void { if (this.goal) this.save(); this.detach(); }
+  shutdown(reason: SessionShutdownEvent["reason"]): void {
+    if (this.goal && this.schedule !== "detached") {
+      if (reason === "quit" && this.goal.status !== "completed") { this.goal.resumeRequired = true; this.stop("stopped"); }
+      else this.save();
+    }
+    this.detach();
+  }
   start(text: string, ctx: ExtensionContext, budget?: number): void {
     this.cancelRequest(); this.elapsed(); this.disarmWait(); clearTimeout(this.completedTimer);
     const abortOldRun = this.owned && !ctx.isIdle();
@@ -120,22 +135,35 @@ export class GoalManager {
     if (!this.goal || this.goal.status === "completed") throw new Error("No unfinished goal to resume");
     if (this.goal.budget !== undefined && this.goal.usedTokens >= this.goal.budget) throw new Error("Raise the token budget above current usage before resuming");
     const running = this.owned && this.schedule === 'running' && this.goal.status === 'active' && this.goal.automatic;
+    if (running) { this.save(); return 'running'; }
     // A newer explicit resume survives the aborted settlement of an older response.
     this.controlRevision++;
     this.goal.status = "active"; this.goal.automatic = true;
-    this.clearWait(); delete this.goal.error;
-    if (running) { this.save(); return 'running'; }
+    if (this.goal.resumeRequired) this.goal.resumeRequired = false;
+    this.clearWait(); delete this.goal.error; delete this.goal.stoppedFrom;
     this.transition("idle"); this.save(); this.request();
     return this.binding.current?.ctx.isIdle() ? 'scheduled' : 'waiting_host';
   }
+  stopGoal(ctx: ExtensionContext): void {
+    if (!this.goal) throw new Error("No goal to stop");
+    if (this.goal.status === "completed" || this.goal.status === "stopped") return;
+    const abortRun = this.owned;
+    this.stop("stopped");
+    if (abortRun) ctx.abort();
+  }
   clear(ctx: ExtensionContext): void {
     const abortRun = this.owned;
+    this.controlRevision++;
     this.cancelRequest(); this.elapsed(); this.disarmWait(); clearTimeout(this.completedTimer);
     this.goal = undefined; this.transition("idle"); this.save();
     if (abortRun) ctx.abort();
   }
   private stop(status: GoalStatus, error?: string): void {
     this.cancelRequest();
+    // Completion keeps this audit's ownership for idempotent retries; explicit stops revoke
+    // outstanding tools while retaining runGoalId for late cumulative usage accounting.
+    if (status !== "completed") this.controlRevision++;
+    if (status === "stopped" && this.goal!.status !== "stopped" && this.goal!.status !== "completed") this.goal!.stoppedFrom = this.goal!.status;
     this.goal!.status = status; this.goal!.automatic = false;
     if (error) this.goal!.error = error;
     this.clearWait();
@@ -149,65 +177,76 @@ export class GoalManager {
   }
   beforeStart(userInput: boolean): boolean {
     this.runControlRevision = this.controlRevision;
-    this.runGoalId = this.goal?.status === "active" && (this.goal.automatic || userInput) ? this.goal.id : undefined;
+    const goal = this.goal;
+    this.runAccess = goal?.status === "active" && (goal.automatic || userInput) ? "execute" : goal && userInput ? "complete" : undefined;
+    this.runGoalId = this.runAccess ? goal!.id : undefined;
     this.runRevision = this.goal?.revision;
     this.runBinding = this.binding.current;
-    if (this.owned && this.goal?.status === "active") {
-      this.cancelRequest(); this.goal.automatic = true;
+    if (this.executing) {
+      this.cancelRequest(); this.goal!.automatic = true;
       this.clearWait();
       this.save();
     }
     return this.owned;
   }
-  startRun(): void {
+  startRun(ctx?: ExtensionContext): void {
     if (!this.owned) return;
+    // Each low-level request has its own abort signal (including host retries). A cancelled
+    // request must not acquire completion permission merely because a later request starts.
+    const nextSignal = ctx?.signal;
+    if (nextSignal !== this.runSignal) {
+      if (this.runControlRevision !== this.controlRevision && this.goal?.status === "active" && this.goal.automatic) this.runAccess = "execute";
+      this.runControlRevision = this.controlRevision;
+    }
+    this.runSignal = nextSignal;
+    if (!this.executing) return;
     this.cancelRequest();
     if (this.goal?.waiting === "jobs") { this.clearWait(); this.save(); }
     this.transition("running");
   }
   endRun(error?: string): void {
-    if (!this.owned || this.goal?.status !== "active") return;
+    if (!this.executing) return;
     this.lastError = error;
-    if (!this.goal.waiting) this.transition("waiting_host");
+    if (!this.goal!.waiting) this.transition("waiting_host");
   }
   messageEnd(event: MessageEndEvent, ctx: ExtensionContext): void {
     // Edits invalidate tool/control ownership, but an in-flight response still belongs
     // to the same cumulative token budget even if it finishes after the edit.
-    if (!this.goal || this.runGoalId !== this.goal.id || !this.runBinding || !this.binding.isCurrent(this.runBinding) || event.message.role !== "assistant") return;
+    if (!this.goal || this.runGoalId !== this.goal.id || !this.runBinding || !this.binding.isCurrent(this.runBinding) || ctx.sessionManager.getSessionId() !== this.runBinding.sessionId || event.message.role !== "assistant") return;
     this.goal.usedTokens += event.message.usage.totalTokens;
     this.goal.turns++; this.save();
     if (this.goal.status === "active" && this.goal.budget !== undefined && this.goal.usedTokens >= this.goal.budget) { this.stop("budget_limited"); ctx.abort(); }
   }
   beforeSettle(event: AgentBeforeSettleEvent): void {
-    if (!this.owned || this.goal?.status !== "active") return;
+    if (!this.executing) return;
     if (event.outcome === "error") { this.stop("failed", this.lastError ?? "Model request failed"); return; }
     if (event.outcome === "aborted") {
       if (this.runControlRevision === this.controlRevision) this.suspend();
       return;
     }
-    if (!this.goal.waiting && this.goal.automatic) { this.transition("idle"); this.request(); }
+    if (!this.goal!.waiting && this.goal!.automatic) { this.transition("idle"); this.request(); }
   }
   settled(aborted: boolean): void {
-    if (this.owned && this.goal?.status === "active") {
-      if (aborted && !this.goal.waiting && this.runControlRevision === this.controlRevision) this.suspend();
-      else if (!this.goal.waiting) {
+    if (this.executing) {
+      if (aborted && !this.goal!.waiting && this.runControlRevision === this.controlRevision) this.suspend();
+      else if (!this.goal!.waiting) {
         this.transition("idle");
-        if (aborted && this.goal.automatic) this.request();
+        if (aborted && this.goal!.automatic) this.request();
       }
     }
-    this.runGoalId = undefined; this.runBinding = undefined; this.lastError = undefined;
+    this.runGoalId = undefined; this.runRevision = undefined; this.runBinding = undefined; this.runAccess = undefined; this.runSignal = undefined; this.lastError = undefined;
   }
-  private suspend(): void { this.cancelRequest(); this.goal!.automatic = false; this.transition("idle"); this.save(); }
+  private suspend(): void { this.controlRevision++; this.cancelRequest(); this.goal!.automatic = false; this.transition("idle"); this.save(); }
   userPrompt(start: boolean): void {
-    if (!this.owned || this.goal?.status !== "active") return;
-    this.transition(start ? "waiting_user" : this.goal.waiting === "user" ? "waiting_user" : "running");
+    if (!this.executing) return;
+    this.transition(start ? "waiting_user" : this.goal!.waiting === "user" ? "waiting_user" : "running");
   }
   askResult(status: AskResult["status"], ctx: ExtensionContext): void {
-    if (!this.owned || this.goal?.status !== "active" || ctx.sessionManager.getSessionId() !== this.binding.current?.sessionId) return;
+    if (!this.executing || ctx.sessionManager.getSessionId() !== this.binding.current?.sessionId) return;
     if (status === "answered" || status === "timed_out") this.transition("running");
     // Skipping preserves automatic permission; only a system cancellation requires
     // explicit recovery. Consent remains a separate part of the ask result contract.
-    else if (status === "cancelled") { this.goal.waiting = "user"; this.goal.automatic = false; this.cancelRequest(); this.transition("waiting_user"); this.save(); }
+    else if (status === "cancelled") { this.controlRevision++; this.goal!.waiting = "user"; this.goal!.automatic = false; this.cancelRequest(); this.transition("waiting_user"); this.save(); }
   }
   beforeCompact(): void { if (this.goal?.status === "active") this.transition("waiting_host"); }
   compacted(willRetry: boolean): void {
@@ -223,27 +262,31 @@ export class GoalManager {
     this.goal.automatic = false; if (error) this.goal.error = error;
     this.transition(this.goal.waiting === "user" ? "waiting_user" : this.goal.waiting === "jobs" ? "waiting_jobs" : "idle"); this.save();
   }
-  requireOwned(id: string, ctx: ExtensionContext): Goal {
-    if (!this.goal || this.goal.id !== id) throw new ToolError("NOT_FOUND", "Use the exact goalId from the active goal contract", id);
-    if (this.goal.status !== "active") throw new ToolError("NOT_RUNNING", `Goal is ${this.goal.status}; ask the user to start or resume a goal`, id);
-    if (!this.owned || ctx.sessionManager.getSessionId() !== this.binding.current?.sessionId) {
-      throw new ToolError("STALE_BINDING", "The tool call does not own the current goal; use the active goal contract in its owning session", id);
+  requireOwned(id: string, ctx: ExtensionContext, access: "execute" | "complete" = "execute", signal?: AbortSignal): Goal {
+    if (!this.goal || this.goal.id !== id) throw new ToolError("NOT_FOUND", "Use the exact goalId from the current goal contract", id);
+    if (access === "execute" && (this.goal.status !== "active" || this.runAccess === "complete")) throw new ToolError("NOT_RUNNING", `Goal is ${this.goal.status}; execution requires /goal resume, but a new user audit may complete it without resume`, id);
+    if (!this.owned || !this.runAccess || this.runControlRevision !== this.controlRevision || signal?.aborted || this.runSignal?.aborted ||
+      ctx.signal?.aborted || this.runSignal && ctx.signal !== this.runSignal || ctx.sessionManager.getSessionId() !== this.binding.current?.sessionId) {
+      throw new ToolError("STALE_BINDING", "The tool call does not own the current goal revision and request; use a fresh goal contract in its owning session", id);
     }
     return this.goal;
   }
-  complete(id: string, summary: string, ctx: ExtensionContext): void {
-    const goal = this.requireOwned(id, ctx); goal.progress = summary; goal.completedAt = Date.now();
+  complete(id: string, summary: string, ctx: ExtensionContext, signal?: AbortSignal): boolean {
+    const goal = this.requireOwned(id, ctx, "complete", signal);
+    if (goal.status === "completed") return false;
+    goal.progress = summary; goal.completedAt = Date.now();
     this.stop("completed"); this.armCompletion();
+    return true;
   }
-  block(id: string, reason: string, evidence: string, ctx: ExtensionContext): void {
-    this.requireOwned(id, ctx); this.goal!.progress = evidence; this.stop("blocked", reason);
+  block(id: string, reason: string, evidence: string, ctx: ExtensionContext, signal?: AbortSignal): void {
+    this.requireOwned(id, ctx, "execute", signal); this.goal!.progress = evidence; this.stop("blocked", reason);
   }
   /**
    * waitFor resumes only after every listed job/agent settles (or one asks its parent), or at
    * the deadline. IDs already settled are reported and skipped; if none remain, nothing waits.
    */
-  wait(id: string, reason: string, delay: number | undefined, ctx: ExtensionContext, waitFor?: string[]): { waiting: boolean; settled: string[] } {
-    const goal = this.requireOwned(id, ctx);
+  wait(id: string, reason: string, delay: number | undefined, ctx: ExtensionContext, waitFor?: string[], signal?: AbortSignal): { waiting: boolean; settled: string[] } {
+    const goal = this.requireOwned(id, ctx, "execute", signal);
     const ids = [...new Set(waitFor ?? [])];
     // Unknown IDs throw NOT_FOUND/HISTORY_READ_ONLY here, so the model sees them at the call.
     const settled = ids.filter(item => this.waits.settlement(item).settled);

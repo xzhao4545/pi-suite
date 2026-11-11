@@ -28,7 +28,7 @@ export function childSuite(pi: ExtensionAPI, run: Execution, manager: AgentManag
   const config = run.config, binding = new SessionBinding(), dock = new Dock();
   const status = new StatusPublisher(dock), notices = new Notifications(pi, binding), waits = new WaitRegistry();
   const tasks = config.modules.tasks ? new TasksModule(binding, dock, { persisted: run.record.persisted,
-    assigned: run.record.taskId && run.parent.taskStore ? { id: run.record.taskId, store: run.parent.taskStore } : undefined }) : undefined;
+    assigned: run.record.taskId && run.parent.taskStore ? { id: run.record.taskId, generation: run.record.taskGeneration, store: run.parent.taskStore } : undefined }) : undefined;
   const agents = new AgentsModule(pi, binding, notices, status, tasks, run, manager);
   const creatorRoots = () => binding.current ? agents.visibleRunIds(binding.current.ctx) : [];
   const jobs = config.modules.jobs ? new JobsModule(pi, binding, notices, status, creatorRoots) : undefined;

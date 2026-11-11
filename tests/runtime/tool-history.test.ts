@@ -8,6 +8,7 @@ import { createAgentSession, DefaultResourceLoader, SessionManager, SettingsMana
   type AgentSession, type ExtensionAPI, type ExtensionUIContext, type SessionEntry, type SessionStartEvent } from '@earendil-works/pi-coding-agent';
 import { terminal } from '../support/terminal.ts';
 import { agentDir } from '../support/jobs.ts';
+import { listTasks, taskCall } from '../support/tasks.ts';
 import { agentRuntime } from '../../src/agents/runtime.ts';
 import { loadConfig } from '../../src/runtime/config.ts';
 import { registerSuiteRenderers } from '../../src/runtime/renderers.ts';
@@ -125,7 +126,7 @@ test('actual loader resolves historical renderers before binding, during reload 
     const session = await open(SessionManager.create(root, join(root, 'sessions')));
     checkEarly(session); await bind(session);
     faux.setResponses([
-      fauxAssistantMessage(fauxToolCall('task_edit', { op: 'add', title: 'History group', children: ['History child one', 'History child two'] })),
+      listTasks(), taskCall('task_edit', generation => ({generation, op: 'add', title: 'History group', children: ['History child one', 'History child two']})),
       fauxAssistantMessage(fauxToolCall('task_list', {})), fauxAssistantMessage('Recorded'),
     ]);
     await session.prompt('Record tasks for history');
@@ -195,7 +196,7 @@ test('actual loader resolves historical renderers before binding, during reload 
       assert.equal((await child.done.promise).state, 'completed', child.record.error);
     }
     rmSync(join(root, '.pi', 'pi-suite.json'));
-    assert.equal(faux.state.callCount, 5, 'only the three parent turns and two explicitly started children requested the model');
+    assert.equal(faux.state.callCount, 6, 'only four parent turns (including generation discovery) and two explicitly started children requested the model');
     let beforeStart = false;
     await session.reload({ beforeSessionStart: () => {
       beforeStart = true; checkEarly(session); assert.deepEqual(replay(session), expected);
@@ -212,7 +213,7 @@ test('actual loader resolves historical renderers before binding, during reload 
       checkEarly(restored); assert.deepEqual(replay(restored, false), expected); await bind(restored);
       checkEarly(restored); assert.deepEqual(replay(restored, false), expected); await close(restored);
     }
-    assert.equal(faux.state.callCount, 5, 'history rendering never executes tools or requests a model');
+    assert.equal(faux.state.callCount, 6, 'history rendering never executes tools or requests a model');
     assert.deepEqual(errors, []);
   } finally { if (current) await close(current); rmSync(root, { recursive: true, force: true }); }
 });

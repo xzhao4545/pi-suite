@@ -125,12 +125,13 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
     dock.detach(binding.current?.ctx);
     schedules?.stop(); ask?.cancel(); goal?.detach(); jobs?.detach(); workflows?.detach(); agents?.detach(); notifications.detach();
     if (!firstBinding) config = loadConfig(ctx.cwd);
+    const goalReason = firstBinding ? reason : "tree";
     firstBinding = false; cachedTypes = undefined;
     await prepareClipboard(pi, ctx);
     binding.bind(ctx);
     dock.bind(ctx, config.ui.maxRows);
     status.bind(ctx.ui, { goal: config.goal.display, agents: config.agents.display, jobs: config.jobs.display }, goal !== undefined);
-    goal?.restore(ctx, reason);
+    goal?.restore(ctx, goalReason);
     await tasks?.bind(ctx, { reason, previousSessionFile });
     agents?.manager.configure(config); agents?.bind();
     jobs?.bind();
@@ -143,7 +144,7 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
   pi.on("session_shutdown", async event => {
     agentRpc?.detach();
     schedules?.stop();
-    ask?.cancel(); goal?.shutdown();
+    ask?.cancel(); goal?.shutdown(event.reason);
     tasks?.detach();
     // Detach before revoking so pending job notices are cancelled under the old session ID.
     (jobs ?? agentJobViewer?.viewer.jobs)?.detach();

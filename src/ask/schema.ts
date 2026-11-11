@@ -5,7 +5,7 @@ const option = Type.Union([Type.String({ minLength: 1 }), Type.Object({
   description: Type.Optional(Type.String()), recommended: Type.Optional(Type.Boolean()),
 })]);
 const fields = {
-  context: Type.Optional(Type.String()), options: Type.Optional(Type.Array(option)),
+  options: Type.Optional(Type.Array(option)),
   allowMultiple: Type.Optional(Type.Boolean()),
   defaultAnswer: Type.Optional(Type.String()), defaultOptionId: Type.Optional(Type.String()),
   defaultOptionIds: Type.Optional(Type.Array(Type.String(), { uniqueItems: true })),
@@ -43,7 +43,7 @@ export type AskResult =
 export function normalize(params: AskParams): Question[] {
   if (!params.questions && !params.question?.trim()) throw new Error("question or questions is required");
   if (params.questions && [params.options, params.allowMultiple,
-    params.context, params.defaultAnswer, params.defaultOptionId, params.defaultOptionIds].some(value => value !== undefined)) {
+    params.defaultAnswer, params.defaultOptionId, params.defaultOptionIds].some(value => value !== undefined)) {
     throw new Error("Batch question settings must be inside each questions entry");
   }
   return (params.questions ?? [{ ...params, question: params.question! }]).map(input => {
@@ -59,6 +59,9 @@ export function normalize(params: AskParams): Question[] {
     if ((hasSingle && allowMultiple) || (hasMulti && !allowMultiple)) throw new Error("Default selection must match allowMultiple");
     const defaults = input.defaultOptionIds ?? (hasSingle ? [input.defaultOptionId!] : []);
     if (defaults.some(id => !ids.has(id))) throw new Error("Default references an unknown option ID");
-    return { ...input, options, allowMultiple };
+    // Project current question fields instead of spreading input: historical/foreign
+    // fields must not leak into live forms or newly persisted details.
+    const { question, title, defaultAnswer, defaultOptionId, defaultOptionIds } = input as QuestionInput;
+    return { question, title, defaultAnswer, defaultOptionId, defaultOptionIds, options, allowMultiple };
   });
 }

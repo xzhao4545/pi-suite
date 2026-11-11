@@ -6,7 +6,7 @@ import { readBounded, readContinuation, textSource } from '../runtime/read.ts';
 import { sanitizeText } from '../runtime/text.ts';
 import { checkedArguments, LIST_LIMITS, listFields, objectId, paginate, readFields, registerBoundTool, rejectContextWithoutSearch, textResult as text } from '../runtime/tools.ts';
 import type { WaitRegistry } from '../runtime/wait.ts';
-import { childId } from '../tasks/types.ts';
+import { childId, generationSchema } from '../tasks/types.ts';
 import { thinkingSchema } from './schema.ts';
 import { questionText } from './questions.ts';
 import { AgentsModule, agentSummary, summaryLine, usageText } from './index.ts';
@@ -28,7 +28,7 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
   const startFields = { prompt: Type.String({ minLength: 1 }), type: Type.Optional(Type.String({ minLength: 1 })),
     name: Type.Optional(Type.String({ maxLength: 80 })), background: Type.Optional(Type.Boolean()),
     model: Type.Optional(Type.String({ minLength: 1 })), thinking: Type.Optional(thinkingSchema),
-    maxTurns: Type.Optional(Type.Integer({ minimum: 0 })), taskId: Type.Optional(childId),
+    maxTurns: Type.Optional(Type.Integer({ minimum: 0 })), taskId: Type.Optional(childId), taskGeneration: Type.Optional(generationSchema),
     inheritContext: Type.Optional(Type.Boolean()), isolated: Type.Optional(Type.Boolean()), schedule: Type.Optional(Type.String({ minLength: 1 })) };
   const buildStartSchema = () => {
     const fields = { ...startFields };
@@ -37,7 +37,7 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
   };
   const startSchema = buildStartSchema();
   const description = 'Start a same-process Pi child session. background=true (default) returns an ID immediately; false waits and returns early on any direct child question. ' +
-    'Types: general-purpose, Explore, Plan or a configured agent markdown file. Read with agent_read, answer/steer/resume with agent_send, stop its subtree with agent_stop, wait with wait.';
+    'Types: general-purpose, Explore, Plan or a configured agent markdown file. Read with agent_read, answer/steer/resume with agent_send, stop its subtree with agent_stop, wait with wait. taskId requires taskGeneration from the source task_list; expired assignments cannot be resumed or rebound to reused IDs.';
   const scheduleDescription = ' schedule registers a future job instead of starting now: six-field cron, interval 5m/1h, or one-shot +10m/ISO. Do not combine with background:false or inheritContext. Manage via /subagents schedules.';
   const startTool: ToolDefinition<typeof startSchema> = { name: 'agent_start', ...startRenderers, label: 'Start agent',
     description: description + (scheduling ? scheduleDescription : ''),
@@ -106,7 +106,7 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
     async execute(_id, params, signal, _update, ctx) {
       const scope = agents.scope(ctx), { record, run } = await agents.manager.lookup(params.id, scope, config(), params.runId, signal);
       const lines = [summaryLine(record) + (!agents.manager.visible(record, scope) ? ' · read-only' : ''),
-        `model: ${record.model} · thinking: ${record.thinking} · turns ${record.turns ?? 0} · tools ${record.toolUses ?? 0}${record.taskId ? ` · task ${record.taskId}` : ''}`,
+        `model: ${record.model} · thinking: ${record.thinking} · turns ${record.turns ?? 0} · tools ${record.toolUses ?? 0}${record.taskId ? ` · task ${record.taskId} @ ${record.taskGeneration ?? 'unavailable (legacy link expired)'}` : ''}`,
         record.activity ? `activity: ${record.activity}` : undefined, record.error,
         run?.question ? questionText(run) : undefined];
       let created: JobSummary[] = [], jobsUnavailable: string | undefined;
