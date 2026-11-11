@@ -21,6 +21,7 @@ import { SessionBinding } from '../../src/runtime/binding.ts';
 import { Notifications } from '../../src/runtime/notifications.ts';
 import { Dock } from '../../src/ui/dock.ts';
 import { StatusPublisher } from '../../src/ui/status.ts';
+import { defaults } from '../../src/runtime/config.ts';
 test('/jobs opens command/output directly, Esc preserves list identity/filter, and details double-left closes the entire chain', {timeout: 15000}, async () => {
   const root = agentDir(), binding = new SessionBinding(), dock = new Dock();
   let api!: ExtensionAPI, ctx!: ExtensionContext, module!: JobsModule, notices!: Notifications;
@@ -81,7 +82,7 @@ test('actual /jobs outer overlay budgets command and log independently; keyboard
   } finally {overlay?.hide(); view?.dispose(); native.dispose(); await jobs.shutdown(Date.now() + 5000); rmSync(root, {recursive: true, force: true});}
 });
 const theme = {fg: (_color: string, text: string) => text, bold: (text: string) => text} as unknown as Theme;
-const keys = {detachKey: 'ctrl+b', returnKey: 'ctrl+g', transferKey: 'ctrl+t'} as const;
+const keys = defaults.jobs;
 async function until(check: () => boolean): Promise<void> {
   const deadline = Date.now() + 5000;
   while (!check()) { assert.ok(Date.now() < deadline, 'expected viewer state'); await sleep(20); }
@@ -126,13 +127,13 @@ test('one pipe viewer bounds multiline command and preserves per-stream search, 
 
 test('same-screen PTY defaults to readonly browsing, resizes only the true screen and releases its own subscriptions/control', {timeout: 15000}, async () => {
   const root = agentDir(), jobs = manager(root), navigation = new ViewerNavigation();
-  let view: JobView | undefined;
+  let view: JobView | undefined, detached = false;
   try {
     const job = await jobs.start({...owner, cwd: root, name: 'Console', mode: 'pty', command: 'printf "\\033[31m彩色\\033[0m"; while read line; do echo "$line"; done'}, testShell());
     const source = jobs.terminal(job.id)!;
     await until(() => source.getViewportLines().join('\n').includes('彩色'));
     let resizes = 0; const resize = source.resize.bind(source); source.resize = (cols, rows) => {resizes++; resize(cols, rows);};
-    view = new JobView(terminal(40, 100), theme, {} as never, {job, live: true, readonly: false, control: jobs, manager: jobs, source, keys, navigation}, () => {});
+    view = new JobView(terminal(40, 100), theme, {} as never, {job, live: true, readonly: false, control: jobs, manager: jobs, source, keys, navigation}, () => {detached = true;});
     await view.initialize();
     view.render(100); const rows = source.rows;
     assert.ok(rows < readingRows(terminal(40, 100)) - 4); assert.equal(source.cols, 100);
@@ -142,7 +143,9 @@ test('same-screen PTY defaults to readonly browsing, resizes only the true scree
     view.render(100); assert.ok(source.rows < rows, 'expanded command rows are never sent as part of the program screen');
     view.handleInput('i'); assert.equal(jobs.userControlled(job.id), true);
     view.handleInput('typed\r'); await until(() => source.getViewportLines().join('\n').includes('typed'));
-    view.dispose(); assert.equal(jobs.userControlled(job.id), false); assert.equal(jobs.peek(job.id).state, 'running');
+    view.handleInput('\x02'); assert.equal(detached, false, 'tmux prefix is not the view exit key');
+    view.handleInput('\x1d'); assert.equal(detached, true, 'native Ctrl+] leaves the view');
+    assert.equal(jobs.userControlled(job.id), false); assert.equal(jobs.peek(job.id).state, 'running');
     assert.ok(source.getViewportLines().join('\n').includes('typed'), 'disposing a view cannot dispose its live terminal');
   } finally { view?.dispose(); await jobs.shutdown(Date.now() + 5000); rmSync(root, {recursive: true, force: true}); }
 });

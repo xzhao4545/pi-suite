@@ -6,7 +6,7 @@ import { initTheme, highlightCode, createBashToolDefinition, ToolExecutionCompon
 import { Text, visibleWidth } from '@earendil-works/pi-tui';
 import { stripVTControlCharacters } from 'node:util';
 import { toolRenderers, stateLine } from '../../src/ui/tool-render.ts';
-import { commandComponent } from '../../src/ui/rendering/command.ts';
+import { CodeComponent, commandComponent } from '../../src/ui/rendering/command.ts';
 import { builtinCommandRenderers } from '../../src/ui/rendering/builtin-command.ts';
 import { registerToolRenderers, toolRenderer } from '../../src/runtime/tools.ts';
 import { stateTone } from '../../src/ui/browser-chrome.ts';
@@ -118,13 +118,23 @@ test('structured expansions sanitize before styling, keep literal logs, syntax/l
   for (const shell of ['bash', 'powershell'] as const) {
     const source = shell === 'bash' ? command : '$name = "world"\nWrite-Host $name # comment';
     const component = commandComponent(source, shell, theme);
-    assert.equal(component.render(120).map(line => line.trimEnd()).join('\n'), highlightCode(source, shell).join('\n'));
+    assert.equal(component.render(120).map(line => stripVTControlCharacters(line).trimEnd()).join('\n'), source);
+    assert.ok(component.render(120).join('\n').includes(theme.fg('syntaxFunction', shell === 'bash' ? 'echo' : 'Write-Host')));
     const first = component.render(120); assert.equal(component.render(120), first, 'unchanged layout is reused');
     assert.ok(component.render(9).every(line => visibleWidth(line) <= 9));
     component.invalidate(); assert.notEqual(component.render(120), first);
   }
   const themed = commandComponent(command, 'bash', theme), dark = themed.render(120);
   initTheme('light'); assert.notDeepEqual(themed.render(120), dark, 'live theme proxy invalidates syntax ANSI'); initTheme('dark');
+  const modes = new CodeComponent({code: command, language: 'bash', theme});
+  const nativeCode = modes.render(120);
+  assert.equal(nativeCode.map(line => line.trimEnd()).join('\n'), highlightCode(command, 'bash').join('\n'));
+  modes.setSource({code: command, language: 'bash', mode: 'command', theme});
+  assert.notDeepEqual(modes.render(120), nativeCode, 'same source in command mode uses positional roles');
+  modes.setSource({code: command, language: 'bash', theme});
+  assert.deepEqual(modes.render(120), nativeCode, 'same cached row can return to native code mode');
+  const tabs = commandComponent('cat <<-EOF\n\t$HOME\n\tEOF\nnode -v', 'bash', theme).render(120).join('\n');
+  assert.ok(tabs.includes(theme.fg('syntaxFunction', 'node')), 'heredoc tab semantics precede display expansion');
   const log = '# literal **not markdown**\nconst secret = 1;\x1b[2J\x1b]52;c;bad\x07';
   const renderer = toolRenderers<unknown, unknown>({ call: () => ({ icon: '', title: 'Object' }),
     collapsed: () => ({ ...stateLine('running'), title: 'Object', meta: [{ text: 'running', tone: 'success' }] }),
@@ -169,7 +179,7 @@ test('builtin command composition invokes native call lifecycle and preserves re
   const ctx = { state: {}, args, cwd: process.cwd(), executionStarted: false, argsComplete: false, isPartial: true, expanded: false,
     isError: false, outputPad: 0, keyHint: () => '', keyText: () => '' } as unknown as Parameters<NonNullable<ToolRenderers['renderCall']>>[2];
   const call = enhanced.renderCall!(args, theme, ctx), shown = call.render(120).join('\n');
-  assert.equal(calls, 1); assert.match(stripVTControlCharacters(shown), /timeout 2s/); assert.ok(shown.includes(highlightCode(args.command, 'bash')[0]));
+  assert.equal(calls, 1); assert.match(stripVTControlCharacters(shown), /timeout 2s/); assert.ok(shown.includes(theme.fg('syntaxFunction', 'echo')));
   const disabled = builtinCommandRenderers(base, 'bash', () => false);
   assert.deepEqual(disabled.renderCall!(args, theme, ctx).render(120), base.renderCall!(args, theme, ctx).render(120));
   const self = { ...base, renderShell: 'self' as const }; assert.equal(builtinCommandRenderers(self, 'bash', () => true), self);

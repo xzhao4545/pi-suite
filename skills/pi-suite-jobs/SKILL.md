@@ -51,7 +51,7 @@ job_write({id: "job_3fa1c2d0", paste: "first line\nsecond line", sensitive: true
 
 Choose one of `input`, `keys` or `paste`; a call may instead contain only `submit` or `endInput`. Named `keys` are PTY-only. `submit` sends Enter; typing text alone does not submit a terminal-editor prompt. `endInput: true` closes pipe stdin; PTY EOF uses `keys: ["ctrl+d"]`. Sending bytes is not proof the program consumed them.
 
-`sensitive: true` omits text from the input log; the program may still echo it into output. User keystrokes in the terminal take control, pause supervision updates/quiet termination and make model writes return `USER_CONTROL`. Wait for the user to return control; defaults are Ctrl+G to hand it back, Ctrl+B to detach, and Ctrl+T to leave while transferring the screen. These keys are configurable.
+`sensitive: true` omits text from the input log; the program may still echo it into output. User keystrokes in the terminal take control, pause supervision updates/quiet termination and make model writes return `USER_CONTROL`. Wait for the user to return control; defaults are Ctrl+G to hand it back, Ctrl+] to detach (avoids tmux's default Ctrl+B prefix), and Ctrl+T to leave while transferring the screen. These keys are configurable; explicit saved overrides keep their configured values.
 
 ## Read, wait and monitor
 

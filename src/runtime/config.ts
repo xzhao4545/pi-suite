@@ -73,7 +73,8 @@ export const defaults: SuiteConfig = {
   goal: { display: "status" }, agents: { display: "status", maxConcurrent: 10, maxConcurrentForeground: 0,
     maxDepth: 3, persistSessions: true, types: {}, mentions: true, scheduling: true, workflows: true },
   tasks: { reminders: true },
-  jobs: { display: "status", detachKey: "ctrl+b", returnKey: "ctrl+g", transferKey: "ctrl+t",
+  // tmux intercepts Ctrl+B as its default prefix before the terminal view can see it.
+  jobs: { display: "status", detachKey: Key.ctrl(Key.rightbracket), returnKey: "ctrl+g", transferKey: "ctrl+t",
     agents: mergePresets() },
 };
 

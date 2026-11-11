@@ -47,7 +47,7 @@ jobs 检查使用真实进程：pipe 的 stdout/stderr、退出码与耗时，st
 
 Linux Pi 1.5.0 实际发布 CLI 另通过临时终端缩放验收：真实 job_start 和 /jobs Attach terminal 路径下，外层 40×24→120×40→60×30→40×24 的实际 PTY 缩放传到内层 40×17→120×30→60×22→40×17；内层 TTY ioctl、同 stdin 的 stty size 与四次 SIGWINCH 一致。实际用户接管/交还、关闭后继续、重新 attach 输入、菜单停止及内外层清理通过；未新增永久测试条目，范围见 [终端缩放阶段](../finished/pi-suite/jobs/terminal-resize.md)。
 
-共享 wait 用内存来源核对其他对象结算、未在 ids 中的 child 提问、等待中与等待前的用户插话、超时，以及 mode all 的部分结算不返回；真实宿主核对等待一个 job 时另一 job 结算提前返回且不再通知、用户 steer 结束等待且不停止 job。goal_wait 的 waitFor 通过真实宿主核对其他 job 结算不结束等待、恢复时合并送达，以及已结算 ID 不进入等待。终端视图在真实 PTY job 上核对用户按键接管后模型写入返回 USER_CONTROL、Ctrl+G 交还、Ctrl+T 带回含用户与模型输入结果的屏幕、Ctrl+B 离开后 job 仍在运行。monitor 用真实进程核对 literal 与阈值 trigger、同行去重、冷却、detector 丢弃与改名，poll-diff 在样本变化时触发，file-watch 不带 command 运行并在文件事件时触发；真实宿主核对 monitor 事件使等待其自身 job 的 wait 提前返回、events 通道读取，以及已返回事件不再唤醒。
+共享 wait 用内存来源核对其他对象结算、未在 ids 中的 child 提问、等待中与等待前的用户插话、超时，以及 mode all 的部分结算不返回；真实宿主核对等待一个 job 时另一 job 结算提前返回且不再通知、用户 steer 结束等待且不停止 job。goal_wait 的 waitFor 通过真实宿主核对其他 job 结算不结束等待、恢复时合并送达，以及已结算 ID 不进入等待。终端视图在真实 PTY job 上核对用户按键接管后模型写入返回 USER_CONTROL、Ctrl+G 交还、Ctrl+T 带回含用户与模型输入结果的屏幕、Ctrl+] 离开后 job 仍在运行。monitor 用真实进程核对 literal 与阈值 trigger、同行去重、冷却、detector 丢弃与改名，poll-diff 在样本变化时触发，file-watch 不带 command 运行并在文件事件时触发；真实宿主核对 monitor 事件使等待其自身 job 的 wait 提前返回、events 通道读取，以及已返回事件不再唤醒。
 
 询问协调的 1 项 Linux（Node 24.22.2）真实 SDK 聚合检查通过，使用公共 UI 包装器与 AskView 键盘输入核对 answered、skipped、timed_out、cancelled；两个真实 child 的父级问题与实际 pipe job 完成在原生询问期间暂存，恢复边界和 goal 请求合并为一条消息。系统取消后目标等待新的用户 prompt，skipped/timed_out 保持自动许可并继续；父级原生询问依次展示，排队不启动第二题期限，回答后两个 child 实际完成，已消费消息不再次唤醒。child 问题的父级协议期限独立管理。该检查通过受控 UI 上下文驱动实际组件和定时器，Windows 原生组合见 [询问验收](../finished/pi-suite/ask/windows-combination.md)。
 

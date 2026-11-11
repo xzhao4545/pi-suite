@@ -1,6 +1,6 @@
 import type { Theme, ToolRenderers } from '@earendil-works/pi-coding-agent';
 import type { Component } from '@earendil-works/pi-tui';
-import { CodeComponent, type CommandShell } from './command.ts';
+import { CodeComponent, type CodeSource, type CommandShell } from './command.ts';
 
 type CallArgs = { command?: unknown; timeout?: number } | undefined;
 /** The native slot is still invoked: it owns the live timer and argument diagnostics. */
@@ -9,7 +9,7 @@ class CommandCall implements Component {
   private highlighted?: CodeComponent;
   update(args: CallArgs, shell: CommandShell, theme: Theme): void {
     if (typeof args?.command !== 'string' || !args.command) { this.highlighted = undefined; return; }
-    const source = { code: args.command, language: shell, theme,
+    const source: CodeSource = { code: args.command, language: shell, mode: 'command', theme,
       prefix: theme.fg('toolTitle', theme.bold(shell === 'powershell' ? 'PS> ' : '$ ')),
       suffix: args.timeout ? theme.fg('muted', ` (timeout ${args.timeout}s)`) : '' };
     this.highlighted ??= new CodeComponent(source);

@@ -4,7 +4,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import { fauxProvider, fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
-import { createAgentSession, DefaultResourceLoader, SessionManager, SettingsManager, ToolExecutionComponent, highlightCode,
+import { createAgentSession, DefaultResourceLoader, SessionManager, SettingsManager, ToolExecutionComponent,
   type AgentSession, type ExtensionAPI, type ExtensionUIContext, type SessionEntry, type SessionStartEvent } from '@earendil-works/pi-coding-agent';
 import { terminal } from '../support/terminal.ts';
 import { agentDir } from '../support/jobs.ts';
@@ -14,6 +14,16 @@ import { loadConfig } from '../../src/runtime/config.ts';
 import { registerSuiteRenderers } from '../../src/runtime/renderers.ts';
 import { toolRenderer } from '../../src/runtime/tools.ts';
 import { Transcript } from '../../src/ui/transcript.ts';
+import { commandComponent, type CommandShell } from '../../src/ui/rendering/command.ts';
+
+/** Get the host's live theme through its public renderer callback, including pre-bind history. */
+function highlightedCommand(code: string, shell: CommandShell): string {
+  let component!: ReturnType<typeof commandComponent>;
+  new ToolExecutionComponent('theme-probe', 'theme-probe', {}, {}, {
+    renderCall: (_args, theme) => component = commandComponent(code, shell, theme),
+  }, terminal(30, 120), process.cwd());
+  return component.render(120).map(line => line.trimEnd()).join('\n');
+}
 
 test('read-only Suite lookup supplies the same native body to Ask History and collected-child transcripts', () => {
   let resolveRenderer!: Parameters<ExtensionAPI['registerToolRenderer']>[0];
@@ -110,9 +120,9 @@ test('actual loader resolves historical renderers before binding, during reload 
     assert.equal(collapsed.length, 1); assert.match(collapsed[0], /Tasks.*1 groups 2 items/);
     list.setExpanded(true);
     assert.match(list.render(120).map(stripVTControlCharacters).join('\n'), /History child two/);
-    for (const name of ['bash', 'powershell']) {
+    for (const name of ['bash', 'powershell'] as const) {
       const command = tools.get(`history-${name}`)!;
-      const highlighted = highlightCode(name === 'bash' ? 'echo "$HOME" | grep value' : '$name = "world"', name)[0]!;
+      const highlighted = highlightedCommand(name === 'bash' ? 'echo "$HOME" | grep value' : '$name = "world"', name);
       assert.equal(command.render(120).join('\n').includes(highlighted), highlightEnabled, `${name} uses the saved option snapshot`);
       assert.match(command.render(120).map(stripVTControlCharacters).join('\n'), /native output/);
       command.setExpanded(true); assert.match(command.render(120).map(stripVTControlCharacters).join('\n'), /native output/);
@@ -174,7 +184,7 @@ test('actual loader resolves historical renderers before binding, during reload 
           terminal(30, 120), target).render(120).map(stripVTControlCharacters);
         assert.equal(askCall.length, 4); assert.match(askCall[2], /^  .*Ask parent/);
         assert.doesNotMatch(askCall.join('\n'), /^\s*─+\s*$/m);
-        for (const [name, command] of [['bash', 'echo "$HOME" | grep value'], ['powershell', '$name = "world"']]) {
+        for (const [name, command] of [['bash', 'echo "$HOME" | grep value'], ['powershell', '$name = "world"']] as const) {
           const live = renderer(child, name!), mapped = run.renderers?.get(name!);
           assert.ok(live?.renderCall); assert.ok(live?.renderResult);
           if (mapped) assert.equal(mapped.renderResult, live.renderResult, 'captured child Transcript map retains native result slot');
@@ -182,7 +192,7 @@ test('actual loader resolves historical renderers before binding, during reload 
           const tool = new ToolExecutionComponent(name!, `child-${name}`, { command, timeout: 2 },
             { outputPad: 2 }, live, terminal(30, 120), target);
           const call = tool.render(120).join('\n');
-          assert.equal(call.includes(highlightCode(command!, name!)[0]!), highlightEnabled, `${name} uses run.config, not target config`);
+          assert.equal(call.includes(highlightedCommand(command, name)), highlightEnabled, `${name} uses run.config, not target config`);
           assert.match(stripVTControlCharacters(call), /timeout 2s/);
           const result = { content: [{ type: 'text', text: 'unchanged child output' }], details: {}, isError: false };
           const before = JSON.stringify(result);

@@ -6,6 +6,8 @@
 
 以下 patched 宿主 UI/入口记录保留迁移前开发依赖组合的审计与验收细节，不作为现状或消费者安装证明。U1/T1/M1、净化及三组补丁清理已实施，当前官方未修改 Pi 1.5.0 的加载/运行范围见 [官方 Pi 插件兼容实施](./pi-suite/official-pi-compatibility/index.md)；消费者安装按用户指示 [延期](../todo/official-pi-installation.md)，未实际 npm 发布。
 
+- [命令结构高亮与语法配色优化](./pi-suite/ui/command-highlighting.md) — 共享 code/command 模式、Bash／PowerShell 词法区间与原生角色配色；历史／child、官方 CLI 三宽度、主题／配置 reload 验证及全量 226/226 通过，用户确认实际预览配色。用户消息亮灰背景／纯白文字与 tmux 安全默认离开键同步。
+
 - [交互与生命周期细化](./pi-suite/interaction-refinement/index.md) — 七项实施与逐项审计：Ask 24 码点短题与仅删除 context、Goal 非 active 结案/stop 与 quit/冷恢复、Tasks 原子清空与 generation、Subagents 连续交接与动态信息高度；官方 CLI 逐帧、真实 SIGKILL 冷恢复和 RPC 过期引用验收通过，完整套件 222/222、typecheck 通过。
 
 - [官方 Pi 插件兼容实施](./pi-suite/official-pi-compatibility/index.md) — 公开组件键盘阅读、持久 fork 首头只读与内存独立提示、统一私有 parentModelRuntime、原版 Responses 行为及三组补丁清理；三个 Pi peer/dev 精确 1.5.0、private:true 保持；stock U1 18/18、T1 16/16、全量 215/215 与 typecheck、官方原有 bin/RPC 三项及新增真实 CLI Dock/搜索/合法 child 中文 Editor 补验通过，实施与文档已提交；消费者安装按指示延期。

@@ -2,21 +2,23 @@
 
 ## 状态与目标
 
-方案已确认，当前阶段仅记录需求与实施设计，尚未实施命令识别或语法配色变更。实现选择仍需按下文技术约束验证，不把方案描述或原生高亮一致性测试当成新效果已通过。
+命令结构识别与语法配色已实施，类型检查、相关契约与官方 CLI 自动终端验证通过，用户已确认实际预览的配色可接受。以下保留实施前根因与详细设计；稳定实现维护在 [命令结构高亮](../../../current/ui/command-highlighting.md) 和 [主题](../../../current/ui/themes.md)。
+
+本专项不将预览终端的输入／离开异常认定为已修复；tmux 的 Ctrl+B 前缀冲突已通过默认离开键 Ctrl+] 避开，底部提示与嵌套预览输入链另行处理。
 
 目标是改善 Bash／PowerShell 命令的可读性：让用户快速区分执行程序、选项、变量、字符串与管道／重定向关系，而不是仅让字符串有颜色。采用“命令结构识别 + 分层配色”的组合方案，保持普通参数与路径低视觉权重，不追求每个词都使用不同颜色。
 
 用户消息背景 `#323232` 属于独立调整，不纳入本专项的功能实施；语法配色不得改变用户消息、工具状态面板、Dock 或终端默认前景／背景。
 
-## 当前实现与问题根因
+## 实施前状态与问题根因
 
 ### 共用渲染链
 
-- [command.ts](../../src/ui/rendering/command.ts) 的 `CodeComponent` 先清理不可信文本、展开制表符，再调用 Pi `highlightCode(code, language)`，通过原生 `Text` 进行宽度布局。
+- [command.ts](../../../../src/ui/rendering/command.ts) 的 `CodeComponent` 先清理不可信文本、展开制表符，再调用 Pi `highlightCode(code, language)`，通过原生 `Text` 进行宽度布局。
 - `commandComponent(command, shell, theme)` 提供 Jobs 与 Suite 命令字段的统一入口。
-- [builtin-command.ts](../../src/ui/rendering/builtin-command.ts) 装饰原生模型 Bash／PowerShell 的 `renderCall`，命令当前同样由 `CodeComponent` 渲染；原生计时、调用诊断、结果与工具外壳继续由 Pi 维护。
-- [tool-render.ts](../../src/ui/tool-render.ts) 的 `ToolCode` 与 `ToolCommand` 共用代码组件；工具展开按行索引保留组件，更新时调用 `setSource`。
-- [Jobs 查看器](../../src/jobs/viewer/component.ts) 的顶部命令与 [Jobs 工具](../../src/jobs/render.ts) 的展开命令复用共享入口。主会话、child 与历史 Transcript 使用统一登记的 renderer。
+- [builtin-command.ts](../../../../src/ui/rendering/builtin-command.ts) 装饰原生模型 Bash／PowerShell 的 `renderCall`，命令当前同样由 `CodeComponent` 渲染；原生计时、调用诊断、结果与工具外壳继续由 Pi 维护。
+- [tool-render.ts](../../../../src/ui/tool-render.ts) 的 `ToolCode` 与 `ToolCommand` 共用代码组件；工具展开按行索引保留组件，更新时调用 `setSource`。
+- [Jobs 查看器](../../../../src/jobs/viewer/component.ts) 的顶部命令与 [Jobs 工具](../../../../src/jobs/render.ts) 的展开命令复用共享入口。主会话、child 与历史 Transcript 使用统一登记的 renderer。
 - 组件已有源码、语言、主题、宽度及可信前后缀缓存。Pi 提供 live Theme proxy，主题对象身份本身不能证明配色未改变。
 
 共享组件与原生工具组合边界合理，问题不在框架缺失，不重做工具容器或为不同页面分别实现高亮。
@@ -39,13 +41,13 @@
 
 ### 主题颜色重复
 
-[oh-my-pi.json](../../themes/oh-my-pi.json) 当前将 `syntaxVariable` 与正文均映射到 `brightAluminum`（`#e8ecf4`）；变量即使被识别，仍接近白色。`syntaxKeyword`、`syntaxType`、`syntaxOperator` 共用电蓝色；字符串使用金色，因此字符串成为最明显的视觉区别。
+[oh-my-pi.json](../../../../themes/oh-my-pi.json) 当前将 `syntaxVariable` 与正文均映射到 `brightAluminum`（`#e8ecf4`）；变量即使被识别，仍接近白色。`syntaxKeyword`、`syntaxType`、`syntaxOperator` 共用电蓝色；字符串使用金色，因此字符串成为最明显的视觉区别。
 
 未识别的文本通常没有语法前景 ANSI，显示为所在终端／容器的默认前景。修改 `syntax*` 只能改善已识别角色，不能使未识别的命令、参数或符号自动获得颜色。
 
 ### 现有测试的局限
 
-[tool-render.test.ts](../../tests/runtime/tool-render.test.ts) 验证了共享组件与 Pi 原生 `highlightCode` 输出一致，以及缓存、宽度、清理和原生调用组合等契约。这不能证明外部命令、选项与结构符号区分充分；实施后应调整命令模式的断言，普通代码模式仍保留原生高亮契约。
+[tool-render.test.ts](../../../../tests/runtime/tool-render.test.ts) 验证了共享组件与 Pi 原生 `highlightCode` 输出一致，以及缓存、宽度、清理和原生调用组合等契约。这不能证明外部命令、选项与结构符号区分充分；实施后应调整命令模式的断言，普通代码模式仍保留原生高亮契约。
 
 ## 功能范围与非目标
 
@@ -186,27 +188,36 @@
 
 最终由用户确认程序、参数、变量与结构符号的区分度和亮度；必要时仅调整语法调色板，不以增加更多误判规则追求彩色覆盖率。
 
+## 实施与验证结论
+
+- 采用无新增依赖的共享词法扫描器与源码区间；不访问宿主私有 tokenizer、不修改全局 grammar、不对 ANSI 补染。普通 code 模式仍使用 Pi 原生高亮，显式 command 模式复用同一组件、Theme、Text 和原生工具组合。
+- 执行位置、参数词连续性、表达式、引用与嵌套状态共同决定角色；Bash heredoc 先确定逻辑正文边界，再在有界正文内处理展开。PowerShell 未闭合类型与表达式不重复扫描后缀。
+- 新增三个语义测试组与一个官方 CLI 共享消费者测试，调整现有模式切换、历史／child 及配置快照断言；最终全量 226/226 通过，类型检查通过。
+- 官方 Pi 1.5.0 自动终端覆盖 Bash 模型调用、展开 ToolCommand 与 Jobs，在 40／80／120 列和 truecolor／256 色下核对角色、Unicode、主题切换／用户主题热重载与关闭增强后的原生历史显示。PowerShell 的词法与组件验证不代表实际 PowerShell 进程或 Windows 终端验收。
+- 自带语法角色与基础代码前景在三个工具背景上的最低对比度为 truecolor 4.51:1、256 色 5.21:1。用户消息背景为 `#323232`，文字为纯白 `#ffffff`；用户确认预览配色可接受。
+- 支持边界为展示层词法识别，不保证完整 AST、CLI 子命令 schema、Bash extglob／数组赋值、异常 ANSI-C 控制／无效码点分隔符或 PowerShell 完整声明／成员／泛型语义；任意极深嵌套的资源上界不作承诺。
+
 ## 任务列表
 
-- [ ] 复核实际 Pi 与语法库能力，确定公开 API／依赖边界及位置感知识别方案，写明不能可靠识别的范围。
-- [ ] 在共享渲染层实现显式 code/command 模式、角色映射与模式切换缓存，不改变原生工具组合。
-- [ ] 实现 Bash 执行位置、赋值、选项、变量、结构符号与引用／嵌套／heredoc／流式边界。
-- [ ] 复用 PowerShell 原生覆盖并统一命令角色，处理其独有的转义、调用、运算符与 here-string 边界。
-- [ ] 将内置调用区、Jobs 与 Suite `ToolCommand` 接入同一模式，核对 child／历史及开关范围。
-- [ ] 更新 `oh-my-pi` 语法色，校验原生主题 schema、角色差异与相关面板的可读对比度。
-- [ ] 调整现有命令一致性测试，完成有限的语义／边界／缓存／共享集成验证与类型检查。
-- [ ] 通过官方入口进行代表宽度和代码块观察，记录实际覆盖结论与未通过项，并取得用户观感确认。
-- [ ] 将稳定行为同步 current，对操作说明涉及的变化同步对应文档；完成后归档到 finished 并更新索引、提交代码。
+- [x] 复核实际 Pi 与语法库能力，确定公开 API／依赖边界及位置感知识别方案，写明不能可靠识别的范围。
+- [x] 在共享渲染层实现显式 code/command 模式、角色映射与模式切换缓存，不改变原生工具组合。
+- [x] 实现 Bash 执行位置、赋值、选项、变量、结构符号与引用／嵌套／heredoc／流式边界。
+- [x] 保留 PowerShell 原生覆盖的主要词法类别并统一命令角色，处理其独有的转义、调用、运算符与 here-string 边界。
+- [x] 将内置调用区、Jobs 与 Suite `ToolCommand` 接入同一模式，核对 child／历史及开关范围。
+- [x] 更新 `oh-my-pi` 语法色，校验原生主题 schema、角色差异与相关面板的可读对比度。
+- [x] 调整现有命令一致性测试，完成有限的语义／边界／缓存／共享集成验证与类型检查。
+- [x] 通过官方入口进行代表宽度和代码块观察，记录实际覆盖结论与未通过项，并取得用户观感确认。
+- [x] 将稳定行为同步 current，对操作说明涉及的变化同步对应文档；归档到 finished 并更新索引、随实现提交。
 
 ## 文档同步与完成条件
 
-当前阶段只维护此待办与索引，不提前将命令增强能力写成 current 的已实现事实。实施完成后局部更新：
+稳定行为已局部沉淀到以下页面，设计与验证的适用范围随本专项保留：
 
-- [模型工具契约](../current/runtime/tools.md)：普通代码与命令模式边界、共享组件、开关和原生工具组合。
-- [统一界面](../current/ui/index.md)：共享渲染能力、缓存和消费者范围。
-- [主题](../current/ui/themes.md)：语法颜色与共享代码块影响；保留现有用户消息背景及主题加载说明。
-- [Jobs 操作](../current/jobs/index.md#用户操作) 与相关操作文档：仅在实际默认行为或操作方式变化时同步，不重复公共契约。
+- [模型工具契约](../../../current/runtime/tools.md)：普通代码与命令模式边界、共享组件、开关和原生工具组合。
+- [统一界面](../../../current/ui/index.md)：共享渲染能力、缓存和消费者范围。
+- [主题](../../../current/ui/themes.md)：语法颜色与共享代码块影响；保留现有用户消息背景及主题加载说明。
+- [Jobs 操作](../../../current/jobs/index.md#用户操作) 与相关操作文档：仅在实际默认行为或操作方式变化时同步，不重复公共契约。
 
 完成条件是上述功能及边界均有相应验证，明确不能支持的语法／平台范围，用户视觉确认已获得，稳定事实已沉淀 current。专项移动到 `doc/finished/pi-suite/ui/` 并更新 finished/todo 索引；不在 current／finished 保存临时测试流水账、本机产物路径或产物归档清单。
 
-[返回待办索引](index.md)
+[返回已完成索引](../../index.md)

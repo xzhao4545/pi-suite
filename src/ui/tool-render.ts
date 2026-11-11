@@ -2,7 +2,7 @@ import { getLanguageFromPath, type Theme, type ThemeColor, type ToolRenderers } 
 import { Container, Text, truncateToWidth, type Component } from '@earendil-works/pi-tui';
 import { sanitizeText } from '../runtime/text.ts';
 import { stateTone } from './browser-chrome.ts';
-import { CodeComponent, commandComponent, type CommandShell } from './rendering/command.ts';
+import { CodeComponent, commandComponent, type CodeSource, type CommandShell } from './rendering/command.ts';
 
 export type Tone = ThemeColor;
 export interface ToolLine {
@@ -73,7 +73,8 @@ class ToolBody implements Component {
         if (row.label) content.addChild(plainText(this.theme, `${row.label}:`, 'muted'));
         const source = 'command' in row ? row.command : row.code;
         if (language) {
-          const spec = { code: source, language, theme: this.theme };
+          const spec: CodeSource = 'command' in row ? { code: source, language: row.shell, mode: 'command', theme: this.theme }
+            : { code: source, language, theme: this.theme };
           const code = this.codes.get(index) ?? ('command' in row
             ? commandComponent(source, row.shell, this.theme) as CodeComponent : new CodeComponent(spec));
           code.setSource(spec); this.codes.set(index, code); content.addChild(code);

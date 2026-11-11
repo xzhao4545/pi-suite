@@ -45,6 +45,20 @@ export default function cliHost(pi: ExtensionAPI) {
     fauxAssistantMessage('CLI_SEED_DONE'),
     fauxAssistantMessage('CLI_JOB_SETTLED'), // A late pipe-job notification can request one continuation.
   ]);
+  if (process.env.PI_SUITE_TEST_HIGHLIGHT) {
+    const command = 'FOO=bar node --version 2>&1 | head -n 1; printf \'%s\\n\' "$HOME" \'中文😀\'';
+    faux.setResponses([
+      fauxAssistantMessage(fauxToolCall('bash', {command})),
+      fauxAssistantMessage(fauxToolCall('job_start', {command, name: 'CLI_HIGHLIGHT_JOB'})),
+      fauxAssistantMessage('CLI_HIGHLIGHT_DONE'),
+      fauxAssistantMessage('CLI_HIGHLIGHT_SETTLED'),
+    ]);
+    pi.registerCommand('cli-highlight-theme', {description: 'Change the active theme through the public host API', handler: async (name, ctx) => {
+      const changed = ctx.ui.setTheme(name.trim());
+      if (!changed.success) throw new Error(changed.error);
+      snapshot(ctx, `theme-${name.trim()}`);
+    }});
+  }
   if (process.env.PI_SUITE_TEST_GOAL_MODE) faux.setResponses([goalReply, goalReply, goalReply, goalReply]);
   if (endpoint) pi.registerProvider('cli-proof', {
     api: 'openai-responses', baseUrl: endpoint, apiKey: 'local-test', models: ['offline', 'other'].map(id => ({id, name: `Local Responses ${id}`,

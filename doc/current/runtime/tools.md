@@ -32,7 +32,7 @@ ui/tool-render.ts 的 ToolView 提供 call、collapsed 与可选 expanded；统�
 
 ToolLine 清理字面字段并压平换行，折叠行按可见宽度截断；图标按 tone 着色，主要标题使用 toolTitle，titleTone 可显式保留任务状态色，summary 使用 toolOutput，meta 默认 dim 或指定语义色，任务完成标题支持删除线。stateLine 复用 Browser/Dock 的 stateTone：starting/running 为 success，queued/waiting/waiting(parent)/stopping 与清理未确认为 warning，failed/limited/timed_out 为 error，completed/stopped 为 dim。
 
-ToolView.expanded 可返回结构化 ToolLine、ToolField、ToolCode、ToolCommand、字面字符串数组，或原生 Component。ToolField 标签为 muted，值保留多行并按正文/错误/警告角色着色；ToolCode 只接受明确 language 或真实 path，ToolCommand 明确声明 bash/powershell。命令、代码与 JSON 使用 Pi highlightCode，普通日志和任意正文保持字面量，不进行 Markdown 或语言猜测。所有不可信字面内容先 sanitize 再生成可信 ANSI，原生 Component 的生产者负责同一边界。公共组件保留布局和高亮缓存，内容、宽度、语言与主题变化时更新或 invalidate，ANSI 不写入业务状态。未提供 expanded 时显示模型正文全文；敏感 job_write 输入在展开中保持隐藏，可能回显输入的错误诊断在着色前脱敏，模型 content/details 保持原样。
+ToolView.expanded 可返回结构化 ToolLine、ToolField、ToolCode、ToolCommand、字面字符串数组，或原生 Component。ToolField 标签为 muted，值保留多行并按正文/错误/警告角色着色；ToolCode 只接受明确 language 或真实 path，ToolCommand 明确声明 bash/powershell。普通代码与 JSON 使用 Pi highlightCode，显式命令使用共享 Shell 词法区间与活动主题角色；普通日志和任意正文保持字面量，不进行 Markdown 或语言猜测。所有不可信字面内容先 sanitize 再生成可信 ANSI，原生 Component 的生产者负责同一边界。公共组件保留源码区间、布局和高亮缓存，内容、宽度、语言、用途模式与主题变化时更新或 invalidate，ANSI 不写入业务状态。未提供 expanded 时显示模型正文全文；敏感 job_write 输入在展开中保持隐藏，可能回显输入的错误诊断在着色前脱敏，模型 content/details 保持原样。
 
 普通 subagent 的 agent_start/list/get/read/send/stop 以 AgentRecord.name 为主标识，ID 仅在展开正文或 dim 元信息中出现；集合折叠行保留数量/范围。启动调用以 name 或类型名显示；只有 ID 的调用通过 agents/runtime.ts 的 agentDisplayName 查询已有进程级 Manager 内存记录，可带 runId 选择执行，找不到时显示 ID，不创建运行时、不发现或读取磁盘历史。stop 的 details 保存名称，历史结果可直接显示。
 
@@ -42,7 +42,7 @@ ToolView.expanded 可返回结构化 ToolLine、ToolField、ToolCode、ToolComma
 
 runtime/tools.ts 的 registerToolRenderers 支持按工具名组合已有 renderer；live resolver 调用 next() 保留后续扩展与原生定义，纯展示 lookup 使用同一组合。ui.highlightBuiltinCommands 默认 true，仅增强内置模型 bash/powershell 的命令调用区；增强仍调用原生 renderCall 维护计时，保留 renderShell、renderResult、超时、部分参数、流式输出、截断、图片与展开能力。false 使用完整原生调用显示；已有第三方 self-shell 保留自身组合。用户 !/!! 的 BashExecutionComponent、原生 read/write 代码与 edit diff 不受该选项影响。
 
-src/ui/rendering/command.ts 导出 commandComponent(command, shell, theme): Component，shell 为 bash 或 powershell，供 Jobs 顶部和 Suite ToolCommand 展开复用。返回组件按原始命令及真实 shell 语言高亮，不执行命令；调用方保留组件实例并在主题/布局失效时 invalidate。Jobs 和 Suite 命令字段始终高亮，不受内置工具专用选项影响。
+src/ui/rendering/command.ts 导出 commandComponent(command, shell, theme): Component，shell 为 bash 或 powershell，供 Jobs 顶部和 Suite ToolCommand 展开复用。返回组件显式采用 command 模式，根据执行位置区分程序、选项、变量、字符串与结构符号，不执行命令或查询程序／路径。普通 CodeComponent 保留原生 code 模式；ToolBody.setSource 将用途模式纳入同一行的更新判断。调用方保留组件实例并在主题/布局失效时 invalidate；主题改变重新着色，宽度改变只更新布局。Jobs 和 Suite 命令字段始终高亮，不受内置工具专用选项影响。词法、缓存及支持范围见 [命令结构高亮](../ui/command-highlighting.md)。
 
 runtime/tools.ts 的 registerBoundTool 同时登记运行时 renderer；首次加载只注册工具，运行时刷新保留活动工具选择，显式启用时加入该工具。renderer lookup 按 ExtensionAPI 隔离，主会话与 child 的 ask_user 可使用不同标题。Ask Transcript 使用同一查找，child 查看器使用实际 run.renderers；历史结果使用持久化 content/details 重新绘制，不改写记录、不重新执行工具或请求模型。wait 折叠只显示结算比例、失败计数与提前返回原因，展开保留逐项摘要、others 与 pending；普通 agent 的逐项主标识与 pending 按现有内存记录显示名称，无记录时保留 ID，job/workflow 显示不变。替换仅在渲染层进行，content、summaryLine、通知文本及展开正文中的 read/send 参数保持原始 ID 契约。
 

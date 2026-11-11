@@ -17,6 +17,7 @@
 - [公共运行时与配置](./runtime/index.md) — 会话绑定、统一通知、模块开关及配置优先级。
 - [统一界面](./ui/index.md) — Dock 父子高度预算、必要执行详情、状态发布、外部 footer 边界与原生历史组件。
 - [主题](./ui/themes.md) — Oh My Pi Titanium 参考配色、包资源加载、主题选择与终端/第三方状态栏边界。
+- [命令结构高亮](./ui/command-highlighting.md) — 显式命令／代码模式、Bash／PowerShell 词法边界、主题角色、缓存与原生工具组合。
 - [ask 接口与操作](./ask/index.md) — 默认值、批量、多选、超时、搜索及焦点。
 - [目标管理](./goal/index.md) — 持久目标、运行调度、宿主恢复、预算和操作。
 - [两级任务管理](./tasks/index.md) — 原子批量编辑、派生进度、会话存储、Dock 折叠、详情与临时提醒。

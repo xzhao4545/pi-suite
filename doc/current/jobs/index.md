@@ -134,7 +134,7 @@ Subagents 所属 Jobs 沿用全终端阅读覆盖作用域，普通 Jobs 入口�
 | 任意其他按键（接管态） | 原样发送给程序，左右键不触发浏览退出 |
 | Ctrl+G（returnKey，接管态） | 把输入交还模型，保留视图；恢复 hands-free 更新，重新开始静默计时 |
 | Ctrl+T（transferKey，接管态） | 离开并把实际当前屏幕发给模型；/jobs 为新消息，job_start attach 写入工具结果 |
-| Ctrl+B（detachKey） | 离开视图，Job 继续运行；普通浏览 Esc 逐层返回 |
+| Ctrl+]（detachKey） | 离开视图，Job 继续运行；避开 tmux 默认 Ctrl+B 前缀，普通浏览 Esc 逐层返回 |
 | Shift+↑/↓（接管态） | 滚动终端回滚区，不发送输入 |
 | x / Delete（浏览态） | 按权限和实际生命周期显示，二次确认停止子进程或删除历史；pending/unconfirmed 不标为成功 |
 | Esc / ←←（浏览态） | Esc 返回来源，300ms 内双左退出整个 Jobs/Subagents 浏览链；搜索/过滤/Editor 的左右键只移动光标 |

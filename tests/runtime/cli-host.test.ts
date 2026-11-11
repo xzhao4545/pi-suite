@@ -7,6 +7,7 @@ import {join, dirname, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import xterm from '@xterm/headless';
 import {RpcClient} from '@earendil-works/pi-coding-agent';
+import {foregroundAnsi, parseColor} from '@earendil-works/pi-tui';
 import {createPtyProcess} from '../../src/jobs/backends/pty.ts';
 import {agentDir, bashPath} from '../support/jobs.ts';
 import {GOAL_ENTRY, type Goal} from '../../src/goal/state.ts';
@@ -272,5 +273,89 @@ test('official Responses persists new state across resume and keeps original sam
   } finally {
     await client.stop(); server.closeAllConnections();
     await new Promise<void>(done => server.close(() => done())); rmSync(root, {recursive: true, force: true});
+  }
+});
+
+// Semantic tests cover the grammar. This single stock-bin scenario checks its actual consumers,
+// terminal color conversion, cached history, package resources and native reload boundaries.
+test('official CLI shares command roles across native calls, ToolCommand and Jobs at three widths', {timeout: 60000}, async () => {
+  for (const trueColor of ['1', '0']) {
+    const {root, user, env, snapshot} = setup('fullscreen');
+    env.PI_SUITE_TEST_HIGHLIGHT = '1'; env.PI_TRUE_COLOR = trueColor;
+    const palette = JSON.parse(readFileSync(resolve('themes/oh-my-pi.json'), 'utf8'));
+    const copy = structuredClone(palette); copy.name = 'command-proof';
+    mkdirSync(join(user, 'themes')); writeFileSync(join(user, 'themes', 'command-proof.json'), JSON.stringify(copy));
+    const screen = new xterm.Terminal({cols: 80, rows: 40, allowProposedApi: true});
+    const packageArgs = args.map(arg => arg === resolve('src/index.ts') ? resolve('.') : arg);
+    const pty = createPtyProcess(process.execPath, [bin, ...packageArgs, '--use-theme', 'oh-my-pi'], {cwd: root, env, cols: 80, rows: 40, name: 'xterm-256color'});
+    let exited = false, output = '';
+    const data = pty.onData(chunk => {output = (output + chunk).slice(-32000); screen.write(chunk);});
+    const exit = pty.onExit(() => {exited = true;});
+    const responses = screen.onData(chunk => pty.write(chunk));
+    const lines = () => Array.from({length: screen.rows}, (_, row) => screen.buffer.active.getLine(screen.buffer.active.viewportY + row)?.translateToString(true) ?? '');
+    const expected = (token: string) => {
+      let color = palette.colors[token];
+      while (palette.vars[color]) color = palette.vars[color];
+      const ansi = foregroundAnsi(parseColor(color), trueColor === '1' ? 'truecolor' : '256color');
+      return trueColor === '1' ? parseInt(color.slice(1), 16) : Number(/(\d+)m$/.exec(ansi)![1]);
+    };
+    const hasColor = (word: string, token: string, native = false) => lines().some((line, row) => {
+      if (native && !line.trimStart().startsWith('$ FOO=')) return false;
+      const col = line.indexOf(word);
+      if (col < 0) return false;
+      const cell = screen.buffer.active.getLine(screen.buffer.active.viewportY + row)?.getCell(col);
+      return cell?.getFgColor() === expected(token) && (trueColor === '1' ? cell.isFgRGB() : cell.isFgPalette());
+    });
+    const visible = (text: string) => lines().some(line => line.includes(text));
+    const waitFor = async (label: string, predicate: () => boolean) => {
+      const deadline = Date.now() + 10000;
+      while (!predicate()) {
+        assert.equal(exited, false, `CLI exited during ${label}\n${output.slice(-3000)}`);
+        assert.ok(Date.now() < deadline, `${trueColor}: ${label}\n${lines().join('\n')}\n${output.slice(-2000)}`);
+        await pause();
+      }
+    };
+    const checkCommand = async () => {
+      await waitFor('command roles', () => hasColor('node', 'syntaxFunction') && hasColor('--version', 'syntaxType') && hasColor('2>&1', 'syntaxOperator'));
+    };
+    try {
+      await waitFor('startup', () => !!snapshot());
+      pty.write('highlight\r'); await waitFor('real native and job calls', () => (snapshot()?.calls ?? 0) >= 3 && snapshot()?.idle === true);
+      for (const columns of [40, 80, 120]) {
+        screen.resize(columns, 40); pty.resize(columns, 40);
+        await checkCommand();
+        pty.write('\x0f'); await waitFor('expanded ToolCommand', () => visible('command:'));
+        await checkCommand();
+        pty.write('\x0f'); await waitFor('collapsed ToolCommand', () => !visible('command:'));
+      }
+      pty.write('/jobs\r'); await waitFor('Jobs list', () => visible('Jobs ▸'));
+      pty.write('\r'); await waitFor('Jobs command pane', () => !visible('Jobs ▸') && visible('command'));
+      pty.write('c');
+      for (const columns of [40, 80, 120]) {
+        screen.resize(columns, 40); pty.resize(columns, 40);
+        await checkCommand();
+        await waitFor('Unicode command remains visible', () => visible('中文😀'));
+      }
+      pty.write('\x1b'); await waitFor('return to Jobs', () => visible('Jobs ▸'));
+      pty.write('\x1b'); await waitFor('return to chat', () => !visible('Jobs ▸'));
+      pty.write('/cli-highlight-theme command-proof\r');
+      await waitFor('copied user theme selected', () => snapshot()?.reason === 'theme-command-proof');
+      copy.vars.syntaxCyan = '#ff99cc'; writeFileSync(join(user, 'themes', 'command-proof.json'), JSON.stringify(copy));
+      const original = palette.vars.syntaxCyan; palette.vars.syntaxCyan = copy.vars.syntaxCyan;
+      await checkCommand();
+      palette.vars.syntaxCyan = original;
+      pty.write('/cli-highlight-theme oh-my-pi\r'); await checkCommand();
+      writeFileSync(join(user, 'pi-suite.json'), JSON.stringify({ui: {highlightBuiltinCommands: false}}));
+      pty.write('/reload\r');
+      await waitFor('native history after disabled/reload', () => hasColor('node', 'toolTitle', true));
+      pty.write('\x0f'); await waitFor('ToolCommand remains enhanced after disabled/reload', () => visible('command:') && hasColor('node', 'syntaxFunction'));
+      assert.doesNotMatch(output, /TypeError|Extension errors/);
+      pty.write('/exit\r'); await waitFor('normal quit', () => exited);
+    } finally {
+      if (!exited) {
+        pty.kill(); const deadline = Date.now() + 3000; while (!exited && Date.now() < deadline) await pause();
+      }
+      responses.dispose(); data.dispose(); exit.dispose(); pty.close(); screen.dispose(); rmSync(root, {recursive: true, force: true});
+    }
   }
 });
