@@ -276,6 +276,54 @@ test('official Responses persists new state across resume and keeps original sam
   }
 });
 
+test('official CLI PTY footer survives input handoff, resize and detach in regular/fullscreen layouts', {timeout: 60000}, async () => {
+  for (const mode of ['regular', 'fullscreen'] as const) {
+    const {root, env, snapshot} = setup(mode); env.PI_SUITE_TEST_PTY = '1';
+    const screen = new xterm.Terminal({cols: 80, rows: 30, allowProposedApi: true});
+    const pty = createPtyProcess(process.execPath, [bin, ...args], {cwd: root, env, cols: 80, rows: 30, name: 'xterm-256color'});
+    let exited = false, exitCode: number | undefined, output = '';
+    const data = pty.onData(chunk => {output = (output + chunk).slice(-16000); screen.write(chunk);});
+    const exit = pty.onExit(event => {exited = true; exitCode = event.exitCode;});
+    const responses = screen.onData(chunk => pty.write(chunk));
+    const lines = () => Array.from({length: screen.rows}, (_, row) => screen.buffer.active.getLine(screen.buffer.active.viewportY + row)?.translateToString(true) ?? '');
+    const visible = (text: string) => lines().some(line => line.includes(text));
+    const waitFor = async (label: string, predicate: () => boolean) => {
+      const end = Date.now() + 10000;
+      while (!predicate()) {
+        assert.equal(exited, false, `${mode}: exited during ${label}`);
+        assert.ok(Date.now() < end, `${mode}: ${label}\n${lines().join('\n')}\n${output.slice(-2000)}`);
+        await pause();
+      }
+    };
+    const inputFooter = async () => {
+      await waitFor('input footer', () => visible('you control input') && visible('ctrl+] leave') && visible('ctrl+g return input') && visible('ctrl+t send screen'));
+    };
+    try {
+      await waitFor('startup', () => !!snapshot()); pty.write('pty\r');
+      await waitFor('PTY program', () => visible('CLI_PTY_READY')); await inputFooter();
+      for (const columns of [40, 80, 120]) {
+        screen.resize(columns, 30); pty.resize(columns, 30); await inputFooter();
+        pty.write(`USER_${columns}\r`); await waitFor('program consumed input', () => visible(`CLI_GOT:USER_${columns}`));
+        pty.write('\x07'); await waitFor('read-only footer', () => visible('read-only view') && visible('Esc back') && visible('i input'));
+        assert.equal(visible('return input'), false); assert.equal(visible('send screen'), false);
+        pty.write('i'); await inputFooter();
+      }
+      pty.write('\x1d'); await waitFor('native continuation after detach', () => snapshot()?.idle === true && visible('CLI_PTY_DETACHED'));
+      pty.write('/jobs\r'); await waitFor('Jobs list', () => visible('Jobs ▸'));
+      pty.write('\r'); await waitFor('live PTY browsing', () => !visible('Jobs ▸') && visible('read-only view') && visible('running') && visible('ctrl+] leave'));
+      pty.write('c\t'); await waitFor('command pane focus', () => visible('command focus'));
+      assert.equal(visible('i input'), false, 'unfocused PTY does not advertise an input shortcut');
+      pty.write('\x1d'); await waitFor('return to list', () => visible('Jobs ▸'));
+      pty.write('\x1b'); await waitFor('original editor restored', () => !visible('Jobs ▸'));
+      pty.write('/exit\r'); await waitFor('native quit', () => exited); assert.equal(exitCode, 0);
+      assert.doesNotMatch(output, /TypeError|Extension errors/);
+    } finally {
+      if (!exited) { pty.kill(); const end = Date.now() + 3000; while (!exited && Date.now() < end) await pause(); }
+      responses.dispose(); data.dispose(); exit.dispose(); pty.close(); screen.dispose(); rmSync(root, {recursive: true, force: true});
+    }
+  }
+});
+
 // Semantic tests cover the grammar. This single stock-bin scenario checks its actual consumers,
 // terminal color conversion, cached history, package resources and native reload boundaries.
 test('official CLI shares command roles across native calls, ToolCommand and Jobs at three widths', {timeout: 60000}, async () => {

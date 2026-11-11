@@ -138,7 +138,10 @@ test('same-screen PTY defaults to readonly browsing, resizes only the true scree
     view.render(100); const rows = source.rows;
     assert.ok(rows < readingRows(terminal(40, 100)) - 4); assert.equal(source.cols, 100);
     view.render(100); assert.equal(resizes, 1, 'unchanged dimensions cannot trigger PTY redraw');
-    view.handleInput('\x1b[A'); view.handleInput('x'); view.handleInput('c'); // c also cancels the armed stop.
+    view.handleInput('\x1b[A'); view.handleInput('x');
+    const confirmation = stripVTControlCharacters(view.render(40).join('\n'));
+    assert.match(confirmation, /Press x again/); assert.match(confirmation, /ctrl\+\] leave/);
+    view.handleInput('c'); // c also cancels the armed stop.
     assert.equal(jobs.userControlled(job.id), false); assert.equal(jobs.peek(job.id).state, 'running');
     view.render(100); assert.ok(source.rows < rows, 'expanded command rows are never sent as part of the program screen');
     view.handleInput('i'); assert.equal(jobs.userControlled(job.id), true);

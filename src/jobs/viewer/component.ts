@@ -129,7 +129,7 @@ export class JobView extends Container {
   private bottom(width: number): string[] {
     const source = this.options.source;
     const reading = this.selected === 'terminal'
-      ? `${source?.viewport?.alternate ? 'alternate screen' : 'terminal screen'} · ${this.terminal?.inputMode ? 'input' : 'read-only'} · ${source?.following !== false ? 'following' : 'history'}`
+      ? `${source?.viewport?.alternate ? 'alternate screen' : 'terminal screen'} · ${this.terminal?.inputMode ? 'you control input' : source?.closed ? 'exited' : 'read-only view'} · ${source?.following !== false ? 'following' : 'history'}`
       : `${this.selected} · ${this.streams.get(this.selected)?.status.split(' · ').slice(-1)[0] ?? 'loading'}${this.job.mode === 'pty' && !source ? ' · log only (no terminal snapshot)' : ''}`;
     return [jobRow(this.job, width, this.theme), truncateToWidth(this.error ? this.theme.fg('warning', this.error)
       : `${this.busy ? 'Working… · ' : ''}${reading}${this.options.readonly || !this.options.live ? ' · read-only object' : ''}${this.commandFocus ? ' · command focus' : ''}`, width)];
@@ -167,6 +167,9 @@ export class JobView extends Container {
   handleInput(data: string): void {
     if (this.details) { this.details.handleInput(data); return; }
     if (this.terminal?.inputMode && this.selected === 'terminal') { this.terminal.handleInput(data); return; }
+    // The advertised leave key must work even while the command pane or search
+    // owns focus. Program input retains its own terminal dispatch above.
+    if (matchesKey(data, this.options.keys.detachKey)) { this.finish(); return; }
     if (this.commandFocus && this.command.searching) {
       this.doubleLeft.reset(); this.command.handleInput(data); this.tui.requestRender(); return;
     }

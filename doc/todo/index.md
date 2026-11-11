@@ -4,6 +4,8 @@
 
 ## 任务索引
 
+- [PTY 控制终端与嵌套 Pi 退出排查](pty-terminal-investigation.md) — 待排查；独立 tmux 直接启动的输出路由差异、嵌套 Pi 原生退出与 PTY 结算未验证项，不由提示栏改动代替修复。
+
 - [官方 Pi 干净消费者安装验收](official-pi-installation.md) — 用户明确延期 Git/本地包安装及资源发现验收；官方 Pi 1.5.0 的代码实施与实际 bin/RPC 加载结果不替代安装证据，保持 private:true，不执行 npm 发布。
 
 Pi Suite Windows 验收见 [收尾记录](../finished/pi-suite/windows-completion.md)；Cursor CLI 验收按用户要求移除。

@@ -157,7 +157,7 @@ export default pi => {
     await until(() => received().prompt === 'USER_INPUT');
     view.handleInput('\x07'); assert.equal(jobs.userControlled(job.id), false);
     jobs.write(job.id, 'MODEL_INPUT\r', {source: 'model', kind: 'text'}); await until(() => received().prompt === 'MODEL_INPUT');
-    view.handleInput('\x02'); assert.equal((await attached).action, 'detach'); assert.equal(jobs.peek(job.id).state, 'running');
+    view.handleInput('\x1d'); assert.equal((await attached).action, 'detach'); assert.equal(jobs.peek(job.id).state, 'running');
     assert.equal(h.faux.state.callCount, 4, 'viewing the CLI never wakes the parent provider');
     const stopped = await jobs.stop(job.id, 'user'); assert.equal(stopped.job.state, 'stopped'); assert.equal(stopped.job.cleanup.state, 'managed_scope_confirmed');
   } finally { await h.dispose(); rmSync(root, {recursive: true, force: true}); }

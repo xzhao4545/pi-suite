@@ -125,7 +125,7 @@ Subagents 所属 Jobs 沿用全终端阅读覆盖作用域，普通 Jobs 入口�
 
 默认 stdout，通过 `s` 切换 stdout/stderr/input 以及存在 monitor 时的 events；PTY 有屏幕时还可在屏幕与 output/input/events 间切换。各流复用独立 JobLogView，保留自己的字节窗口、阅读位置、搜索和跟随，切走解除该流轮询/订阅，切回再刷新；stdout/stderr 不合并，不改成 PTY。窗口范围使用原始字节偏移，清理不改变续读位置。UTF-8 字符跨分页或实时写入边界时只显示完整字符；模型读取仍按 job_read 的默认智能截断与搜索契约返回。
 
-终端视图显示同一个 headless xterm 屏幕、文字属性、颜色、光标和有界回滚。默认浏览不会向程序发送方向键或抢输入控制；`i` 明确接管时使用 Manager.write 的 user/sensitive 入口，模型 job_write 返回 USER_CONTROL，hands-free 更新与静默终止暂停。resize 仅传递实际屏幕尺寸且尺寸未变不重复调用；历史快照保持保存时尺寸，不改变已退出程序。
+终端视图在共享阅读 overlay 中显示同一个 headless xterm 屏幕、文字属性、颜色、光标和有界回滚，直接 attach 与浏览使用一致的窗口/高度预算。底部快捷键按实际配置显示，离开键优先，最多占两行；接管态显示交还输入和发送屏幕，浏览态显示 Esc 返回与可用的 i 接管，结束/只读时隐藏输入操作。错误或二次确认独立显示，退出提示保持可见；命令区焦点下收起 i 提示，Tab/Esc 回到输出后可接管，配置离开键仍直接退出查看器；标题、信息与提示先扣除高度，再 resize 真实 PTY 输出区。默认浏览不会向程序发送方向键或抢输入控制；`i` 明确接管时使用 Manager.write 的 user/sensitive 入口，模型 job_write 返回 USER_CONTROL，hands-free 更新与静默终止暂停。resize 仅传递实际屏幕尺寸且尺寸未变不重复调用；历史快照保持保存时尺寸，不改变已退出程序。
 
 | 按键（可配置） | 行为 |
 | --- | --- |

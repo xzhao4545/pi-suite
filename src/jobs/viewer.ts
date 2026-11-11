@@ -35,7 +35,9 @@ export async function attachJob(ctx: ExtensionContext, deps: ViewerDeps, id: str
   const abort = () => view?.finish('detach');
   signal?.addEventListener('abort', abort, { once: true });
   try {
-    return await ctx.ui.custom<TerminalExit>((tui, theme, _keys, done) => view = new TerminalView(tui, theme, terminal, deps.keys(), {
+    // A full PTY is a reading window, not an editor-sized dialog. The shared overlay
+    // keeps its actual height ceiling aligned with TerminalView after every resize.
+    return await openReading<TerminalExit>(ctx, (tui, theme, _keys, done) => view = new TerminalView(tui, theme, terminal, deps.keys(), {
       title: () => displayName(manager.peek(id)),
       initialInput: true, canInput: () => manager.peek(id).state === 'running', takeControl: () => manager.takeControl(id),
       // Raw keystrokes can include passwords; the input log keeps only that something was typed.

@@ -5,7 +5,9 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Theme } from '@earendil-works/pi-coding-agent';
+import { stripVTControlCharacters } from 'node:util';
 import { CURSOR_MARKER, visibleWidth } from '@earendil-works/pi-tui';
+import { readingRows } from '../../src/ui/reading.ts';
 import { TerminalView, type TerminalExit } from '../../src/ui/terminal.ts';
 import { TerminalScreen } from '../../src/jobs/terminal/screen.ts';
 import { ViewerNavigation } from '../../src/ui/viewer/navigation.ts';
@@ -24,26 +26,43 @@ test('PTY browse has no input side effects; configured input/return/transfer/det
   const root = agentDir(), jobs = manager(root), cwd = mkdtempSync(join(tmpdir(), 'pi-suite-term-'));
   try {
     const {id} = await jobs.start({command: 'while read line; do echo "got:$line"; done', mode: 'pty', cwd, ...owner}, testShell());
-    const source = jobs.terminal(id)!, exits: TerminalExit[] = [], navigation = new ViewerNavigation();
-    const open = (readonly = false) => new TerminalView(terminal(24, 60), theme, source, keys, {
+    const source = jobs.terminal(id)!, exits: TerminalExit[] = [], navigation = new ViewerNavigation(), tui = terminal(24, 60);
+    let failWrite = false;
+    const open = (readonly = false) => new TerminalView(tui, theme, source, keys, {
       title: () => 'Console', readonly, navigation,
       takeControl: () => jobs.takeControl(id),
-      write: data => { jobs.write(id, data, {source: 'user', kind: 'keys', sensitive: true}); },
+      write: data => { if (failWrite) throw new Error('PTY input failed'); jobs.write(id, data, {source: 'user', kind: 'keys', sensitive: true}); },
       returnControl: () => jobs.returnControl(id), userControl: () => jobs.userControlled(id),
     }, exit => exits.push(exit));
     const view = open(); view.render(60);
+    const checkFooter = (input: boolean) => {
+      for (const width of [40, 80, 120]) {
+        const rendered = view.render(width), text = stripVTControlCharacters(rendered.join('\n'));
+        assert.equal(rendered.length, readingRows(tui)); assert.ok(rendered.every(line => visibleWidth(line) <= width));
+        const hints = rendered.slice(-3, -1).map(stripVTControlCharacters).join('\n');
+        assert.match(hints, /ctrl\+j leave/);
+        if (input) { assert.match(hints, /ctrl\+k return input/); assert.match(hints, /ctrl\+l send screen/); }
+        else { assert.match(hints, /Esc back/); assert.match(text, /i input/); assert.doesNotMatch(text, /return input|send screen/); }
+        assert.ok(source.rows < readingRows(tui), 'footer rows are not process rows');
+      }
+    };
+    checkFooter(false);
     assert.equal(jobs.userControlled(id), false);
     for (const data of ['\x1b[A', '\x1b[B', 'abc', '\x14']) view.handleInput(data);
     assert.equal(jobs.userControlled(id), false);
     assert.equal(readFileSync(jobs.logPath(jobs.peek(id), 'input'), 'utf8'), '');
-    view.handleInput('i'); assert.equal(jobs.userControlled(id), true);
+    view.handleInput('i'); assert.equal(jobs.userControlled(id), true); checkFooter(true);
+    failWrite = true; view.handleInput('unwritten');
+    const failed = stripVTControlCharacters(view.render(40).join('\n'));
+    assert.match(failed, /PTY input failed/); assert.match(failed, /ctrl\+j leave/);
+    failWrite = false;
     for (const key of 'secret\r') view.handleInput(key);
     assert.throws(() => jobs.write(id, 'x\r', {source: 'model', kind: 'text'}), /USER_CONTROL/);
     await until(() => source.getViewportLines().join('\n').includes('got:secret'));
     assert.ok(view.render(60).some(line => line.includes(CURSOR_MARKER)));
     // Left/Esc in input mode are program keys, never browsing-chain close gestures.
     view.handleInput('\x1b[D'); view.handleInput('\x1b[D'); assert.equal(navigation.closed, false);
-    view.handleInput('\x0b'); assert.equal(jobs.userControlled(id), false); assert.equal(view.inputMode, false);
+    view.handleInput('\x0b'); assert.equal(jobs.userControlled(id), false); assert.equal(view.inputMode, false); checkFooter(false);
     jobs.write(id, '\x15model\r', {source: 'model', kind: 'text', text: 'model'});
     await until(() => source.getViewportLines().join('\n').includes('got:model'));
     view.handleInput('i'); view.handleInput('\x0c');

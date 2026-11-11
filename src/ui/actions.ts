@@ -12,8 +12,11 @@ export type DetailAction = { key: KeyId; label: string; available?: () => boolea
   ({run: () => void; input?: never} | {input: () => InlineRequest; run?: never});
 
 export const keyLabel = (key: KeyId): string => key === 'enter' ? 'Enter' : key;
-/** Desktop widths show every key; phone widths may truncate without stealing body height. */
-export const keyHelp = (text: string, width: number): string[] => width >= 80 ? wrapTextWithAnsi(text, width) : [truncateToWidth(text, width)];
+/** Other readers keep their compact phone layout; fixed footers can opt into bounded wrapping. */
+export const keyHelp = (text: string, width: number, maxRows?: number): string[] => {
+  const lines = width >= 80 || maxRows !== undefined ? wrapTextWithAnsi(text, width) : [truncateToWidth(text, width)];
+  return maxRows === undefined ? lines : lines.slice(0, maxRows);
+};
 
 /** Detail and browser frames share availability and two-step confirmation. */
 export class ActionBar {
@@ -30,7 +33,9 @@ export class ActionBar {
     this.available();
     return this.armed && confirmation(keyLabel(this.armed.key), this.armed.label.toLowerCase(), theme);
   }
-  render(theme?: Theme): string { return this.available().map(action => keyHint(keyLabel(action.key), action.label.toLowerCase(), theme)).join(' · '); }
+  render(theme?: Theme, exclude: readonly KeyId[] = []): string {
+    return this.available().filter(action => !exclude.includes(action.key)).map(action => keyHint(keyLabel(action.key), action.label.toLowerCase(), theme)).join(' · ');
+  }
   /** Any other key cancels a pending confirmation, so a stray second press cannot act on new state. */
   handleInput(data: string): boolean {
     const action = this.available().find(action => matchesKey(data, action.key));

@@ -37,7 +37,7 @@ job_start({agent: {preset: "codex", prompt: "Review the requested diff"}, mode: 
 job_start({command: "my-cli", mode: "pty", attach: true})
 ```
 
-`attach: true` requires a PTY and the interactive UI; it blocks until the user leaves the input view. The job continues afterwards. `/jobs`, Dock and owned Jobs open command/output directly in read-only browsing mode; use `i` to explicitly take over an active PTY. Leaving a view, compaction, reload and session changes do not stop it.
+`attach: true` requires a PTY and the interactive UI; it opens the shared reading overlay and blocks until the user leaves the input view. The bottom help puts the configured leave key first and uses at most two lines; input/return/screen keys follow the current control state, and errors or confirmations do not replace the escape route. The job continues afterwards. `/jobs`, Dock and owned Jobs open command/output directly in read-only browsing mode; use `i` to explicitly take over an active PTY. Leaving a view, compaction, reload and session changes do not stop it.
 
 Dispatch defaults to quiet termination after 8000 ms of silence and a 15000 ms startup grace. Silence requests a real stop; after exit the result is `stopped` with `completionReason: "quiet"`, never proof of success. For tests, builds or CLIs that may legitimately go quiet, set `autoExitOnQuiet: false` and choose a suitable `timeoutMs`. Hands-free defaults to no quiet termination; updates are bounded by `updateMaxChars` and `maxTotalChars`.
 

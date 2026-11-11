@@ -72,22 +72,28 @@ export class TerminalView implements Component {
   private follow(): void { if (this.source.follow) this.source.follow(); else this.source.scroll(-Number.MAX_SAFE_INTEGER); }
   render(width: number): string[] {
     if (!this.canInput() && this.input) this.releaseInput();
+    const leave = keyHint(this.keys.detachKey, 'leave', this.theme);
     const help = this.input
-      ? `${keyHint(this.keys.returnKey, 'return to model', this.theme)} · ${keyHint(this.keys.transferKey, 'send screen', this.theme)} · ${keyHint(this.keys.detachKey, 'leave (job keeps running)', this.theme)} · Shift+↑↓ history`
-      : [keyHint('Esc', 'back', this.theme), ...this.options.navigation ? [keyHint('←←', 'close', this.theme)] : [],
-        this.bar.hint(this.theme) ?? this.bar.render(this.theme), '↑↓ PgUp/PgDn Home/End history'].join(' · ');
+      ? [leave, keyHint(this.keys.returnKey, 'return input', this.theme), keyHint(this.keys.transferKey, 'send screen', this.theme), keyHint('Shift+↑↓', 'history', this.theme)].join(' · ')
+      : [leave, keyHint('Esc', 'back', this.theme), ...this.canInput() && this.focused ? [keyHint('i', 'input', this.theme)] : [],
+        keyHint('↑↓ PgUp/PgDn Home/End', 'history', this.theme), ...this.options.navigation ? [keyHint('←←', 'close', this.theme)] : [],
+        this.bar.render(this.theme, ['i'])].join(' · ');
     const total = readingRows(this.tui), titleRows = Number(!this.options.hideTitle);
     const bottom = this.options.bottom?.(width) ?? [];
     const metadata = bottom.length ? [separator(width, this.theme), ...bottom] : [];
-    const hints = keyHelp(this.error ? this.theme.fg('warning', this.error) : help, width).slice(0, Math.max(1, total - titleRows - metadata.length - 4));
-    this.height = Math.max(1, total - 2 - titleRows - metadata.length - 1 - hints.length);
+    // Errors and confirmations must not erase the user's escape route. The promoted
+    // input action is omitted from the secondary bar, without changing dispatch.
+    const feedback = this.error ? this.theme.fg('warning', this.error) : !this.input ? this.bar.hint(this.theme) : undefined;
+    const notice = feedback ? [truncateToWidth(feedback, width)] : [];
+    const hints = keyHelp(help, width, Math.min(2, Math.max(1, total - titleRows - metadata.length - notice.length - 4)));
+    this.height = Math.max(1, total - 3 - titleRows - metadata.length - notice.length - hints.length);
     this.bodyStart = 1 + titleRows;
     // Only process screen rows reach xterm/PTY. An unchanged size never causes resize/redraw.
     if (!this.source.closed && (this.source.cols !== width || this.source.rows !== this.height)) this.source.resize(Math.max(1, width), this.height);
     const screen = this.source.getViewportLines({ansi: true, cursor: this.focused, hardwareCursor: this.input && this.focused, height: this.height});
     const control = this.source.closed ? 'exited' : this.input ? 'you control input' : 'read-only view';
     return commandFrame(width, [...titleRows ? [truncateToWidth(this.theme.fg('accent', `${this.options.title()} · ${control}`), width)] : [],
-      ...Array.from({length: this.height}, (_, index) => screen[index] ?? ''), ...metadata, separator(width, this.theme), ...hints], this.theme)
+      ...Array.from({length: this.height}, (_, index) => screen[index] ?? ''), ...metadata, ...notice, separator(width, this.theme), ...hints], this.theme)
       .map(line => truncateToWidth(line, width));
   }
   handleInput(data: string): void {

@@ -59,6 +59,12 @@ export default function cliHost(pi: ExtensionAPI) {
       snapshot(ctx, `theme-${name.trim()}`);
     }});
   }
+  if (process.env.PI_SUITE_TEST_PTY) faux.setResponses([
+    fauxAssistantMessage(fauxToolCall('job_start', {mode: 'pty', attach: true, name: 'CLI_PTY',
+      command: "printf 'CLI_PTY_READY\\n'; while read line; do printf 'CLI_GOT:%s\\n' \"$line\"; done"})),
+    fauxAssistantMessage('CLI_PTY_DETACHED'),
+    fauxAssistantMessage('CLI_PTY_SETTLED'),
+  ]);
   if (process.env.PI_SUITE_TEST_GOAL_MODE) faux.setResponses([goalReply, goalReply, goalReply, goalReply]);
   if (endpoint) pi.registerProvider('cli-proof', {
     api: 'openai-responses', baseUrl: endpoint, apiKey: 'local-test', models: ['offline', 'other'].map(id => ({id, name: `Local Responses ${id}`,

@@ -45,7 +45,7 @@ Linux 独立工具进程组的 1 项真实进程聚合覆盖 pipe/PTY 异步 sto
 
 jobs 检查使用真实进程：pipe 的 stdout/stderr、退出码与耗时，stdin 输入与 sensitive 记录，进程树停止确认、重复停止与已结算不再停止，timeoutMs，另一 manager 只读历史，按创建归属级联停止及停止期间的启动，quit 停止与准入关闭，PTY 输入与合并输出；并通过真实宿主核对 wait 撤销通知、轮后结算恰好唤醒一次、状态计数清除、列表筛选与参数冲突、job_stop 结果和不支持的通道。同进程保活用 SDK 的 AgentSessionRuntime 与 reload 核对：job 运行中执行 new、resume、fork 与 reload，仍是原进程且日志连续，只有所属会话收到一次结果。输出读取核对小日志全量、1 MiB 与 100 MiB 日志的头尾与中段关键行截断及续读范围、中文与 emoji 分页边界、搜索上下文与匹配上限续读、无效正则，以及 PTY 回车覆写与重复行折叠。Windows 用 Git Bash 运行（测试在临时 agentDir 的 settings.json 设置 shellPath），Linux 用系统 bash。
 
-Linux Pi 1.5.0 实际发布 CLI 另通过临时终端缩放验收：真实 job_start 和 /jobs Attach terminal 路径下，外层 40×24→120×40→60×30→40×24 的实际 PTY 缩放传到内层 40×17→120×30→60×22→40×17；内层 TTY ioctl、同 stdin 的 stty size 与四次 SIGWINCH 一致。实际用户接管/交还、关闭后继续、重新 attach 输入、菜单停止及内外层清理通过；未新增永久测试条目，范围见 [终端缩放阶段](../finished/pi-suite/jobs/terminal-resize.md)。
+Linux Pi 1.5.0 实际发布 CLI 在普通／fullscreen 和 40／80／120 列核对直接 PTY attach：配置离开键优先、接管／只读提示、真实输入消费、缩放、交还与重新接管、离开后 job 继续以及命令区焦点下的退出、原编辑器恢复和正常 quit。真实 PTY 组件核对自定义键、光标、反馈／确认时保留退出提示与逐区高度预算；控制台 ioctl／同 stdin 的 stty 和 SIGWINCH 契约见 [终端缩放阶段](../finished/pi-suite/jobs/terminal-resize.md)。嵌套程序自己的退出与 PTY 结算不由提示栏检查代替。
 
 共享 wait 用内存来源核对其他对象结算、未在 ids 中的 child 提问、等待中与等待前的用户插话、超时，以及 mode all 的部分结算不返回；真实宿主核对等待一个 job 时另一 job 结算提前返回且不再通知、用户 steer 结束等待且不停止 job。goal_wait 的 waitFor 通过真实宿主核对其他 job 结算不结束等待、恢复时合并送达，以及已结算 ID 不进入等待。终端视图在真实 PTY job 上核对用户按键接管后模型写入返回 USER_CONTROL、Ctrl+G 交还、Ctrl+T 带回含用户与模型输入结果的屏幕、Ctrl+] 离开后 job 仍在运行。monitor 用真实进程核对 literal 与阈值 trigger、同行去重、冷却、detector 丢弃与改名，poll-diff 在样本变化时触发，file-watch 不带 command 运行并在文件事件时触发；真实宿主核对 monitor 事件使等待其自身 job 的 wait 提前返回、events 通道读取，以及已返回事件不再唤醒。
 
