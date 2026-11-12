@@ -1,3 +1,4 @@
+import { contentText } from '@earendil-works/pi-ai';
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { AgentBeforeSettleEvent, ExtensionAPI, ExtensionContext, MessageEndEvent } from "@earendil-works/pi-coding-agent";
@@ -13,7 +14,7 @@ function fixture() {
   const binding = new SessionBinding();
   const statuses = new Map<string, string | undefined>(); const sent: string[] = [];
   const entries: { type: "custom"; customType: string; data: { version: number; goal: Goal | null } }[] = [];
-  const pi = { appendEntry(customType: string, data: typeof entries[number]["data"]) { entries.push({ type: "custom", customType, data }); }, sendMessage: (m: { content: unknown }) => { sent.push(String(m.content)); } } as unknown as ExtensionAPI;
+  const pi = { appendEntry(customType: string, data: typeof entries[number]["data"]) { entries.push({ type: "custom", customType, data }); }, sendMessage: (m: { content: unknown }) => { sent.push(contentText(m.content as Parameters<typeof contentText>[0])); } } as unknown as ExtensionAPI;
   const notifications = new Notifications(pi, binding);
   const status = new StatusPublisher(new Dock());
   const ctx = { isIdle: () => false, hasPendingMessages: () => false, abort() {},
@@ -66,15 +67,29 @@ test("a settlement merges goal/job/agent wakeups and yields to pending host mess
   const { manager: g, notifications: n, ctx, run } = fixture();
   try {
     g.start("Work", ctx); run();
-    n.enqueue("main", "job:1", "Job finished"); n.enqueue("main", "agent:1", "Agent finished");
+    let delivered = 0;
+    n.enqueue("main", "job:1", "Job finished", () => delivered++); n.enqueue("main", "agent:1", "Agent finished", () => delivered++);
     const event = { outcome: "completed", continue: false, context: { pendingMessages: [] } } as unknown as AgentBeforeSettleEvent;
     g.beforeSettle(event);
     assert.equal(n.beforeSettle({ ...event, continue: true }), undefined);
     assert.equal(n.beforeSettle({ ...event, context: { pendingMessages: [{}] } } as AgentBeforeSettleEvent), undefined);
     const result = n.beforeSettle(event)!;
     assert.equal(result.continue, true); assert.equal(result.entries!.length, 1);
-    assert.match(JSON.stringify(result.entries), /Job finished.*Agent finished.*Active goal/);
-    assert.equal(n.beforeSettle(event), undefined);
+    assert.match(JSON.stringify(result.entries), /Job finished.*Agent finished.*Continue the current goal/);
+    assert.equal(n.beforeSettle(event), undefined); assert.equal(delivered, 2);
+    const entry = result.entries![0]; assert.equal(entry.type, 'custom_message');
+    if (entry.type !== 'custom_message') throw new Error('Expected notification draft');
+    const first = { ...entry, role: 'custom' as const, timestamp: 0 };
+    g.beforeSettle(event);
+    const next = n.beforeSettle(event)!.entries![0];
+    if (next.type !== 'custom_message') throw new Error('Expected notification draft');
+    const second = { ...next, role: 'custom' as const, timestamp: 1 };
+    const legacy = { ...first, details: undefined, content: 'Active goal legacy mixed notice' };
+    const raw = [legacy, first, second], saved = JSON.stringify(raw);
+    const projected = n.project(raw, `goal:${g.goal!.id}`);
+    assert.deepEqual(projected.map(message => message.role === 'custom' ? contentText(message.content) : undefined), ['Active goal legacy mixed notice', 'Job finished\nAgent finished', contentText(second.content)]);
+    assert.deepEqual(n.project(raw).map(message => message.role === 'custom' ? contentText(message.content) : undefined), ['Active goal legacy mixed notice', 'Job finished\nAgent finished']);
+    assert.equal(JSON.stringify(raw), saved, 'projection never rewrites persisted batches');
   } finally { g.detach(); }
 });
 

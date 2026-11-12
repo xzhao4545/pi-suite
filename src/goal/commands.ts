@@ -3,6 +3,7 @@ import type { Notifications } from "../runtime/notifications.ts";
 import type { Dock } from "../ui/dock.ts";
 import { showDetails } from "../ui/details.ts";
 import type { GoalManager } from "./manager.ts";
+import { autoStopMessage } from './activity.ts';
 import { goalDuration } from './state.ts';
 
 export function parseGoalArgs(args: string): { text?: string; budget?: number } {
@@ -26,7 +27,7 @@ export function registerGoalCommand(pi: ExtensionAPI, manager: GoalManager, dock
     try {
       await showDetails(ctx, dock, "Goal", `# ${goal.text}\n\nStatus: ${goal.status} · ${manager.schedule}\n\n` +
         `ID: ${goal.id}\n\nTokens: ${goal.usedTokens}${goal.budget ? `/${goal.budget}` : " (no limit)"} · Turns: ${goal.turns} · Active elapsed: ${goalDuration(manager.elapsedMs)}\n\n` +
-        `Progress: ${goal.progress || "not yet recorded"}${goal.stoppedFrom ? `\n\nStopped from: ${goal.stoppedFrom}` : ""}${goal.error ? `\n\nError: ${goal.error}` : ""}`);
+        `Progress: ${goal.progress || "not yet recorded"}${goal.stoppedFrom ? `\n\nStopped from: ${goal.stoppedFrom}` : ""}${goal.autoStopReason ? `\n\nAutomatic stop: ${autoStopMessage[goal.autoStopReason]}` : ""}${goal.error ? `\n\nError: ${goal.error}` : ""}`);
     } finally { release(); }
   };
   pi.registerCommand("goal", {

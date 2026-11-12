@@ -1,5 +1,6 @@
 import { Type, type Static } from "typebox";
 import { Value } from "typebox/value";
+import type { AutoStopReason } from "./activity.ts";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 export const GOAL_ENTRY = "pi-suite:goal";
@@ -8,7 +9,8 @@ const goalSchema = Type.Object({
   status: Type.String({ enum: ["active", "paused", "blocked", "failed", "completed", "budget_limited", "stopped"] }),
   // Stopping must not erase the reason an unfinished goal could not proceed.
   stoppedFrom: Type.Optional(Type.String({ enum: ["active", "paused", "blocked", "failed", "budget_limited"] })),
-  automatic: Type.Boolean(), resumeRequired: Type.Optional(Type.Boolean()), waiting: Type.Optional(Type.String({ enum: ["user", "jobs"] })),
+  automatic: Type.Boolean(), autoStopReason: Type.Optional(Type.String({ enum: ["no_tools", "repeated_tools"] })),
+  resumeRequired: Type.Optional(Type.Boolean()), waiting: Type.Optional(Type.String({ enum: ["user", "jobs"] })),
   budget: Type.Optional(Type.Integer({ minimum: 1 })), usedTokens: Type.Integer({ minimum: 0 }),
   elapsedMs: Type.Number({ minimum: 0 }), turns: Type.Integer({ minimum: 0 }),
   progress: Type.String(), error: Type.Optional(Type.String()),
@@ -19,7 +21,7 @@ const goalSchema = Type.Object({
 const entrySchema = Type.Object({ version: Type.Literal(1), goal: Type.Union([goalSchema, Type.Null()]) });
 export type GoalStatus = "active" | "paused" | "blocked" | "failed" | "completed" | "budget_limited" | "stopped";
 export type Schedule = "running" | "waiting_user" | "waiting_jobs" | "waiting_host" | "detached" | "idle";
-export type Goal = Omit<Static<typeof goalSchema>, "status" | "waiting"> & { status: GoalStatus; waiting?: "user" | "jobs" };
+export type Goal = Omit<Static<typeof goalSchema>, "status" | "waiting" | "autoStopReason"> & { status: GoalStatus; waiting?: "user" | "jobs"; autoStopReason?: AutoStopReason };
 
 export function restoreGoal(ctx: ExtensionContext): Goal | undefined {
   const entry = ctx.sessionManager.getBranch().findLast(entry => entry.type === "custom" && entry.customType === GOAL_ENTRY);
@@ -42,6 +44,19 @@ export function goalRequiresResume(ctx: ExtensionContext, goal: Goal): boolean {
   return saved.resumeRequired === true || saved.revision !== goal.revision;
 }
 
+export function goalAutoStopReason(ctx: ExtensionContext, goal: Goal): AutoStopReason | undefined {
+  // Tree selection restores work, not permission to bypass an automatic stop. A later
+  // explicit resume clears the reason in the same snapshot stream, scoped to this revision.
+  const entry = ctx.sessionManager.getEntries().findLast(entry => {
+    if (entry.type !== "custom" || entry.customType !== GOAL_ENTRY) return false;
+    const saved = (entry.data as { goal?: Goal } | undefined)?.goal;
+    return saved?.id === goal.id && saved.revision === goal.revision;
+  });
+  if (!entry || entry.type !== "custom") return;
+  if (!Value.Check(entrySchema, entry.data)) throw new Error("Invalid persisted pi-suite automatic goal permission");
+  return (entry.data.goal as Goal).autoStopReason;
+}
+
 export function goalDuration(elapsedMs: number): string {
   const seconds = Math.floor(elapsedMs / 1000), minutes = Math.floor(seconds / 60), hours = Math.floor(minutes / 60);
   const pair = (value: number) => String(value).padStart(2, '0');
@@ -59,16 +74,4 @@ export function goalSummary(goal: Goal | undefined, schedule: Schedule, now = Da
   if (goal.status !== "active") return `${terminal[goal.status]} ${time}`;
   // The footer identifies the state; /goal retains the precise wait and error details.
   return `${schedule === 'running' ? '🎯 goal' : !goal.automatic && !goal.waiting ? '⏸ goal' : '⏳ goal'} ${time}`;
-}
-
-export function goalContract(goal: Goal): string {
-  const executing = goal.status === "active";
-  return `${executing ? "Active goal" : "Goal"} ${goal.id}: ${goal.text}\nStatus: ${goal.status} · Revision: ${goal.revision}${goal.stoppedFrom ? ` · Stopped from: ${goal.stoppedFrom}` : ""}\nProgress: ${goal.progress || "not yet recorded"}\n` +
-    `Tokens: ${goal.usedTokens}${goal.budget ? `/${goal.budget}` : " (no configured limit)"}.${goal.error ? `\nError: ${goal.error}` : ""}\n` +
-    (executing ? "Continue until every requirement is implemented and verified. " :
-      "This user-driven turn has completion-only permission: audit existing work without resuming automatic execution. Only explicit /goal resume restores execution; goal_wait and goal_blocked require an active execution turn. ") +
-    "Use goal_complete with the exact goalId and verification evidence only after a requirement-by-requirement completion audit; failed, paused, blocked, budget_limited and stopped goals may be closed without resume. Completed calls are idempotent and preserve the original evidence and completion time. " +
-    "Use goal_blocked only for the same evidenced external blocker repeated for at least three turns. " +
-    "Use goal_wait only when an arranged external event or deadline must wake the work. " +
-    "A timed_out/cancelled ask_user is not consent. Never replace the objective with an easier subset.";
 }

@@ -91,7 +91,7 @@ test('hands-free survives reload and wakes a goal waiting on its job once', { ti
       () => fauxAssistantMessage(fauxToolCall('job_start', { command: 'sleep 1; echo after-reload; cat', mode: 'pty', handsFree: { quietMs: 100 } })),
       context => { id = /job_[a-f0-9]{8}/.exec(lastText(context))![0]; return fauxAssistantMessage(fauxToolCall('goal_wait', { goalId: goalId(context), reason: 'wait for CLI output', waitFor: [id] })); },
       context => {
-        const wake = JSON.stringify(context.messages.findLast(message => message.role === 'user'));
+        const wake = JSON.stringify(context.messages.filter(message => message.role === 'user'));
         assert.match(wake, /Hands-free update/); assert.match(wake, /after-reload/);
         return fauxAssistantMessage(fauxToolCall('job_stop', { id }));
       },

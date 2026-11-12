@@ -21,8 +21,8 @@ test("goal_wait waitFor holds other notices until the waited job settles; settle
       context => { fast = jobId(context); return fauxAssistantMessage(fauxToolCall("job_start", { command: "sleep 2" })); },
       context => { slow = jobId(context); return fauxAssistantMessage(fauxToolCall("goal_wait", { goalId: goalId(context), reason: "slow build", waitFor: [slow] })); },
       context => {
-        // One merged wake: the held fast notice, the slow result and the goal contract.
-        const wake = JSON.stringify(context.messages.findLast(message => message.role === "user"));
+        // One merged wake: held fast notice and slow result; the contract is a separate projection.
+        const wake = JSON.stringify(context.messages.filter(message => message.role === "user"));
         assert.match(wake, new RegExp(`${slow} completed`)); assert.match(wake, new RegExp(`${fast} completed`));
         return fauxAssistantMessage(fauxToolCall("goal_wait", { goalId: goalId(context), reason: "fast", waitFor: [fast] }));
       },

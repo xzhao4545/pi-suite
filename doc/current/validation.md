@@ -28,6 +28,12 @@ goal 模型工具的 Linux 契约检查通过，核对空白参数 INVALID_ARGS�
 
 [交互细化逐项验收](../finished/pi-suite/interaction-refinement/validation.md) 核对 Ask 模型 content/details 分离、24 Unicode 码点短题/重名 #N、仅删除题目 context；Goal 独立结案权限、stop/clear、quit 与真实 SIGKILL 冷恢复手动 resume；Tasks v4 自动/主动清空、代次及过期引用、当前恢复基线和五秒反馈；Subagents 根导航连续交接与实际一/两行信息预算。官方 CLI 对 regular/fullscreen 的同步绘制输出逐帧检查 tabs、进入历史和返回，原生 TUI 聚合另覆盖延迟/resize/构造失败/输入焦点与旧新 reader dispose。完整套件 222/222、typecheck 与 diff 检查通过，约一分钟；没有新增消费者安装或宿主补丁。
 
+## Goal 请求与自动续跑
+
+Goal 的请求合同、通知来源与五轮自动停跑通过 Linux Node 24.22.2、官方未修改 Pi 1.5.0 SDK 验证。无压缩连续 20 次自然工具请求和 20 次边界续跑均只有一份当前合同，usedTokens 与状态实时更新，短控制片段有界，其他提示节、动态工具增删与真实事件保留。Completions/Responses 的中途更新与折叠四种受控序列化组合保留强制 head、合同与工具声明；没有测量生产缓存或费用。
+
+自动轮无工具/相同活动停跑、持久原因、用户审计与显式 resume、变化的只读研究、等待、reload/compact 和真实后台唤醒权限通过。类型检查与受影响 38 项补验通过，覆盖全量检查中的通知断言同步；230 项检查的综合结论及官方 CLI 适用范围见 [Goal 专项](../finished/pi-suite/goal/context-optimization.md)。Windows 新行为与收费服务不在本次验收范围。
+
 ## 检查
 
 ```sh

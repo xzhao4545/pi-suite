@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
-import { host, complete, goalId } from "../support/host.ts";
+import { host, complete, goalId, goalView } from "../support/host.ts";
 
 test("real host rejects invalid goal evidence, continues unfinished work once, then terminates on verified completion", { timeout: 15000 }, async () => {
   const h = await host();
@@ -47,8 +47,7 @@ test('real host user audits close stopped and non-active goals without resume or
       const before = h.goal()!, calls = h.faux.state.callCount;
       h.faux.setResponses([context => {
         assert.equal(h.goal()?.status, state); assert.equal(h.goal()?.automatic, false);
-        const sections = JSON.stringify(context.messages.filter(message => message.role === 'system'));
-        assert.match(sections, /completion-only permission/);
+        assert.equal(goalView(context).access, "complete");
         return complete(context);
       }]);
       await h.session.prompt('Audit existing work and close this goal only if every requirement is verified.'); await h.idle();
@@ -91,8 +90,8 @@ test("Esc preserves the goal, foreign work cannot resume it, and explicit resume
     assert.equal(h.goal()?.status, "active"); assert.equal(h.goal()?.automatic, false);
     assert.match(h.statuses.get("goal") ?? "", /^⏸ goal \d+:\d{2}(?::\d{2})?$/);
     h.faux.setResponses([context => {
-      const updates = context.messages.filter(m => m.role === "system");
-      assert.ok(updates.some(m => m.sections?.["pi-suite-goal"] === null), "foreign work removes the stale goal contract");
+      assert.ok(!JSON.stringify(context.messages).includes("Current Goal contract (request-only"), "foreign work cannot receive a goal contract");
+      assert.ok(context.messages.filter(m => m.role === "system").every(m => !("pi-suite-goal" in (m.sections ?? {}))), "foreign work removes the stale goal section");
       return fauxAssistantMessage("foreign work finished");
     }]);
     await h.session.sendCustomMessage({ customType: "other-extension", content: "Independent work", display: false }, { triggerTurn: true });
@@ -137,7 +136,7 @@ test("an explicit budget stops model work, can be raised, and clear removes the 
 
 test("real host manual compact and overflow recovery keep one continuation and goal ownership", { timeout: 15000 }, async () => {
   const reasons: string[] = [];
-  const h = await host({ compact: true, extend: pi => {
+  const h = await host({ compact: true, keepRecentTokens: 0, extend: pi => {
     pi.on("session_before_compact", event => {
       reasons.push(event.reason);
       return { compaction: { summary: "Conversation compacted", firstKeptEntryId: event.preparation.firstKeptEntryId,
@@ -192,7 +191,7 @@ test("reload preserves an arranged wait; branch navigation restores its own goal
 });
 
 test("manual compact aborts an active response and resumes once after host becomes idle", { timeout: 15000 }, async () => {
-  const h = await host({ compact: true, extend: pi => {
+  const h = await host({ compact: true, keepRecentTokens: 0, extend: pi => {
     pi.on("session_before_compact", event => ({ compaction: { summary: "Compacted safely",
       firstKeptEntryId: event.preparation.firstKeptEntryId, tokensBefore: event.preparation.tokensBefore } }));
   } });
@@ -214,7 +213,7 @@ test("manual compact aborts an active response and resumes once after host becom
 
 test("threshold compact preserves active work; cancelled compact leaves the target awaiting recovery", { timeout: 15000 }, async () => {
   let cancel = false; const reasons: string[] = [];
-  const h = await host({ compact: true, contextWindow: 12000, reserveTokens: 2000, extend: pi => {
+  const h = await host({ compact: true, keepRecentTokens: 0, contextWindow: 12000, reserveTokens: 2000, extend: pi => {
     pi.on("session_before_compact", event => {
       reasons.push(event.reason);
       return cancel ? { cancel: true } : { compaction: { summary: "Compacted context",

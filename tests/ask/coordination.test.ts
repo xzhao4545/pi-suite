@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { fauxAssistantMessage, fauxToolCall, type FauxResponseFactory, type TranscriptContext } from '@earendil-works/pi-ai';
+import { contentText, fauxAssistantMessage, fauxToolCall, type FauxResponseFactory, type TranscriptContext } from '@earendil-works/pi-ai';
 import type { ExtensionContext, ExtensionUIContext } from '@earendil-works/pi-coding-agent';
 import { AskView } from '../../src/ask/view.ts';
 import { agentRuntime } from '../../src/agents/runtime.ts';
@@ -15,8 +15,8 @@ import { terminal } from '../support/terminal.ts';
 import type { Dock } from '../../src/ui/dock.ts';
 
 function userText(context: TranscriptContext): string {
-  const content = context.messages.findLast(message => message.role === 'user')?.content;
-  return typeof content === 'string' ? content : content?.filter(block => block.type === 'text').map(block => block.text).join('\n') ?? '';
+  const message = context.messages.findLast(message => message.role === 'user' && !contentText(message.content).startsWith('Current Goal contract (request-only'));
+  return message ? contentText(message.content) : '';
 }
 const toolText = (context: TranscriptContext) => context.messages.findLast(message => message.role === 'toolResult')?.content
   .map(part => part.type === 'text' ? part.text : '').join('\n') ?? '';

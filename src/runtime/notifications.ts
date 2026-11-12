@@ -1,8 +1,13 @@
-import type { AgentBeforeSettleEvent, BoundaryResult, ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { AgentBeforeSettleEvent, BoundaryResult, ContextEvent, ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { TextContent } from "@earendil-works/pi-ai";
 import type { SessionBinding } from "./binding.ts";
+type AgentMessage = ContextEvent["messages"][number];
 
 /** One delivery path for job, agent and goal wakeups; UI readers never send follow-ups. */
-type Pending = { text: string; delivered?: () => void };
+type Source = "event" | "goal-continuation";
+type Pending = { text: string; source: Source; delivered?: () => void };
+type Segment = { requestId: string; source: Source };
+type NotificationDetails = { notificationVersion: 1; segments: Segment[] };
 /** Per-run questions keep the :ask suffix so goal admission uses the same shared queue. */
 export const isQuestion = (requestId: string): boolean => requestId.startsWith("agent:") && requestId.endsWith(":ask");
 export class Notifications {
@@ -29,17 +34,46 @@ export class Notifications {
   }
 
   /** delivered runs once the message has left the queue; a later enqueue under the same ID replaces it. */
-  enqueue(sessionId: string, id: string, text: string, delivered?: () => void): void {
+  enqueue(sessionId: string, id: string, text: string, delivered?: () => void, source: Source = "event"): void {
     let messages = this.pending.get(sessionId);
     if (!messages) this.pending.set(sessionId, messages = new Map());
-    messages.set(id, { text, delivered });
+    messages.set(id, { text, delivered, source });
     this.flush();
   }
-  private take(sessionId: string): string {
+  private take(sessionId: string): { content: TextContent[]; details: NotificationDetails } {
     const messages = this.pending.get(sessionId)!;
     this.pending.delete(sessionId);
     for (const message of messages.values()) message.delivered?.();
-    return [...messages.values()].map(message => message.text).join("\n");
+    // Provenance aligns with content blocks, avoiding a second persisted copy of event text.
+    const segments = [...messages].map(([requestId, message]) => ({ requestId, source: message.source }));
+    return { content: [...messages.values()].map(message => ({ type: "text", text: message.text })), details: { notificationVersion: 1, segments } };
+  }
+
+  /** Keep one current control signal, but every real event in a mixed delivery. */
+  project(messages: AgentMessage[], goalRequestId?: string): AgentMessage[] {
+    let keptControl = false;
+    const result: AgentMessage[] = [];
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      const details = message.role === "custom" && message.customType === "pi-suite:notification" ?
+        message.details as NotificationDetails | undefined : undefined;
+      // Legacy batches have no segment provenance: never infer it from their text.
+      if (message.role !== "custom" || details?.notificationVersion !== 1) { result.push(message); continue; }
+      if (!Array.isArray(message.content) || !Array.isArray(details.segments) || details.segments.length !== message.content.length ||
+        details.segments.some(segment => !segment || typeof segment.requestId !== "string" ||
+          !["event", "goal-continuation"].includes(segment.source))) throw new Error("Invalid pi-suite notification segments");
+      const segments: Segment[] = [];
+      const content = message.content.filter((_block, index) => {
+        const segment = details.segments[index];
+        if (segment.source === "goal-continuation") {
+          if (keptControl || segment.requestId !== goalRequestId) return false;
+          keptControl = true;
+        }
+        segments.push(segment); return true;
+      });
+      if (content.length) result.push(content.length === message.content.length ? message : { ...message, content, details: { ...details, segments } });
+    }
+    return result.reverse();
   }
 
   beforeSettle(event: AgentBeforeSettleEvent): BoundaryResult | undefined {
@@ -50,7 +84,7 @@ export class Notifications {
     if (event.continue || event.context.pendingMessages.length) return;
     if (!this.admitted(active.sessionId)) return;
     return { continue: true, entries: [{ type: "custom_message", customType: "pi-suite:notification",
-      content: this.take(active.sessionId), display: false }] };
+      ...this.take(active.sessionId), display: false }] };
   }
 
   afterHostOperation(): void {
@@ -71,7 +105,7 @@ export class Notifications {
     const active = this.binding.current;
     if (!active || this.blockers.size || !active.ctx.isIdle() || active.ctx.hasPendingMessages()) return;
     if (!this.admitted(active.sessionId)) return;
-    this.pi.sendMessage({ customType: "pi-suite:notification", content: this.take(active.sessionId), display: true },
+    this.pi.sendMessage({ customType: "pi-suite:notification", ...this.take(active.sessionId), display: true },
       { triggerTurn: true, deliverAs: "followUp" });
   }
 }

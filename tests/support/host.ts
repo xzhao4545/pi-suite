@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { fauxProvider, fauxAssistantMessage, fauxToolCall, type FauxResponseStep, type TranscriptContext, type RegisterFauxProviderOptions } from "@earendil-works/pi-ai";
+import { contentText, fauxProvider, fauxAssistantMessage, fauxToolCall, type FauxResponseStep, type TranscriptContext, type RegisterFauxProviderOptions } from "@earendil-works/pi-ai";
 import {
   createAgentSession, DefaultResourceLoader, SessionManager, SettingsManager,
   type ExtensionAPI, type ExtensionUIContext, type Theme, type SessionStartEvent,
@@ -17,7 +17,7 @@ import { GOAL_ENTRY, type Goal } from "../../src/goal/state.ts";
 export async function host(options: {
   retry?: boolean; compact?: boolean; sessionManager?: SessionManager;
   root?: string; persisted?: boolean; sessionStartEvent?: SessionStartEvent;
-  contextWindow?: number; reserveTokens?: number;
+  contextWindow?: number; reserveTokens?: number; keepRecentTokens?: number;
   extend?: (pi: ExtensionAPI) => void;
   additionalExtensionPaths?: string[];
   ui?: (ui: ExtensionUIContext) => ExtensionUIContext;
@@ -34,7 +34,7 @@ export async function host(options: {
   if (options.responses) faux.setResponses(options.responses);
   const settingsManager = SettingsManager.inMemory({
     retry: { enabled: options.retry ?? false, maxRetries: 1, baseDelayMs: 1 },
-    compaction: { enabled: options.compact ?? false, reserveTokens: options.reserveTokens ?? 1024, keepRecentTokens: 128 },
+    compaction: { enabled: options.compact ?? false, reserveTokens: options.reserveTokens ?? 1024, keepRecentTokens: options.keepRecentTokens ?? 128 },
   });
   const resourceLoader = new DefaultResourceLoader({ cwd: root, agentDir: root, settingsManager,
     noExtensions: true, noSkills: true, noPromptTemplates: true, noContextFiles: true,
@@ -85,14 +85,16 @@ export async function host(options: {
   };
 }
 
-export function goalId(context: TranscriptContext): string {
-  const sections: Record<string, string | null> = {};
-  for (const message of context.messages) if (message.role === "system") Object.assign(sections, message.sections);
-  // Completion-only turns expose the same ID under a "Goal" heading, not "Active goal".
-  const id = /(?:Active goal|Goal) ([^:]+):/.exec(sections["pi-suite-goal"] ?? "")?.[1];
-  assert.ok(id, "admitted goal must reach the provider's system contract");
-  return id;
+export function goalView(context: TranscriptContext): { goalId: string; revision: number; objective: string; status: string; access: string; usedTokens: number; automatic: boolean; progress: string; budget: number | null; waiting?: string } {
+  // Custom conversation context survives Pi's final forced-system projection.
+  const message = context.messages.findLast(message => message.role === "user" &&
+    contentText(message.content).startsWith("Current Goal contract (request-only"));
+  assert.ok(message?.role === "user", "admitted goal must reach the provider's request contract");
+  const text = contentText(message.content);
+  return JSON.parse(text.slice(text.lastIndexOf("\n") + 1));
 }
+
+export function goalId(context: TranscriptContext): string { return goalView(context).goalId; }
 
 export const complete = (context: TranscriptContext) => fauxAssistantMessage(fauxToolCall("goal_complete", {
   goalId: goalId(context), summary: "All requested checks passed",

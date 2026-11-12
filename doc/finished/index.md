@@ -6,6 +6,8 @@
 
 以下 patched 宿主 UI/入口记录保留迁移前开发依赖组合的审计与验收细节，不作为现状或消费者安装证明。U1/T1/M1、净化及三组补丁清理已实施，当前官方未修改 Pi 1.5.0 的加载/运行范围见 [官方 Pi 插件兼容实施](./pi-suite/official-pi-compatibility/index.md)；消费者安装按用户指示 [延期](../todo/official-pi-installation.md)，未实际 npm 发布。
 
+- [Goal 上下文与自动续跑优化](./pi-suite/goal/context-optimization.md) — 请求级权威合同、短唤醒与分段来源、有界控制投影；五个自动轮无工具/相同活动停跑、持久原因与显式恢复，官方 Pi 1.5.0 SDK/CLI 与代表性 Provider 序列化验证。
+
 - [PTY 底部快捷键提示](./pi-suite/ui/pty-shortcut-footer.md) — 直接接管共享阅读窗口、退出优先的两行提示与独立反馈预算；官方 CLI 普通／全屏三宽度、原生焦点恢复、命令区离开及隔离 tmux 嵌套输入／离开通过，复杂子程序退出另留待办。
 
 - [命令结构高亮与语法配色优化](./pi-suite/ui/command-highlighting.md) — 共享 code/command 模式、Bash／PowerShell 词法区间与原生角色配色；历史／child、官方 CLI 三宽度、主题／配置 reload 验证及全量 226/226 通过，用户确认实际预览配色。用户消息亮灰背景／纯白文字与 tmux 安全默认离开键同步。

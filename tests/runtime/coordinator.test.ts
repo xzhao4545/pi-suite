@@ -1,3 +1,4 @@
+import { contentText } from '@earendil-works/pi-ai';
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
@@ -41,7 +42,7 @@ test("configuration uses user defaults plus project section overrides and reject
 test("binding revocation fences wakeups; blocked notifications coalesce without crossing sessions", () => {
   const binding = new SessionBinding(); const sent: string[] = []; let idle = true;
   const ctx = (id: string) => ({ sessionManager: { getSessionId: () => id }, isIdle: () => idle, hasPendingMessages: () => false }) as unknown as ExtensionContext;
-  const notifications = new Notifications({ sendMessage: message => { sent.push(String(message.content)); } } as ExtensionAPI, binding);
+  const notifications = new Notifications({ sendMessage: message => { sent.push(contentText(message.content)); } } as ExtensionAPI, binding);
   const old = binding.bind(ctx("a")); const release = notifications.hold();
   notifications.enqueue("a", "job:1", "old"); notifications.enqueue("a", "job:1", "new");
   binding.revoke(); binding.bind(ctx("b")); release();

@@ -1,7 +1,7 @@
 import { renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { fauxProvider, fauxAssistantMessage, fauxToolCall, type FauxResponseFactory } from '@earendil-works/pi-ai';
+import { contentText, fauxProvider, fauxAssistantMessage, fauxToolCall, type FauxResponseFactory } from '@earendil-works/pi-ai';
 import { TuiAltScreen, TuiMainScreen } from '@earendil-works/pi-tui';
 
 /** Offline tools or a local Responses server inside the real, unmodified published host. */
@@ -19,18 +19,15 @@ export default function cliHost(pi: ExtensionAPI) {
     return generation;
   };
   const goalReply: FauxResponseFactory = context => {
-    const sections: Record<string, string | null> = {};
-    for (const message of context.messages) if (message.role === 'system') Object.assign(sections, message.sections);
-    const contract = sections['pi-suite-goal'] ?? '';
-    const match = /(?:Active goal|Goal) ([^:]+):/.exec(contract);
-    const goalId = match?.[1];
-    if (!goalId) throw new Error(`Expected the actual bound Goal contract: ${JSON.stringify(sections)}`);
-    if (match[0].startsWith('Active goal ')) return fauxAssistantMessage(fauxToolCall('goal_wait', {
+    const contract = context.messages.findLast(message => message.role === 'user' && contentText(message.content).startsWith('Current Goal contract (request-only'));
+    if (!contract) throw new Error('Expected the actual bound Goal contract');
+    const text = contentText(contract.content);
+    const {goalId, access} = JSON.parse(text.slice(text.lastIndexOf('\n') + 1));
+    if (access === 'execute') return fauxAssistantMessage(fauxToolCall('goal_wait', {
       goalId, reason: 'CLI controlled external deadline', resumeAfterMs: 60000,
     }));
-    const user = context.messages.findLast(message => message.role === 'user');
-    const text = user ? typeof user.content === 'string' ? user.content : user.content.filter(block => block.type === 'text').map(block => block.text).join('\n') : '';
-    return text.includes('CLI_AUDIT') ? fauxAssistantMessage(fauxToolCall('goal_complete', {goalId, summary: 'CLI completed-work audit'}))
+    const user = context.messages.findLast(message => message.role === 'user' && message !== contract);
+    return (user ? contentText(user.content) : '').includes('CLI_AUDIT') ? fauxAssistantMessage(fauxToolCall('goal_complete', {goalId, summary: 'CLI completed-work audit'}))
       : fauxAssistantMessage('CLI_STOPPED_MANUAL_INPUT');
   };
   faux.setResponses([

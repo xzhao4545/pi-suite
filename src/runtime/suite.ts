@@ -161,6 +161,10 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
     notifications.detach(); status.detach(); dock.detach(binding.current?.ctx); binding.revoke();
     return Promise.all([quit, agentQuit, workflowQuit, scheduleQuit]).then(() => { if (agents) pi.events.emit('subagents:disposed', {}); });
   });
+  pi.on("context_with_system", (event, ctx) => {
+    const view = goal?.contextView(ctx);
+    return { messages: notifications.project(event.messages, view?.access === "execute" ? `goal:${view.goal.id}` : undefined) };
+  });
   pi.on("agent_before_settle", event => { goal?.beforeSettle(event); return notifications.beforeSettle(event); });
   pi.on("agent_settled", event => {
     waits.steeringDelivered(); goal?.settled(event.aborted);
