@@ -4,6 +4,7 @@
 
 ## 任务索引
 
+- [UI 文案、Goal 状态与 Responses 跨资源恢复](goal-responses-recovery.md) — 方案已确认、待实施；保留诊断告警，仅留 /goal pause，三态生命周期与一行恢复展示，设置化跨资源历史 ID 隔离、瞬态重试及 Goal 最终结算协调。
 - [源码入口启动性能优化](source-startup-performance.md) — 待实施；解耦 renderer/执行依赖，补齐 Tasks、Goal 查看器按需加载，按真实 CLI 冷暖启动与首次使用验收；不做预编译、不改安装方式，第三方扩展另行处理。
 
 - [PTY 控制终端与嵌套 Pi 退出排查](pty-terminal-investigation.md) — 待排查；独立 tmux 直接启动的输出路由差异、嵌套 Pi 原生退出与 PTY 结算未验证项，不由提示栏改动代替修复。
