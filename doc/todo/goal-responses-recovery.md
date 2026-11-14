@@ -1,26 +1,12 @@
 # UI 文案、Goal 状态与 Responses 跨资源恢复
 
-## 状态、授权与目标
+## 状态与目标
 
-本专项方案已经用户确认，当前为待实施状态。本次授权范围仅为将修订后的详细方案写入 `doc/todo` 并更新索引，不修改运行时代码、用户配置或当前实现文档，不执行功能验收。本文件中的目标行为、字段名和模块拆分属于待实施设计，不代表已经落地。
-
-五项原始需求分别为：
-
-1. 排查 UI 中展示功能需求、内部设计说明的文本，提出并实施局部文案调整；需求与完整实现规则进入文档和必要注释。
-2. `/goal resume` 默认仅显示一行恢复提示，更多信息由用户展开后查看。
-3. 精简 Goal 状态及重复控制入口，降低用户理解成本。
-4. 参考 `npm:pi-model-manager` 的 Responses 跨资源自动恢复，在 Suite 增加启用设置，并修复恢复请求遇到 429 等其他错误后过早结束恢复的问题。
-5. 修复可恢复错误导致 Goal 提前停止，避免请求恢复成功后目标仍不能继续工作。
-
-### 用户明确修订
-
-- **保留包含 `control bridge v3` 的告警。** 这类诊断信息需要说明清楚，方便故障排查；不将它作为违规 UI 文案处理，不删除或泛化协议版本、真实故障原因和恢复条件。
-- **`/goal pause` 与 `/goal stop` 不同时保留。** 两者当前均中止归属运行、保留目标并要求恢复，统一保留 `/goal pause`，删除 `/goal stop` 的命令分支、帮助和当前操作说明，不提供兼容别名或隐藏的第二入口。
-- 其他已提出的方案方向接受，包括精确历史 ID 隔离、原生有限重试、最终结算协调和现有框架复用。
+本专项待实施，目标是收敛 UI 文案、简化 Goal 状态与操作，并实现不打断 Goal 的 Responses 跨资源自动恢复。
 
 ## 检查依据与现有根因
 
-下列事实来自只读源码调查；未启动 TUI，未重放用户请求，不作为已通过运行验收的证据。行号为调查时定位，实施时以最新符号和代码为准。
+以下根因依据源码与 Pi 1.5.0 接口分析；运行行为按验收计划验证。定位行号以实施时的最新代码为准。
 
 | 位置 | 当前事实 | 修改方向 |
 | --- | --- | --- |
@@ -39,7 +25,7 @@
 - 参考实现 `observeResult` 在下一次匹配的 `turn_end` 先清除 pendingRecovery；该次为任意 error 时即提示停止。这早于宿主对 429 的原生重试判断。它没有直接调用取消原生重试的函数，但恢复状态与提示会过早终结，随后成功不能正确结束原恢复阶段。
 - Pi 1.5.0 提供 `before_provider_request` 替换最终 payload、`agent_before_settle` 返回 entries/continue、持久 context_edit、`agent_settled` 最终通知和自定义消息 renderer 的 expanded 选项。公开说明见 [Pi 扩展文档](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md)，实现以项目实际固定版本为准，不以 main 文档替代版本验证。
 - 本地宿主顺序为：message_end、turn_end、agent_end，随后原生瞬态重试/压缩/队列，再进入无原生后续工作的 agent_before_settle；提交边界修改后重建上下文并决定能否 continue，最终才 agent_settled。
-- 用户错误说明历史状态项与当前 OpenAI resource 不匹配。资源切换、路由或同名 provider 配置改变是可能原因；未读取实际失败 payload，不能断言具体路由原因，也不能保证所有跨资源密文均可无损重放。
+- 跨资源错误表示历史状态项与当前 OpenAI resource 不匹配。资源切换、路由或同名 provider 配置改变均可能导致该问题；具体原因需结合实际失败 payload 判断，不能保证所有跨资源密文均可无损重放。
 
 ## 一、UI 文案收敛
 
@@ -61,7 +47,6 @@ UI 展示用户当前需要操作、判断的状态、数据、权限和错误�
 | `src/goal/activity.ts:6-7` | 自动停跑通知混合轮数、检测规则和 goal remains active | 默认简短暂停原因；完整检测规则与证据在文档和 Goal 详情，不新增常驻解释段 |
 | `src/jobs/viewer/component.ts:133,141` | 缺少 owned terminal/readable final snapshot 的长展示 | 底栏可用 Logs only，详情准确说明画面不可用、日志可读；不删数据缺失事实 |
 | `src/tasks/index.ts:108` | `in-memory source` 的 fork 告警 | 去掉存储实现术语，保留独立任务列表及未复制来源任务的结果 |
-| `src/jobs/index.ts:152-153` | `control bridge v3` 受限告警 | **保持诊断信息，不列入文案清理** |
 
 修改局限于展示生成点，不改 sanitizeText、不截断错误、不移除工具协议。现有 `doc/current/ui/index.md` 的文本精简规则及各模块文档做局部维护，不全量重写。
 
@@ -199,7 +184,7 @@ UI 展示用户当前需要操作、判断的状态、数据、权限和错误�
 - Goal：`src/goal/state.ts`、manager、commands、context、activity、tools、render 和生命周期注册。
 - Runtime：config/schema/defaults、现有设置列表及 config-fields、notifications、suite 结算协调、共享 renderer 登记及新的最小恢复模块。
 - Child：`src/agents/child.ts` 中的会话恢复注册；session.ts 只管理会话目录/生命周期，不把请求修复无谓塞入该层。
-- 文案：settings/view、agents/ui/types、jobs/viewer/component、tasks/index 的具体展示点；不修改 control bridge v3 告警。
+- 文案：settings/view、agents/ui/types、jobs/viewer/component、tasks/index 的具体展示点。
 - 调用与测试：修改导出符号前用 LSP 查全部引用，更新相关现有契约测试；删除只固化旧文案/内部实现的断言，不把新措辞重新固定成行为契约。
 - 与 [源码入口启动性能优化](source-startup-performance.md) 的共同边界：新增 renderer 不能引入完整执行依赖到 factory；请求恢复不能连接多余 UI/资源栈。该方案对 Goal 控制命令的描述在实施时同步去除 stop，不重复实施启动专项。
 
@@ -209,7 +194,7 @@ UI 展示用户当前需要操作、判断的状态、数据、权限和错误�
 2. 局部调整文案，接入恢复消息一行/展开展示，保持模型控制和真实事件完整。
 3. 实现最小 Responses 恢复模块、严格开关、分支隔离和主/子会话接入。
 4. 统一恢复、Goal 和通知的边界顺序与最终结算，处理取消竞争和扩展共存。
-5. 运行有针对性的实际行为验收，局部维护文档并提交；不把方案中的目标行为提前写成 current 已实现事实。
+5. 运行有针对性的实际行为验收，局部维护文档；不把方案中的目标行为提前写成 current 已实现事实。
 
 ## 验收计划
 
@@ -251,16 +236,16 @@ UI 展示用户当前需要操作、判断的状态、数据、权限和错误�
 - [统一界面](../current/ui/index.md)、[命令高亮](../current/ui/command-highlighting.md)、[模型继承](../current/agents/models.md) 及相关模块操作说明：局部收敛文案，保留诊断告警与真实数据边界。
 - [上游登记](../../third-party/UPSTREAM.md)：参考版本、独立实现与许可证边界；不得把 AGPL 来源误标为 MIT 复制代码。
 
-完成后移动专项到 `doc/finished` 并更新两侧索引；current 不写临时流水账、会话调度、本机产物路径或未执行验收结论。历史已完成专项保留其时代事实，不为删除 stop 全量改写历史记录。提交使用简短中文类型前缀，禁止把用户其他变更混入本专项。
+完成后移动专项到 `doc/finished` 并更新两侧索引；current 不写临时流水账、会话调度、本机产物路径或未执行验收结论。历史已完成专项保留其时代事实，不为删除 stop 全量改写历史记录。
 
 ## 任务清单
 
-- [ ] 1. 完成 UI 文案局部收敛，保留 control bridge v3 等排障告警、错误全文、权限与原始数据。
-- [ ] 2. `/goal resume` 默认一行，原生展开保留详情，混合通知与模型控制不丢失且不重复启动。
-- [ ] 3. 迁移 Goal 三种持久状态/四种用户展示，统一 pause，删除 stop 入口并保留历史数据与权限规则。
-- [ ] 4. 接入 Responses 跨资源恢复设置、精确 ID 隔离、主/子会话作用域和跨瞬态错误的有限重试生命周期。
-- [ ] 5. 修复 Goal 过早失败结算，处理取消竞争、最终失败及与 Model Manager 的两种顺序共存。
-- [ ] 6. 完成实际 TUI、受控 Responses 故障序列和必要行为检查，记录适用范围与未通过项。
-- [ ] 7. 局部更新当前文档、上游来源及操作说明，归档完成专项并提交。
+- [ ] [UI 文案收敛](#一ui-文案收敛)
+- [ ] [恢复提示与折叠展示](#二恢复提示与折叠展示)
+- [ ] [Goal 生命周期与唯一暂停入口](#三goal-生命周期与唯一暂停入口)
+- [ ] [Responses 跨资源自动恢复](#四responses-跨资源自动恢复)
+- [ ] [恢复与 Goal 最终结算协调](#五恢复与-goal-最终结算协调)
+- [ ] [行为验收](#验收计划)
+- [ ] [文档同步与归档](#文档与完成标准)
 
 [返回待办索引](index.md)

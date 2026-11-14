@@ -4,16 +4,10 @@
 
 ## 任务索引
 
-- [UI 文案、Goal 状态与 Responses 跨资源恢复](goal-responses-recovery.md) — 方案已确认、待实施；保留诊断告警，仅留 /goal pause，三态生命周期与一行恢复展示，设置化跨资源历史 ID 隔离、瞬态重试及 Goal 最终结算协调。
+- [UI 文案、Goal 状态与 Responses 跨资源恢复](goal-responses-recovery.md) — 待实施；保留诊断告警，仅留 /goal pause，三态生命周期与一行恢复展示，设置化跨资源历史 ID 隔离、瞬态重试及 Goal 最终结算协调。
 - [源码入口启动性能优化](source-startup-performance.md) — 待实施；解耦 renderer/执行依赖，补齐 Tasks、Goal 查看器按需加载，按真实 CLI 冷暖启动与首次使用验收；不做预编译、不改安装方式，第三方扩展另行处理。
 
-- [PTY 控制终端与嵌套 Pi 退出排查](pty-terminal-investigation.md) — 待排查；独立 tmux 直接启动的输出路由差异、嵌套 Pi 原生退出与 PTY 结算未验证项，不由提示栏改动代替修复。
-
-- [官方 Pi 干净消费者安装验收](official-pi-installation.md) — 用户明确延期 Git/本地包安装及资源发现验收；官方 Pi 1.5.0 的代码实施与实际 bin/RPC 加载结果不替代安装证据，保持 private:true，不执行 npm 发布。
-
-Pi Suite Windows 验收见 [收尾记录](../finished/pi-suite/windows-completion.md)；Cursor CLI 验收按用户要求移除。
-
-当前实现与开发方式见 [doc/current](../current/index.md)。完整设计、上游按文件处置与既有验收证据保存在 [设计与实施记录](../finished/pi-suite/design/index.md)，原设计细节保留。既有验收专项仅处理 Windows；手机 SSH 专项取消，Linux 由用户后续在其他设备验收，不阻塞该专项。新增交互与启动需求及 tmux 复制的环境与验收范围已归档到 [对应专项](../finished/pi-suite/interaction-improvements/index.md)。
+当前实现与开发方式见 [doc/current](../current/index.md)。完整设计、上游按文件处置与既有验收证据保存在 [设计与实施记录](../finished/pi-suite/design/index.md)，原设计细节保留。新增交互与启动需求及 tmux 复制的环境与验收范围已归档到 [对应专项](../finished/pi-suite/interaction-improvements/index.md)。
 
 ## 规则
 
