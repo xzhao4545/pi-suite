@@ -1,6 +1,6 @@
 # 目标管理
 
-goal 模块维护一个主会话分支的持久目标，模型的一次运行与目标状态分别管理。modules.goal 决定是否加载；goal.display 接受 status、dock、hidden，默认 status。
+goal 模块维护一个主会话分支的持久目标，生命周期为 active / paused / completed；界面统一派生进行中、等待中、已暂停、已完成。模型的一次运行与目标生命周期分别管理。modules.goal 决定是否加载；goal.display 接受 status、dock、hidden，默认 status。
 
 - [状态与宿主生命周期](./lifecycle.md) — 归属、用量、重试、压缩、会话恢复和通知。
 - [请求上下文与自动续跑](./context.md) — 请求级合同、通知来源、有界投影与自动停跑。

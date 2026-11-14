@@ -2,8 +2,7 @@
 // Pi resolves paths before its loader runs factories, so excludes and the suite singleton
 // are filtered before execution rather than in the upstream post-load extensionsOverride.
 import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { isAbsolute, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import { createCodemodeExtension, createMcpExtension, createToolSearchExtension, DefaultPackageManager,
   DefaultResourceLoader, getAgentDir, SettingsManager, type ExtensionFactory, type Skill } from '@earendil-works/pi-coding-agent';
 import { ToolError } from '../../runtime/errors.ts';
@@ -16,10 +15,6 @@ import { inheritableParentPrompt } from './prompts.ts';
 const builtins = ['read', 'write', 'edit', 'bash', 'grep', 'find', 'ls', 'powershell'];
 const suiteTools = ['task_list', 'task_get', 'task_edit', 'job_start', 'job_list', 'job_get', 'job_read', 'job_write', 'job_stop', 'wait'];
 const nestedTools = ['agent_start', 'agent_list', 'agent_get', 'agent_read', 'agent_send', 'agent_stop', 'wait'];
-export function resourcePath(path: string, cwd: string): string {
-  const expanded = path === '~' || path.startsWith('~/') || path.startsWith('~\\') ? homedir() + path.slice(1) : path;
-  return isAbsolute(expanded) ? expanded : resolve(cwd, expanded);
-}
 
 export async function childResources(run: Execution, factory: ExtensionFactory) {
   const { type, record, parent } = run, cwd = run.configCwd, agentDir = getAgentDir();

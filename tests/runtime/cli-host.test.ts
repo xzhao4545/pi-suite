@@ -10,7 +10,8 @@ import {RpcClient} from '@earendil-works/pi-coding-agent';
 import {foregroundAnsi, parseColor} from '@earendil-works/pi-tui';
 import {createPtyProcess} from '../../src/jobs/backends/pty.ts';
 import {agentDir, bashPath} from '../support/jobs.ts';
-import {GOAL_ENTRY, type Goal} from '../../src/goal/state.ts';
+import {GOAL_ENTRY} from '../../src/goal/snapshot.ts';
+import type {Goal} from '../../src/goal/state.ts';
 
 const storedGoal = (file: string): Goal | undefined => readFileSync(file, 'utf8').split('\n').filter(Boolean)
   .map(line => JSON.parse(line)).findLast(entry => entry.type === 'custom' && entry.customType === GOAL_ENTRY)?.data.goal ?? undefined;
@@ -34,7 +35,7 @@ function setup(mode: 'fullscreen' | 'regular') {
 const pause = () => new Promise(resolve => setTimeout(resolve, 20));
 
 // The actual official bin has its own bundled classes/virtual modules; SDK-only checks miss this boundary.
-test('official CLI keeps reading frames continuous, adapts metadata, forks tasks and quits Goals stopped', {timeout: 90000}, async () => {
+test('official CLI keeps reading frames continuous, adapts metadata, forks tasks and quits Goals paused', {timeout: 90000}, async () => {
   assert.equal(JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8')).bin.pi, 'dist/bundle/cli.js');
   for (const mode of ['fullscreen', 'regular'] as const) {
     const {root, env, snapshot} = setup(mode);
@@ -141,7 +142,8 @@ test('official CLI keeps reading frames continuous, adapts metadata, forks tasks
       pty.write('/exit\r'); const deadline = Date.now() + 5000; while (!exited && Date.now() < deadline) await pause();
       assert.equal(exited, true, 'native host exits normally');
       assert.equal(exitCode, 0, 'native quit completes child/job cleanup without a failing exit');
-      assert.equal(storedGoal(goalFile)?.status, 'stopped');
+      assert.equal(storedGoal(goalFile)?.status, 'paused');
+      assert.equal(storedGoal(goalFile)?.reason?.kind, 'shutdown');
       assert.equal(storedGoal(goalFile)?.automatic, false);
       assert.equal(storedGoal(goalFile)?.resumeAt, undefined, 'quit revokes the scheduled wake');
       const rpcOptions = {cwd: root, env: {...env, PI_SUITE_TEST_GOAL_MODE: '1'},
@@ -150,10 +152,10 @@ test('official CLI keeps reading frames continuous, adapts metadata, forks tasks
       try {
         await resumed.start(); await resumed.getState(); await new Promise(done => setTimeout(done, 250));
         assert.equal(snapshot()?.calls, 0, 'cold startup must not request the provider');
-        assert.equal(storedGoal(goalFile)?.status, 'stopped');
+        assert.equal(storedGoal(goalFile)?.status, 'paused');
         await resumed.promptAndWait('CLI_ORDINARY_INPUT');
         assert.equal(snapshot()?.calls, 1);
-        assert.equal(storedGoal(goalFile)?.status, 'stopped', 'ordinary input is not resume');
+        assert.equal(storedGoal(goalFile)?.status, 'paused', 'ordinary input is not resume');
         const resumedIdle = resumed.waitForIdle(15000);
         await resumed.prompt('/goal resume');
         await resumedIdle;
@@ -161,14 +163,14 @@ test('official CLI keeps reading frames continuous, adapts metadata, forks tasks
         while (!storedGoal(goalFile)?.resumeAt) { assert.ok(Date.now() < until, 'explicit resume did not restore execution'); await pause(); }
         assert.equal(storedGoal(goalFile)?.status, 'active');
         // SIGKILL cannot run Suite's quit hook: recovery must revoke the persisted active
-        // lease itself, rather than relying on graceful shutdown to have saved stopped.
+        // lease itself, rather than relying on graceful shutdown to have saved paused.
         const beforeCrash = readFileSync(goalFile, 'utf8');
         process.kill(snapshot()!.pid, 'SIGKILL');
         await resumed.stop();
         assert.equal(readFileSync(goalFile, 'utf8'), beforeCrash, 'forced exit does not rewrite the active snapshot');
         resumed = new RpcClient(rpcOptions);
         await resumed.start(); await resumed.getState();
-        assert.equal(storedGoal(goalFile)?.status, 'stopped', 'cold recovery also revokes any unsaved active lease');
+        assert.equal(storedGoal(goalFile)?.status, 'paused', 'cold recovery also revokes any unsaved active lease');
         assert.equal(snapshot()?.calls, 0);
         await resumed.promptAndWait('CLI_AUDIT');
         assert.equal(storedGoal(goalFile)?.status, 'completed', 'completion-only audit does not need resume');

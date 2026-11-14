@@ -2,7 +2,7 @@
 
 ## 状态与目标
 
-用户已确认先不做预编译 JS 发布入口，只实施其他启动优化。本文件记录待实施方案；本次仅写入方案，不修改运行时代码或用户配置。既有启动专项见 [启动性能优化记录](../finished/pi-suite/interaction-improvements/startup-performance.md)，本项补充当前入口、渲染依赖和查看器边界的检查结果，不覆盖原有记录。
+用户已确认先不做预编译 JS 发布入口，只实施其他启动优化。共享 registry、资源路径和 Tasks 查看器边界已实施，Goal 详情按需加载已在目标模块实现；真实 CLI/RPC 对比与聚焦检查结论见下文。TUI 首次可操作、完整扩展集合和全部首次使用验收尚未全部完成，冷首次使用仍有明显阶段转移，本项保留在 todo，不归档。既有启动专项见 [启动性能优化记录](../finished/pi-suite/interaction-improvements/startup-performance.md)，本项补充源码入口、渲染依赖和查看器边界，不覆盖原有记录。
 
 目标是在保留全部默认功能、历史工具渲染和首次就绪契约的前提下，减少源码入口的冷加载成本及无必要的启动依赖。优化必须改善实际就绪时间，不能只把 factory 的等待挪到 session_start，或把全部等待转移到第一次工具调用。
 
@@ -17,9 +17,9 @@
 
 ## 检查依据与适用范围
 
-### 已确认的加载问题
+### 实施前基线中的加载问题
 
-| 位置 | 当前事实 | 处理方向 |
+| 位置 | 实施前事实 | 处理方向 |
 | --- | --- | --- |
 | `src/index.ts`、`src/runtime/renderers.ts` | factory 提前注册所有历史 renderer；业务模块虽在 session_start 激活，但 renderer 的静态依赖已经进入入口加载图 | 保留提前注册，切断显示代码对执行 owner 和资源加载器的运行时依赖 |
 | `src/agents/render.ts`、`src/runtime/wait-render.ts` → `src/agents/runtime.ts` | 仅为 `agentDisplayName` 查询就静态引入 AgentManager、jobs runtime；AgentManager 继续连接 history、catalog 等模块 | 将只读查询与创建 owner 的实现解耦，仍读取同一份进程级 owner 状态 |
@@ -28,7 +28,7 @@
 | `src/runtime/suite.ts` → `src/tasks/viewer.ts` | tasks 准入时为注册 `/tasks` 和 Dock 回调直接导入 viewer，连带 BrowserView/DetailsView 等组件 | 将轻量命令注册与真正查看界面分离，首次命令或 Dock 打开时才加载 viewer |
 | `src/goal/commands.ts` → `src/ui/details.ts` | `/goal` 注册阶段静态导入详情阅读组件，实际仅详情操作使用 | 在详情调用路径加载阅读组件，目标控制命令仍启动即用 |
 
-此前的入口加载追踪中，factory 场景读取约 77 个 Suite 源文件，完成 session_start 后约 142 个。该计数表示源文件读取集合，不等同于执行次数或精确耗时贡献，也不作为永久测试断言；实施时须重新建立真实 CLI 基线。
+此前的入口加载追踪中，factory 场景读取约 77 个 Suite 源文件，完成 session_start 后约 142 个。该计数表示源文件读取集合，不等同于执行次数或精确耗时贡献，也不作为永久测试断言；本次以实际官方 Node bin/RPC 重新建立基线，并以加载追踪辅助定位。
 
 此前完整配置的诊断中，Suite 冷加载约 2.1 秒，Plannotator 约 2.5 秒，Slopchop 约 1.8 秒，Model Manager 约 1.5 秒，Web Access 约 1.1 秒。这些近似单次数据仅用于选择检查方向，不是优化后的结果、稳定预算或 TUI 首屏时间；缓存差异不能全部归因于 TypeScript 转换。
 
@@ -119,20 +119,79 @@
 
 优先复用 `tests/runtime/tool-history.test.ts`、`tool-render.test.ts`、`modules.test.ts`、`cli-host.test.ts`，以及 agents 资源/lifecycle、jobs launch/PTY、Ask 和 workflow 的相关现有检查。仅为明确跨模块行为风险调整或增加必要测试，不为每个 import、文件移动或注册转发新增测试；临时性能诊断不进入日常测试集合。
 
-代码实施收尾统一运行 `pnpm typecheck`、`pnpm test`，另运行受影响的真实 CLI/PTY/RPC 场景。日常检查控制在 5 分钟内、全量检查控制在 10 分钟内；不在每个小改动后重复全量运行。当前仅记录方案，不运行代码测试或消费者安装。
+代码实施收尾统一运行 `pnpm typecheck`、`pnpm test`，另运行受影响的真实 CLI/PTY/RPC 场景。日常检查控制在 5 分钟内、全量检查控制在 10 分钟内；不在每个小改动后重复全量运行。聚焦检查与性能样本不替代收尾全量检查，也不替代消费者安装。
 
-实施后局部同步 [公共运行时](../current/runtime/index.md)、[统一 UI](../current/ui/index.md)、[任务操作](../current/tasks/operations.md)、[子代理运行时](../current/agents/runtime.md) 和 [验证规则](../current/validation.md) 中受影响的稳定事实，尤其校正查看器何时实际加载；不把新设计写成已经生效的 current 事实。方案完成后移至 finished 并更新索引，性能结论保留环境与适用范围，不保留临时日志、脚本或本机产物路径。
+局部同步 [公共运行时](../current/runtime/index.md)、[统一 UI](../current/ui/index.md)、[任务操作](../current/tasks/operations.md)、[子代理运行时](../current/agents/runtime.md) 和 [验证规则](../current/validation.md) 中受影响的稳定事实，尤其校正查看器何时实际加载；未完成的验收仍保留于本项。只有全部完成条件满足后才移至 finished 并更新索引。性能结论保留环境与适用范围，不保留临时日志、脚本或本机产物路径。
+
+## 已实施边界与验收结论
+
+### 实现范围
+
+- agents/registry.ts 复用原进程 symbol 和 owner map，名称查询仅有 AgentManager 类型依赖；agents 与 wait renderer、现有名称检查已迁移，不保留 runtime.ts 的名称查询 re-export。
+- history 与 runner 共用 resources/paths.ts 的原路径展开语义；child loader 不再输出路径函数。runtime/tools.ts 的传递依赖为共享 schema、读取契约及错误模块，没有执行 owner/查看器链；本次不机械拆分它，提前渲染、lookup 与执行登记仍使用原唯一 WeakMap。
+- Tasks 命令在 commands.ts 注册，非 TUI 文本查询不加载 viewer；TUI 命令及 Dock 打开时才导入 viewer，导入、详情读取和返回选择均核对捕获的 SessionBinding。失效绑定不挂旧页面或改新 Dock，通知令牌始终 finally 释放。
+- Goal 的 showDetails 已进入实际详情路径，导入后核对目标模块捕获的绑定及取消信号。Ask、Jobs、Suite 设置、PTY、child 和 Worker 的既有按需入口保留，历史与原生命令 renderer 仍在 factory 提前注册。
+
+### 实际 CLI/RPC 对比
+
+环境为 Linux、Node 24.22.2、官方未修改 Pi 1.5.0 与 1.5.2 的 `dist/bundle/cli.js --mode rpc`。改动前保留独立源码副本；“仅启动改动”副本只应用本项 registry、资源路径和 Tasks 边界，不混入同期 Goal 重构；“联合快照”包含当时的 Goal 详情延迟与 Responses 恢复，不是后续所有联合修改的最终验收。
+
+每组前后各 5 个独立进程，交替顺序采样。cwd、临时用户配置和资源场景保持等价；默认全部 Suite 模块启用，使用明确源码入口，不加载第三方扩展。冷样本关闭 Jiti 文件转换缓存与 Node 编译缓存；暖样本启用各版本/副本独立临时目录中的 Jiti 文件缓存，预热样本不计入五次比较，Node 编译缓存仍关闭。不清理用户缓存，不发送模型请求。真实就绪定义为进程启动至首个 `get_state` 响应；随后检查命令登记、首次 `/tasks` 文本、空 Goal status 和扩展命令触发的原生 reload。
+
+以下为真实就绪中位数，括号为最小–最大值，单位 ms：
+
+| 宿主/场景 | 实施前 | 仅启动改动 | 联合快照 |
+| --- | --- | --- | --- |
+| Pi 1.5.2 默认冷 | 3136（3097–3263） | 3018（2990–3072） | 3044（2937–3158） |
+| Pi 1.5.2 默认暖 | 652（637–705） | 663（649–693） | 647（626–682） |
+| Pi 1.5.0 默认冷 | 6239（3043–6386） | 5987（2967–6023） | 5990（2895–6091） |
+| Pi 1.5.0 默认暖 | 1157（1109–1181） | 1168（1150–1188） | 1150（1136–1153） |
+| Pi 1.5.2 无 Suite 对照 | 1162（647–1176） | 1176（659–1248） | 未测 |
+| Pi 1.5.2 全业务关闭冷 | 2232（2221–2296） | 1540（1498–1558） | 未测 |
+| Pi 1.5.2 类型/持久记录冷 | 3186（3043–3468） | 3120（3052–3400） | 未测 |
+
+Pi 1.5.2 默认冷就绪中位数减少约 118ms（3.8%），联合快照减少约 92ms（2.9%）；默认暖差异落在样本波动内。默认冷 reload 中位数 2021 → 1866ms，暖 reload 87 → 86ms；RPC 首次 Tasks 文本 1.45 → 1.50ms。类型/记录场景的冷 reload 2083 → 1949ms。全关闭场景只证明准入优化，不能替代默认性能：其冷 reload 1365 → 1450ms，存在剩余成本，尚未完成“不明显回退”的综合验收。
+
+Pi 1.5.0 冷样本与无 Suite 对照均出现约两倍的整段时延变化，不能把这部分归因于 Suite 或 TypeScript 转换，也不能用跨宿主数字推断版本性能。上述范围完整保留，当前只支持有限的同组交替比较；未建立生产缓存、完整配置或 TUI 首屏预算。
+
+临时真实 CLI 加载追踪的一次阶段诊断：实施前 import/factory 约 1359ms、session_start 主处理约 972ms；仅启动改动约 599/1771ms，联合快照约 564/1680ms。说明名称查询提前加载的 owner 工作回归必要会话准入，factory 收益大部分为阶段转移，端到端只小幅改善。源码读取集合分别为 factory 77 → 31（联合 33）、session_start 后 142 → 138（联合 135），只用于定位：factory 不再加载 AgentManager、JobManager、child loader；仅启动副本的 Goal 静态依赖仍加载 DetailsView，联合快照的首次就绪没有加载 Tasks viewer、BrowserView 或 DetailsView。
+
+### 实际 TUI 首次使用对比
+
+Linux Node 24.22.2、官方 Pi 1.5.0 实际 Node bin、fullscreen 80×30、默认全部模块及同一离线 fixture，前后各五进程交替采样。冷组禁用 Jiti/Node 编译缓存；暖组只启用隔离的 Jiti 文件缓存，预热不计样本。首个 `/tasks` 命令发出后真实页面出现并可返回才算可操作，不用 session_start 标记冒充首屏时间。
+
+| 指标（ms，中位数及范围） | 实施前 | 联合实现 |
+| --- | --- | --- |
+| 冷 session_start 标记 | 3195（3115–3415） | 3065（3037–3507） |
+| 冷首次 Tasks 页面（自进程启动） | 3285（3211–3509） | 3296（3265–3783） |
+| 冷首次 Tasks 命令等待 | 90（89–95） | 237（228–276） |
+| 暖 session_start 标记 | 735（710–743） | 727（704–743） |
+| 暖首次 Tasks 页面（自进程启动） | 833（804–842） | 823（798–842） |
+| 暖首次 Tasks 命令等待 | 95（91–106） | 95（90–100） |
+
+空 Goal status 的首次反馈中位数均约 21ms。Tasks 列表不再为显示首屏预载详情阅读器，详情实际打开才加载；导入前后均核对绑定。该局部边界没有消除冷首次列表的转换等待：冷首屏整体没有可靠改善，启动标记约 130ms 的收益主要转移到首次 Tasks（约 +147ms）。暖组无明显回退。故本项尚未达到“默认端到端改善、首次使用无明显回退”的全部完成条件，不以 factory 文件减少或 RPC 数字代替这一结论。
+
+### 检查与未覆盖范围
+
+受影响的 Tasks UI/撤销、工具显示/历史、模块准入、agents 资源/历史/运行检查，以及官方 CLI/PTY/RPC 合并检查的最终结果见 [验证规则](../current/validation.md)。实际 CLI 已覆盖 regular/fullscreen 的历史工具、Tasks/Goal/Jobs/Subagents 首次打开/返回、PTY 输入/resize、child、clone/冷恢复/quit；实际 Goal 恢复与混合通知历史在 40/80/120 列另通过离线 smoke，不涉及收费服务。
+
+尚未建立完整第三方扩展集合、首次 Ask/workflow 的前后性能比较、生产类型/历史规模与 Windows 新行为验收；既有契约通过不等于这些性能场景已测。安装副本、用户配置、宿主、第三方安装目录和发布方式均未修改，Pi 1.5.2 仅为诊断，不扩大正式支持范围。
 
 ## 任务列表
 
-- [ ] 建立源码入口冷/暖启动、factory/session_start、首次使用和 reload 的可比基线，区分 Pi 1.5.0 正式范围与实际 1.5.2 诊断。
-- [ ] 提取共享轻量 agents registry/只读名称查询，迁移全部调用，保留唯一 owner、按 agentDir 隔离和无副作用显示语义。
-- [ ] 解耦资源路径函数与 child resource loader，并按实测决定 runtime/tools 的最小显示注册边界；保留唯一工具/renderer 注册表。
-- [ ] 分离 Tasks 轻量命令注册与查看器，实现 `/tasks`、Dock 详情首次加载和加载期间绑定撤销处理。
-- [ ] 将 Goal 详情阅读组件移入实际使用路径，核查其余按需栈与传递导入，保持提前历史渲染和启动就绪合同。
+- [ ] 建立源码入口冷/暖启动、factory/session_start、首次使用和 reload 的完整可比基线，区分 Pi 1.5.0 正式范围与实际 1.5.2 诊断。
+  - [x] 官方 Node bin/RPC、阶段辅助追踪及冷/暖/reload/首次文本查询的独立进程基线与对比。
+  - [x] 真实 TUI 首次 Tasks 可操作、冷暖前后各五进程与返回。
+  - [ ] 完整扩展集合及其他交互首次使用基线。
+- [x] 提取共享轻量 agents registry/只读名称查询，迁移全部调用，保留唯一 owner、按 agentDir 隔离和无副作用显示语义。
+- [x] 解耦资源路径函数与 child resource loader，并按实测决定 runtime/tools 的最小显示注册边界；保留唯一工具/renderer 注册表。
+- [x] 分离 Tasks 轻量命令注册与查看器，实现 `/tasks`、Dock 详情首次加载和加载期间绑定撤销处理。
+- [x] 将 Goal 详情阅读组件移入实际使用路径，核查其余按需栈与传递导入，保持提前历史渲染和启动就绪合同。
 - [ ] 复测剩余启动成本，只处理有证据的额外依赖或重复工作；不并发共享图、不后台跳过必要绑定、不新增永久缓存。
 - [ ] 完成现有契约检查及真实 CLI 的历史、首次命令/工具、PTY、child/workflow、reload/切换/退出验收，报告未覆盖范围。
-- [ ] 提供优化前后多进程采样结论与首次使用代价，确认默认功能端到端改善而非阶段转移。
-- [ ] 局部更新 current 文档并归档本项；保持源码 Git 安装方式及独立安装验收延期边界，不修改第三方安装目录。
+- [ ] 提供优化前后多进程采样结论与首次交互使用代价，确认默认功能端到端改善而非阶段转移。
+  - [x] 前后各五进程 RPC 对比、范围、波动与阶段转移分析。
+- [ ] 局部更新 current 文档并在完成全部验收后归档本项；保持源码 Git 安装方式及独立安装验收延期边界，不修改第三方安装目录。
+  - [x] 同步当前 registry、资源路径和查看器加载边界。
 
 [返回待办索引](index.md)

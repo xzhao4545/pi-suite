@@ -27,7 +27,7 @@ function highlightedCommand(code: string, shell: CommandShell): string {
 
 test('read-only Suite lookup supplies the same native body to Ask History and collected-child transcripts', () => {
   let resolveRenderer!: Parameters<ExtensionAPI['registerToolRenderer']>[0];
-  const pi = { registerToolRenderer: (resolver: typeof resolveRenderer) => { resolveRenderer = resolver; } } as ExtensionAPI;
+  const pi = { registerToolRenderer: (resolver: typeof resolveRenderer) => { resolveRenderer = resolver; }, registerMessageRenderer() {} } as unknown as ExtensionAPI;
   registerSuiteRenderers(pi, true);
   const lookup = (name: string) => toolRenderer(pi, name);
   for (const name of ['goal_complete', 'ask_user', 'task_list']) {

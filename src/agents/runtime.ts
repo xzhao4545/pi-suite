@@ -3,11 +3,11 @@ import { acquireRuntime } from '../jobs/runtime.ts';
 import { AgentManager } from './manager.ts';
 import { getAgentDir } from '@earendil-works/pi-coding-agent';
 
+import { agentOwners, existingAgentRuntime } from './registry.ts';
+
 /** Reload changes listeners; existing SDK sessions and queued runs keep their owner. */
-const key = Symbol.for('pi-suite.agents.runtime.v1');
-const registry = globalThis as unknown as Record<symbol, Map<string, AgentManager> | undefined>;
 export function agentRuntime(): AgentManager {
-  const managers = registry[key] ??= new Map();
+  const managers = agentOwners();
   const agentDir = getAgentDir();
   if (!managers.has(agentDir) || managers.get(agentDir)!.closed) {
     const runtime = acquireRuntime(agentDir);
@@ -30,14 +30,7 @@ export function agentRuntime(): AgentManager {
   return managers.get(agentDir)!;
 }
 
-/** Display queries may run before session binding; acquiring a runtime would initialize jobs and touch disk. */
-export function agentDisplayName(id: string, runId?: string): string {
-  if (!id?.startsWith('agent_')) return id;
-  return registry[key]?.get(getAgentDir())?.records()
-    .find(record => record.id === id && (!runId || record.runId === runId) && !record.workflowId)?.name ?? id;
-}
-
 /** Query only: quit must not create an owner when agent tools are disabled. */
 export function quitExistingAgentRuntime(agentDir: string): Promise<void> | undefined {
-  return registry[key]?.get(agentDir)?.shutdown();
+  return existingAgentRuntime(agentDir)?.shutdown();
 }

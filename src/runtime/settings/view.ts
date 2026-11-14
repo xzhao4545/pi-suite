@@ -8,7 +8,7 @@ import type { Dock } from '../../ui/dock.ts';
 import { commandFrame } from '../../ui/frame.ts';
 
 const describe = (value: unknown): string => value === undefined ? 'inherit' : JSON.stringify(value);
-type FieldSchema = TSchema & { type?: string; enum?: string[] };
+type FieldSchema = TSchema & { type?: string; enum?: string[]; description?: string };
 type Field = { path: string[]; schema: FieldSchema };
 const fields: Field[] = Object.entries(configSchema.properties).flatMap(([section, schema]) =>
   Object.entries(schema.properties as Record<string, FieldSchema>).map(([field, schema]) => ({ path: [section, field], schema })));
@@ -46,7 +46,7 @@ export async function showSuiteSettings(ctx: ExtensionCommandContext, dock: Dock
         : configField(layers.user, field.path) !== undefined ? 'user' : 'default';
       const active = configField(config(), field.path);
       return { id: field.path.join('.'), label: field.path.join(' · '), currentValue: describe(effective(field)), values: ['Edit…'],
-        description: `${field.path.join('.') === 'ui.maxRows' ? 'Idle Dock rows: 1–30 (default 12). Ask uses its own 70% height limit.\n' : field.path.join('.') === 'ui.highlightBuiltinCommands' ? 'Native model bash / powershell command syntax highlighting (default true). Jobs and Suite command fields always highlight; ! / !! stays native.\n' : ''}Source: ${source}\nDefault: ${describe(configField(defaults, field.path))}\nUser: ${describe(configField(layers.user, field.path))}\nProject: ${describe(configField(layers.project, field.path))}\nEffective: ${describe(effective(field))}\n${field.path[0] === 'modules' || field.path[0] === 'commands' ? `Active: ${describe(active)}\n` : ''}Save changes, then /reload to apply.` };
+        description: `${field.schema.description ? `${field.schema.description}\n` : ''}Source: ${source}\nDefault: ${describe(configField(defaults, field.path))}\nUser: ${describe(configField(layers.user, field.path))}\nProject: ${describe(configField(layers.project, field.path))}\nEffective: ${describe(effective(field))}\n${field.path[0] === 'modules' || field.path[0] === 'commands' ? `Active: ${describe(active)}\n` : ''}Save changes, then /reload to apply.` };
     });
     dock.setDetail(true);
     let selected: string | undefined;

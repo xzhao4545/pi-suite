@@ -11,7 +11,7 @@ export function registerGoalTools(pi: ExtensionAPI, manager: GoalManager): void 
   registerBoundTool(pi, {
     name: "goal_complete",
     ...completeRenderers, label: "Goal Complete", executionMode: "sequential",
-    description: "Complete the current owned goal after auditing every original requirement with verification evidence. A new user-driven audit may close failed, paused, blocked, budget_limited or stopped goals without resume or automatic execution. Completed is idempotent: original evidence, completion time and feedback are preserved. Partial or unverified work must not be completed.",
+    description: "Complete the current owned goal after auditing every original requirement with verification evidence. A new user-driven audit may close paused goals without resume or automatic execution. Completed is idempotent: original evidence, completion time and feedback are preserved. Partial or unverified work must not be completed.",
     parameters: Type.Object({ goalId, summary: Type.String({ minLength: 1, maxLength: 4000 }) }),
     async execute(_id, params, signal, _update, ctx) {
       if (!params.summary.trim()) throw new ToolError("INVALID_ARGS", "Completion summary must include verification evidence", params.goalId);
@@ -24,13 +24,13 @@ export function registerGoalTools(pi: ExtensionAPI, manager: GoalManager): void 
   registerBoundTool(pi, {
     name: "goal_blocked",
     ...blockedRenderers, label: "Goal Blocked", executionMode: "sequential",
-    description: "For an active owned execution turn only: stop for the same evidenced external blocker repeated for at least three consecutive goal turns. Incomplete work and ordinary clarification are not blockers.",
+    description: "For an active owned execution turn only: pause for the same evidenced external blocker repeated for at least three consecutive goal turns. Incomplete work and ordinary clarification are not blockers.",
     parameters: Type.Object({ goalId, reason: Type.String({ minLength: 1, maxLength: 1000 }),
       evidence: Type.String({ minLength: 1, maxLength: 4000 }), repeatedTurns: Type.Integer({ minimum: 3 }) }),
     async execute(_id, params, signal, _update, ctx) {
       if (!params.reason.trim() || !params.evidence.trim()) throw new ToolError("INVALID_ARGS", "Blocking requires a reason and concrete evidence", params.goalId);
       manager.block(params.goalId, params.reason, params.evidence, ctx, signal);
-      return { content: [{ type: "text", text: `Goal blocked: ${params.reason}` }], details: params, terminate: true };
+      return { content: [{ type: "text", text: `Goal paused: ${params.reason}` }], details: params, terminate: true };
     },
   }, 'initial');
   registerBoundTool(pi, {

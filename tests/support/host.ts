@@ -11,7 +11,8 @@ import {
 import piSuite from "../../src/index.ts";
 import type { AutocompleteProvider } from "@earendil-works/pi-tui";
 import { terminal } from "./terminal.ts";
-import { GOAL_ENTRY, type Goal } from "../../src/goal/state.ts";
+import { GOAL_ENTRY } from '../../src/goal/snapshot.ts';
+import type { Goal } from '../../src/goal/state.ts';
 
 /** Real SDK session with the SDK's own offline provider; no credentials or network. */
 export async function host(options: {

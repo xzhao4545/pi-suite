@@ -14,6 +14,8 @@ import { builtinCommandRenderers } from '../ui/rendering/builtin-command.ts';
  * Children pass their admitted config snapshot (or an owner-supplied provider), not execution cwd.
  */
 export function registerSuiteRenderers(pi: ExtensionAPI, commandHighlight?: boolean | (() => boolean)): void {
+  goal.registerGoalMessageRenderers(pi);
+  pi.registerMessageRenderer('pi-suite:notification', goal.goalNotificationRenderer);
   // Factory scope has no session cwd. Freeze each context's saved option on first display;
   // /reload creates a fresh registry, including when history is rebuilt before session_start.
   const options = new Map<string, boolean>();

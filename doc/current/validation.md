@@ -8,7 +8,7 @@ Linux 检查复用已有 Node.js/nvm 环境；非交互 shell 应先加载 nvm �
 
 goal 参考 @narumitw/pi-goal 0.54.15 的工具契约与控制语义，生命周期接入 Pi 1.5.0 的公共最终结算接口，许可证见 [pi-goal MIT](../../third-party/licenses/pi-goal.txt)。
 
-goal 模型工具的 Linux 契约检查通过，核对空白参数 INVALID_ARGS、错误或缺失 goalId 的 NOT_FOUND、wait/block 非 active 或仅结案轮的 NOT_RUNNING，以及失效修订/绑定/请求取消代次或非所属会话的 STALE_BINDING。新的用户审计轮可直接完成 failed/paused/blocked/budget_limited/stopped，completed 幂等；工具错误通过共享 ToolError 保留代码与调用 goalId，操作边界见 [目标接口](goal/operations.md)。
+goal 模型工具的 Linux 契约检查通过，核对空白参数 INVALID_ARGS、错误或缺失 goalId 的 NOT_FOUND、wait/block 非 active 或仅结案轮的 NOT_RUNNING，以及失效修订/绑定/请求取消代次或非所属会话的 STALE_BINDING。新的用户审计轮可直接完成 paused，completed 幂等；工具错误通过共享 ToolError 保留代码与调用 goalId，操作边界见 [目标接口](goal/operations.md)。
 
 交互与启动专项通过真实 Pi TypeScript 加载、完整集合筛选/稳定身份/窄屏阅读、配置锁与两层覆盖、设置保存及 reload 准入验证。Linux 实际 CLI 覆盖 /exit 的空闲、生成、工具及压缩取消、PTY 清理与终端恢复；独立 tmux 验证 Pi 原生 OSC 52 在 external 阻断、on 转发中文多行内容，用户确认其 Linux/SSH/tmux 全屏拖选可在本机粘贴。性能结论与范围见 [交互与启动专项](../finished/pi-suite/interaction-improvements/index.md)。
 
@@ -26,13 +26,25 @@ goal 模型工具的 Linux 契约检查通过，核对空白参数 INVALID_ARGS�
 
 ## 七项交互与生命周期
 
-[交互细化逐项验收](../finished/pi-suite/interaction-refinement/validation.md) 核对 Ask 模型 content/details 分离、24 Unicode 码点短题/重名 #N、仅删除题目 context；Goal 独立结案权限、stop/clear、quit 与真实 SIGKILL 冷恢复手动 resume；Tasks v4 自动/主动清空、代次及过期引用、当前恢复基线和五秒反馈；Subagents 根导航连续交接与实际一/两行信息预算。官方 CLI 对 regular/fullscreen 的同步绘制输出逐帧检查 tabs、进入历史和返回，原生 TUI 聚合另覆盖延迟/resize/构造失败/输入焦点与旧新 reader dispose。完整套件 222/222、typecheck 与 diff 检查通过，约一分钟；没有新增消费者安装或宿主补丁。
+[交互细化逐项验收](../finished/pi-suite/interaction-refinement/validation.md) 核对 Ask 模型 content/details 分离、24 Unicode 码点短题/重名 #N、仅删除题目 context；Goal 独立结案权限、pause/clear、quit 与真实 SIGKILL 冷恢复手动 resume；Tasks v4 自动/主动清空、代次及过期引用、当前恢复基线和五秒反馈；Subagents 根导航连续交接与实际一/两行信息预算。官方 CLI 对 regular/fullscreen 的同步绘制输出逐帧检查 tabs、进入历史和返回，原生 TUI 聚合另覆盖延迟/resize/构造失败/输入焦点与旧新 reader dispose。完整套件 222/222、typecheck 与 diff 检查通过，约一分钟；没有新增消费者安装或宿主补丁。
 
 ## Goal 请求与自动续跑
 
 Goal 的请求合同、通知来源与五轮自动停跑通过 Linux Node 24.22.2、官方未修改 Pi 1.5.0 SDK 验证。无压缩连续 20 次自然工具请求和 20 次边界续跑均只有一份当前合同，usedTokens 与状态实时更新，短控制片段有界，其他提示节、动态工具增删与真实事件保留。Completions/Responses 的中途更新与折叠四种受控序列化组合保留强制 head、合同与工具声明；没有测量生产缓存或费用。
 
 自动轮无工具/相同活动停跑、持久原因、用户审计与显式 resume、变化的只读研究、等待、reload/compact 和真实后台唤醒权限通过。类型检查与受影响 38 项补验通过，覆盖全量检查中的通知断言同步；230 项检查的综合结论及官方 CLI 适用范围见 [Goal 专项](../finished/pi-suite/goal/context-optimization.md)。Windows 新行为与收费服务不在本次验收范围。
+
+## 源码入口性能验证
+
+源码入口、renderer 提前注册与首次就绪边界见 [公共运行时](runtime/index.md#加载与首次就绪)。性能验收使用官方实际 Node bin/RPC，不以 SDK factory 时长或源文件读取数代替真实就绪。比较固定宿主版本、配置、cwd 与资源集合；冷样本明确 Jiti 文件缓存和 Node 编译缓存状态，暖样本先预热，再交替运行前后各至少五个独立进程，报告中位数、完整范围、阶段转移和首次使用代价，不清理用户缓存或发送收费请求。
+
+RPC 首个状态响应、命令登记与文本查询只证明非 TUI 就绪；TUI 首屏、首次 viewer/Ask/PTY/child/workflow 和切换竞争按实际路径分别验证。查看器延迟入口的聚焦检查覆盖导入、任务快照读取和返回选择期间的 SessionBinding 撤销，以及通知令牌的 finally 释放；不得通过源码 import 文本或固定文件数量断言锁定实现。未完成范围及可比样本结论维护在 [源码启动待办](../todo/source-startup-performance.md)，不扩大 Pi 1.5.0 支持声明。
+
+## Responses 恢复与三态 Goal
+
+Linux Node 24.22.2、官方未修改 Pi 1.5.0 的 9 组聚合覆盖真实 SDK serializer、HTTP/SSE、boundary/context_edit 与原生重试：资源 400 的 ID-only 修复、429/503 后成功、有限预算耗尽保留最后错误、无新 ID 不重复恢复、默认关闭与不安全请求拒绝、普通参数/权限/额度/上下文错误不误接管、暂停后的迟到成功拒绝、两种公开边界扩展顺序，以及分支/端点/实例隔离。工具副作用不重放、原始失败保留、Goal 最终结算暂停通过；协议及限制见 [Responses 恢复](runtime/responses-recovery.md)。这不是实际 Model Manager 全扩展或真实上游密文的验收，亦不证明所有并发 child/控制组合。
+
+Goal 三态 version 2 与 version 1 迁移检查保留累计数据、原因与权限，冷/树分支不能绕过手动或自动暂停。实际 Pi 1.5.0 Node bin 的 regular/fullscreen 在 40/80/120 列覆盖 `/goal pause`、恢复一行摘要、Ctrl+O 原生展开/收起与前次原因，阅读不增加模型请求。混合 job/agent 通知及 `/reload` 历史重建保留真实事件、隐藏结构化 Goal 控制片段。原生 custom message 不提供鼠标单项展开，不新增模拟点击；busy/already-running 的全部实际组合仍在 [专项待办](../todo/goal-responses-recovery.md)。Windows 新行为与收费真实服务未验证。
 
 ## 检查
 
@@ -123,7 +135,7 @@ Workflow 宿主的 5 项 Linux（Node 24.22.2）真实 SDK/faux 与进程检查�
 
 真实 MCP 的 1 项 Linux stdio 聚合验证原生传输与 discovery、mcp__ 服务器名单和显式资源 helper 并存、禁用与非选择服务器不执行，以及 child 结束后全部服务进程退出。受控真实服务另核对原生 codemode/tool_search、晚注册工具在下一请求执行、隔离与不可信项目不连接；跨 cwd RPC 只加载用户 MCP，不加载父项目或目标项目 MCP。服务为本机协议夹具，传输范围见 [MCP 阶段](../finished/pi-suite/agents/mcp-transport.md)；Windows 实际外部服务见 [Context7 验收](../finished/pi-suite/agents/windows-context7.md)，不推及 OAuth 或其他服务。
 
-当前 Linux（Node 24.22.2、官方未修改 Pi 1.5.0）检查集共 215 项，全量检查与类型检查通过，无失败、跳过或取消项；完整测试约 51 秒，日常检查耗时在 5 分钟内。检查覆盖询问、目标、任务、执行、子代理、workflow 和共享组件的当前契约。平台及安装适用范围按上述各专项结论区分。
+当前 Linux（Node 24.22.2、官方未修改 Pi 1.5.0）检查集共 243 项，全量检查与类型检查通过，无失败、跳过或取消项；完整测试约 57 秒，日常检查耗时在 5 分钟内。检查覆盖询问、目标、任务、执行、子代理、workflow 和共享组件的当前契约。平台及安装适用范围按上述各专项结论区分。
 
 完整 Starship 的 1 项 Linux SDK 聚合从开发依赖加载 0.65.2 实际发布入口，核对 goal_wait、tasks、运行 child、两个 job 与主询问在 40×24、60×30、120×40 并存，实际 emoji/24 位样式、max_statuses 插入顺序、disabled/缺失 extension_status、整体换行和显式 Dock 显示。询问期间实际 job 结算不增加模型调用。终端尺寸由受控 fixture 驱动；当前布局使用独立的空闲 Dock/询问预算，任意用户 footer format 无可靠公共高度反馈，Windows 原生 footer 见 [CLI/footer 验收](../finished/pi-suite/jobs/windows-cli-ui.md)，预算与焦点/鼠标/草稿见 [询问组合](../finished/pi-suite/ask/windows-combination.md)。
 

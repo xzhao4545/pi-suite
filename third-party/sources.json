@@ -83,6 +83,19 @@
     }
   },
   {
+    "name": "pi-model-manager",
+    "version": "0.4.6",
+    "usage": "Protocol behavior reference only; no source imported or runtime dependency",
+    "integrity": "sha512-tnFvbbxZzqAojaaDesrHIOFCVvYEr7wHYlDJhxjuZ1HoAu/5T3PxtlE3DRh621U09kURCEE5w0hp8ixMV6jRwg==",
+    "tarball": "https://registry.npmjs.org/pi-model-manager/-/pi-model-manager-0.4.6.tgz",
+    "license": "AGPL-3.0-only",
+    "gitHead": "ce5e42d688ff67209caa7da286864976e6ed3f84",
+    "repository": {
+      "url": "git+https://github.com/Qihuanxishini/pi-model-manager.git",
+      "type": "git"
+    }
+  },
+  {
     "name": "oh-my-pi (Titanium theme)",
     "license": "MIT",
     "gitHead": "602aaee4cd3101c14e6c821a41a200f311896146",

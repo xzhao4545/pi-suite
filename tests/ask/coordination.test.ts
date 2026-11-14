@@ -107,7 +107,7 @@ test('native asks hold real child questions and job completion; only system canc
       else {
         gate.cancel();
         await h.idle();
-        assert.equal(h.goal()?.waiting, 'user'); assert.equal(h.goal()?.automatic, false);
+        assert.equal(h.goal()?.status, 'paused'); assert.equal(h.goal()?.reason?.wait?.waiting, 'user'); assert.equal(h.goal()?.automatic, false);
         assert.equal(rootCalls, 2); assert.equal(notices().length, 1);
         assert.ok(runs.every(run => run.record.state === 'waiting'));
         resumed = h.session.prompt('Continue with my explicit answer');

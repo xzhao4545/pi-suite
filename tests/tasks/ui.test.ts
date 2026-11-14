@@ -4,13 +4,15 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
-import { SessionManager, type ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { SessionManager, type ExtensionAPI, type ExtensionCommandContext, type ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { visibleWidth } from '@earendil-works/pi-tui';
 import { Dock } from '../../src/ui/dock.ts';
 import { SessionBinding } from '../../src/runtime/binding.ts';
 import { TasksModule, taskPath } from '../../src/tasks/index.ts';
 import { TaskStore } from '../../src/tasks/store.ts';
-import { TaskBrowserView } from '../../src/tasks/viewer.ts';
+import { TaskBrowserView, showTask, showTasks } from '../../src/tasks/viewer.ts';
+import { registerTasksCommand } from '../../src/tasks/commands.ts';
+import type { Notifications } from '../../src/runtime/notifications.ts';
 import { terminal } from '../support/terminal.ts';
 import { displayText } from '../../src/ui/browser-chrome.ts';
 
@@ -105,6 +107,48 @@ test('persisted fork reads the actual source header without repair; source error
     assert.match(notices.at(-1)!, /TASK_STORE_INVALID|current state is retained/);
     assert.equal(readFileSync(sourcePath, 'utf8'), '{invalid tasks');
   } finally { tasks.detach(); binding.revoke(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('task readers revoke pending imports, snapshot reads and returned selection with their binding', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'pi-suite-task-reader-')), binding = new SessionBinding(), dock = new Dock();
+  const notices: string[] = [], tasks = new TasksModule(binding, dock);
+  const a = taskContext(root, 'a', text => notices.push(text)), b = taskContext(root, 'b');
+  let handler!: (args: string, ctx: ExtensionCommandContext) => Promise<void>, opened = 0, released = 0;
+  Object.assign(a.ui, {custom: async () => { opened++; return undefined; }});
+  const pi = { registerCommand: (_name: string, options: {handler: typeof handler}) => { handler = options.handler; } } as unknown as ExtensionAPI;
+  const notifications = { hold: () => {
+    // A session replacement queued while import() yields must not open the old UI.
+    queueMicrotask(() => binding.bind(b));
+    return () => { released++; };
+  } } as unknown as Notifications;
+  try {
+    binding.bind(a); await tasks.bind(a, {reason: 'startup'});
+    registerTasksCommand(pi, tasks, dock, notifications, binding);
+    await assert.rejects(handler('1 2', a as ExtensionCommandContext), /Use \/tasks/);
+    a.mode = 'rpc'; await handler('', a as ExtensionCommandContext);
+    assert.deepEqual(notices, ['No tasks']); assert.equal(opened, 0);
+    a.mode = 'tui'; await handler('', a as ExtensionCommandContext);
+    assert.equal(opened, 0, 'replacement during import cannot mount the old browser');
+    assert.equal(released, 1, 'a revoked import still releases notification ownership');
+
+    binding.bind(a); await tasks.bind(a, {reason: 'reload'});
+    const generation = tasks.current(a).generation;
+    await tasks.edit(a, [{op: 'add', title: 'group', children: ['child']}], generation);
+    const gate = Promise.withResolvers<void>(), entered = Promise.withResolvers<void>(), get = tasks.get.bind(tasks);
+    t.mock.method(tasks, 'get', async (...args: Parameters<typeof get>) => {
+      const result = await get(...args); entered.resolve(); await gate.promise; return result;
+    });
+    const pending = showTask(a, tasks, dock, `${generation}:1.1`, binding);
+    await entered.promise; binding.bind(b); gate.resolve(); await pending;
+    assert.equal(opened, 0, 'a loaded detail cannot mount after its task read loses ownership');
+
+    binding.bind(a); await tasks.bind(a, {reason: 'reload'});
+    let selections = 0;
+    t.mock.method(tasks, 'selectGroup', () => { selections++; });
+    Object.assign(a.ui, {custom: async () => { binding.bind(b); return `${generation}:1.1`; }});
+    await showTasks(a, tasks, undefined, 'all', binding);
+    assert.equal(selections, 0, 'a closed old reader cannot redirect the replacement Dock selection');
+  } finally { tasks.detach(); binding.revoke(); rmSync(root, {recursive: true, force: true}); }
 });
 
 const taskContext = (cwd: string, id: string, notify: (message: string, type?: string) => void = () => {}) => ({

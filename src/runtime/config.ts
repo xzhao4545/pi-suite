@@ -20,8 +20,12 @@ export const configSchema = Type.Object({
     jobs: Type.Optional(Type.Boolean()), goal: Type.Optional(Type.Boolean()),
     agents: Type.Optional(Type.Boolean()),
   }, { additionalProperties: false })),
-  ui: Type.Optional(Type.Object({ maxRows: Type.Optional(Type.Integer({ minimum: 1, maximum: 30 })),
-    highlightBuiltinCommands: Type.Optional(Type.Boolean()) }, { additionalProperties: false })),
+  runtime: Type.Optional(Type.Object({
+    openAIResponsesAutoRecovery: Type.Optional(Type.Boolean({ description: "Automatic recovery for OpenAI Responses cross-resource errors." })),
+  }, { additionalProperties: false })),
+  ui: Type.Optional(Type.Object({ maxRows: Type.Optional(Type.Integer({ minimum: 1, maximum: 30,
+    description: "Idle Dock rows: 1–30 (default 12)." })),
+    highlightBuiltinCommands: Type.Optional(Type.Boolean({ description: "Built-in model Bash / PowerShell command highlighting (default true)." })) }, { additionalProperties: false })),
   ask: Type.Optional(Type.Object({
     timeout: Type.Optional(Type.Integer({ minimum: 0, maximum: 2147483647 })),
     historyKey: Type.Optional(Type.String({ pattern: keyPattern })),
@@ -54,6 +58,7 @@ export type DisplayMode = "status" | "dock" | "hidden";
 export interface SuiteConfig {
   commands: { exit: boolean };
   modules: Record<"ask" | "tasks" | "jobs" | "goal" | "agents", boolean>;
+  runtime: { openAIResponsesAutoRecovery: boolean };
   ui: { maxRows: number; highlightBuiltinCommands: boolean };
   ask: { timeout: number; historyKey: KeyId };
   goal: { display: DisplayMode };
@@ -69,6 +74,7 @@ export interface SuiteConfig {
 export const defaults: SuiteConfig = {
   commands: { exit: true },
   modules: { ask: true, tasks: true, jobs: true, goal: true, agents: true },
+  runtime: { openAIResponsesAutoRecovery: false },
   ui: { maxRows: 12, highlightBuiltinCommands: true }, ask: { timeout: 600000, historyKey: "ctrl+h" },
   goal: { display: "status" }, agents: { display: "status", maxConcurrent: 10, maxConcurrentForeground: 0,
     maxDepth: 3, persistSessions: true, types: {}, mentions: true, scheduling: true, workflows: true },

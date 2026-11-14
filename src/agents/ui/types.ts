@@ -21,9 +21,10 @@ export async function showAgentTypes(ctx: ExtensionContext, dock: Dock, config: 
         // Inheritance is a runtime choice, not a type default; never preview the parent's live value as a pin.
         model = resolved.modelSource === 'inherited' ? 'not configured' : `${resolved.model.provider}/${resolved.model.id}`;
         thinking = resolved.thinkingSource === 'inherited' ? 'not configured' : clampThinkingLevel(resolved.model, resolved.thinking);
-        settings = [`Model: ${model} (${resolved.modelSource})`, `Thinking: ${thinking} (${resolved.thinkingSource})`,
-          ...resolved.modelSource === 'inherited' ? ["At runtime, uses the parent session's current model when the run starts."] : [],
-          ...resolved.thinkingSource === 'inherited' ? ["At runtime, uses the parent session's current thinking level when the run starts, clamped to the model's capabilities."] : []].join('\n');
+        settings = [
+          `Model: ${model} (${resolved.modelSource})${resolved.modelSource === 'inherited' ? ' · inherit from parent at start' : ''}`,
+          `Thinking: ${thinking} (${resolved.thinkingSource})${resolved.thinkingSource === 'inherited' ? ' · inherit from parent at start, adjusted to model capabilities' : ''}`,
+        ].join('\n');
       } catch (error) {
         // Invalid model pins remain visible and editable; report the exact failure in details.
         settings = `Configuration error: ${error instanceof Error ? error.message : String(error)}`;

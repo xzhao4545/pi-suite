@@ -105,7 +105,7 @@ export class TasksModule {
       // establish the final baseline before enabling live completion feedback.
       this.refresh(); this.restored = true;
       if (event.reason === 'fork' && !event.previousSessionFile) {
-        ctx.ui.notify('Tasks were not inherited from the in-memory source; this fork uses an independent task list.', 'warning');
+        ctx.ui.notify('Source tasks were not copied; this fork uses an independent task list.', 'warning');
       }
     }
   }

@@ -8,7 +8,8 @@ import { GoalManager } from "../../src/goal/manager.ts";
 import { Dock } from "../../src/ui/dock.ts";
 import { StatusPublisher } from "../../src/ui/status.ts";
 import { WaitRegistry } from "../../src/runtime/wait.ts";
-import { GOAL_ENTRY, goalDuration, type Goal } from '../../src/goal/state.ts';
+import { GOAL_ENTRY } from '../../src/goal/snapshot.ts';
+import { goalDuration, type Goal } from '../../src/goal/state.ts';
 
 function fixture() {
   const binding = new SessionBinding();
@@ -56,7 +57,7 @@ test("wait and completion timers cannot mutate edited objectives or revoked bind
     assert.ok(notifications.has("main", request));
     run(); g.complete(g.goal!.id, "Verified", ctx); assert.match(statuses.get("goal") ?? "", /^✅ goal \d+:\d{2}(?::\d{2})?$/);
     g.start("New goal", ctx); const id = g.goal!.id; t.mock.timers.tick(5000);
-    assert.equal(g.goal!.id, id); assert.match(statuses.get("goal") ?? "", /^⏳ goal \d+:\d{2}(?::\d{2})?$/);
+    assert.equal(g.goal!.id, id); assert.match(statuses.get("goal") ?? "", /^🎯 goal \d+:\d{2}(?::\d{2})?$/);
     run(); g.wait(id, "Late event", 100, ctx); binding.revoke(); t.mock.timers.tick(100);
     assert.throws(() => g.requireOwned(id, ctx), { name: "ToolError", code: "STALE_BINDING", objectId: id });
     assert.equal(g.goal!.waiting, "jobs"); assert.equal(g.goal!.id, id);
@@ -69,7 +70,7 @@ test("a settlement merges goal/job/agent wakeups and yields to pending host mess
     g.start("Work", ctx); run();
     let delivered = 0;
     n.enqueue("main", "job:1", "Job finished", () => delivered++); n.enqueue("main", "agent:1", "Agent finished", () => delivered++);
-    const event = { outcome: "completed", continue: false, context: { pendingMessages: [] } } as unknown as AgentBeforeSettleEvent;
+    const event = { outcome: "completed", continue: false, entries: [], context: { pendingMessages: [] } } as unknown as AgentBeforeSettleEvent;
     g.beforeSettle(event);
     assert.equal(n.beforeSettle({ ...event, continue: true }), undefined);
     assert.equal(n.beforeSettle({ ...event, context: { pendingMessages: [{}] } } as AgentBeforeSettleEvent), undefined);
@@ -123,10 +124,10 @@ test('user audits close non-active goals without execution permission, and compl
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 10000 });
   const { manager: g, ctx, run, notifications, entries, statuses } = fixture();
   try {
-    for (const state of ['failed', 'paused', 'blocked', 'budget_limited', 'stopped'] as const) {
+    for (const kind of ['request_failed', 'manual', 'blocked', 'budget', 'historical_stop'] as const) {
       g.start('Audit every requirement', ctx, 1); run(); const id = g.goal!.id;
       g.pause(ctx);
-      g.goal!.status = state; g.goal!.error = 'Original fault'; g.goal!.usedTokens = 10;
+      g.goal!.reason = { kind }; g.goal!.error = 'Original fault'; g.goal!.usedTokens = 10;
       assert.throws(() => g.complete(id, 'Old request', ctx), { code: 'STALE_BINDING' });
       g.settled(true);
       assert.equal(g.beforeStart(false), false, 'unrelated child/custom run cannot acquire audit ownership');
@@ -137,7 +138,7 @@ test('user audits close non-active goals without execution permission, and compl
       assert.throws(() => g.wait(id, 'Do work', undefined, ctx), { code: 'NOT_RUNNING' });
       assert.throws(() => g.block(id, 'Blocker', 'Evidence', ctx), { code: 'NOT_RUNNING' });
       g.messageEnd({ message: { role: 'assistant', usage: { totalTokens: 2 } } } as MessageEndEvent, ctx);
-      assert.equal(g.goal!.usedTokens, 12); assert.equal(g.goal!.status, state);
+      assert.equal(g.goal!.usedTokens, 12); assert.equal(g.goal!.status, 'paused');
       assert.equal(notifications.has('main', `goal:${id}`), false);
       assert.equal(g.complete(id, 'Verified existing work', ctx), true);
       const at = g.goal!.completedAt, saved = entries.length;
@@ -178,38 +179,44 @@ test('completion-only ownership rejects wrong sessions, revisions, cancelled req
   } finally { g.detach(); }
 });
 
-test('quit stops every unfinished state with frozen usage and reasons; cold permission survives tree/reload by revision', t => {
+test('quit pauses every unfinished goal with frozen usage and reasons; cold permission survives tree/reload by revision', t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   let now = 0; t.mock.method(performance, 'now', () => now);
   const { manager: g, ctx, run, entries, notifications } = fixture();
   try {
-    for (const state of ['active', 'failed', 'paused', 'blocked', 'budget_limited'] as const) {
+    for (const kind of [undefined, 'request_failed', 'manual', 'blocked', 'budget'] as const) {
       g.start('Retain all evidence', ctx, 100); run(); now += 1000;
-      g.goal!.status = state; g.goal!.progress = 'Saved progress'; g.goal!.error = 'Fault retained';
+      if (kind) { g.goal!.status = 'paused'; g.goal!.reason = { kind }; }
+      g.goal!.progress = 'Saved progress'; g.goal!.error = 'Fault retained';
       g.goal!.waiting = 'jobs'; g.goal!.resumeAt = Date.now() + 100; g.goal!.waitFor = ['job_deadbeef'];
       g.shutdown('quit'); const saved = entries.at(-1)!.data.goal!, count = entries.length;
-      assert.equal(saved.status, 'stopped'); assert.equal(saved.stoppedFrom, state); assert.equal(saved.automatic, false);
+      assert.equal(saved.status, 'paused'); assert.equal(saved.reason?.kind, 'shutdown'); assert.equal(saved.reason?.previous, kind); assert.equal(saved.automatic, false);
       assert.equal(saved.progress, 'Saved progress'); assert.equal(saved.error, 'Fault retained'); assert.equal(saved.budget, 100);
       assert.equal(saved.resumeAt, undefined); assert.equal(saved.waitFor, undefined); assert.equal(saved.waiting, undefined);
       assert.equal(saved.elapsedMs, 1000); assert.equal(saved.resumeRequired, true);
       t.mock.timers.tick(200); now += 10000; assert.equal(g.elapsedMs, 1000);
       g.shutdown('quit'); assert.equal(entries.length, count); assert.equal(notifications.has('main', `goal:${saved.id}`), false);
     }
+    g.pause(ctx); g.settled(true); g.resume(); g.beforeStart(true); g.startRun(ctx); g.settled(true);
+    assert.equal(g.goal!.reason?.kind, 'cancelled'); assert.equal(g.goal!.resumeRequired, false);
+    g.restore(ctx, 'startup');
+    assert.equal(g.goal!.status, 'paused'); assert.equal(g.goal!.resumeRequired, true, 'cold startup revokes Esc user-input grant too');
+    g.beforeStart(true); g.startRun(ctx); assert.equal(g.goal!.automatic, false); g.settled(false);
     g.start('Crash snapshot', ctx); run(); g.wait(g.goal!.id, 'Deadline', 100, ctx);
     const old = entries.at(-1)!; g.detach();
-    g.restore(ctx, 'startup'); assert.equal(g.goal!.status, 'stopped');
+    g.restore(ctx, 'startup'); assert.equal(g.goal!.status, 'paused');
     t.mock.timers.tick(200); assert.equal(notifications.has('main', `goal:${g.goal!.id}`), false);
     // Selecting a stale active branch must not undo the session's cold revocation.
     t.mock.method(ctx.sessionManager, 'getBranch', () => [old] as never);
-    for (const reason of ['tree', 'reload'] as const) { g.restore(ctx, reason); assert.equal(g.goal!.status, 'stopped'); }
+    for (const reason of ['tree', 'reload'] as const) { g.restore(ctx, reason); assert.equal(g.goal!.status, 'paused'); }
     g.beforeStart(true); g.startRun(ctx); assert.equal(g.goal!.automatic, false);
     g.settled(false); g.resume(); assert.equal(g.goal!.resumeRequired, false);
     g.restore(ctx, 'tree'); assert.equal(g.goal!.status, 'active');
-    const prior = { ...old, data: { version: 1, goal: { ...old.data.goal!, revision: old.data.goal!.revision + 1 } } };
+    const prior = { ...old, data: { version: 2, goal: { ...old.data.goal!, revision: old.data.goal!.revision + 1 } } };
     t.mock.method(ctx.sessionManager, 'getBranch', () => [prior] as never);
-    g.restore(ctx, 'tree'); assert.equal(g.goal!.status, 'stopped', 'grant cannot authorize another revision');
-    g.resume(); run(); g.stopGoal(ctx); const stopped = entries.length;
-    g.stopGoal(ctx); assert.equal(entries.length, stopped, 'stop is idempotent and retains goal');
+    g.restore(ctx, 'tree'); assert.equal(g.goal!.status, 'paused', 'grant cannot authorize another revision');
+    g.resume(); run(); g.pause(ctx); const paused = entries.length;
+    g.pause(ctx); assert.equal(entries.length, paused, 'pause is idempotent and retains goal');
     g.settled(true); g.beforeStart(true); g.startRun(ctx); g.complete(g.goal!.id, 'Verified', ctx);
     const completed = { ...g.goal! }; g.shutdown('quit'); assert.deepEqual(g.goal, completed);
     assert.ok(entries.every(entry => entry.customType === GOAL_ENTRY));
@@ -226,5 +233,30 @@ test('explicit resume during abort settlement survives the older run and queues 
     assert.equal(g.goal!.automatic, true);
     assert.ok(notifications.has('main', `goal:${g.goal!.id}`));
     run(); assert.equal(notifications.has('main', `goal:${g.goal!.id}`), false);
+  } finally { g.detach(); }
+});
+
+test('error boundaries remain provisional, recovery keeps one automatic round, and only final settlement pauses', () => {
+  const { manager: g, ctx, notifications } = fixture();
+  const event = (outcome: 'completed' | 'error', continued = false) => ({ outcome, continue: continued, entries: [], context: { pendingMessages: [] } }) as unknown as AgentBeforeSettleEvent;
+  try {
+    g.start('Recover without losing ownership', ctx); g.activity.delivered(); g.beforeStart(false); g.startRun(ctx);
+    for (let i = 0; i < 6; i++) {
+      g.endRun(i ? '429 retry attempt' : '400 cross-resource');
+      g.beforeSettle(event('error', true));
+      assert.equal(g.goal!.status, 'active'); assert.equal(g.goal!.automatic, true); assert.equal(g.schedule, 'waiting_host');
+      assert.equal(notifications.has('main', `goal:${g.goal!.id}`), false);
+      g.startRun(ctx);
+    }
+    g.endRun(); g.beforeSettle(event('completed')); g.settled(false);
+    assert.equal(g.goal!.status, 'active', 'failed attempts are not no-tool rounds');
+    assert.ok(notifications.has('main', `goal:${g.goal!.id}`));
+    g.beforeStart(false); g.startRun(ctx); g.endRun('401 final credential error');
+    g.beforeSettle(event('error'));
+    assert.equal(g.goal!.status, 'active', 'a later extension can still propose recovery');
+    g.settled(false);
+    assert.equal(g.goal!.status, 'paused'); assert.equal(g.goal!.reason?.kind, 'request_failed');
+    assert.equal(g.goal!.error, '401 final credential error'); assert.equal(g.goal!.resumeRequired, true);
+    assert.equal(notifications.has('main', `goal:${g.goal!.id}`), false);
   } finally { g.detach(); }
 });

@@ -83,7 +83,7 @@ export class Notifications {
     // the next boundary instead of adding another request or changing its ordering.
     if (event.continue || event.context.pendingMessages.length) return;
     if (!this.admitted(active.sessionId)) return;
-    return { continue: true, entries: [{ type: "custom_message", customType: "pi-suite:notification",
+    return { continue: true, entries: [...event.entries, { type: "custom_message", customType: "pi-suite:notification",
       ...this.take(active.sessionId), display: false }] };
   }
 
@@ -105,7 +105,9 @@ export class Notifications {
     const active = this.binding.current;
     if (!active || this.blockers.size || !active.ctx.isIdle() || active.ctx.hasPendingMessages()) return;
     if (!this.admitted(active.sessionId)) return;
-    this.pi.sendMessage({ customType: "pi-suite:notification", ...this.take(active.sessionId), display: true },
+    const message = this.take(active.sessionId);
+    this.pi.sendMessage({ customType: "pi-suite:notification", ...message,
+      display: message.details.segments.some(segment => segment.source !== "goal-continuation") },
       { triggerTurn: true, deliverAs: "followUp" });
   }
 }

@@ -11,13 +11,14 @@ import { visibleAgent, type AgentType } from '../agents/types.ts';
 import { registerSuiteCommand } from './settings/index.ts';
 import { prepareClipboard } from './clipboard.ts';
 import type { SubagentsDeps } from '../agents/commands.ts';
+import { registerResponsesRecovery } from './responses/index.ts';
 
 export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
   let config = loadConfig(initial.cwd);
   // Pi uses Jiti with shared dependency graphs: concurrent imports can expose unfinished
   // exports. Load admitted stacks in order and finish registration before session_start returns.
   const [taskApi, goalApi, jobApi, agentApi] = [
-    config.modules.tasks ? [await import('../tasks/index.ts'), await import('../tasks/tools.ts'), await import('../tasks/viewer.ts')] as const : undefined,
+    config.modules.tasks ? [await import('../tasks/index.ts'), await import('../tasks/tools.ts'), await import('../tasks/commands.ts')] as const : undefined,
     config.modules.goal ? [await import('../goal/manager.ts'), await import('../goal/tools.ts'), await import('../goal/commands.ts'), await import('../goal/index.ts')] as const : undefined,
     config.modules.jobs || config.modules.agents ? [await import('../jobs/index.ts'), await import('../jobs/tools.ts'), await import('../jobs/commands.ts')] as const : undefined,
     config.modules.agents ? [await import('../agents/index.ts'), await import('../agents/tools.ts'), await import('../agents/commands.ts'),
@@ -34,13 +35,19 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
   const dock = new Dock();
   const status = new StatusPublisher(dock);
   const notifications = new Notifications(pi, binding);
+  const recovery = registerResponsesRecovery(pi, binding, config.runtime.openAIResponsesAutoRecovery);
   const tasks = config.modules.tasks ? new taskApi![0].TasksModule(binding, dock) : undefined;
   if (tasks) {
-    taskApi![1].registerTaskTools(pi, tasks); taskApi![2].registerTasksCommand(pi, tasks, dock, notifications); tasks.registerReminders(pi, () => config);
+    taskApi![1].registerTaskTools(pi, tasks); taskApi![2].registerTasksCommand(pi, tasks, dock, notifications, binding); tasks.registerReminders(pi, () => config);
     dock.setOpen('tasks', async (rowId, ctx) => {
+      const current = binding.current;
+      if (!current) return;
       const release = notifications.hold();
-      try { await taskApi![2].showTask(ctx, tasks, dock, rowId.slice('task:'.length)); }
-      finally { release(); }
+      try {
+        const { showTask } = await import('../tasks/viewer.ts');
+        if (!binding.isCurrent(current) || ctx.signal?.aborted) return;
+        await showTask(ctx, tasks, dock, rowId.slice('task:'.length), binding);
+      } finally { release(); }
     });
   }
   const waits = new WaitRegistry();
@@ -129,6 +136,7 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
     firstBinding = false; cachedTypes = undefined;
     await prepareClipboard(pi, ctx);
     binding.bind(ctx);
+    recovery.reset(ctx);
     dock.bind(ctx, config.ui.maxRows);
     status.bind(ctx.ui, { goal: config.goal.display, agents: config.agents.display, jobs: config.jobs.display }, goal !== undefined);
     goal?.restore(ctx, goalReason);
@@ -158,6 +166,7 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
     const workflowQuit = event.reason === 'quit' ? quitExistingWorkflowRuntime(agentDir) : undefined;
     const scheduleQuit = agentQuit?.then(() => schedules?.drain());
     workflows?.detach(); agents?.detach();
+    recovery.reset();
     notifications.detach(); status.detach(); dock.detach(binding.current?.ctx); binding.revoke();
     return Promise.all([quit, agentQuit, workflowQuit, scheduleQuit]).then(() => { if (agents) pi.events.emit('subagents:disposed', {}); });
   });
@@ -165,8 +174,14 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
     const view = goal?.contextView(ctx);
     return { messages: notifications.project(event.messages, view?.access === "execute" ? `goal:${view.goal.id}` : undefined) };
   });
-  pi.on("agent_before_settle", event => { goal?.beforeSettle(event); return notifications.beforeSettle(event); });
+  pi.on("agent_before_settle", event => {
+    const repair = recovery.beforeSettle(event);
+    const proposed = repair ? { ...event, ...repair } : event;
+    goal?.beforeSettle(proposed);
+    return notifications.beforeSettle(proposed) ?? repair;
+  });
   pi.on("agent_settled", event => {
+    recovery.settled();
     waits.steeringDelivered(); goal?.settled(event.aborted);
     if (event.aborted) jobs?.pauseWakes();
     notifications.flush();

@@ -153,11 +153,29 @@ test('configuration edits share locks, preserve other fields and enforce layer/s
   const paths = configPaths(project, root);
   writeFileSync(paths.user, JSON.stringify({ask: {timeout: 55}, agents: {types: {worker: {thinking: 'low'}}}}));
   try {
+    assert.equal(loadConfig(project, root).runtime.openAIResponsesAutoRecovery, false);
     await Promise.all([
       writeConfigFields(project, [{path: ['commands', 'exit'], value: false}], root),
       writeConfigFields(project, [{path: ['agents', 'types', 'worker', 'model'], value: 'provider/model'}], root),
+      writeConfigFields(project, [{path: ['runtime', 'openAIResponsesAutoRecovery'], value: true}], root),
     ]);
     assert.equal(loadConfig(project, root).commands.exit, false);
+    assert.deepEqual(readConfig(paths.user).runtime, {openAIResponsesAutoRecovery: true});
+    await writeConfigFields(project, [{path: ['runtime', 'openAIResponsesAutoRecovery'], value: false, layer: 'project'}], root);
+    assert.equal(loadConfig(project, root).runtime.openAIResponsesAutoRecovery, false);
+    assert.equal(readConfig(paths.user).runtime?.openAIResponsesAutoRecovery, true);
+    await writeConfigFields(project, [{path: ['runtime', 'openAIResponsesAutoRecovery'], value: undefined, layer: 'project'}], root);
+    assert.equal(loadConfig(project, root).runtime.openAIResponsesAutoRecovery, true);
+    assert.equal(readConfig(paths.project).runtime, undefined);
+    const beforeInvalid = readConfig(paths.user);
+    await assert.rejects(writeConfigFields(project, [
+      {path: ['commands', 'exit'], value: true},
+      {path: ['runtime', 'openAIResponsesAutoRecovery'], value: 'true'},
+    ], root), /Invalid/);
+    await assert.rejects(writeConfigFields(project, [{path: ['runtime', 'unknown'], value: true}], root), /Invalid/);
+    assert.deepEqual(readConfig(paths.user), beforeInvalid, 'invalid recovery edits cannot commit other fields');
+    await writeConfigFields(project, [{path: ['runtime', 'openAIResponsesAutoRecovery'], value: undefined, layer: 'user'}], root);
+    assert.equal(loadConfig(project, root).runtime.openAIResponsesAutoRecovery, false);
     assert.deepEqual(readConfig(paths.user).agents?.types?.worker, {model: 'provider/model', thinking: 'low'});
     assert.equal(readConfig(paths.user).ask?.timeout, 55);
     assert.equal(loadConfig(project, root).ui.highlightBuiltinCommands, true);

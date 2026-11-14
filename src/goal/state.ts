@@ -1,77 +1,37 @@
-import { Type, type Static } from "typebox";
-import { Value } from "typebox/value";
-import type { AutoStopReason } from "./activity.ts";
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { AutoStopReason } from './activity.ts';
 
-export const GOAL_ENTRY = "pi-suite:goal";
-const goalSchema = Type.Object({
-  id: Type.String(), revision: Type.Integer({ minimum: 0 }), text: Type.String({ minLength: 1, maxLength: 4000 }),
-  status: Type.String({ enum: ["active", "paused", "blocked", "failed", "completed", "budget_limited", "stopped"] }),
-  // Stopping must not erase the reason an unfinished goal could not proceed.
-  stoppedFrom: Type.Optional(Type.String({ enum: ["active", "paused", "blocked", "failed", "budget_limited"] })),
-  automatic: Type.Boolean(), autoStopReason: Type.Optional(Type.String({ enum: ["no_tools", "repeated_tools"] })),
-  resumeRequired: Type.Optional(Type.Boolean()), waiting: Type.Optional(Type.String({ enum: ["user", "jobs"] })),
-  budget: Type.Optional(Type.Integer({ minimum: 1 })), usedTokens: Type.Integer({ minimum: 0 }),
-  elapsedMs: Type.Number({ minimum: 0 }), turns: Type.Integer({ minimum: 0 }),
-  progress: Type.String(), error: Type.Optional(Type.String()),
-  resumeAt: Type.Optional(Type.Number()), completedAt: Type.Optional(Type.Number()),
-  // goal_wait waitFor: the goal resumes only after all these job/agent IDs settle (or one asks).
-  waitFor: Type.Optional(Type.Array(Type.String())),
-}, { additionalProperties: false });
-const entrySchema = Type.Object({ version: Type.Literal(1), goal: Type.Union([goalSchema, Type.Null()]) });
-export type GoalStatus = "active" | "paused" | "blocked" | "failed" | "completed" | "budget_limited" | "stopped";
-export type Schedule = "running" | "waiting_user" | "waiting_jobs" | "waiting_host" | "detached" | "idle";
-export type Goal = Omit<Static<typeof goalSchema>, "status" | "waiting" | "autoStopReason"> & { status: GoalStatus; waiting?: "user" | "jobs"; autoStopReason?: AutoStopReason };
-
-export function restoreGoal(ctx: ExtensionContext): Goal | undefined {
-  const entry = ctx.sessionManager.getBranch().findLast(entry => entry.type === "custom" && entry.customType === GOAL_ENTRY);
-  if (!entry || entry.type !== "custom") return;
-  if (!Value.Check(entrySchema, entry.data)) throw new Error("Invalid persisted pi-suite goal");
-  return entry.data.goal ? { ...entry.data.goal } as Goal : undefined;
+export type GoalLifecycle = 'active' | 'paused' | 'completed';
+export type PauseKind = 'manual' | 'blocked' | 'request_failed' | 'budget' | AutoStopReason | 'shutdown' | 'startup' | 'cancelled' | 'compaction_failed' | 'historical_stop' | 'permission';
+export type GoalWait = { waiting: 'user' | 'jobs'; resumeAt?: number; waitFor?: string[] };
+export type PauseReason = { kind: PauseKind; previous?: string; automaticStop?: AutoStopReason; wait?: GoalWait };
+export interface Goal {
+  id: string; revision: number; text: string; status: GoalLifecycle;
+  automatic: boolean; resumeRequired?: boolean; reason?: PauseReason;
+  budget?: number; usedTokens: number; elapsedMs: number; turns: number;
+  progress: string; error?: string; completedAt?: number;
+  waiting?: 'user' | 'jobs'; resumeAt?: number; waitFor?: string[];
 }
-
-export function goalRequiresResume(ctx: ExtensionContext, goal: Goal): boolean {
-  // Branch selection restores work, not a grant to undo a cold-start revocation. Read only
-  // permission metadata across the session; an explicit grant applies to its revision only.
-  const entry = ctx.sessionManager.getEntries().findLast(entry => {
-    if (entry.type !== "custom" || entry.customType !== GOAL_ENTRY) return false;
-    const saved = (entry.data as { goal?: Goal } | undefined)?.goal;
-    return saved?.id === goal.id && saved.resumeRequired !== undefined;
-  });
-  if (!entry || entry.type !== "custom") return false;
-  if (!Value.Check(entrySchema, entry.data)) throw new Error("Invalid persisted pi-suite goal permission");
-  const saved = entry.data.goal as Goal;
-  return saved.resumeRequired === true || saved.revision !== goal.revision;
+export type Schedule = 'running' | 'waiting_user' | 'waiting_jobs' | 'waiting_host' | 'detached' | 'idle';
+export type GoalUserState = 'running' | 'waiting' | 'paused' | 'completed';
+export const goalStateLabels: Record<GoalUserState, string> = { running: '进行中', waiting: '等待中', paused: '已暂停', completed: '已完成' };
+export const pauseLabels: Record<PauseKind, string> = {
+  manual: 'Manually paused', blocked: 'External blocker', request_failed: 'Model request failed', budget: 'Token budget reached',
+  no_tools: 'No tool activity', repeated_tools: 'Repeated tool activity', shutdown: 'Session ended', startup: 'Session restored',
+  cancelled: 'Request cancelled', compaction_failed: 'Compaction failed', historical_stop: 'Historical stop', permission: 'Resume required',
+};
+/** Detached is a binding fact, not a fifth lifecycle. All UI uses this projection. */
+export function goalUserState(goal: Goal, schedule: Schedule): GoalUserState {
+  if (goal.status === 'completed') return 'completed';
+  if (goal.status === 'paused' || !goal.automatic) return 'paused';
+  return goal.waiting || schedule.startsWith('waiting_') ? 'waiting' : 'running';
 }
-
-export function goalAutoStopReason(ctx: ExtensionContext, goal: Goal): AutoStopReason | undefined {
-  // Tree selection restores work, not permission to bypass an automatic stop. A later
-  // explicit resume clears the reason in the same snapshot stream, scoped to this revision.
-  const entry = ctx.sessionManager.getEntries().findLast(entry => {
-    if (entry.type !== "custom" || entry.customType !== GOAL_ENTRY) return false;
-    const saved = (entry.data as { goal?: Goal } | undefined)?.goal;
-    return saved?.id === goal.id && saved.revision === goal.revision;
-  });
-  if (!entry || entry.type !== "custom") return;
-  if (!Value.Check(entrySchema, entry.data)) throw new Error("Invalid persisted pi-suite automatic goal permission");
-  return (entry.data.goal as Goal).autoStopReason;
-}
-
 export function goalDuration(elapsedMs: number): string {
   const seconds = Math.floor(elapsedMs / 1000), minutes = Math.floor(seconds / 60), hours = Math.floor(minutes / 60);
   const pair = (value: number) => String(value).padStart(2, '0');
   return hours ? `${hours}:${pair(minutes % 60)}:${pair(seconds % 60)}` : `${pair(minutes)}:${pair(seconds % 60)}`;
 }
-
 export function goalSummary(goal: Goal | undefined, schedule: Schedule, now = Date.now(), elapsedMs = goal?.elapsedMs ?? 0): string | undefined {
-  if (!goal || schedule === "detached") return;
-  const terminal: Record<Exclude<GoalStatus, "active">, string> = {
-    paused: "⏸ goal", blocked: "⚠ goal", failed: "❌ goal",
-    completed: "✅ goal", budget_limited: "⏹ goal", stopped: "⏹ goal",
-  };
-  if (goal.status === "completed" && now >= (goal.completedAt ?? 0) + 5000) return;
-  const time = goalDuration(elapsedMs);
-  if (goal.status !== "active") return `${terminal[goal.status]} ${time}`;
-  // The footer identifies the state; /goal retains the precise wait and error details.
-  return `${schedule === 'running' ? '🎯 goal' : !goal.automatic && !goal.waiting ? '⏸ goal' : '⏳ goal'} ${time}`;
+  if (!goal || schedule === 'detached' || goal.status === 'completed' && now >= (goal.completedAt ?? 0) + 5000) return;
+  const icons: Record<GoalUserState, string> = { running: '🎯', waiting: '⏳', paused: '⏸', completed: '✅' };
+  return `${icons[goalUserState(goal, schedule)]} goal ${goalDuration(elapsedMs)}`;
 }

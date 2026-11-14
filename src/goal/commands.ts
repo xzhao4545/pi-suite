@@ -1,10 +1,9 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import type { Notifications } from "../runtime/notifications.ts";
 import type { Dock } from "../ui/dock.ts";
-import { showDetails } from "../ui/details.ts";
-import type { GoalManager } from "./manager.ts";
-import { autoStopMessage } from './activity.ts';
-import { goalDuration } from './state.ts';
+import { GOAL_RESUME, goalDetails, type ResumeDetails } from './presentation.ts';
+
+import type { GoalManager } from './manager.ts';
 
 export function parseGoalArgs(args: string): { text?: string; budget?: number } {
   let text = args.trim(); let budget: number | undefined;
@@ -23,24 +22,38 @@ export function registerGoalCommand(pi: ExtensionAPI, manager: GoalManager, dock
   const details = async (ctx: ExtensionCommandContext) => {
     const goal = manager.goal;
     if (!goal) { ctx.ui.notify("No goal"); return; }
+    const captured = manager.captureBinding(ctx);
+    if (!captured) return;
     const release = notifications.hold();
     try {
-      await showDetails(ctx, dock, "Goal", `# ${goal.text}\n\nStatus: ${goal.status} · ${manager.schedule}\n\n` +
-        `ID: ${goal.id}\n\nTokens: ${goal.usedTokens}${goal.budget ? `/${goal.budget}` : " (no limit)"} · Turns: ${goal.turns} · Active elapsed: ${goalDuration(manager.elapsedMs)}\n\n` +
-        `Progress: ${goal.progress || "not yet recorded"}${goal.stoppedFrom ? `\n\nStopped from: ${goal.stoppedFrom}` : ""}${goal.autoStopReason ? `\n\nAutomatic stop: ${autoStopMessage[goal.autoStopReason]}` : ""}${goal.error ? `\n\nError: ${goal.error}` : ""}`);
+      const { showDetails } = await import('../ui/details.ts');
+      // Loading can cross shutdown/tree/reload. Never mount the old page in a new binding.
+      if (!manager.isCurrent(captured) || manager.goal !== goal || ctx.signal?.aborted) return;
+      await showDetails(ctx, dock, 'Goal', goalDetails(goal, manager.schedule, manager.elapsedMs));
     } finally { release(); }
   };
   pi.registerCommand("goal", {
-    description: "Manage goal: [--tokens 100k] <objective>, status, edit, pause, resume, stop (keep), clear (delete)",
+    description: 'Manage goal: [--tokens 100k] <objective>, status, edit, pause, resume, clear',
+    getArgumentCompletions: prefix => ['status', 'edit', 'pause', 'resume', 'clear'].filter(value => value.startsWith(prefix)).map(value => ({ value, label: value })),
     handler: async (args, ctx) => {
       const trimmed = args.trim();
       if (!trimmed || trimmed === "status") { await details(ctx); return; }
       if (trimmed === "pause") { manager.pause(ctx); return; }
-      if (trimmed === "resume") {
-        if (manager.resume() === 'waiting_host') ctx.ui.notify('Goal resumed; waiting for the current response, cancellation or host operation to finish.');
+      if (trimmed === 'resume') {
+        const previous = manager.goal && goalDetails(manager.goal, manager.schedule, manager.elapsedMs);
+        // Hold control delivery until the explicit result is stored. The display message never
+        // triggers execution; the existing requestId queue owns the one continuation.
+        const release = notifications.hold();
+        try {
+          const result = manager.resume();
+          const summary = result === 'running' ? 'Goal already running' : result === 'waiting_host' ? 'Goal resumed · waiting' : 'Goal resumed';
+          pi.sendMessage({ customType: GOAL_RESUME, content: summary, display: true,
+            details: { resumeVersion: 1, text: `${previous}${result === 'waiting_host' ? '\n\nWaiting for the current response, cancellation or host operation.' : ''}` } satisfies ResumeDetails }, { triggerTurn: false });
+        } finally { release(); }
         return;
       }
-      if (trimmed === "stop") { manager.stopGoal(ctx); return; }
+      // Removed control words must not fall through to objective creation.
+      if (/^stop(?:\s|$)/.test(trimmed)) throw new Error('Unknown goal command: stop');
       if (trimmed === "clear") { manager.clear(ctx); return; }
       if (trimmed === "edit" || trimmed.startsWith("edit ")) {
         const input = parseGoalArgs(trimmed.slice(4));
@@ -50,8 +63,11 @@ export function registerGoalCommand(pi: ExtensionAPI, manager: GoalManager, dock
       const input = parseGoalArgs(trimmed);
       if (!input.text) throw new Error("Supply a goal objective");
       const old = manager.goal;
+      const captured = manager.captureBinding(ctx);
+      if (!captured) return;
       if (old && old.status !== "completed") {
         if (!ctx.hasUI || !await ctx.ui.confirm("Replace unfinished goal?", `${old.text}\n\nNew goal: ${input.text}`)) return;
+        if (!manager.isCurrent(captured) || ctx.signal?.aborted) return;
       }
       manager.start(input.text, ctx, input.budget);
     },

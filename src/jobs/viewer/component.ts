@@ -130,7 +130,7 @@ export class JobView extends Container {
     const source = this.options.source;
     const reading = this.selected === 'terminal'
       ? `${source?.viewport?.alternate ? 'alternate screen' : 'terminal screen'} · ${this.terminal?.inputMode ? 'you control input' : source?.closed ? 'exited' : 'read-only view'} · ${source?.following !== false ? 'following' : 'history'}`
-      : `${this.selected} · ${this.streams.get(this.selected)?.status.split(' · ').slice(-1)[0] ?? 'loading'}${this.job.mode === 'pty' && !source ? ' · log only (no terminal snapshot)' : ''}`;
+      : `${this.selected} · ${this.streams.get(this.selected)?.status.split(' · ').slice(-1)[0] ?? 'loading'}${this.job.mode === 'pty' && !source ? ' · Logs only' : ''}`;
     return [jobRow(this.job, width, this.theme), truncateToWidth(this.error ? this.theme.fg('warning', this.error)
       : `${this.busy ? 'Working… · ' : ''}${reading}${this.options.readonly || !this.options.live ? ' · read-only object' : ''}${this.commandFocus ? ' · command focus' : ''}`, width)];
   }
@@ -138,7 +138,7 @@ export class JobView extends Container {
     this.doubleLeft.reset();
     const text = [`ID: ${this.job.id}`, ...jobDetail(this.job, true),
       ...!this.options.live ? ['history only: not controlled by this Pi process'] : [],
-      ...this.job.mode === 'pty' && !this.options.source ? ['log only: no owned terminal or readable final snapshot'] : [],
+      ...this.job.mode === 'pty' && !this.options.source ? ['Terminal screen unavailable: no live terminal or readable final snapshot. Saved logs remain readable.'] : [],
       'All saved fields:', JSON.stringify(this.job, null, 2)].join('\n');
     this.details = new DetailsView(this.tui, () => 'Job details', new Text(sanitizeText(text), 0, 0), () => {
       this.details?.dispose(); this.details = undefined;

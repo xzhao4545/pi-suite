@@ -1,4 +1,4 @@
-import { agentDisplayName } from '../agents/runtime.ts';
+import { agentDisplayName } from '../agents/registry.ts';
 import { sanitizeText } from './text.ts';
 import { toolRenderers, stateLine } from '../ui/tool-render.ts';
 import type { WaitResult } from './wait.ts';

@@ -32,21 +32,21 @@ test("real host rejects invalid goal evidence, continues unfinished work once, t
   } finally { await h.dispose(); }
 });
 
-test('real host user audits close stopped and non-active goals without resume or budget execution, with idempotent completion', { timeout: 15000 }, async () => {
+test('real host user audits close paused goals without resume or budget execution, with idempotent completion', { timeout: 15000 }, async () => {
   const h = await host();
   try {
-    for (const state of ['failed', 'paused', 'blocked', 'budget_limited', 'stopped'] as const) {
-      h.faux.setResponses([state === 'failed' ? fauxAssistantMessage('', { stopReason: 'error', errorMessage: 'Original provider failure' }) :
-        state === 'budget_limited' ? fauxAssistantMessage('Budget spent') :
+    for (const state of ['request_failed', 'manual', 'blocked', 'budget'] as const) {
+      h.faux.setResponses([state === 'request_failed' ? fauxAssistantMessage('', { stopReason: 'error', errorMessage: 'Original provider failure' }) :
+        state === 'budget' ? fauxAssistantMessage('Budget spent') :
         context => fauxAssistantMessage(fauxToolCall(state === 'blocked' ? 'goal_blocked' : 'goal_wait', state === 'blocked' ?
           { goalId: goalId(context), reason: 'External obstacle', evidence: 'Repeated obstacle', repeatedTurns: 3 } :
           { goalId: goalId(context), reason: 'Arranged deadline', resumeAfterMs: 10000 }))]);
-      await h.session.prompt(`/goal ${state === 'budget_limited' ? '--tokens 1 ' : ''}Audit every original requirement`); await h.idle();
-      if (state === 'paused' || state === 'stopped') await h.session.prompt(`/goal ${state === 'paused' ? 'pause' : 'stop'}`);
-      assert.equal(h.goal()?.status, state); assert.equal(h.goal()?.automatic, false);
+      await h.session.prompt(`/goal ${state === 'budget' ? '--tokens 1 ' : ''}Audit every original requirement`); await h.idle();
+      if (state === 'manual') await h.session.prompt('/goal pause');
+      assert.equal(h.goal()?.status, 'paused'); assert.equal(h.goal()?.reason?.kind, state); assert.equal(h.goal()?.automatic, false);
       const before = h.goal()!, calls = h.faux.state.callCount;
       h.faux.setResponses([context => {
-        assert.equal(h.goal()?.status, state); assert.equal(h.goal()?.automatic, false);
+        assert.equal(h.goal()?.status, 'paused'); assert.equal(h.goal()?.automatic, false);
         assert.equal(goalView(context).access, "complete");
         return complete(context);
       }]);
@@ -75,8 +75,8 @@ test("host retry succeeds without suite retry; exhausted retries persist final f
     assert.equal(h.faux.state.callCount, 2); assert.equal(h.goal()?.status, "completed");
     h.faux.setResponses([error(), error()]);
     await h.session.prompt("/goal Verify final error"); await h.idle();
-    assert.equal(h.faux.state.callCount, 4); assert.equal(h.goal()?.status, "failed");
-    assert.match(h.goal()?.error ?? "", /503/); assert.match(h.statuses.get("goal") ?? "", /^❌ goal \d+:\d{2}(?::\d{2})?$/);
+    assert.equal(h.faux.state.callCount, 4); assert.equal(h.goal()?.status, 'paused'); assert.equal(h.goal()?.reason?.kind, 'request_failed');
+    assert.match(h.goal()?.error ?? "", /503/); assert.match(h.statuses.get("goal") ?? "", /^⏸ goal \d+:\d{2}(?::\d{2})?$/);
   } finally { await h.dispose(); }
 });
 
@@ -87,7 +87,7 @@ test("Esc preserves the goal, foreign work cannot resume it, and explicit resume
     h.faux.setResponses([async () => { started.resolve(); await release.promise; return fauxAssistantMessage("interrupted"); }]);
     await h.session.prompt("/goal Keep control after Esc"); await started.promise;
     const aborted = h.session.abort(); release.resolve(); await aborted; await h.idle();
-    assert.equal(h.goal()?.status, "active"); assert.equal(h.goal()?.automatic, false);
+    assert.equal(h.goal()?.status, 'paused'); assert.equal(h.goal()?.automatic, false);
     assert.match(h.statuses.get("goal") ?? "", /^⏸ goal \d+:\d{2}(?::\d{2})?$/);
     h.faux.setResponses([context => {
       assert.ok(!JSON.stringify(context.messages).includes("Current Goal contract (request-only"), "foreign work cannot receive a goal contract");
@@ -125,8 +125,8 @@ test("an explicit budget stops model work, can be raised, and clear removes the 
   try {
     h.faux.setResponses([fauxAssistantMessage("Progress")]);
     await h.session.prompt("/goal --tokens 1 Stay within budget"); await h.idle();
-    assert.equal(h.goal()?.status, "budget_limited"); assert.equal(h.faux.state.callCount, 1);
-    assert.ok(h.goal()!.usedTokens >= 1); assert.match(h.statuses.get("goal") ?? "", /^⏹ goal \d+:\d{2}(?::\d{2})?$/);
+    assert.equal(h.goal()?.status, 'paused'); assert.equal(h.goal()?.reason?.kind, 'budget'); assert.equal(h.faux.state.callCount, 1);
+    assert.ok(h.goal()!.usedTokens >= 1); assert.match(h.statuses.get("goal") ?? "", /^⏸ goal \d+:\d{2}(?::\d{2})?$/);
     h.faux.setResponses([complete]);
     await h.session.prompt("/goal edit --tokens 100k"); await h.session.prompt("/goal resume"); await h.idle();
     assert.equal(h.goal()?.status, "completed");
@@ -231,8 +231,8 @@ test("threshold compact preserves active work; cancelled compact leaves the targ
     }))]);
     await h.session.prompt("/goal Verify cancelled compaction"); await h.idle();
     cancel = true; await assert.rejects(h.session.compact(), /Compaction cancelled/);
-    assert.equal(h.goal()?.status, "active"); assert.equal(h.goal()?.automatic, false);
-    assert.equal(h.goal()?.waiting, "jobs"); assert.equal(h.faux.state.callCount, 4);
+    assert.equal(h.goal()?.status, 'paused'); assert.equal(h.goal()?.automatic, false);
+    assert.equal(h.goal()?.reason?.wait?.waiting, 'jobs'); assert.equal(h.faux.state.callCount, 4);
   } finally { await h.dispose(); }
 });
 

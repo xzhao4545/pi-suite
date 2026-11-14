@@ -6,9 +6,11 @@ import type { StatusPublisher } from "../ui/status.ts";
 import type { AskResult } from "../ask/schema.ts";
 import type { WaitRegistry } from "../runtime/wait.ts";
 import { ToolError } from "../runtime/errors.ts";
-import { GoalActivity, autoStopMessage, type AutoStopReason } from "./activity.ts";
+import { GoalActivity, autoStopMessage } from "./activity.ts";
 import { GOAL_CONTINUATION } from "./context.ts";
-import { GOAL_ENTRY, goalSummary, goalRequiresResume, goalAutoStopReason, restoreGoal, type Goal, type GoalStatus, type Schedule } from "./state.ts";
+import { GOAL_ENTRY, goalRequiresResume, restoreGoal } from './snapshot.ts';
+import { goalSummary, type Goal, type PauseKind, type Schedule } from './state.ts';
+import { GoalWaitResources } from './wait.ts';
 
 export class GoalManager {
   goal?: Goal;
@@ -21,8 +23,7 @@ export class GoalManager {
   private runSignal?: AbortSignal;
   private runningSince?: number;
   private lastError?: string;
-  private waitTimer?: NodeJS.Timeout;
-  private waitWatch?: () => void;
+  private readonly waitResources: GoalWaitResources;
   private completedTimer?: NodeJS.Timeout;
   private clock?: NodeJS.Timeout;
   private controlRevision = 0;
@@ -30,6 +31,7 @@ export class GoalManager {
 
   constructor(private pi: ExtensionAPI, private binding: SessionBinding, private notifications: Notifications, private status: StatusPublisher,
     private waits: WaitRegistry) {
+    this.waitResources = new GoalWaitResources(binding, waits);
     // While waitFor objects are pending, other settlement notices merge silently instead of
     // waking the model. A direct child's question still wakes it: the child is waiting for an
     // answer, and the run that answers it ends this wait (startRun clears it). So does a monitor
@@ -70,7 +72,7 @@ export class GoalManager {
   private save(): void {
     this.elapsed();
     if (this.schedule === "running" && this.goal?.status === "active") this.runningSince = performance.now();
-    this.pi.appendEntry(GOAL_ENTRY, { version: 1, goal: this.goal ? { ...this.goal } : null });
+    this.pi.appendEntry(GOAL_ENTRY, { version: 2, goal: this.goal ? structuredClone(this.goal) : null });
     this.publish();
   }
   private publish(): void {
@@ -89,17 +91,14 @@ export class GoalManager {
     this.detach(); this.goal = restoreGoal(ctx);
     // Startup cannot know whether the previous process quit or was killed. Revoke active
     // snapshots before requests/deadlines are armed; reload and branch operations are distinct.
-    if (this.goal?.status === "active" && (reason === "startup" || goalRequiresResume(ctx, this.goal))) {
-      this.goal.resumeRequired = true;
-      this.stop("stopped");
-    }
-    if (this.goal?.status === "active" && !this.goal.autoStopReason) {
-      const reason = goalAutoStopReason(ctx, this.goal);
-      if (reason) { this.goal.autoStopReason = reason; this.goal.automatic = false; this.save(); }
+    const permission = this.goal && goalRequiresResume(ctx, this.goal);
+    if (this.goal && this.goal.status !== 'completed') {
+      if (permission) this.pauseFor(permission.reason?.kind ?? 'permission');
+      else if (reason === 'startup') this.pauseFor('startup');
     }
     this.transition(this.goal?.waiting === "user" ? "waiting_user" : this.goal?.waiting === "jobs" ? "waiting_jobs" : "idle");
     if (this.goal?.status === "active" && this.goal.automatic) {
-      if (this.goal.budget !== undefined && this.goal.usedTokens >= this.goal.budget) this.stop("budget_limited");
+      if (this.goal.budget !== undefined && this.goal.usedTokens >= this.goal.budget) this.pauseFor('budget');
       else if (!this.goal.waiting) this.request();
       else this.armWait();
     }
@@ -116,7 +115,7 @@ export class GoalManager {
   }
   shutdown(reason: SessionShutdownEvent["reason"]): void {
     if (this.goal && this.schedule !== "detached") {
-      if (reason === "quit" && this.goal.status !== "completed") { this.goal.resumeRequired = true; this.stop("stopped"); }
+      if (reason === "quit" && this.goal.status !== "completed") this.pauseFor('shutdown');
       else this.save();
     }
     this.detach();
@@ -144,12 +143,22 @@ export class GoalManager {
     if (budget !== undefined) this.goal.budget = budget;
     this.save();
     if (this.goal.status === "active" && this.goal.budget !== undefined && this.goal.usedTokens >= this.goal.budget) {
-      this.stop("budget_limited"); if (this.owned) ctx.abort();
+      this.pauseFor('budget'); if (this.owned) ctx.abort();
     }
     if (abortOldRun) ctx.abort();
     if (text !== undefined && this.goal.status === "active" && this.goal.automatic) this.request();
   }
-  pause(ctx: ExtensionContext): void { if (!this.goal) throw new Error("No goal to pause"); this.stop("paused"); if (this.owned) ctx.abort(); }
+  pause(ctx: ExtensionContext): void {
+    if (!this.goal) throw new Error('No goal to pause');
+    if (this.goal.status === 'completed' || this.goal.status === 'paused' && this.goal.reason?.kind === 'manual') return;
+    this.pauseFor('manual'); if (this.owned) ctx.abort();
+  }
+  /** Async readers recheck this binding after loading UI, before mounting it. */
+  captureBinding(ctx: ExtensionContext): Binding | undefined {
+    const current = this.binding.current;
+    return current?.sessionId === ctx.sessionManager.getSessionId() ? current : undefined;
+  }
+  isCurrent(captured: Binding): boolean { return this.binding.isCurrent(captured); }
   resume(): 'running' | 'scheduled' | 'waiting_host' {
     if (!this.goal || this.goal.status === "completed") throw new Error("No unfinished goal to resume");
     if (this.goal.budget !== undefined && this.goal.usedTokens >= this.goal.budget) throw new Error("Raise the token budget above current usage before resuming");
@@ -158,18 +167,11 @@ export class GoalManager {
     // A newer explicit resume survives the aborted settlement of an older response.
     this.activity.reset();
     this.controlRevision++;
-    this.goal.status = "active"; this.goal.automatic = true; delete this.goal.autoStopReason;
-    if (this.goal.resumeRequired) this.goal.resumeRequired = false;
-    this.clearWait(); delete this.goal.error; delete this.goal.stoppedFrom;
+    this.goal.status = "active"; this.goal.automatic = true; delete this.goal.reason;
+    this.goal.resumeRequired = false;
+    this.clearWait(); delete this.goal.error;
     this.transition("idle"); this.save(); this.request();
     return this.binding.current?.ctx.isIdle() ? 'scheduled' : 'waiting_host';
-  }
-  stopGoal(ctx: ExtensionContext): void {
-    if (!this.goal) throw new Error("No goal to stop");
-    if (this.goal.status === "completed" || this.goal.status === "stopped") return;
-    const abortRun = this.owned;
-    this.stop("stopped");
-    if (abortRun) ctx.abort();
   }
   clear(ctx: ExtensionContext): void {
     const abortRun = this.owned;
@@ -179,17 +181,16 @@ export class GoalManager {
     this.goal = undefined; this.transition("idle"); this.save();
     if (abortRun) ctx.abort();
   }
-  private stop(status: GoalStatus, error?: string): void {
-    this.activity.reset();
-    this.cancelRequest();
-    // Completion keeps this audit's ownership for idempotent retries; explicit stops revoke
-    // outstanding tools while retaining runGoalId for late cumulative usage accounting.
-    if (status !== "completed") this.controlRevision++;
-    if (status === "stopped" && this.goal!.status !== "stopped" && this.goal!.status !== "completed") this.goal!.stoppedFrom = this.goal!.status;
-    this.goal!.status = status; this.goal!.automatic = false;
-    if (error) this.goal!.error = error;
-    this.clearWait();
-    this.transition("idle"); this.save();
+  private pauseFor(kind: PauseKind, error?: string, explicit = true): void {
+    this.activity.reset(); this.cancelRequest(); this.controlRevision++;
+    const goal = this.goal!;
+    const wait = goal.waiting ? { waiting: goal.waiting, resumeAt: goal.resumeAt, waitFor: goal.waitFor } : goal.reason?.wait;
+    const previous = kind === 'shutdown' || kind === 'startup' ? goal.reason?.kind : goal.reason?.previous;
+    goal.status = 'paused'; goal.automatic = false; goal.resumeRequired = explicit;
+    const automaticStop = goal.reason?.automaticStop;
+    goal.reason = { kind, ...previous ? { previous } : {}, ...automaticStop ? { automaticStop } : {}, ...wait ? { wait } : {} };
+    if (error) goal.error = error;
+    this.clearWait(); this.transition('idle'); this.save();
   }
   private request(): void {
     const goal = this.goal, current = this.binding.current;
@@ -204,7 +205,10 @@ export class GoalManager {
     this.runControlRevision = this.controlRevision;
     const goal = this.goal;
     if (userInput) this.activity.reset();
-    this.runAccess = goal?.status === "active" && (goal.automatic || userInput && !goal.autoStopReason) ? "execute" : goal && userInput ? "complete" : undefined;
+    if (userInput && goal?.status === 'paused' && !goal.resumeRequired) {
+      goal.status = 'active'; goal.automatic = true; delete goal.reason;
+    }
+    this.runAccess = goal?.status === 'active' && goal.automatic ? 'execute' : goal && userInput ? 'complete' : undefined;
     this.runGoalId = this.runAccess ? goal!.id : undefined;
     this.runRevision = this.goal?.revision;
     this.runBinding = this.binding.current;
@@ -226,6 +230,7 @@ export class GoalManager {
     }
     this.runSignal = nextSignal;
     if (!this.executing) return;
+    this.lastError = undefined;
     this.activity.start();
     this.cancelRequest();
     if (this.goal?.waiting === "jobs") { this.clearWait(); this.save(); }
@@ -240,38 +245,34 @@ export class GoalManager {
     // Edits invalidate tool/control ownership, but an in-flight response still belongs
     // to the same cumulative token budget even if it finishes after the edit.
     if (!this.goal || this.runGoalId !== this.goal.id || !this.runBinding || !this.binding.isCurrent(this.runBinding) || ctx.sessionManager.getSessionId() !== this.runBinding.sessionId || event.message.role !== "assistant") return;
+    this.lastError = event.message.stopReason === 'error' ? event.message.errorMessage ?? 'Model request failed' : undefined;
     this.goal.usedTokens += event.message.usage.totalTokens;
     this.goal.turns++; this.save();
-    if (this.goal.status === "active" && this.goal.budget !== undefined && this.goal.usedTokens >= this.goal.budget) { this.stop("budget_limited"); ctx.abort(); }
+    if (this.goal.status === "active" && this.goal.budget !== undefined && this.goal.usedTokens >= this.goal.budget) { this.pauseFor('budget'); ctx.abort(); }
   }
   beforeSettle(event: AgentBeforeSettleEvent): void {
-    if (!this.executing) return;
-    if (event.outcome === "error") { this.stop("failed", this.lastError ?? "Model request failed"); return; }
-    if (event.outcome === "aborted") {
-      if (this.runControlRevision === this.controlRevision) this.suspend();
-      return;
+    if (!this.executing || this.runControlRevision !== this.controlRevision) return;
+    // Errors are provisional: a later extension may repair this same boundary. Recovery
+    // and host work take precedence over Goal's guard and continuation queue.
+    if (event.outcome === 'error' || event.continue || event.context?.pendingMessages.length) {
+      this.cancelRequest(); this.transition('waiting_host'); return;
     }
+    if (event.outcome === 'aborted') return;
     if (!this.goal!.waiting && this.goal!.automatic) {
-      // A newer explicit resume/edit owns the next phase; old settlement cannot stop it.
-      const reason = this.runControlRevision === this.controlRevision ? this.activity.finish() : undefined;
-      if (reason) { this.suspend(reason); this.binding.current?.ctx.ui.notify(autoStopMessage[reason], "warning"); return; }
-      this.transition("idle"); this.request();
+      const reason = this.activity.finish();
+      if (reason) { this.pauseFor(reason); this.binding.current?.ctx.ui.notify(autoStopMessage[reason], 'warning'); return; }
+      this.transition('idle'); this.request();
     }
   }
   settled(aborted: boolean): void {
     if (this.executing) {
-      if (aborted && !this.goal!.waiting && this.runControlRevision === this.controlRevision) this.suspend();
-      else if (!this.goal!.waiting) {
-        this.transition("idle");
-        if (aborted && this.goal!.automatic) this.request();
-      }
+      if (this.runControlRevision === this.controlRevision) {
+        if (aborted && !this.goal!.waiting) this.pauseFor('cancelled', undefined, false);
+        else if (this.lastError) this.pauseFor('request_failed', this.lastError);
+        else if (!this.goal!.waiting) this.transition('idle');
+      } else if (!this.goal!.waiting && this.goal!.automatic) { this.transition('idle'); this.request(); }
     }
     this.runGoalId = undefined; this.runRevision = undefined; this.runBinding = undefined; this.runAccess = undefined; this.runSignal = undefined; this.lastError = undefined;
-  }
-  private suspend(reason?: AutoStopReason): void {
-    this.activity.reset(); this.controlRevision++; this.cancelRequest(); this.goal!.automatic = false;
-    if (reason) this.goal!.autoStopReason = reason;
-    this.transition("idle"); this.save();
   }
   userPrompt(start: boolean): void {
     if (!this.executing) return;
@@ -282,14 +283,16 @@ export class GoalManager {
     if (status === "answered" || status === "timed_out") this.transition("running");
     // Skipping preserves automatic permission; only a system cancellation requires
     // explicit recovery. Consent remains a separate part of the ask result contract.
-    else if (status === "cancelled") { this.activity.reset(); this.controlRevision++; this.goal!.waiting = "user"; this.goal!.automatic = false; this.cancelRequest(); this.transition("waiting_user"); this.save(); }
+    else if (status === 'cancelled') { this.goal!.waiting = 'user'; this.pauseFor('cancelled', undefined, false); }
   }
   beforeCompact(): void { if (this.goal?.status === "active") this.transition("waiting_host"); }
   compacted(willRetry: boolean): void {
+    if (this.goal?.status === 'paused' && !this.goal.resumeRequired && this.goal.reason?.kind === 'cancelled') {
+      this.goal.status = 'active'; delete this.goal.reason;
+    }
     if (this.goal?.status !== "active") return;
     if (this.goal.waiting) { this.transition(this.goal.waiting === "user" ? "waiting_user" : "waiting_jobs"); return; }
     this.activity.reset();
-    if (this.goal.autoStopReason) { this.transition("idle"); return; }
     // Manual compact aborts before its public before-compact event. Completion is the
     // explicit recovery signal that restores automatic permission after that abort.
     this.goal.automatic = true; this.save();
@@ -297,8 +300,7 @@ export class GoalManager {
   }
   compactFailed(error?: string): void {
     if (this.goal?.status !== "active") return;
-    this.activity.reset(); this.goal.automatic = false; if (error) this.goal.error = error;
-    this.transition(this.goal.waiting === "user" ? "waiting_user" : this.goal.waiting === "jobs" ? "waiting_jobs" : "idle"); this.save();
+    this.pauseFor('compaction_failed', error, false);
   }
   requireOwned(id: string, ctx: ExtensionContext, access: "execute" | "complete" = "execute", signal?: AbortSignal): Goal {
     if (!this.goal || this.goal.id !== id) throw new ToolError("NOT_FOUND", "Use the exact goalId from the current goal contract", id);
@@ -312,11 +314,13 @@ export class GoalManager {
     const goal = this.requireOwned(id, ctx, "complete", signal);
     if (goal.status === "completed") return false;
     goal.progress = summary; goal.completedAt = Date.now();
-    this.stop("completed"); this.armCompletion();
+    // Retain this audit's fence for idempotent retries without granting execution.
+    goal.status = 'completed'; goal.automatic = false;
+    this.activity.reset(); this.cancelRequest(); this.clearWait(); this.transition('idle'); this.save(); this.armCompletion();
     return true;
   }
   block(id: string, reason: string, evidence: string, ctx: ExtensionContext, signal?: AbortSignal): void {
-    this.requireOwned(id, ctx, "execute", signal); this.goal!.progress = evidence; this.stop("blocked", reason);
+    this.requireOwned(id, ctx, "execute", signal); this.goal!.progress = evidence; this.pauseFor('blocked', reason);
   }
   /**
    * waitFor resumes only after every listed job/agent settles (or one asks its parent), or at
@@ -335,37 +339,18 @@ export class GoalManager {
     this.transition("waiting_jobs"); this.save(); this.armWait();
     return { waiting: true, settled };
   }
-  private disarmWait(): void {
-    clearTimeout(this.waitTimer); this.waitTimer = undefined;
-    this.waitWatch?.(); this.waitWatch = undefined;
-  }
+  private disarmWait(): void { this.waitResources.disarm(); }
   /** Leaves any arranged wait: timer, watch and the persisted wait fields. */
   private clearWait(): void {
     this.disarmWait();
     if (this.goal) { delete this.goal.waiting; delete this.goal.resumeAt; delete this.goal.waitFor; }
   }
-  private waitedDone(ids: string[]): boolean {
-    // After a Pi restart a listed object can be history only. It can no longer settle in this
-    // process, so it stops holding the goal instead of blocking it forever.
-    const states = ids.map(item => {
-      try { return this.waits.settlement(item); } catch (error) { if (error instanceof ToolError) return undefined; throw error; }
-    });
-    return states.every(state => !state || state.settled) || states.some(state => state?.question);
-  }
   private armWait(): void {
-    this.disarmWait();
-    const goal = this.goal, captured = this.binding.current;
-    if (goal?.waiting !== "jobs" || !captured) return;
-    const resume = () => {
-      if (!this.binding.isCurrent(captured) || this.goal?.id !== goal.id || this.goal.waiting !== "jobs") return;
-      this.clearWait(); this.transition("idle"); this.save(); this.request();
-    };
-    if (goal.resumeAt) this.waitTimer = setTimeout(resume, Math.max(0, goal.resumeAt - Date.now()));
-    if (!goal.waitFor) return;
-    // A module disabled since the wait was arranged cannot report; its IDs no longer hold the goal.
-    const ids = goal.waitFor.filter(item => this.waits.has(item));
-    if (this.waitedDone(ids)) { resume(); return; }
-    this.waitWatch = this.waits.watch(ids, () => { if (this.waitedDone(ids)) resume(); });
+    const goal = this.goal;
+    this.waitResources.arm(goal, () => {
+      if (this.goal !== goal || goal?.status !== 'active' || !goal.automatic) return;
+      this.clearWait(); this.transition('idle'); this.save(); this.request();
+    });
   }
   private armCompletion(): void {
     clearTimeout(this.completedTimer);

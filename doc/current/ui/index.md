@@ -36,6 +36,8 @@ pi-starship 的 `git_status` 使用 Git 上游跟踪分支的缓存差异：默�
 
 ## 原生会话查看
 
+命令/回调注册与实际页面加载分离：Tasks、Goal、Jobs、Subagents 和 Suite 设置的加载入口及绑定撤销规则见 [加载与首次就绪](../runtime/index.md#加载与首次就绪)。工具与历史 renderer 独立于交互查看器，在 factory 提前登记，不等待首次使用或 session_start。
+
 `/tasks`、`/jobs`、`/subagents`、`/goal` 和 `/suite` 的内容块及公共选择器、详情、日志和终端接管视图，上下各有一道随宽度变化的横线，使用 Pi border 主题角色。DetailsView、BrowserView 与 JobView 显式扣除标题、正文、输入和底部栏预算，再用公开 VStack/HStack 组合有界输出；阅读窗口不依赖宿主替嵌套正文补做布局或鼠标分派。传统字符串组件的 frame.ts 复用 Pi `/settings` 的 DynamicBorder，调用方仍为上下边界预留两行并扣除顶部行坐标。
 
 Transcript 以原生 Container 保留完整子组件树，复用 Pi 的 UserMessageComponent、AssistantMessageComponent、ToolExecutionComponent、CustomMessageComponent 和压缩/分支摘要组件，渲染保留实际消息与工具组件，不把全文压成独立字符串窗口；复杂阅读 overlay 的单项工具鼠标命中不作为能力保证。已知内置工具采用 Pi 提供的 renderers；child 提供其实际渲染定义，结束执行释放定义后使用 Suite 登记 lookup，缺少定义的第三方扩展工具使用原生通用工具呈现。稳定消息保留组件与宽度缓存，调用方按每条 entry 的身份检测变化，并只更新变化的流式消息或工具结果。工具调用与部分/最终结果按 toolCallId 配对，不执行工具。thinking 与工具详情可切换展开，输出默认不传输终端图片。
@@ -67,6 +69,8 @@ ViewerNavigation 通过显式 `back`/`close` 结果贯穿列表、会话、所�
 ## 展示文本精简
 
 标题、导航、状态摘要和折叠工具正文通过公共展示层按实际焦点/动作生成；Tasks 的 Dock 选择与详情标题不重复只读标签，`Enter view` 保留查看语义。名称、状态、必要数量与操作优先，机器 ID 和完整配置留在可读详情中；工具摘要采用调用/结果接替，不重复输出。workspace 历史权限、危险动作确认、错误全文及用户/工具原文继续完整保留，精简不会修改协议结果、任务数据或控制准入。
+
+界面说明当前操作、状态、数据、权限和错误；完整功能要求、渲染预算、实现保证与模型控制规则放在模块文档和必要注释中。文案在具体展示生成点收敛，不按长度、数字或英文术语机械过滤，不使用全局过滤器。快捷键、设置范围与来源、协议版本告警、日志、工具结果与模型专用 description/promptGuidelines 保留；用户主动查看的 agent 定义、系统提示词和 workflow 脚本不因界面精简而改写。
 
 ## 浏览器配色角色
 

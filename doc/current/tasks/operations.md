@@ -1,6 +1,6 @@
 # 任务操作与显示
 
-`/tasks [group ID]` 通过共享 BrowserView 打开 Pi custom 浏览器，标题为 `Tasks ▸ List`。默认 State 为 All，包含已完成组与子任务；指定组 ID 查看该组，State 可切换为 Unfinished、Running、Blocked、Completed。非 TUI 模式通过通知展示对应文本。
+`/tasks [group ID]` 的轻量命令在模块准入时就绪，首次 TUI 调用才加载 viewer.ts 并通过共享 BrowserView 打开 Pi custom 浏览器，标题为 `Tasks ▸ List`。默认 State 为 All，包含已完成组与子任务；指定组 ID 查看该组，State 可切换为 Unfinished、Running、Blocked、Completed。非 TUI 模式通过通知展示对应文本，不加载交互查看器。Dock 首次查看同样按需加载，导入、任务读取和返回选择后的绑定校验见 [加载与首次就绪](../runtime/index.md#加载与首次就绪)。
 
 | 详情操作 | 行为 |
 | --- | --- |

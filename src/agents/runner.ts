@@ -2,7 +2,8 @@
 import { createAgentSession, getAgentDir, SessionManager, type ExtensionFactory } from '@earendil-works/pi-coding-agent';
 import type { AgentEventKind, Execution } from './types.ts';
 import { AGENT_ENTRY, resultText } from './records.ts';
-import { childResources, resourcePath } from './resources/loader.ts';
+import { childResources } from './resources/loader.ts';
+import { resourcePath } from './resources/paths.ts';
 import { installExtensionToolScope } from './resources/scope.ts';
 import { createStructuredCapture, createStructuredOutputTool, structuredRetryPrompt } from './output/tool.ts';
 import { sanitizeText } from '../runtime/text.ts';

@@ -4,8 +4,8 @@
 
 ## 任务索引
 
-- [UI 文案、Goal 状态与 Responses 跨资源恢复](goal-responses-recovery.md) — 待实施；保留诊断告警，仅留 /goal pause，三态生命周期与一行恢复展示，设置化跨资源历史 ID 隔离、瞬态重试及 Goal 最终结算协调。
-- [源码入口启动性能优化](source-startup-performance.md) — 待实施；解耦 renderer/执行依赖，补齐 Tasks、Goal 查看器按需加载，按真实 CLI 冷暖启动与首次使用验收；不做预编译、不改安装方式，第三方扩展另行处理。
+- [UI 文案、Goal 状态与 Responses 跨资源恢复](goal-responses-recovery.md) — 实现已落地、验收未全部完成；三态/快照迁移、一行展开恢复、主/child ID 隔离与原生重试边界已接入，剩余实际扩展共存及控制组合见专项。
+- [源码入口启动性能优化](source-startup-performance.md) — registry/路径解耦、Tasks/Goal 按需加载已实施并有前后五进程采样；冷启动存在首次使用成本转移，尚未满足完整性能完成条件；不做预编译、不改安装方式，第三方扩展另行处理。
 
 当前实现与开发方式见 [doc/current](../current/index.md)。完整设计、上游按文件处置与既有验收证据保存在 [设计与实施记录](../finished/pi-suite/design/index.md)，原设计细节保留。新增交互与启动需求及 tmux 复制的环境与验收范围已归档到 [对应专项](../finished/pi-suite/interaction-improvements/index.md)。
 

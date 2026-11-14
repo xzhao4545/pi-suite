@@ -1,6 +1,6 @@
 import { truncateToWidth } from '@earendil-works/pi-tui';
 import { toolRenderers, stateLine, type ToolExpandedRow } from '../ui/tool-render.ts';
-import { agentDisplayName } from './runtime.ts';
+import { agentDisplayName } from './registry.ts';
 import type { StopOutcome } from '../runtime/tools.ts';
 import type { ScheduledAgent } from './schedules/store.ts';
 import type { agentSummary } from './index.ts';

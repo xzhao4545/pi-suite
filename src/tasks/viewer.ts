@@ -1,9 +1,8 @@
-import type { ExtensionAPI, ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
+import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { truncateToWidth, type TUI } from '@earendil-works/pi-tui';
 import { BrowserView, browseState } from '../ui/browser.ts';
-import { showDetails } from '../ui/details.ts';
 import type { Dock } from '../ui/dock.ts';
-import type { Notifications } from '../runtime/notifications.ts';
+import type { SessionBinding } from '../runtime/binding.ts';
 import { parseTaskReference, taskReferenceKey, type TasksModule } from './index.ts';
 import { checkGeneration } from './types.ts';
 import { queryTasks, taskDetails, taskTitle, type TaskFilter } from './query.ts';
@@ -43,35 +42,24 @@ export class TaskBrowserView extends BrowserView {
 }
 
 /** Dock opens a read-only task receipt; selection never edits or changes task status. */
-export async function showTask(ctx: ExtensionContext, tasks: TasksModule, dock: Dock, reference: string): Promise<void> {
+export async function showTask(ctx: ExtensionContext, tasks: TasksModule, dock: Dock, reference: string, binding: SessionBinding): Promise<void> {
+  const current = binding.current;
+  if (!current) return;
   const { id, generation } = parseTaskReference(reference);
   const {task, views} = await tasks.get(ctx, id, generation);
+  if (!binding.isCurrent(current) || ctx.signal?.aborted) return;
+  const { showDetails } = await import('../ui/details.ts');
+  if (!binding.isCurrent(current) || ctx.signal?.aborted) return;
   await showDetails(ctx, dock, `Tasks ▸ ${taskTitle(task)}`, taskDetails(task, views).join('\n'), 'text');
 }
 
-export function registerTasksCommand(pi: ExtensionAPI, tasks: TasksModule, dock: Dock, notifications: Notifications): void {
-  pi.registerCommand('tasks', {
-    description: 'Browse tasks: [group ID]; filter group/state, search and read live details',
-    handler: async (args, ctx) => {
-      const words = args.trim().split(/\s+/).filter(Boolean);
-      if (words.length > 1 || words.some(word => !/^[1-9][0-9]*$/.test(word))) throw new Error('Use /tasks [group ID]');
-      const groupId = words[0], state = 'all';
-      const generation = (await tasks.scope(ctx).snapshot()).generation;
-      const { data, rows } = await tasks.list(ctx, { parentId: groupId, state }, generation);
-      tasks.selectGroup(groupId);
-      if (ctx.mode !== 'tui') {
-        const views = new Map(taskViews(data).map(task => [task.id, task]));
-        ctx.ui.notify(rows.map(task => taskDetails(task, views).join('\n')).join('\n\n') || 'No tasks'); return;
-      }
-      const release = notifications.hold(); dock.setDetail(true);
-      try { await showTasks(ctx, tasks, groupId, state); }
-      finally { dock.setDetail(false); release(); }
-    },
-  });
-}
-async function showTasks(ctx: ExtensionContext, tasks: TasksModule, groupId: string | undefined, state: TaskFilter): Promise<void> {
+export async function showTasks(ctx: ExtensionContext, tasks: TasksModule, groupId: string | undefined, state: TaskFilter,
+  binding: SessionBinding): Promise<void> {
+  const current = binding.current;
+  if (!current) return;
   const selected = await ctx.ui.custom<string | undefined>((tui, theme, _keys, done) =>
     new TaskBrowserView(tui, () => tasks.current(ctx), done, groupId, state, refresh => tasks.subscribe(ctx, refresh), theme));
+  if (!binding.isCurrent(current) || ctx.signal?.aborted) return;
   if (selected) {
     const { id, generation } = parseTaskReference(selected), data = tasks.current(ctx);
     checkGeneration(data, generation);

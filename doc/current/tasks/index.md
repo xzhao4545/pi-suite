@@ -36,6 +36,7 @@ TaskStore.link 为统一执行引用入口，保存 agent owner 与 jobIds；它
 - store.ts：统一串行入口、存储锁与原子提交。
 - index.ts：会话绑定、Dock 摘要、完成反馈与提醒。
 - schema.ts、tools.ts、render.ts：公共参数校验、短回执与公共工具显示框架接入。
+- commands.ts：轻量命令注册、非 TUI 文本查询与按需交互加载。
 - presentation.ts、viewer.ts：统一任务文字/符号与共享 BrowserView 接入。
 
 存储见 [存储与会话](storage.md)，操作见 [用户操作](operations.md)，验证范围见 [基线与验证](../validation.md)。

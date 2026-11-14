@@ -11,8 +11,11 @@
 | @tintinweb/pi-subagents | 0.23.0 | https://github.com/tintinweb/pi-subagents |
 | pi-background-jobs | 0.1.3 | npm 发布元数据未提供仓库，以发布包为核对来源 |
 | @narumitw/pi-starship（开发验收参考） | 0.65.2 | https://github.com/narumiruna/pi-extensions/tree/main/packages/pi-starship |
+| pi-model-manager（协议行为参考，未导入源码） | 0.4.6 | https://github.com/Qihuanxishini/pi-model-manager |
 
 ## 实现来源与更新
+
+Responses 恢复的行为参考为 `pi-model-manager@0.4.6`；npm 元数据标明许可证为 **AGPL-3.0-only**（gitHead `ce5e42d688ff67209caa7da286864976e6ed3f84`）。`src/runtime/responses/` 根据公开 Responses 请求协议及 Pi 1.5.0 的 payload hook、append-only context edit 与结算边界独立实现，未复制该扩展源码、未将其作为依赖，也不将其标记为 MIT 导入。恢复不复刻模型管理、Provider adapter 或私有请求 pipeline；仅隔离失败请求的历史 item ID，瞬态重试由宿主负责。
 
 `themes/oh-my-pi.json` 的配色参考 [Oh My Pi Titanium](https://github.com/can1357/oh-my-pi/blob/602aaee4cd3101c14e6c821a41a200f311896146/packages/tui/src/theme/defaults.json)，固定提交 `602aaee4cd3101c14e6c821a41a200f311896146`。保留其 [完整 MIT 许可证](./licenses/oh-my-pi.txt)。本包按 Pi 1.5.0 的主题 schema 映射原生角色，提高灰色边框与次要文字亮度，降低选中背景亮度，补齐滚动条、搜索、工具状态背景及 thinkingMax；不导入 OMP 的 terminal/symbols/statusLine/pythonMode 字段或主题运行时代码。
 

@@ -12,6 +12,8 @@
 
 后台启动立即返回 ID。前台启动等待最终结果，当前父级的任一直接 child 提问都会使其提前返回；提前返回后的最终结果进入统一通知。父级 Esc 取消尚未返回的前台调用与其 child，后台 child 继续运行。reload、会话切换和树导航更换监听绑定，执行 owner 保持稳定；quit 从当前 agentDir 的既有进程注册取消并等待活动执行，即使 agents/jobs 模块全部关闭也适用，不为退出清理创建新 Manager。
 
+agents/registry.ts 是执行与显示共享的轻量进程注册边界，保留 `Symbol.for('pi-suite.agents.runtime.v1')` 与按 agentDir 隔离的 owner map；对 AgentManager 只使用类型依赖。runtime.ts 负责创建/复用 owner、顺序加载 runner/child 与 quit，renderer 的名称查询不经过创建路径；查询按 id、可选 runId 匹配且排除 workflow child，没有当前进程记录时返回原 ID，不维护另一份名称缓存或读取历史文件。
+
 正在等待真实 agent_start 前台调用的顶级普通 child 可从查看器单向转为后台；queued、stopping、已结算、嵌套、workflow、RPC 与普通恢复运行不具备该调用契约。Manager 将 chargedPool 从 foreground 转为 background，释放前台槽位并唤醒队列；后台池已满也允许既有执行转入，实际占用计数仍参与后续排队。前台工具返回 backgrounded:true，撤销其等待和 abort 绑定，父级后续取消不停止该 child；background 写入既有 run 记录，最终结果由统一通知消费。
 
 准入时捕获父级 cwd、模型目录、thinking、信任、系统提示、owner 和 anchor，排队与 workflow 的后续调用不读取被 reload 撤销的 ExtensionContext。workflow child 的会话 resume 沿用原类型、模型、thinking、schema、工具与配置，普通 agent_send 恢复仍按模型配置规则解析。

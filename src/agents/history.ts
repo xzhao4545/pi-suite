@@ -6,7 +6,7 @@ import { ToolError } from '../runtime/errors.ts';
 import { agentTypes } from './catalog.ts';
 import { AGENT_ENTRY, decodeAgentRecord, readAgentSession } from './records.ts';
 import { active, recordWorkspace, type AgentRecord, type ParentScope } from './types.ts';
-import { resourcePath } from './resources/loader.ts';
+import { resourcePath } from './resources/paths.ts';
 import { WORKFLOW_ENTRY_TYPE, decodeWorkflowEntry } from './workflow/entry.ts';
 import { readWorkflowSnapshot } from './workflow/store.ts';
 

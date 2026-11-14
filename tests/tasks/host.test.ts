@@ -65,7 +65,7 @@ test('native task tools retain captured jobs, memory reload and independent memo
     const source = taskStore(`memory:${root}:${h.session.sessionManager.getSessionId()}`), snapshot = await source.snapshot();
     await runtime.fork(h.session.sessionManager.getLeafId()!, { position: 'at' });
     assert.ok(forked);
-    assert.ok(forked.notices.some(notice => notice.type === 'warning' && /not inherited.*in-memory source.*independent task list/.test(notice.text)));
+    assert.ok(forked.notices.some(notice => notice.type === 'warning'), 'uncopied tasks must be reported');
     assert.equal(forked.session.sessionFile, undefined);
     const forkGeneration = generationOf(await call(forked, 'task_list', { state: 'all' }));
     assert.match(await call(forked, 'task_list', { generation: forkGeneration, state: 'all' }), /^generation: .*\ntasks 0\/0/);

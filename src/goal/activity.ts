@@ -3,8 +3,8 @@ import type { ToolExecutionStartEvent, ToolExecutionEndEvent } from "@earendil-w
 
 export type AutoStopReason = "no_tools" | "repeated_tools";
 export const autoStopMessage: Record<AutoStopReason, string> = {
-  no_tools: "Automatic goal continuation stopped after 5 consecutive rounds without tool activity. The goal remains active; review it and use /goal resume.",
-  repeated_tools: "Automatic goal continuation stopped after 5 consecutive rounds with identical tool calls and results. The goal remains active; review it and use /goal resume.",
+  no_tools: 'Goal paused · no tool activity',
+  repeated_tools: 'Goal paused · repeated tool activity',
 };
 const digest = (value: unknown): string => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 

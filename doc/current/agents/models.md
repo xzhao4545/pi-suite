@@ -2,7 +2,7 @@
 
 `/subagents types` 或 `/subagents` 的 Types 页面配置启用状态、模型与 thinking；运行记录和 Transcript 的 `c Model / thinking` 操作配置单个 run。Types 页 Enter 或 `c` 配置类型默认值，对之后新建的执行生效；Runs 页与 Transcript 的 `c` 修改所选 run 的覆盖，从它下一次请求生效，Read only 记录不提供。模型修改依次选择模型与 thinking，任一步 Esc 取消整次修改。
 
-Types 按无调用参数、无 individual 覆盖的默认启动设置解析来源，已配置 thinking 使用 Pi 的模型能力约束。模型来源为 inherited 时，列表与详情显示 `not configured`，而不是父级主会话当前模型；详情说明运行时使用启动时父级会话的当前模型。thinking 来源为 inherited 时同样显示 `not configured`，执行启动时继承父级当前思考强度并按实际模型能力收紧。此展示不改变运行时解析顺序。列表显示类型、●/○ 启用状态、模型名称和 thinking；窄列表中两个字段均未配置时合并为 `M/H not configured`（model/thinking），避免重复标记挤掉类型名，详情仍分别列出两个字段及来源。右侧显示配置的完整 provider/modelId 及各字段来源；不可用模型在详情显示具体错误并允许进入修正，预览不创建 child 会话。Enter 或 `c` 直接打开模型选择，返回保留筛选、所选类型和阅读位置。
+Types 按无调用参数、无 individual 覆盖的默认启动设置解析来源，已配置 thinking 使用 Pi 的模型能力约束。模型来源为 inherited 时，列表与详情显示 `not configured`，而不是父级主会话当前模型；详情在 Model 字段内标明从启动时父级继承。thinking 来源为 inherited 时同样显示 `not configured`，Thinking 字段内标明启动时继承父级思考强度并按实际模型能力调整，不另加运行机制说明段。此展示不改变运行时解析顺序。列表显示类型、●/○ 启用状态、模型名称和 thinking；窄列表中两个字段均未配置时合并为 `M/H not configured`（model/thinking），避免重复标记挤掉类型名，详情仍分别列出两个字段及来源。右侧显示配置的完整 provider/modelId 及各字段来源；不可用模型在详情显示具体错误并允许进入修正，预览不创建 child 会话。Enter 或 `c` 直接打开模型选择，返回保留筛选、所选类型和阅读位置。
 
 模型列表来自 Pi 的 `modelRegistry.getAvailable()`，包含全部已认证模型，不受父会话 scoped models 限制。共享选择器复用 Pi 原生 Input、fuzzyFilter 与 SelectList，显示 provider/modelId 和模型显示名；直接输入文字按 provider、model ID 与显示名模糊过滤，Backspace 清除输入，无匹配时显示 `No matching items`。No override 作为可搜索候选保留。长行按可见宽度截断，完整值保持独立；↑↓ 和 PageUp/PageDown 移动，Enter 提交，Esc 取消，按键遵循宿主注入的 keybindings；resize 保留查询与选中对象，过滤输入时焦点与原生光标保持一致。thinking 使用 pi-ai 的模型能力列表，非推理模型仅提供 No override 与 off。
 
