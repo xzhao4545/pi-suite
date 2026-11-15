@@ -25,6 +25,10 @@ type HttpError = {status: number; message: string; code?: string};
 type Step = number | HttpError | 'complete' | 'partial' | 'hold';
 type Unsafe = 'reference' | 'previous' | 'store' | 'unknown' | 'compaction';
 const mismatch = "Item 'rs_seed' belongs to a different OpenAI resource";
+const cpaMismatch = 'cpa API error (400): ' + JSON.stringify({code: null,
+  message: 'OpenAI Responses bad request: The requested item was created under a different *** OpenAI resource. ' +
+    'Use the same resource that created the item to access it. [trace_id=f4f12dea59a3ef75ac76fe51a49f110e]',
+  param: '', type: 'invalid_request_error'});
 const text = (id: string, value: string): Item => ({type: 'message', id, role: 'assistant', phase: 'final_answer',
   status: 'completed', content: [{type: 'output_text', text: value, annotations: []}]});
 const call = (id: string, name: string, args: object): Item => ({type: 'function_call', id, call_id: `call_${id}`,
@@ -186,7 +190,8 @@ const replayWire = (wire: Wire): Wire => ({...wire, input: wire.input.filter(ite
 })});
 
 for (const transient of [false, true]) test(`actual SDK repairs Responses IDs${transient ? ' across native 429/503 retries' : ' without discarding replay content'}`, {timeout: 20000}, async () => {
-  const h = await fixture({enabled: true, maxRetries: 2, steps: [400, ...transient ? [429, 503] : [], 'complete']});
+  const h = await fixture({enabled: true, maxRetries: 2,
+    steps: [transient ? 400 : {status: 400, message: cpaMismatch}, ...transient ? [429, 503] : [], 'complete']});
   try {
     await h.seed(); await h.run();
     assert.equal(h.requests.length, transient ? 6 : 4); assert.equal(h.effects(), 1, 'history replay must not rerun the seed tool');
@@ -253,6 +258,7 @@ test('ordinary API errors and unknown/compaction resources are not admitted for 
     {error: {status: 403, message: `Forbidden: ${mismatch}`}},
     {error: {status: 429, message: 'You exceeded your current quota', code: 'insufficient_quota'}},
     {error: {status: 400, message: 'Maximum context length is 32000 tokens'}},
+    {error: {status: 400, message: 'OpenAI Responses bad request: invalid schema description mentioning a different *** OpenAI resource'}},
     ...(['unknown', 'compaction'] as const).map(unsafe => ({unsafe, error: {status: 400, message: mismatch}})),
   ];
   for (const scenario of cases) {

@@ -69,7 +69,10 @@ export function resourceMismatch(error: string, ids: readonly string[]): boolean
   if (/\b(?:401|403|429|5\d\d)\b|rate.?limit|quota|billing|context.{0,20}(?:length|window)|maximum context/.test(text)) return false;
   const namedItem = ids.some(id => error.includes(id));
   const resource = /(?:different|another|across|cross)[ -](?:openai[ -])?(?:resource|organization|project)|(?:resource|organization|project).{0,50}(?:mismatch|does not match|not belong)/.test(text);
+  // Gateways may omit the item ID and qualify/redact the resource name. Recognize
+  // the explicit creation-origin sentence, not arbitrary words between "different" and "resource".
+  const createdElsewhere = /\bitem was created (?:under|in) (?:a different|another) [^.!?\r\n]{0,80}\b(?:resource|organization|project)\b/.test(text);
   const ownership = namedItem && /not found|does not exist|belongs to|was created in|provided without.{0,80}required|not owned by/.test(text);
   const cipher = namedItem && /encrypted.{0,40}(?:cannot|could not|failed|invalid|verif|decrypt)|(?:decrypt|verif).{0,40}(?:encrypted|reasoning)/.test(text);
-  return resource || ownership || cipher;
+  return resource || createdElsewhere || ownership || cipher;
 }
