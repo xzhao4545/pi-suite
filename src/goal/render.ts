@@ -25,11 +25,13 @@ export const waitRenderers = toolRenderers<unknown, { reason: string; waiting: b
 
 /** Factory-safe definitions: no owner, model request, UI reader or resource loader imports. */
 export function registerGoalMessageRenderers(pi: ExtensionAPI): void {
-  pi.registerMessageRenderer<ResumeDetails>(GOAL_RESUME, (message, options, theme) => {
-    const summary = typeof message.content === 'string' ? message.content : 'Goal resumed';
-    const text = options.expanded && message.details?.resumeVersion === 1 ? `${summary}\n\n${message.details.text}` : summary;
-    return new Text(sanitizeText(text), options.outputPad, 0);
-  });
+  const receipt = (summary: string, details: ResumeDetails | undefined, expanded: boolean, pad: number) =>
+    new Text(sanitizeText(expanded && details?.resumeVersion === 1 ? `${summary}\n\n${details.text}` : summary), pad, 0);
+  pi.registerEntryRenderer<ResumeDetails & { summary: string }>(GOAL_RESUME, (entry, options) =>
+    receipt(entry.data?.summary ?? 'Goal resumed', entry.data, options.expanded, 1));
+  // Persisted message receipts still need their factory renderer when replaying history.
+  pi.registerMessageRenderer<ResumeDetails>(GOAL_RESUME, (message, options) =>
+    receipt(typeof message.content === 'string' ? message.content : 'Goal resumed', message.details, options.expanded, options.outputPad));
 }
 
 /** Preserve every real event in a mixed notification; provenance, never text, identifies control. */

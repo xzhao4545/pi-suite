@@ -11,7 +11,6 @@ import { visibleAgent, type AgentType } from '../agents/types.ts';
 import { registerSuiteCommand } from './settings/index.ts';
 import { prepareClipboard } from './clipboard.ts';
 import type { SubagentsDeps } from '../agents/commands.ts';
-import { registerResponsesRecovery } from './responses/index.ts';
 
 export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
   let config = loadConfig(initial.cwd);
@@ -35,7 +34,10 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
   const dock = new Dock();
   const status = new StatusPublisher(dock);
   const notifications = new Notifications(pi, binding);
-  const recovery = registerResponsesRecovery(pi, binding, config.runtime.openAIResponsesAutoRecovery);
+  // Disabled recovery must not load its protocol classifier or request-state machinery.
+  // Enabled registration still completes before binding, so the first request is covered.
+  const recovery = config.runtime.openAIResponsesAutoRecovery
+    ? (await import('./responses/index.ts')).registerResponsesRecovery(pi, binding, true) : undefined;
   const tasks = config.modules.tasks ? new taskApi![0].TasksModule(binding, dock) : undefined;
   if (tasks) {
     taskApi![1].registerTaskTools(pi, tasks); taskApi![2].registerTasksCommand(pi, tasks, dock, notifications, binding); tasks.registerReminders(pi, () => config);
@@ -136,7 +138,7 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
     firstBinding = false; cachedTypes = undefined;
     await prepareClipboard(pi, ctx);
     binding.bind(ctx);
-    recovery.reset(ctx);
+    recovery?.reset(ctx);
     dock.bind(ctx, config.ui.maxRows);
     status.bind(ctx.ui, { goal: config.goal.display, agents: config.agents.display, jobs: config.jobs.display }, goal !== undefined);
     goal?.restore(ctx, goalReason);
@@ -166,7 +168,7 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
     const workflowQuit = event.reason === 'quit' ? quitExistingWorkflowRuntime(agentDir) : undefined;
     const scheduleQuit = agentQuit?.then(() => schedules?.drain());
     workflows?.detach(); agents?.detach();
-    recovery.reset();
+    recovery?.reset();
     notifications.detach(); status.detach(); dock.detach(binding.current?.ctx); binding.revoke();
     return Promise.all([quit, agentQuit, workflowQuit, scheduleQuit]).then(() => { if (agents) pi.events.emit('subagents:disposed', {}); });
   });
@@ -175,13 +177,13 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
     return { messages: notifications.project(event.messages, view?.access === "execute" ? `goal:${view.goal.id}` : undefined) };
   });
   pi.on("agent_before_settle", event => {
-    const repair = recovery.beforeSettle(event);
+    const repair = recovery?.beforeSettle(event);
     const proposed = repair ? { ...event, ...repair } : event;
     goal?.beforeSettle(proposed);
     return notifications.beforeSettle(proposed) ?? repair;
   });
   pi.on("agent_settled", event => {
-    recovery.settled();
+    recovery?.settled();
     waits.steeringDelivered(); goal?.settled(event.aborted);
     if (event.aborted) jobs?.pauseWakes();
     notifications.flush();

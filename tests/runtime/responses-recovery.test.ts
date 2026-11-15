@@ -8,7 +8,7 @@ import {join} from 'node:path';
 import {createHash} from 'node:crypto';
 import {Type} from 'typebox';
 import {
-  createAgentSession, DefaultResourceLoader, SessionManager, SettingsManager,
+  AgentSessionRuntime, createAgentSession, DefaultResourceLoader, SessionManager, SettingsManager,
   type AgentSessionEvent, type ExtensionAPI, type ExtensionFactory, type ExtensionContext,
 } from '@earendil-works/pi-coding-agent';
 import piSuite from '../../src/index.ts';
@@ -22,7 +22,7 @@ import {SessionBinding} from '../../src/runtime/binding.ts';
 type Item = {type?: string; id?: string; [key: string]: unknown};
 type Wire = {model: string; input: Item[]; [key: string]: unknown};
 type HttpError = {status: number; message: string; code?: string};
-type Step = number | HttpError | 'complete' | 'partial' | 'hold';
+type Step = number | HttpError | 'complete' | 'partial' | 'hold' | 'network';
 type Unsafe = 'reference' | 'previous' | 'store' | 'unknown' | 'compaction';
 const mismatch = "Item 'rs_seed' belongs to a different OpenAI resource";
 const cpaMismatch = 'cpa API error (400): ' + JSON.stringify({code: null,
@@ -95,6 +95,7 @@ async function fixture(options: {
       errors.push('Unexpected extra provider request');
       response.writeHead(400, {'content-type': 'application/json'}); response.end(JSON.stringify({error: {message: 'unexpected request'}})); return;
     }
+    if (step === 'network') { response.destroy(); return; }
     if (step === 'hold') {
       response.once('close', () => disconnected.resolve()); held.resolve({wire, response}); return;
     }
@@ -157,11 +158,12 @@ async function fixture(options: {
   const {session, extensionsResult} = await createAgentSession({cwd: root, agentDir: user, settingsManager: settings,
     resourceLoader: loader, sessionManager: manager, tools: ['recovery_probe', 'goal_complete', 'goal_wait', 'goal_blocked']});
   assert.deepEqual(extensionsResult.errors, []);
-  await session.bindExtensions({mode: 'rpc', onError: event => errors.push(event.error)});
+  await session.bindExtensions({mode: 'rpc', uiContext: {...session.extensionRunner.createContext().ui,
+    confirm: async () => true}, onError: event => errors.push(event.error)});
   const model = session.modelRuntime.getModel('recovery-local', 'offline'); assert.ok(model);
   await session.setModel(model);
   session.subscribe(event => events.push(event));
-  return {session, requests, requestGoals, events, errors, goal, manager, held: held.promise, disconnected: disconnected.promise,
+  return {session, extensionsResult, services: {cwd: root, agentDir: user, modelRuntime: session.modelRuntime, settingsManager: settings, resourceLoader: loader, diagnostics: []}, requests, requestGoals, events, errors, goal, manager, held: held.promise, disconnected: disconnected.promise,
     effects: () => effects, externalRepairs: () => externalRepairs,
     async seed() {await session.prompt('Create replay history'); await session.waitForIdle(); assert.equal(requests.length, 2); armed = true;},
     async run() {await session.prompt('/goal Verify resource recovery'); await session.waitForIdle(); assert.deepEqual(errors, []);},
@@ -189,24 +191,26 @@ const replayWire = (wire: Wire): Wire => ({...wire, input: wire.input.filter(ite
   return !content.startsWith('Current Goal contract (request-only');
 })});
 
-for (const transient of [false, true]) test(`actual SDK repairs Responses IDs${transient ? ' across native 429/503 retries' : ' without discarding replay content'}`, {timeout: 20000}, async () => {
+for (const transient of [false, true, 'network'] as const) test(`actual SDK repairs Responses IDs${transient === 'network' ? ' across a native network retry' : transient ? ' across native 429/503 retries' : ' without discarding replay content'}`, {timeout: 20000}, async () => {
+  const steps: Step[] = transient === 'network' ? ['network'] : transient ? [429, 503] : [];
+  const retries = steps.length;
   const h = await fixture({enabled: true, maxRetries: 2,
-    steps: [transient ? 400 : {status: 400, message: cpaMismatch}, ...transient ? [429, 503] : [], 'complete']});
+    steps: [transient ? 400 : {status: 400, message: cpaMismatch}, ...steps, 'complete']});
   try {
     await h.seed(); await h.run();
-    assert.equal(h.requests.length, transient ? 6 : 4); assert.equal(h.effects(), 1, 'history replay must not rerun the seed tool');
+    assert.equal(h.requests.length, 4 + retries); assert.equal(h.effects(), 1, 'history replay must not rerun the seed tool');
     assert.deepEqual(replayWire(h.requests[3]), replayWire({...h.requests[2], input: stripped(h.requests[2].input)}), 'only upstream history input[].id may change');
     const replay = h.requests[3].input;
     assert.ok(replay.some(item => item.type === 'reasoning' && item.encrypted_content === 'cipher_keep_verbatim'));
     assert.ok(replay.some(item => item.type === 'message' && item.phase === 'final_answer'));
     assert.ok(replay.some(item => item.type === 'function_call' && item.call_id === 'call_fc_seed' && item.arguments === '{"value":"original arguments"}'));
     assert.ok(replay.some(item => item.type === 'function_call_output' && item.call_id === 'call_fc_seed' && String(item.output).includes('RESULT:original arguments')));
-    assert.ok(h.requestGoals.slice(2, transient ? 6 : 4).every(state => state === 'active'), 'Goal remains active until success');
+    assert.ok(h.requestGoals.slice(2).every(state => state === 'active'), 'Goal remains active until success');
     assert.equal(h.goal()?.status, 'completed'); assert.equal(records(h).length, 1);
-    assert.equal(errors(h).length, transient ? 3 : 1, 'failed attempts remain in real history');
-    assert.equal(h.events.filter(event => event.type === 'auto_retry_start').length, transient ? 2 : 0);
+    assert.equal(errors(h).length, retries + 1, 'failed attempts remain in real history');
+    assert.equal(h.events.filter(event => event.type === 'auto_retry_start').length, retries);
     if (transient) {
-      assert.deepEqual(replayWire(h.requests[4]), replayWire(h.requests[3])); assert.deepEqual(replayWire(h.requests[5]), replayWire(h.requests[3]));
+      for (const request of h.requests.slice(4)) assert.deepEqual(replayWire(request), replayWire(h.requests[3]));
       assert.ok(h.events.some(event => event.type === 'auto_retry_end' && event.success));
     }
   } finally {await h.dispose();}
@@ -274,27 +278,54 @@ test('ordinary API errors and unknown/compaction resources are not admitted for 
   }
 });
 
-test('pause aborts a repaired request and its late success cannot reclaim Goal ownership', {timeout: 20000}, async () => {
-  const h = await fixture({enabled: true, maxRetries: 2, steps: [400, 'hold']});
-  try {
-    await h.seed();
-    const running = h.run(), {wire, response} = await h.held;
-    assert.equal(h.requests.length, 4); assert.equal(records(h).length, 1); assert.equal(h.goal()?.status, 'active');
-    const id = goalId(wire);
-    await h.session.prompt('/goal pause');
-    assert.equal(h.goal()?.status, 'paused'); assert.equal(h.goal()?.automatic, false);
-    // This is a real upstream late completion. Abort may already have closed the
-    // socket; do not substitute a fake message_end to force delivery after abort.
-    sse(response, [call('fc_late', 'goal_complete', {goalId: id, summary: 'Must not complete the paused Goal'})]);
-    await running; await h.disconnected;
-    assert.equal(h.requests.length, 4); assert.equal(h.effects(), 1); assert.equal(h.goal()?.id, id);
-    assert.equal(h.goal()?.status, 'paused'); assert.equal(h.goal()?.reason?.kind, 'manual');
-    assert.equal(h.goal()?.completedAt, undefined); assert.equal(h.goal()?.progress, '');
-    assert.equal(h.events.filter(event => event.type === 'auto_retry_start').length, 0);
-    assert.ok(h.events.some(event => event.type === 'message_end' && event.message.role === 'assistant' && event.message.stopReason === 'aborted'));
-    assert.equal(h.events.filter(event => event.type === 'tool_execution_start' && event.toolName === 'goal_complete').length, 0);
-    assert.equal(h.manager.getBranch().filter(entry => entry.type === 'message' && entry.message.role === 'user').length, 1, 'pause/recovery must not duplicate user input');
-  } finally {await h.dispose();}
+test('control changes abort a repaired request and late success cannot reclaim superseded Goal ownership', {timeout: 20000}, async () => {
+  for (const action of ['pause', 'clear', 'edit', 'replace', 'abort', 'new'] as const) {
+    const superseded = action === 'edit' || action === 'replace';
+    const h = await fixture({enabled: true, maxRetries: 2, steps: [400, 'hold', ...superseded ? ['complete' as const] : []]});
+    try {
+      await h.seed();
+      const running = h.run(), {wire, response} = await h.held;
+      assert.equal(h.requests.length, 4); assert.equal(records(h).length, 1); assert.equal(h.goal()?.status, 'active');
+      const id = goalId(wire);
+      if (action === 'new') {
+        let replacement: Awaited<ReturnType<typeof fixture>> | undefined;
+        const runtime = new AgentSessionRuntime(h.session, h.services, async () => {
+          replacement = await fixture({enabled: true, steps: []});
+          return {...replacement, ...replacement.services, services: replacement.services, diagnostics: []};
+        });
+        try {
+          await runtime.newSession();
+          sse(response, [call('fc_late', 'goal_complete', {goalId: id, summary: 'Must not enter the replacement session'})]);
+          await running; await h.disconnected;
+          assert.equal(replacement?.goal(), undefined); assert.equal(replacement?.requests.length, 0);
+          assert.equal(records(replacement!).length, 0); assert.equal(h.requests.length, 4);
+        } finally { await runtime.dispose(); await replacement?.dispose(); }
+        continue;
+      }
+      if (action === 'abort') await h.session.abort();
+      else if (action === 'replace') await h.session.prompt('/goal Replacement objective');
+      else await h.session.prompt(`/goal ${action === 'edit' ? 'edit Updated objective' : action}`);
+      // The real upstream response is late: do not inject a fake message_end past the abort.
+      sse(response, [call('fc_late', 'goal_complete', {goalId: id, summary: 'Must not complete superseded work'})]);
+      await running; await h.disconnected; await h.session.waitForIdle();
+      assert.equal(h.requests.length, superseded ? 5 : 4, action); assert.equal(h.effects(), 1);
+      if (action === 'clear') assert.equal(h.goal(), undefined);
+      else if (superseded) {
+        assert.equal(h.goal()?.status, 'completed', action);
+        assert.equal(h.goal()?.progress, 'Verified recovery');
+        if (action === 'edit') { assert.equal(h.goal()?.id, id); assert.equal(h.goal()?.revision, 1); }
+        else assert.notEqual(h.goal()?.id, id);
+      } else {
+        assert.equal(h.goal()?.id, id); assert.equal(h.goal()?.status, 'paused');
+        assert.equal(h.goal()?.reason?.kind, action === 'pause' ? 'manual' : 'cancelled');
+        assert.equal(h.goal()?.completedAt, undefined); assert.equal(h.goal()?.progress, '');
+      }
+      assert.equal(h.events.filter(event => event.type === 'auto_retry_start').length, 0);
+      assert.ok(h.events.some(event => event.type === 'message_end' && event.message.role === 'assistant' && event.message.stopReason === 'aborted'));
+      assert.equal(h.events.filter(event => event.type === 'tool_execution_start' && event.toolName === 'goal_complete').length, superseded ? 1 : 0);
+      assert.equal(h.manager.getBranch().filter(entry => entry.type === 'message' && entry.message.role === 'user').length, 1);
+    } finally {await h.dispose();}
+  }
 });
 
 test('both extension orders merge failure omission/continuation without duplicate recovery or premature Goal pause', {timeout: 20000}, async () => {

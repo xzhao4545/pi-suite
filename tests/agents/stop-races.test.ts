@@ -174,8 +174,8 @@ test('cascade cleanup joins descendant finalization, isolates jobs and prevents 
       naturalJobId = (await jobs.start({...owner, command: 'read natural', creator: {
         agentId: run.record.id, runId: run.record.runId, ancestors: run.record.ancestors,
       }}, shell)).id;
-      await executeAgent(run, pi => {
-        childSuite(pi, run, natural!);
+      await executeAgent(run, async pi => {
+        await childSuite(pi, run, natural!);
         pi.on('session_shutdown', async () => { childFinalizing.resolve(); await finalization.promise; });
       }, natural!.changed, (kind, details) => natural!.event(kind, run, details));
     }, async roots => (await jobs.stopCreatedBy(roots)).map(({job}) => ({id: job.id, state: job.state, cleanup: job.cleanup.state})));
@@ -206,8 +206,8 @@ test('cascade cleanup joins descendant finalization, isolates jobs and prevents 
         run.controller.signal.addEventListener('abort', () => siblingGate.resolve(), {once: true});
         await siblingGate.promise; result(run, 'sibling partial result'); return;
       }
-      await executeAgent(run, pi => {
-        childSuite(pi, run, failing!);
+      await executeAgent(run, async pi => {
+        await childSuite(pi, run, failing!);
         pi.on('session_shutdown', async () => { lastChildFinalizing.resolve(); await lastFinalization.promise; });
       }, failing!.changed, (kind, details) => failing!.event(kind, run, details));
     }, async roots => {

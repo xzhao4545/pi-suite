@@ -1,7 +1,8 @@
 // Adapted from pi-interactive-shell 0.18.0 pty-session.ts (MIT, third-party/licenses/pi-interactive-shell.txt).
 // pi-suite changes: output goes to the job's disk log instead of an in-memory raw buffer;
 // process-tree stops are owned by the job backend, so this class only signals for disposal.
-import { TerminalScreen, type TerminalSnapshot } from './screen.ts';
+import { TerminalScreen } from './screen.ts';
+import type { TerminalSnapshot } from './snapshot.ts';
 import { buildCursorPositionResponse, buildPrimaryDeviceAttributesResponse, splitAroundDeviceQueries } from './protocol.ts';
 import type { ResolvedShellConfig } from './shell.ts';
 import { createPtyProcess, type PtyProcess } from '../backends/pty.ts';

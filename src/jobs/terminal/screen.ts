@@ -3,13 +3,7 @@ import type { Terminal as XtermTerminal, ITerminalAddon } from '@xterm/headless'
 import serialize from '@xterm/addon-serialize';
 import { renderLineFromCells, sanitizeLine } from './render.ts';
 
-/** A settlement snapshot is xterm's own restore stream, never an arbitrary slice of output.log. */
-export interface TerminalSnapshot {
-  version: 1; cols: number; rows: number; scrollback: number; data: string;
-  cursor: { x: number; y: number; visible: boolean }; alternate: boolean;
-}
-export const SNAPSHOT_SCROLLBACK = 1000;
-export const SNAPSHOT_BYTES = 4 * 1024 * 1024;
+import { SNAPSHOT_BYTES, SNAPSHOT_SCROLLBACK, type TerminalSnapshot } from './snapshot.ts';
 
 /** One bounded terminal model serves live PTYs and restored, read-only final screens. */
 export class TerminalScreen {

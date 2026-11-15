@@ -8,8 +8,7 @@ import { join, relative, sep, isAbsolute } from 'node:path';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { isTerminal } from './state.ts';
 import { ToolError } from '../runtime/errors.ts';
-import type { TerminalSnapshot } from './terminal/screen.ts';
-import { SNAPSHOT_BYTES, SNAPSHOT_SCROLLBACK } from './terminal/screen.ts';
+import { SNAPSHOT_BYTES, SNAPSHOT_SCROLLBACK, type TerminalSnapshot } from './terminal/snapshot.ts';
 import type { JobSummary, Workspace, Stream, InputRecord } from './types.ts';
 
 const JOB_ID = /^job_[a-f0-9]{8}$/;

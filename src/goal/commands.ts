@@ -47,8 +47,10 @@ export function registerGoalCommand(pi: ExtensionAPI, manager: GoalManager, dock
         try {
           const result = manager.resume();
           const summary = result === 'running' ? 'Goal already running' : result === 'waiting_host' ? 'Goal resumed · waiting' : 'Goal resumed';
-          pi.sendMessage({ customType: GOAL_RESUME, content: summary, display: true,
-            details: { resumeVersion: 1, text: `${previous}${result === 'waiting_host' ? '\n\nWaiting for the current response, cancellation or host operation.' : ''}` } satisfies ResumeDetails }, { triggerTurn: false });
+          // A custom message is deferred until turn_end while streaming. This receipt is
+          // display-only, so an entry can appear immediately without entering model history.
+          pi.appendEntry(GOAL_RESUME, { resumeVersion: 1, summary,
+            text: `${previous}${result === 'waiting_host' ? '\n\nWaiting for the current response, cancellation or host operation.' : ''}` } satisfies ResumeDetails & { summary: string });
         } finally { release(); }
         return;
       }

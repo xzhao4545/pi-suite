@@ -2,7 +2,7 @@
 
 ## 状态与目标
 
-UI 文案、Goal 三态与 version 2 快照迁移、唯一 pause 控制、原生一行/展开恢复消息、默认关闭的 Responses ID 恢复及主/child 接入已实施。Linux Pi 1.5.0 的真实 SDK/HTTP 与实际 CLI 验收结论见下文；完整第三方 Model Manager 实例共存、忙碌/已运行恢复展示及所有控制竞争的实际组合仍未全部覆盖，专项保留在 todo，不提前归档。
+UI 文案、Goal 三态与 version 2 快照迁移、唯一 pause 控制、原生一行/展开恢复消息、默认关闭的 Responses ID 恢复及主/child 接入已实施。Linux Pi 1.5.0 的真实 SDK/HTTP、实际 CLI、真实并发 child、两种 Model Manager 加载顺序及控制竞争验收见下文；当前仅保留宿主不提供的单消息鼠标展开、真实上游密文解密与 Windows 新交互等明确边界，不将其伪称为已通过。
 
 ## 检查依据与现有根因
 
@@ -242,8 +242,8 @@ UI 展示用户当前需要操作、判断的状态、数据、权限和错误�
 
 - 三态快照、version 1 许可归一化、自动停跑/历史 stop 诊断与分支恢复守卫已迁移到同一 GoalManager/快照流；`/goal stop` 明确拒绝，不作为正文新建目标。保留部分取消接受普通用户输入的既有许可，显式 pause、冷启动与自动停跑仍要求 resume。
 - `/goal resume` 单独保存可见结果，factory 提前登记原生 message renderer；纯自动控制批次隐藏，混合事件只按 segments.source 隐去控制块。Linux 官方未修改 Pi 1.5.0 实际 Node bin 在 regular/fullscreen、40/80/120 列通过恢复摘要、原生 Ctrl+O 展开/收起、前次暂停原因与零额外模型请求。混合 job/agent 文本在实际 TUI 及 `/reload` 历史重建后保留，控制正文不外露。宿主原生 CustomMessageComponent 不提供单消息鼠标展开，本包不新增模拟点击。
-- Responses 的 9 组聚合覆盖真实 SDK serializer、HTTP/SSE、boundary/context_edit 与原生重试：400→成功、400→429/503→成功、预算耗尽保留最后错误、无新 ID 不重发、关闭/部分输出/引用/未知/compaction/有状态请求拒绝、普通参数/权限/额度/上下文错误不接管、暂停期间旧成功不能完成目标、两种公开边界扩展顺序，以及 branch/端点/独立实例隔离。ID-only 投影保留密文、phase、call_id、工具结果，实际工具副作用仅发生一次。
-- 同一失败源的公开边界共存已通过，但没有实际加载 `pi-model-manager@0.4.6` 全扩展制造资源错误；不能据此宣称该扩展所有版本/私有 pipeline 均兼容。分支/child 独立记录检查不是并发 child 实际跨资源流量验收。Windows 新交互、真实上游密文解密、全部 edit/replace/tree 竞争、busy/already-running 实际展示仍不计为通过。
+- Responses 的 10 组聚合覆盖真实 SDK serializer、HTTP/SSE、网络瞬态错误、boundary/context_edit 与原生重试：400→成功、400→429/503/网络错误→成功、预算耗尽保留最后错误、无新 ID 不重发、关闭/部分输出/引用/未知/compaction/有状态请求拒绝、普通参数/权限/额度/上下文错误不接管、暂停期间旧成功不能完成目标、两种公开边界扩展顺序，以及 branch/端点/独立实例隔离。ID-only 投影保留密文、phase、call_id、工具结果，实际工具副作用仅发生一次。
+- 真实加载 `pi-model-manager@0.4.6` 与 Suite 的两种顺序均通过：同一 CPA 资源错误只产生一个恢复 owner，entries 合并且 Goal 完成；两个真实 AgentManager/runner/childSuite 会话在重叠失败屏障下各自完成三次请求，隔离记录、密文和父会话历史不串扰。恢复期间的 pause、clear、edit、replace、abort 与新建会话竞争也通过，迟到成功不能夺回旧目标或绑定。实际验收不扩展到该扩展的所有版本/私有 pipeline。
 - 类型检查、受影响测试与官方 CLI/PTY/RPC 的合并收尾结果维护于 [验证规则](../current/validation.md)。参考元数据已登记，未导入 AGPL 源码或更改宿主、用户配置及第三方安装。
 
 ## 任务清单
@@ -253,7 +253,7 @@ UI 展示用户当前需要操作、判断的状态、数据、权限和错误�
 - [x] [Goal 生命周期与唯一暂停入口](#三goal-生命周期与唯一暂停入口)
 - [x] [Responses 跨资源自动恢复](#四responses-跨资源自动恢复)
 - [x] [恢复与 Goal 最终结算协调](#五恢复与-goal-最终结算协调)
-- [ ] [行为验收](#验收计划) — 已通过范围见上；剩余组合不计为通过。
+- [ ] [行为验收](#验收计划) — Linux 已通过空闲、busy/already-running、网络/原生重试、并发 child、Model Manager 顺序及控制竞争；宿主不提供的单消息鼠标展开、真实上游密文解密和 Windows 新交互明确不计为通过。
 - [ ] [文档同步与归档](#文档与完成标准) — current 已局部同步，全部验收完成后再归档。
 
 [返回待办索引](index.md)
