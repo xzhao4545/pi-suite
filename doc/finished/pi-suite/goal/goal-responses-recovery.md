@@ -2,7 +2,7 @@
 
 ## 状态与目标
 
-UI 文案、Goal 三态与 version 2 快照迁移、唯一 pause 控制、原生一行/展开恢复消息、默认关闭的 Responses ID 恢复及主/child 接入已实施。Linux Pi 1.5.0 的真实 SDK/HTTP、实际 CLI、真实并发 child、两种 Model Manager 加载顺序及控制竞争验收见下文；当前仅保留宿主不提供的单消息鼠标展开、真实上游密文解密与 Windows 新交互等明确边界，不将其伪称为已通过。
+UI 文案、Goal 三态与 version 2 快照迁移、唯一 pause 控制、原生一行/展开恢复消息、默认关闭的 Responses ID 恢复及主/child 接入已实施。Linux Pi 1.5.0 的真实 SDK/HTTP、实际 CLI、真实并发 child、两种 Model Manager 加载顺序及控制竞争验收见下文。**归档状态：实现与已验证范围归档，未覆盖项不计为通过。** 恢复详情采用宿主原生 `Ctrl+O`；官方 Pi 1.5.0 的自定义消息不支持单条鼠标展开，本专项不模拟点击。真实上游密文解密和 Windows 新交互仍未验证。
 
 ## 检查依据与现有根因
 
@@ -186,7 +186,7 @@ UI 展示用户当前需要操作、判断的状态、数据、权限和错误�
 - Child：`src/agents/child.ts` 中的会话恢复注册；session.ts 只管理会话目录/生命周期，不把请求修复无谓塞入该层。
 - 文案：settings/view、agents/ui/types、jobs/viewer/component、tasks/index 的具体展示点。
 - 调用与测试：修改导出符号前用 LSP 查全部引用，更新相关现有契约测试；删除只固化旧文案/内部实现的断言，不把新措辞重新固定成行为契约。
-- 与 [源码入口启动性能优化](source-startup-performance.md) 的共同边界：新增 renderer 不能引入完整执行依赖到 factory；请求恢复不能连接多余 UI/资源栈。该方案对 Goal 控制命令的描述在实施时同步去除 stop，不重复实施启动专项。
+- 与 [源码入口启动性能优化](../interaction-improvements/source-startup-performance.md) 的共同边界：新增 renderer 不能引入完整执行依赖到 factory；请求恢复不能连接多余 UI/资源栈。该方案对 Goal 控制命令的描述在实施时同步去除 stop，不重复实施启动专项。
 
 ### 实施阶段
 
@@ -231,12 +231,12 @@ UI 展示用户当前需要操作、判断的状态、数据、权限和错误�
 
 当前稳定事实在实施并验证后局部更新到：
 
-- [Goal 索引](../current/goal/index.md)、[生命周期](../current/goal/lifecycle.md)、[上下文与续跑](../current/goal/context.md)、[操作](../current/goal/operations.md)：三态/原因、唯一 pause 命令、恢复展示与最终结算。
-- [公共运行时](../current/runtime/index.md)、[设置](../current/runtime/settings.md)：开关、作用域、继承、reload、生效与原生重试边界；恢复协议较长时按现有小文件/索引规则组织。
-- [统一界面](../current/ui/index.md)、[命令高亮](../current/ui/command-highlighting.md)、[模型继承](../current/agents/models.md) 及相关模块操作说明：局部收敛文案，保留诊断告警与真实数据边界。
-- [上游登记](../../third-party/UPSTREAM.md)：参考版本、独立实现与许可证边界；不得把 AGPL 来源误标为 MIT 复制代码。
+- [Goal 索引](../../../current/goal/index.md)、[生命周期](../../../current/goal/lifecycle.md)、[上下文与续跑](../../../current/goal/context.md)、[操作](../../../current/goal/operations.md)：三态/原因、唯一 pause 命令、恢复展示与最终结算。
+- [公共运行时](../../../current/runtime/index.md)、[设置](../../../current/runtime/settings.md)：开关、作用域、继承、reload、生效与原生重试边界；恢复协议较长时按现有小文件/索引规则组织。
+- [统一界面](../../../current/ui/index.md)、[命令高亮](../../../current/ui/command-highlighting.md)、[模型继承](../../../current/agents/models.md) 及相关模块操作说明：局部收敛文案，保留诊断告警与真实数据边界。
+- [上游登记](../../../../third-party/UPSTREAM.md)：参考版本、独立实现与许可证边界；不得把 AGPL 来源误标为 MIT 复制代码。
 
-完成后移动专项到 `doc/finished` 并更新两侧索引；current 不写临时流水账、会话调度、本机产物路径或未执行验收结论。历史已完成专项保留其时代事实，不为删除 stop 全量改写历史记录。
+本专项归档保留已验收结果与未覆盖边界。current 不写临时流水账、会话调度、本机产物路径或未执行验收结论。历史已完成专项保留其时代事实，不为删除 stop 全量改写历史记录。
 
 ## 已实施与验收范围
 
@@ -244,7 +244,7 @@ UI 展示用户当前需要操作、判断的状态、数据、权限和错误�
 - `/goal resume` 单独保存可见结果，factory 提前登记原生 message renderer；纯自动控制批次隐藏，混合事件只按 segments.source 隐去控制块。Linux 官方未修改 Pi 1.5.0 实际 Node bin 在 regular/fullscreen、40/80/120 列通过恢复摘要、原生 Ctrl+O 展开/收起、前次暂停原因与零额外模型请求。混合 job/agent 文本在实际 TUI 及 `/reload` 历史重建后保留，控制正文不外露。宿主原生 CustomMessageComponent 不提供单消息鼠标展开，本包不新增模拟点击。
 - Responses 的 10 组聚合覆盖真实 SDK serializer、HTTP/SSE、网络瞬态错误、boundary/context_edit 与原生重试：400→成功、400→429/503/网络错误→成功、预算耗尽保留最后错误、无新 ID 不重发、关闭/部分输出/引用/未知/compaction/有状态请求拒绝、普通参数/权限/额度/上下文错误不接管、暂停期间旧成功不能完成目标、两种公开边界扩展顺序，以及 branch/端点/独立实例隔离。ID-only 投影保留密文、phase、call_id、工具结果，实际工具副作用仅发生一次。
 - 真实加载 `pi-model-manager@0.4.6` 与 Suite 的两种顺序均通过：同一 CPA 资源错误只产生一个恢复 owner，entries 合并且 Goal 完成；两个真实 AgentManager/runner/childSuite 会话在重叠失败屏障下各自完成三次请求，隔离记录、密文和父会话历史不串扰。恢复期间的 pause、clear、edit、replace、abort 与新建会话竞争也通过，迟到成功不能夺回旧目标或绑定。实际验收不扩展到该扩展的所有版本/私有 pipeline。
-- 类型检查、受影响测试与官方 CLI/PTY/RPC 的合并收尾结果维护于 [验证规则](../current/validation.md)。参考元数据已登记，未导入 AGPL 源码或更改宿主、用户配置及第三方安装。
+- 类型检查、受影响测试与官方 CLI/PTY/RPC 的合并收尾结果维护于 [验证规则](../../../current/validation.md)。参考元数据已登记，未导入 AGPL 源码或更改宿主、用户配置及第三方安装。
 
 ## 任务清单
 
@@ -254,6 +254,6 @@ UI 展示用户当前需要操作、判断的状态、数据、权限和错误�
 - [x] [Responses 跨资源自动恢复](#四responses-跨资源自动恢复)
 - [x] [恢复与 Goal 最终结算协调](#五恢复与-goal-最终结算协调)
 - [ ] [行为验收](#验收计划) — Linux 已通过空闲、busy/already-running、网络/原生重试、并发 child、Model Manager 顺序及控制竞争；宿主不提供的单消息鼠标展开、真实上游密文解密和 Windows 新交互明确不计为通过。
-- [ ] [文档同步与归档](#文档与完成标准) — current 已局部同步，全部验收完成后再归档。
+- [x] [文档同步与归档](#文档与完成标准) — 已同步稳定事实并归档；不代表未覆盖项已通过。
 
-[返回待办索引](index.md)
+[返回归档索引](../../index.md)

@@ -1,10 +1,13 @@
 # 已完成专项
 
-本目录保存已完成专项记录。形成的稳定实现与规则维护在 [当前文档](../current/index.md)，未完成需求维护在 [待办索引](../todo/index.md)。
+本目录保存已完成专项及阶段性归档记录。形成的稳定实现与规则维护在 [当前文档](../current/index.md)，活跃需求维护在 [待办索引](../todo/index.md)。阶段性归档不代表未验证的条目已通过。
 
 已实施模块的完整设计与原验收契约见 [设计与实施记录](./pi-suite/design/index.md)；平台证据按各专项的实际范围读取，Windows 本轮状态见 [Windows 验收收尾](./pi-suite/windows-completion.md)。
 
 以下 patched 宿主 UI/入口记录保留迁移前开发依赖组合的审计与验收细节，不作为现状或消费者安装证明。U1/T1/M1、净化及三组补丁清理已实施，当前官方未修改 Pi 1.5.0 的加载/运行范围见 [官方 Pi 插件兼容实施](./pi-suite/official-pi-compatibility/index.md)；消费者安装按用户指示 [延期](../todo/official-pi-installation.md)，未实际 npm 发布。
+
+- [UI 文案、Goal 状态与 Responses 跨资源恢复](./pi-suite/goal/goal-responses-recovery.md) — 三态、恢复展示和跨资源 ID 隔离已实施，保留 Linux 官方 Pi 1.5.0 的验收结果；真实上游密文解密及 Windows 新交互未验证。
+- [源码入口启动性能优化](./pi-suite/interaction-improvements/source-startup-performance.md) — 按需加载实现与测量结果阶段性归档；冷首次 Tasks 命令等待增加，性能验收未达成，剩余复测暂缓。
 
 - [Goal 上下文与自动续跑优化](./pi-suite/goal/context-optimization.md) — 请求级权威合同、短唤醒与分段来源、有界控制投影；五个自动轮无工具/相同活动停跑、持久原因与显式恢复，官方 Pi 1.5.0 SDK/CLI 与代表性 Provider 序列化验证。
 

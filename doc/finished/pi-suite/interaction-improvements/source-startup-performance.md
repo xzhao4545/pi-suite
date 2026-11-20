@@ -2,7 +2,7 @@
 
 ## 状态与目标
 
-用户已确认先不做预编译 JS 发布入口，只实施其他启动优化。共享 registry、资源路径和 Tasks 查看器边界已实施，Goal 详情按需加载已在目标模块实现；真实 CLI/RPC 对比与聚焦检查结论见下文。TUI 首次可操作、完整扩展集合和全部首次使用验收尚未全部完成，冷首次使用仍有明显阶段转移，本项保留在 todo，不归档。既有启动专项见 [启动性能优化记录](../finished/pi-suite/interaction-improvements/startup-performance.md)，本项补充源码入口、渲染依赖和查看器边界，不覆盖原有记录。
+用户已确认先不做预编译 JS 发布入口，只实施其他启动优化。共享 registry、资源路径和 Tasks 查看器边界已实施，Goal 详情按需加载已在目标模块实现；真实 CLI/RPC 对比与聚焦检查结论见下文。**归档状态：保留实现和已完成的测量，剩余性能验收暂缓，不判定达标。** 冷启动到首次 Tasks 页面略有改善，但部分等待转移到了首次命令，完整性能验收未完成。既有启动专项见 [启动性能优化记录](startup-performance.md)，本项补充源码入口、渲染依赖和查看器边界，不覆盖原有记录。
 
 目标是在保留全部默认功能、历史工具渲染和首次就绪契约的前提下，减少源码入口的冷加载成本及无必要的启动依赖。优化必须改善实际就绪时间，不能只把 factory 的等待挪到 session_start，或把全部等待转移到第一次工具调用。
 
@@ -13,7 +13,7 @@
 - 不修改 Pi 宿主、Jiti 私有加载器、全局启动包装器或模块身份适配；不以升级宿主代替本项优化。
 - 不通过关闭 ask/tasks/jobs/goal/agents、mentions、调度、workflow 或历史渲染获取性能改善。
 - 不自动停用、修改或更新用户安装的第三方扩展，不清理用户缓存，不增加后台预热、永久资源缓存、遥测或常驻 watcher。
-- 不执行消费者安装验收或 npm 发布；既有 [安装验收待办](official-pi-installation.md) 的延期与授权边界保持不变。
+- 不执行消费者安装验收或 npm 发布；消费者安装验收仍延期，不计为本专项通过。
 
 ## 检查依据与适用范围
 
@@ -121,7 +121,7 @@
 
 代码实施收尾统一运行 `pnpm typecheck`、`pnpm test`，另运行受影响的真实 CLI/PTY/RPC 场景。日常检查控制在 5 分钟内、全量检查控制在 10 分钟内；不在每个小改动后重复全量运行。聚焦检查与性能样本不替代收尾全量检查，也不替代消费者安装。
 
-局部同步 [公共运行时](../current/runtime/index.md)、[统一 UI](../current/ui/index.md)、[任务操作](../current/tasks/operations.md)、[子代理运行时](../current/agents/runtime.md) 和 [验证规则](../current/validation.md) 中受影响的稳定事实，尤其校正查看器何时实际加载；未完成的验收仍保留于本项。只有全部完成条件满足后才移至 finished 并更新索引。性能结论保留环境与适用范围，不保留临时日志、脚本或本机产物路径。
+局部同步 [公共运行时](../../../current/runtime/index.md)、[统一 UI](../../../current/ui/index.md)、[任务操作](../../../current/tasks/operations.md)、[子代理运行时](../../../current/agents/runtime.md) 和 [验证规则](../../../current/validation.md) 中受影响的稳定事实，尤其校正查看器何时实际加载。归档保留原验收条件与未完成项；性能结论保留环境与适用范围，不保留临时日志、脚本或本机产物路径。
 
 ## 已实施边界与验收结论
 
@@ -173,7 +173,7 @@ Linux Node 24.22.2、官方 Pi 1.5.0 实际 Node bin、fullscreen 80×30、默�
 
 ### 检查与未覆盖范围
 
-受影响的 Tasks UI/撤销、工具显示/历史、模块准入、agents 资源/历史/运行检查，以及官方 CLI/PTY/RPC 合并检查的最终结果见 [验证规则](../current/validation.md)。实际 CLI 已覆盖 regular/fullscreen 的历史工具、Tasks/Goal/Jobs/Subagents 首次打开/返回、PTY 输入/resize、child、clone/冷恢复/quit；实际 Goal 恢复与混合通知历史在 40/80/120 列另通过离线 smoke，不涉及收费服务。
+受影响的 Tasks UI/撤销、工具显示/历史、模块准入、agents 资源/历史/运行检查，以及官方 CLI/PTY/RPC 合并检查的最终结果见 [验证规则](../../../current/validation.md)。实际 CLI 已覆盖 regular/fullscreen 的历史工具、Tasks/Goal/Jobs/Subagents 首次打开/返回、PTY 输入/resize、child、clone/冷恢复/quit；实际 Goal 恢复与混合通知历史在 40/80/120 列另通过离线 smoke，不涉及收费服务。
 
 尚未建立完整第三方扩展集合、首次 Ask/workflow 的前后性能比较、生产类型/历史规模与 Windows 新行为验收；既有契约通过不等于这些性能场景已测。安装副本、用户配置、宿主、第三方安装目录和发布方式均未修改，Pi 1.5.2 仅为诊断，不扩大正式支持范围。
 
@@ -191,7 +191,7 @@ Linux Node 24.22.2、官方 Pi 1.5.0 实际 Node bin、fullscreen 80×30、默�
 - [ ] 完成现有契约检查及真实 CLI 的历史、首次命令/工具、PTY、child/workflow、reload/切换/退出验收，报告未覆盖范围。
 - [ ] 提供优化前后多进程采样结论与首次交互使用代价，确认默认功能端到端改善而非阶段转移。
   - [x] 前后各五进程 RPC 对比、范围、波动与阶段转移分析。
-- [ ] 局部更新 current 文档并在完成全部验收后归档本项；保持源码 Git 安装方式及独立安装验收延期边界，不修改第三方安装目录。
+- [x] 局部更新 current 文档并归档已验证范围；保持源码 Git 安装方式及独立安装验收延期边界，不修改第三方安装目录。
   - [x] 同步当前 registry、资源路径和查看器加载边界。
 
-[返回待办索引](index.md)
+[返回归档索引](../../index.md)
