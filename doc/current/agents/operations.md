@@ -23,7 +23,7 @@ Agents 行直接显示主 agent 设置的名称（未设置时使用类型 displ
 
 ## /subagents
 
-`/subagents [queued|finished|all|types|schedules|workflows]` 直接打开对应页或筛选；不带参数每次打开 Runs 的 All 记录。顶部标题为 `Subagents ▸ <页名>`，页面标签为 Runs、Types，以及启用时的 Schedules、Workflows；标签按可见顺序编号，数字键或 `[`/`]` 一次切页，不进入 Tab 焦点环。Runs 的 Scope 按 `w` 循环选择 This session 或 Workspace，State 按 `s` 循环选择 All、Queued、Finished 并显示该范围内的数量；Queued 单独计数，Finished 为非活动记录。活动中的 starting/running/waiting/stopping/queued 排在最前，内部按最近更新时间（无则启动或创建时间）倒序；其余按 endedAt（无则最近更新、启动或创建时间）倒序。模型工具 agent_list 的筛选参数与默认值见上表。列表仅包含 run，不含导航或筛选菜单项。
+`/subagents [queued|finished|all|types|schedules|workflows]` 直接打开对应页或筛选；不带参数每次打开 Runs 的 All 记录。顶部标题为 `Subagents ▸ <页名>`，页面标签为 Runs、Types，以及启用时的 Schedules、Workflows；标签按可见顺序编号，不进入 Tab 焦点环。列表焦点下，数字键直达对应页，`[`/`]` 分别循环切到上一页/下一页，←/→ 使用同一切页逻辑；在第一页 Runs，← 不循环到末页，300ms 内连按两次 ← 才退出根浏览页。切回 Runs 的那次 ← 不计入双击。详情阅读和输入焦点保留原有按键行为，根页的双左退出仅在 Runs 生效。Runs 的 Scope 按 `w` 循环选择 This session 或 Workspace，State 按 `s` 循环选择 All、Queued、Finished 并显示该范围内的数量；Queued 单独计数，Finished 为非活动记录。活动中的 starting/running/waiting/stopping/queued 排在最前，内部按最近更新时间（无则启动或创建时间）倒序；其余按 endedAt（无则最近更新、启动或创建时间）倒序。模型工具 agent_list 的筛选参数与默认值见上表。列表仅包含 run，不含导航或筛选菜单项。
 
 Enter 直接打开所选 run 的 Transcript，排队记录打开 Task details。底部固定导航与动作两行，空列表也列出当前页的全部导航控件；列表为空时正文和动作行显示下一步提示，如 `No queued runs · press s for All (10)`。标题区、列表与底部使用分隔线区分，状态信息位于标题区，样式见 [统一界面配色角色](../ui/index.md#浏览器配色角色)。底部动作行按所选 run 提供 `m message`、`j jobs`、`c model / thinking`、`b background`、`x stop subtree` 或 `x cancel queued`；结束记录存在所属活动 job 时提供 `x cleanup jobs`。Jobs 查看该 run 子树创建的活动 job，Model / thinking 修改所选 run 的覆盖值，从它下一次请求生效；停止和清理按 run 范围执行并保留二次确认。
 

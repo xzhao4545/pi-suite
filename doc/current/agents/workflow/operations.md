@@ -8,7 +8,7 @@ Workflow 工具折叠为一行，名称/统计、副标题与 tokens/tools/repla
 
 ## /subagents workflows
 
-Workflows 页面标题为 `Subagents ▸ Workflows`，通过顶部 `s View` 一次循环 Runs/Saved，切换当前会话与分支的运行及保存资源；数字键或 `[`/`]` 切换 Subagents 页面。运行按开始时间倒序排列，右侧预览进度；Enter 直接打开完整运行详情，底部按状态显示 `p Pause/Resume`、`x Stop`、`r Replay journal`。Saved 支持 `/` 进入名称筛选、源码预览、Enter 查看源码及 `n Start` 输入 JSON args 后启动；运行和保存资源分别保留筛选、选择与阅读位置，往返其他页面保持当前范围。运行详情展示名称、说明、状态、agent 进度、阶段、实际模型/thinking、尝试原因、用量、提示/结果预览、错误、日志与最终结果。metadata 阶段标题精确匹配；未声明阶段的 agent 保留独立 Agents 分组。
+Workflows 页面标题为 `Subagents ▸ Workflows`，通过顶部 `s View` 一次循环 Runs/Saved，切换当前会话与分支的运行及保存资源；数字键、`[`/`]` 或 ←/→ 切换 Subagents 页面，边界行为见 [Subagents 操作](../operations.md#subagents)。运行按开始时间倒序排列，右侧预览进度；Enter 直接打开完整运行详情，底部按状态显示 `p Pause/Resume`、`x Stop`、`r Replay journal`。Saved 支持 `/` 进入名称筛选、源码预览、Enter 查看源码及 `n Start` 输入 JSON args 后启动；运行和保存资源分别保留筛选、选择与阅读位置，往返其他页面保持当前范围。运行详情展示名称、说明、状态、agent 进度、阶段、实际模型/thinking、尝试原因、用量、提示/结果预览、错误、日志与最终结果。metadata 阶段标题精确匹配；未声明阶段的 agent 保留独立 Agents 分组。
 
 | 动作 | 行为 |
 | --- | --- |

@@ -41,7 +41,8 @@ test('subagents navigates pages and empty filters without menu rows or model wor
           case 0:
             assert.match(text(), /All 2.*Queued 1.*Finished 0/); assert.equal(view.getSelectedItem()?.value, queued.record.runId);
             assert.ok(view.render(120).some(line => /running · [\d.]+s/.test(stripVTControlCharacters(line.split('│')[0]))), 'long names retain state and runtime');
-            view.handleInput('/'); view.handleInput('probe'); view.handleInput('\r'); view.handleInput('s'); break;
+            view.handleInput('/'); view.handleInput('prbe'); view.handleInput('\x1b[D');
+            view.handleInput('\x1b[D'); view.handleInput('o'); view.handleInput('\r'); view.handleInput('s'); break;
           case 1:
             assert.equal(view.getSelectedItem()?.value, queued.record.runId); assert.match(text(), /Filter: probe/);
             assert.match(text(), /cancel queued/); assert.doesNotMatch(text(), /m message|b background/);
@@ -54,9 +55,10 @@ test('subagents navigates pages and empty filters without menu rows or model wor
             // Native viewport bounds are independent of terminal width; complete settings
             // remain readable by scrolling instead of leaking beyond the allocated pane.
             view.handleInput('\t'); view.handleInput('\x1b[F'); assert.match(text(), /Model settings:/);
-            view.handleInput('\x1b'); view.handleInput('['); break;
+            view.handleInput('\x1b'); view.handleInput('\x1b[D'); break;
           case 3:
             assert.equal(view.getSelectedItem()?.value, queued.record.runId); assert.match(text(), /Filter: probe/);
+            view.handleInput('\x1b[D'); // The Left that switched from Types must not arm Runs' exit.
             chooseBrowserAction(view, 'Cancel queued'); assert.match(text(), /Press x again to cancel queued/);
             assert.equal(queued.controller.signal.aborted, false); view.handleInput('x'); break;
           case 4:

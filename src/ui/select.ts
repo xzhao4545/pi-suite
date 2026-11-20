@@ -2,15 +2,17 @@ import { getSelectListTheme, type ExtensionContext } from '@earendil-works/pi-co
 import { Input, SelectList, fuzzyFilter, getSelectPageIndex, truncateToWidth, type SelectItem } from '@earendil-works/pi-tui';
 import { DoubleLeft, type ViewerNavigation } from './viewer/navigation.ts';
 import { commandFrame } from './frame.ts';
-import { isReadingScreen, openReading, type ReadingFactory } from './reading.ts';
+import { isReadingSession, openReading, readingRows, type ReadingFactory } from './reading.ts';
 
 /** Native input, paging and display-only truncation keep complete resource identities selectable. */
 export function selectValue(ctx: ExtensionContext, title: string, items: SelectItem[], initial?: string, options: { filter?: boolean; navigation?: ViewerNavigation } = {}): Promise<string | undefined> {
+  const inReading = isReadingSession(ctx);
   const factory: ReadingFactory<string | undefined> = (tui, theme, keys, done) => {
     const input = options.filter ? new Input({ prompt: 'Filter: ' }) : undefined;
     const doubleLeft = new DoubleLeft();
     let filtered = items;
-    let maxVisible = Math.max(1, tui.terminal.rows - 6 - Number(Boolean(input)));
+    const listHeight = () => Math.max(1, (inReading ? readingRows(tui) : tui.terminal.rows) - 6 - Number(Boolean(input)));
+    let maxVisible = listHeight();
     const createList = (index: number) => {
       const next = new SelectList(filtered, maxVisible, getSelectListTheme());
       next.setSelectedIndex(index);
@@ -24,7 +26,7 @@ export function selectValue(ctx: ExtensionContext, title: string, items: SelectI
       get focused() { return input?.focused ?? false; },
       set focused(value: boolean) { if (input) input.focused = value; },
       render(width: number) {
-        const height = Math.max(1, tui.terminal.rows - 6 - Number(Boolean(input)));
+        const height = listHeight();
         if (height !== maxVisible) {
           const index = filtered.indexOf(list.getSelectedItem()!);
           maxVisible = height; list = createList(index);
@@ -59,5 +61,7 @@ export function selectValue(ctx: ExtensionContext, title: string, items: SelectI
       },
     };
   };
-  return isReadingScreen(ctx) ? openReading(ctx, factory) : ctx.ui.custom(factory);
+  // An inline dialog would sit behind the retained browser frame. Mount through
+  // the same reading session so the new overlay takes focus and replaces that frame.
+  return inReading ? openReading(ctx, factory) : ctx.ui.custom(factory);
 }

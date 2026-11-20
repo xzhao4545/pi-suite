@@ -163,14 +163,20 @@ export class BrowserView extends Container {
       : this.options.page ?? this.options.title;
   }
   private empty(): string { return emptyRow(this.page(), this.options.controls ?? [], this.options.state.query, this.options.pages, this.theme); }
+  private firstPage(): boolean {
+    const { pages } = this.options;
+    return !pages || pages.items()[0]?.value === pages.selected();
+  }
   private navigation(): string {
     const hint = (key: string, action: string) => keyHint(key, action, this.theme);
     if (this.focus === 'filter') return `Type to filter · ${hint('↑↓', 'select')} · ${hint('Enter', 'keep')} · ${hint('Esc', 'clear')}`;
-    if (this.focus === 'details') return [...this.options.navigation ? [hint('←←', 'close')] : [],
-      hint('Tab/Esc', 'list'), hint('↑↓ PgUp PgDn', 'scroll'), hint('/', 'search'), hint('n/N', 'next')].join(' · ');
     const { pages, controls = [] } = this.options;
-    return [...this.options.navigation ? [hint('←←', 'close')] : [], hint('Esc', this.options.state.query ? 'clear filter' : this.options.navigation ? 'back' : 'close'),
-      ...pages ? [hint(`1-${Math.min(9, pages.items().length)} / [ ]`, 'page')] : [],
+    const firstPage = this.firstPage();
+    const close = this.options.navigation && firstPage ? [hint('←←', 'close')] : [];
+    if (this.focus === 'details') return [...close,
+      hint('Tab/Esc', 'list'), hint('↑↓ PgUp PgDn', 'scroll'), hint('/', 'search'), hint('n/N', 'next')].join(' · ');
+    return [...close, hint('Esc', this.options.state.query ? 'clear filter' : this.options.navigation ? 'back' : 'close'),
+      ...pages ? [hint(`1-${Math.min(9, pages.items().length)} / ${firstPage ? '→' : '← →'} / [ ]`, 'page')] : [],
       ...controls.map(control => hint(control.key, control.label.toLowerCase())), hint('/', 'filter'), hint('Tab', 'details')].join(' · ');
   }
   private help(): string {
@@ -230,10 +236,12 @@ export class BrowserView extends Container {
     return [this.inputRow(label, room, Boolean(input.focused), width => input.focused ? input.render(width)[0] ?? '' : truncateToWidth(input.getValue(), width))];
   }
   handleInput(data: string): void {
-    if (this.composer.active || this.focus === 'filter' || this.reader?.searching) this.doubleLeft.reset();
+    const { navigation } = this.options;
+    const canClose = this.firstPage() && !this.composer.active && this.focus !== 'filter' && !this.reader?.searching;
+    if (!canClose) this.doubleLeft.reset();
     if (this.composer.handleInput(data)) { this.bar.disarm(); return; }
-    if (this.focus !== 'filter' && !this.reader?.searching && this.options.navigation && this.doubleLeft.handle(data)) {
-      this.options.navigation.close(); this.bar.disarm(); this.done(); return;
+    if (navigation && canClose && this.doubleLeft.handle(data)) {
+      navigation.close(); this.bar.disarm(); this.done(); return;
     }
     this.update();
     const nav = [Key.up, Key.down, Key.pageUp, Key.pageDown].some(key => matchesKey(data, key));
@@ -263,7 +271,9 @@ export class BrowserView extends Container {
     else if (matchesKey(data, Key.tab)) { if (this.reader) this.focus = 'details'; }
     else if (matchesKey(data, '/')) this.focus = 'filter';
     else if (nav) this.list.handleInput(data);
-    else if (pages && (matchesKey(data, '[') || matchesKey(data, ']'))) cycle(pages, this.done, matchesKey(data, '[') ? -1 : 1);
+    else if (pages && (matchesKey(data, ']') || matchesKey(data, Key.right))) cycle(pages, this.done);
+    // '[' still wraps; Left is reserved for the close gesture on the first page.
+    else if (pages && (matchesKey(data, '[') || (!this.firstPage() && matchesKey(data, Key.left)))) cycle(pages, this.done, -1);
     else {
       const page = pages?.items().find((_page, index) => index < 9 && matchesKey(data, String(index + 1) as KeyId));
       const control = controls.find(control => matchesKey(data, control.key));

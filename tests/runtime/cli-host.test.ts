@@ -91,11 +91,28 @@ test('official CLI keeps reading frames continuous, adapts metadata, forks tasks
         const header = `${title} ▸`;
         pty.write(`/${command}\r`); await waitFor(command, () => visible(header));
         if (command === 'subagents') {
-          for (const [key, page] of [[']', 'Types'], ['[', 'Runs']] as const) {
-            const before = frameId;
-            pty.write(key); await waitFor(`tab ${page}`, () => visible(`Subagents ▸ ${page}`));
-            await checkReadingFrames(before);
+          const typesFrame = frameId;
+          pty.write('\x1b[D'); await pause();
+          assert.ok(visible('Subagents ▸ Runs'), 'one Left on Runs does not leave the first tab');
+          pty.write('\x1b[C'); await waitFor('Right opens Types', () => visible('Subagents ▸ Types'));
+          await checkReadingFrames(typesFrame);
+          for (const key of ['\r', 'c']) {
+            pty.write(key); await waitFor('visible model picker above Types', () => visible('Filter:') && visible('No override'));
+            pty.write('zqxv-no-such-cli-model'); await waitFor('model picker has input focus', () => visible('No matching items'));
+            pty.write('\x1b'); await waitFor('Types after model cancel', () => visible('Subagents ▸ Types') && !visible('No matching items'));
           }
+          pty.write('c'); await waitFor('reopened model picker', () => visible('Filter:') && visible('No override'));
+          pty.write('\r'); await waitFor('thinking picker after model selection', () => visible('No override') && !visible('Filter:'));
+          pty.write('\x1b'); await waitFor('Types after thinking cancel', () => visible('Subagents ▸ Types') && !visible('No override'));
+          const runsFrame = frameId;
+          pty.write('\x1b[D'); await waitFor('Left returns to Runs', () => visible('Subagents ▸ Runs'));
+          await checkReadingFrames(runsFrame);
+          const wrapFrame = frameId;
+          pty.write('['); await waitFor('[ wraps to Workflows', () => visible('Subagents ▸ Workflows'));
+          pty.write('\x1b[D'); await waitFor('Left opens Schedules', () => visible('Subagents ▸ Schedules'));
+          pty.write(']'); await waitFor('] opens Workflows', () => visible('Subagents ▸ Workflows'));
+          pty.write('\x1b[C'); await waitFor('Right wraps to Runs', () => visible('Subagents ▸ Runs'));
+          await checkReadingFrames(wrapFrame);
           const entering = frameId;
           pty.write('\r'); await waitFor('child transcript tail', () => visible('Child history paragraph'));
           await checkReadingFrames(entering);
@@ -116,7 +133,7 @@ test('official CLI keeps reading frames continuous, adapts metadata, forks tasks
           pty.write('\r'); await waitFor('job output viewer', () => !visible(header) && visible('previous bytes') && visible('CLI_STDOUT'));
           pty.write('\x1b'); await waitFor('return to jobs list', () => visible(header));
         }
-        pty.write('\x1b'); await waitFor('closed page', () => !visible(header));
+        pty.write(command === 'subagents' ? '\x1b[D\x1b[D' : '\x1b'); await waitFor('closed page', () => !visible(header));
       }
       pty.write('/cli-probe\r'); await waitFor('shared host class identity', () => visible('CLI_NATIVE_IDENTITY_true'));
       pty.write('\x1b'); await waitFor('closed identity probe', () => !visible('CLI_NATIVE_IDENTITY_true'));
