@@ -20,7 +20,7 @@
 - [命令结构高亮](./ui/command-highlighting.md) — 显式命令／代码模式、Bash／PowerShell 词法边界、主题角色、缓存与原生工具组合。
 - [ask 接口与操作](./ask/index.md) — 默认值、批量、多选、超时、搜索及焦点。
 - [目标管理](./goal/index.md) — 持久目标、运行调度、宿主恢复、预算和操作。
-- [两级任务管理](./tasks/index.md) — 原子批量编辑、派生进度、会话存储、Dock 折叠、详情与临时提醒。
+- [两级任务管理](./tasks/index.md) — 原子批量编辑、派生进度、会话存储、Dock 折叠、详情与稳定提醒。
 - [执行任务](./jobs/index.md) — pipe/PTY job、记录与日志、停止证据、工具、通知、同进程保活、[PTY 监督与委派](./jobs/hands-free.md) 及 [CLI 预设与直接启动](./jobs/launch.md)。
 - [Pi 子代理](./agents/index.md) — 同进程会话、两池队列、运行记录、父级提问、任务共享与 job 级联停止，以及 [Workflow 编排](./agents/workflow/index.md) 的资源、宿主、等待和原生控制。
 - [基线与验证](./validation.md) — 依赖来源、目标平台和必要检查范围。

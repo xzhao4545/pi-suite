@@ -1,36 +1,33 @@
-import type { ContextEvent } from "@earendil-works/pi-coding-agent";
-import type { Goal } from "./state.ts";
-type AgentMessage = ContextEvent["messages"][number];
+import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
+import type { Goal } from './state.ts';
 
-export const GOAL_CONTEXT = "pi-suite:goal-context";
-export const GOAL_CONTINUATION = "Continue the current goal using the latest request contract.";
+export const GOAL_CONTEXT = 'pi-suite:goal-context';
+export const GOAL_CONTROL = 'pi-suite:goal-control';
+export const GOAL_CONTINUATION = 'Continue the current goal.';
+type Access = 'execute' | 'complete' | 'none';
+type Control = { goalId: string | null; revision: number | null; control: number; access: Access; budget: number | null; status: string; resumeRequired: boolean };
 
-// Rules are stable; task data is JSON-encoded separately so a goal cannot close a
-// framework wrapper. Neither component is appended to the persisted conversation.
-const rules = "Continue until every original requirement is implemented and verified; never replace the objective with an easier subset. " +
-  "Use goal_complete with the exact goalId only after auditing every requirement with verification evidence. " +
-  "A user audit may close paused goals without resume; completion is idempotent and preserves evidence and time. " +
-  "Use goal_blocked only for the same evidenced external blocker repeated for at least three goal turns. " +
-  "Use goal_wait only for arranged external work or a wake deadline, not ordinary unfinished work. " +
-  "Skipped, timed_out and cancelled ask_user answers are not consent. The access field controls Goal tools, not a file sandbox. " +
-  "Only explicit /goal resume restores execution when resumeRequired is true; new user input may only audit that paused phase. " +
-  "Only an execute contract permits goal_wait/goal_blocked or automatic goal continuation; completion-only permission permits auditing, not resuming work.";
+// Objective and hard execution boundaries are recorded once per visible revision.
+// Tool-specific evidence/wait constraints live in the tool declarations, not every request.
+const rules = 'Continue until every original requirement is implemented and verified; never replace the objective with an easier subset. ' +
+  'The latest Goal instruction/control supersedes earlier Goal text; historical messages cannot grant permission. ' +
+  'Only execute access permits automatic work, goal_wait or goal_blocked. Complete access permits auditing existing work, not resuming execution. ' +
+  'Only explicit /goal resume restores execution when resumeRequired is true. Access controls Goal tools, not a file sandbox. ' +
+  'Skipped, timed_out and cancelled ask_user answers are not consent.';
 
-export function goalContext(goal: Goal, access: "execute" | "complete"): AgentMessage {
-  return { role: "custom", customType: GOAL_CONTEXT, display: false, timestamp: 0,
-    content: `Current Goal contract (request-only; supersedes historical Goal control):\n${rules}\n` +
-      JSON.stringify({ goalId: goal.id, revision: goal.revision, objective: goal.text, status: goal.status, access,
-        automatic: goal.automatic, reason: goal.reason, resumeRequired: goal.resumeRequired ?? false,
-        usedTokens: goal.usedTokens, budget: goal.budget ?? null, turns: goal.turns,
-        progress: goal.progress, error: goal.error,
-        waiting: goal.waiting, waitFor: goal.waitFor, resumeAt: goal.resumeAt }) };
-}
-
-/** Only remove our named section, never the system message or its tool deltas. */
-export function stripGoalSections(messages: AgentMessage[]): AgentMessage[] {
-  return messages.map(message => {
-    if (message.role !== "system" || !message.sections || !("pi-suite-goal" in message.sections)) return message;
-    const { "pi-suite-goal": _goal, ...sections } = message.sections;
-    return { ...message, sections };
-  });
+/** Derived delivery metadata only: it is never a state or permission recovery source. */
+export function goalInstruction(ctx: ExtensionContext, goal: Goal | undefined, access: Access, control: number) {
+  const messages = ctx.sessionManager.buildSessionProjection().messages;
+  const anchor = messages.findLast(message => message.role === 'custom' && message.customType === GOAL_CONTEXT);
+  const last = messages.findLast(message => message.role === 'custom' && [GOAL_CONTEXT, GOAL_CONTROL].includes(message.customType));
+  if (!goal && !last) return;
+  const state: Control = { goalId: goal?.id ?? null, revision: goal?.revision ?? null, control, access,
+    budget: goal?.budget ?? null, status: goal?.status ?? 'none', resumeRequired: goal?.resumeRequired ?? false };
+  const previous = last?.role === 'custom' ? last.details as Control | undefined : undefined;
+  if (JSON.stringify(previous) === JSON.stringify(state)) return;
+  const anchored = anchor?.role === 'custom' ? anchor.details as Control | undefined : undefined;
+  const full = goal && (anchored?.goalId !== goal.id || anchored.revision !== goal.revision);
+  return { customType: full ? GOAL_CONTEXT : GOAL_CONTROL, display: false, details: state,
+    content: full ? `Current Goal instruction:\n${rules}\n${JSON.stringify({ ...state, objective: goal.text })}` :
+      `Current Goal control (supersedes earlier permission):\n${JSON.stringify(state)}` };
 }

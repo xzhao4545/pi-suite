@@ -1,10 +1,9 @@
-import type { AgentBeforeSettleEvent, BoundaryResult, ContextEvent, ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { AgentBeforeSettleEvent, BoundaryResult, ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { TextContent } from "@earendil-works/pi-ai";
 import type { SessionBinding } from "./binding.ts";
-type AgentMessage = ContextEvent["messages"][number];
 
 /** One delivery path for job, agent and goal wakeups; UI readers never send follow-ups. */
-type Source = "event" | "goal-continuation";
+type Source = "event" | "goal-continuation" | "reminder";
 type Pending = { text: string; source: Source; delivered?: () => void };
 type Segment = { requestId: string; source: Source };
 type NotificationDetails = { notificationVersion: 1; segments: Segment[] };
@@ -45,35 +44,19 @@ export class Notifications {
     this.pending.delete(sessionId);
     for (const message of messages.values()) message.delivered?.();
     // Provenance aligns with content blocks, avoiding a second persisted copy of event text.
-    const segments = [...messages].map(([requestId, message]) => ({ requestId, source: message.source }));
-    return { content: [...messages.values()].map(message => ({ type: "text", text: message.text })), details: { notificationVersion: 1, segments } };
+    const events = [...messages].filter(([, message]) => message.source !== 'goal-continuation');
+    // A real result/question already supplies the wake text. Goal still receives its
+    // exactly-once delivery callback, without a redundant independent control block.
+    const visible = events.length ? events : [...messages];
+    const segments = visible.map(([requestId, message]) => ({ requestId, source: message.source }));
+    return { content: visible.map(([, message]) => ({ type: "text", text: message.text })), details: { notificationVersion: 1, segments } };
   }
 
-  /** Keep one current control signal, but every real event in a mixed delivery. */
-  project(messages: AgentMessage[], goalRequestId?: string): AgentMessage[] {
-    let keptControl = false;
-    const result: AgentMessage[] = [];
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const message = messages[i];
-      const details = message.role === "custom" && message.customType === "pi-suite:notification" ?
-        message.details as NotificationDetails | undefined : undefined;
-      // Legacy batches have no segment provenance: never infer it from their text.
-      if (message.role !== "custom" || details?.notificationVersion !== 1) { result.push(message); continue; }
-      if (!Array.isArray(message.content) || !Array.isArray(details.segments) || details.segments.length !== message.content.length ||
-        details.segments.some(segment => !segment || typeof segment.requestId !== "string" ||
-          !["event", "goal-continuation"].includes(segment.source))) throw new Error("Invalid pi-suite notification segments");
-      const segments: Segment[] = [];
-      const content = message.content.filter((_block, index) => {
-        const segment = details.segments[index];
-        if (segment.source === "goal-continuation") {
-          if (keptControl || segment.requestId !== goalRequestId) return false;
-          keptControl = true;
-        }
-        segments.push(segment); return true;
-      });
-      if (content.length) result.push(content.length === message.content.length ? message : { ...message, content, details: { ...details, segments } });
-    }
-    return result.reverse();
+  /** Non-waking reminders use the same provenance envelope at a natural boundary. */
+  reminder(requestId: string, text: string) {
+    return { type: 'custom_message' as const, customType: 'pi-suite:notification', display: false,
+      content: [{ type: 'text' as const, text }],
+      details: { notificationVersion: 1, segments: [{ requestId, source: 'reminder' }] } satisfies NotificationDetails };
   }
 
   beforeSettle(event: AgentBeforeSettleEvent): BoundaryResult | undefined {

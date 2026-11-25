@@ -16,7 +16,7 @@ export class AskManager {
   private active?: AskView;
   private rendererLookup?: (name: string) => ToolRenderers | undefined;
   constructor(private binding: SessionBinding, private notifications: Notifications, private dock: Dock,
-    private onResult?: (status: AskResult["status"], ctx: ExtensionContext) => void) {}
+    private onResult?: (status: AskResult["status"], ctx: ExtensionContext) => void | Promise<void>) {}
   setRendererLookup(lookup: (name: string) => ToolRenderers | undefined): void { this.rendererLookup = lookup; }
   cancel(): void { this.active?.cancel(); }
 
@@ -48,7 +48,7 @@ export class AskManager {
     }, signal);
     // A response from a revoked view cannot authorize work in the next session or reload.
     if (!this.binding.isCurrent(captured)) return { result: cancelled(), questions };
-    this.onResult?.(result.status, ctx);
+    await this.onResult?.(result.status, ctx);
     return { result, questions };
   }
 }

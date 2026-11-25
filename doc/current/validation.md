@@ -22,7 +22,7 @@ goal 模型工具的 Linux 契约检查通过，核对空白参数 INVALID_ARGS�
 
 阅读采用 U1 公开组件、共享显式预算与唯一 scrollTop，scrollbar:hidden；复杂阅读 overlay 的区域鼠标焦点、嵌套单项工具命中和轨道/拖动不在保证范围。Tasks 采用 T1 持久源 LF/UTF-8 首头只读与完整独立快照，内存 fork 明确提示任务不自动继承。M1 保留受守卫的私有父 ModelRegistry.runtime，同一 runtime 的受控 Provider、临时 API key 和虚拟路由聚合通过，失效明确拒绝、不切换默认 runtime。操作与细节分别见 [终端交互](ui/terminal.md)、[任务存储](tasks/storage.md) 和 [模型边界](agents/models.md#模型运行时桥接)。
 
-支持声明精确限定为官方 Pi 1.5.0；消费者 Git/本地包及 tarball 安装按用户指示延期，见 [安装待办](../todo/official-pi-installation.md)，不计为通过。包保持 private:true，未实际 npm 发布。本专项不证明实体人工终端、Windows 人工交互、外网账号/组织权限、真实解密或中转粘性；既有平台专项的结论不扩大到这些范围。
+支持声明精确限定为官方 Pi 1.5.0；消费者 Git/本地包及 tarball 安装按用户指示延期，见 [安装验收边界](../finished/pi-suite/official-pi-compatibility/index.md#状态与执行权限)，不计为通过。包保持 private:true，未实际 npm 发布。本专项不证明实体人工终端、Windows 人工交互、外网账号/组织权限、真实解密或中转粘性；既有平台专项的结论不扩大到这些范围。
 
 ## 七项交互与生命周期
 
@@ -30,9 +30,9 @@ goal 模型工具的 Linux 契约检查通过，核对空白参数 INVALID_ARGS�
 
 ## Goal 请求与自动续跑
 
-Goal 的请求合同、通知来源与五轮自动停跑通过 Linux Node 24.22.2、官方未修改 Pi 1.5.0 SDK 验证。无压缩连续 20 次自然工具请求和 20 次边界续跑均只有一份当前合同，usedTokens 与状态实时更新，短控制片段有界，其他提示节、动态工具增删与真实事件保留。Completions/Responses 的中途更新与折叠四种受控序列化组合保留强制 head、合同与工具声明；没有测量生产缓存或费用。
+Goal 的请求合同、通知来源与五轮自动停跑通过 Linux Node 24.22.2、官方未修改 Pi 1.5.0 SDK 验证。无压缩连续 20 次自然工具请求和 20 次边界续跑均只交付一份完整目标说明；usedTokens 与状态保存在当前 Store/UI，必要短控制追加且不移除历史，其他提示节、动态工具增删与真实事件保留。Completions/Responses 的中途更新与折叠四种受控序列化组合保留强制 head、合同与工具声明；没有测量生产缓存或费用。
 
-自动轮无工具/相同活动停跑、持久原因、用户审计与显式 resume、变化的只读研究、等待、reload/compact 和真实后台唤醒权限通过。类型检查与受影响 38 项补验通过，覆盖全量检查中的通知断言同步；230 项检查的综合结论及官方 CLI 适用范围见 [Goal 专项](../finished/pi-suite/goal/context-optimization.md)。Windows 新行为与收费服务不在本次验收范围。
+自动轮无工具/相同活动停跑、持久原因、用户审计与显式 resume、变化的只读研究、等待、reload/compact 和真实后台唤醒权限通过。类型检查与受影响链路复验通过；当前存储/上下文范围见 [单一状态专项](../finished/pi-suite/goal/goal-state-context/validation.md)，官方 CLI 适用范围见 [续跑验收](../finished/pi-suite/goal/context-optimization.md)。Windows 新行为与收费服务不在本次验收范围。
 
 ## 源码入口性能验证
 
@@ -44,7 +44,9 @@ RPC 首个状态响应、命令登记与文本查询只证明非 TUI 就绪；TU
 
 Linux Node 24.22.2、官方未修改 Pi 1.5.0 的 10 组聚合覆盖真实 SDK serializer、HTTP/SSE、boundary/context_edit 与原生重试：资源 400 的 ID-only 修复、429/503/网络错误后成功、有限预算耗尽保留最后错误、无新 ID 不重复恢复、默认关闭与不安全请求拒绝、普通参数/权限/额度/上下文错误不误接管、暂停后的迟到成功拒绝、两种公开边界扩展顺序，以及分支/端点/实例隔离。工具副作用不重放、原始失败保留、Goal 最终结算暂停通过；另以真实两种 Model Manager 加载顺序、两个并发 childSuite 请求和 pause/clear/edit/replace/abort/new 会话竞争完成实际验收。协议及限制见 [Responses 恢复](runtime/responses-recovery.md)。这不是真实上游密文解密或所有第三方版本的验收。
 
-Goal 三态 version 2 与 version 1 迁移检查保留累计数据、原因与权限，冷/树分支不能绕过手动或自动暂停。实际 Pi 1.5.0 Node bin 的 regular/fullscreen 在 40/80/120 列覆盖 `/goal pause`、恢复一行摘要、Ctrl+O 原生展开/收起与前次原因，阅读不增加模型请求；普通输入占用宿主时 `/goal resume` 即时显示 `Goal resumed · waiting`，目标已运行时显示 `Goal already running`。混合 job/agent 通知及 `/reload` 历史重建保留真实事件、隐藏结构化 Goal 控制片段。原生 custom message 不提供单消息鼠标展开，不新增模拟点击；真实上游密文解密与 Windows 新行为未验证。验收范围见 [Goal 与 Responses 恢复归档](../finished/pi-suite/goal/goal-responses-recovery.md)。
+Goal 使用每主会话一份 version 1 当前文件，兼容导入 JSONL 的 Goal version 1/2；同会话 tree/reload 共用当前状态，new/fork 默认无 Goal，暂停原因与显式恢复许可不能由旧分支回滚。实际 Pi 1.5.0 Node bin 的 regular/fullscreen 在 40/80/120 列覆盖 `/goal pause`、恢复一行摘要、Ctrl+O 原生展开/收起与前次原因，阅读不增加模型请求；普通输入占用宿主时 `/goal resume` 即时显示 `Goal resumed · waiting`，目标已运行时显示 `Goal already running`。混合 job/agent 通知及 `/reload` 历史重建保留真实事件、隐藏结构化 Goal 控制片段。原生 custom message 不提供单消息鼠标展开，不新增模拟点击；真实上游密文解密与 Windows 新行为未验证。验收范围见 [Goal 与 Responses 恢复归档](../finished/pi-suite/goal/goal-responses-recovery.md)。
+
+Linux Node 24.22.2、官方未修改 Pi 1.5.0 的 Goal、Tasks、workflow、Responses 受影响链路检查通过；真实 SDK/本地 HTTP 逐项比较正常续跑的完整 input 前缀以及系统、工具和缓存键，控制、用量和 UI 更新不移除前次 Goal 历史。覆盖单文件导入/clear、迟到计量、存储错误、同会话 tree/reload、new/fork、冷启动、混合通知、等待、预算、停跑、强制提示与压缩；外部 GoalStore 更新沿用共享订阅。该结论验证请求结构，不代表生产缓存率或 Windows 新行为，也没有追加收费上游请求，范围见 [Goal 状态与上下文验收](../finished/pi-suite/goal/goal-state-context/validation.md)。
 
 ## 检查
 
@@ -91,7 +93,7 @@ jobs 技能格式与实际 Pi 包资源加载验收通过，覆盖 package.pi.sk
 
 会话 job 可见集的 1 项 Linux（Node 24.22.2）真实 SDK 聚合检查通过，核对当前 owner/branch 的直属执行、可见 agent 全部 run 根与回收后代的所属 job，在不同 cwd 的 session 列表、状态数量和稳定分页中使用同一集合；workspace 不扩大目录范围。存储 await 期间的结算以返回时 owned 副本为准；主级可见 child job 不转移结果通知 owner，agents 禁用后仍从当前分支保存记录保留遗留 job，v2 受限计数/完整 session 查询拒绝边界通过。Windows 原生组合见 [询问与界面验收](../finished/pi-suite/ask/windows-combination.md) 与 [历史交互验收](../finished/pi-suite/agents/windows-history.md)。
 
-tasks 的 8 项检查在 Linux 覆盖两级批量原子编辑、稳定短 ID、移动与重新打开后的派生进度、依赖反向关系及警告、两个真实进程并发写入同一文件、异步锁等待、无效文件与取消不覆盖。真实 SDK 核对 new/resume/fork/reload 清单独立、内存模式与 job 引用；临时提醒不进入持久 transcript，doing 间隔与项目关闭配置生效。40/60/120 列核对 Dock 完成比例保留、完成反馈与共享详情阅读状态。Windows 原生界面与并发组合见 [任务验收](../finished/pi-suite/tasks/windows-combination.md)。
+tasks 的 8 项检查在 Linux 覆盖两级批量原子编辑、稳定短 ID、移动与重新打开后的派生进度、依赖反向关系及警告、两个真实进程并发写入同一文件、异步锁等待、无效文件与取消不覆盖。真实 SDK 核对 new/resume/fork/reload 清单独立、内存模式与 job 引用；自然 completed turn_end 的任务提醒进入持久 transcript，但不请求新模型轮；doing 间隔、generation 与项目关闭配置生效。40/60/120 列核对 Dock 完成比例保留、完成反馈与共享详情阅读状态。Windows 原生界面与并发组合见 [任务验收](../finished/pi-suite/tasks/windows-combination.md)。
 
 任务界面的现有聚合同时核对父行先分配、余预算 child 相邻展开、blocked 完成与重新打开、选中稳定 ID 及询问期间按实际子任务计数。共享发布器同时接收必要 agent/job 详情，数量不变时的问题、清理和选择变化仍刷新详情，相同内容保持去重。
 

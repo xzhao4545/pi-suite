@@ -50,17 +50,30 @@
 
 ## 改动范围与文档同步
 
-预计修改范围：
+实际修改范围：
 
 - `src/goal/`：Store/schema、Manager 的持久事务和归属、上下文交付、命令与回执、等待/生命周期集成。
 - `src/runtime/json-store.ts`：仅在现有能力不足时统一扩展缺失文件、异步修改或观察边界，不改变其他 Store 的契约。
 - `src/runtime/notifications.ts`、`src/runtime/suite.ts`：公共交付来源、自动续跑准入、绑定和压缩重建协调。
 - `src/tasks/index.ts`：将 reminder 接入公共稳定消息路径，保留任务框架语义。
-- 现有 `tests/goal/`、runtime/Tasks 相关检查：调整状态源与高耦合序列，不新增并行测试框架。
+- `src/ask/index.ts` 与 `src/agents/child.ts`：等待询问控制提交，并为 child 的私有任务接入相同持久 reminder。
+- 现有 `tests/goal/`、runtime/Tasks/workflow 相关检查：调整状态源与高耦合序列，不新增并行测试框架。
 
 实现完成后局部更新 `doc/current/goal/`、`doc/current/runtime/index.md`、相关工具/存储说明、Tasks 操作说明与验证范围。同步新的分支含义、单一状态路径、恢复回执操作、new/fork 和迁移规则；新设计实施前不得提前写成 current 已实现事实。
 
 专项全部完成后将本目录移动到 `doc/finished/`，更新 todo/finished 索引并沉淀 current；归档后不再修改。提交仅包含本专项实际改动，不夹带其他未提交文件。
+
+## 验收结论
+
+Linux Node 24.22.2、官方未修改 Pi 1.5.0：类型检查通过；全量检查范围为 245 项，其暴露的三个失败已处理，并纳入通过的受影响链路复验。最终存储、绑定、Goal、私有 Tasks、schedules、workflow 与 Responses 定向检查 56/56 通过，无取消、跳过或未解决失败。
+
+- 单文件原子状态、全会话最新旧记录导入、clear 墓碑、迟到计量、无变化不写入及损坏/缺失/取消/失败写入边界通过；共享 JsonStore 对外部控制更新维持订阅撤权。
+- 真实 SDK/CLI 的同会话 tree/reload、new/fork、冷启动、显式恢复与结案审计、等待/混合通知、预算和五个自动轮停跑保持控制契约。
+- 自然工具响应、稳定短续跑、强制系统提示与工具声明变化通过；真实本地 Responses 请求逐项保留前次完整 input 前缀及系统、工具和缓存键，新的 Goal 状态不追加到 JSONL。合法压缩在宿主已安排请求前重建说明，不为真实等待或完成单独启动模型。
+- Tasks reminder 在自然 completed turn_end 进入持久历史，不请求新模型轮，主会话和私有 child 使用同一公共通知路径；真实 workflow 重放不重新执行 child，测试通过占用的真实宿主消除空闲直接启动与 wait 之间的通知时序竞争。
+- 已有原始 JSONL、pxph 会话、代理/模型配置及其他用户改动保持原样。
+
+本轮实施验收仅使用 faux provider 与本地受控 HTTP/SSE，没有追加收费上游请求或重放大型项目上下文。实施前四请求对照证明已验证链路的尾部移除诱因；本轮最终请求结构消除了该序列，不据此承诺生产缓存命中率。Windows 新行为、上游内部缓存算法/模型转换及真实收费复测未验证。
 
 ## 完成条件
 

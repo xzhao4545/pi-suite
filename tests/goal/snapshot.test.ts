@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { GOAL_ENTRY, goalRequiresResume, readGoalSnapshot } from '../../src/goal/snapshot.ts';
+import { GOAL_ENTRY, importGoal, readGoalSnapshot } from '../../src/goal/snapshot.ts';
 import { goalUserState } from '../../src/goal/state.ts';
 
 const base = { id: 'goal', revision: 1, text: 'Verify the original requirement', status: 'active', automatic: true,
@@ -38,21 +38,16 @@ test('v1 migration preserves diagnostics and data without widening execution per
   assert.throws(() => readGoalSnapshot({ version: 3, goal: base }), /Invalid persisted/);
 });
 
-test('legacy stop retains automatic guard; snapshot permission blocks stale branches and grants only selected revision', () => {
-  const entries: { type: 'custom'; customType: string; data: unknown }[] = [{ type: 'custom', customType: GOAL_ENTRY, data: { version: 1,
-    goal: { ...base, status: 'stopped', automatic: false, stoppedFrom: 'active', autoStopReason: 'repeated_tools' } } }];
-  const ctx = { sessionManager: { getEntries: () => entries } } as unknown as ExtensionContext;
-  const goal = readGoalSnapshot({ version: 1, goal: base })!;
-  const paused = readGoalSnapshot(entries[0].data)!;
-  assert.equal(paused.reason?.kind, 'historical_stop'); assert.equal(paused.reason?.previous, 'active');
-  assert.equal(paused.reason?.automaticStop, 'repeated_tools'); assert.equal(paused.resumeRequired, true);
-  assert.ok(goalRequiresResume(ctx, goal), 'legacy auto guard without resumeRequired is still a revocation');
-  entries.push({ type: 'custom', customType: GOAL_ENTRY, data: { version: 1, goal: { ...base, status: 'active', automatic: true } } });
-  assert.equal(goalRequiresResume(ctx, goal), undefined, 'v1 explicit resume cleared the automatic guard without a marker');
-  entries.push({ type: 'custom', customType: GOAL_ENTRY, data: { version: 2, goal: { ...paused, resumeRequired: true } } });
-  entries.push({ type: 'custom', customType: GOAL_ENTRY, data: { version: 1, goal: base } });
-  assert.ok(goalRequiresResume(ctx, goal), 'unmarked branch save cannot override explicit revocation');
-  entries.push({ type: 'custom', customType: GOAL_ENTRY, data: { version: 2, goal: { ...goal, resumeRequired: false } } });
-  assert.equal(goalRequiresResume(ctx, goal), undefined);
-  assert.ok(goalRequiresResume(ctx, { ...goal, revision: 2 }), 'grant cannot authorize another revision');
+test('legacy import uses latest physical append, ignores selected leaf and reports damaged newest data', () => {
+  const entries: { type: 'custom'; customType: string; data: unknown }[] = [{ type: 'custom', customType: GOAL_ENTRY,
+    data: { version: 1, goal: { ...base, status: 'stopped', automatic: false, stoppedFrom: 'active', autoStopReason: 'repeated_tools' } } }];
+  const ctx = { sessionManager: { getEntries: () => entries, getBranch: () => entries.slice(0, 1) } } as unknown as ExtensionContext;
+  const paused = importGoal(ctx)!;
+  assert.equal(paused.reason?.kind, 'historical_stop'); assert.equal(paused.reason?.automaticStop, 'repeated_tools');
+  entries.push({ type: 'custom', customType: GOAL_ENTRY, data: { version: 2, goal: { ...base, revision: 2 } } });
+  assert.equal(importGoal(ctx)?.revision, 2);
+  entries.push({ type: 'custom', customType: GOAL_ENTRY, data: { version: 2, goal: null } });
+  assert.equal(importGoal(ctx), undefined);
+  entries.push({ type: 'custom', customType: GOAL_ENTRY, data: { version: 2, goal: { broken: true } } });
+  assert.throws(() => importGoal(ctx), /Invalid persisted/);
 });

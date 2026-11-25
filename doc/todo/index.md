@@ -4,8 +4,6 @@
 
 ## 任务索引
 
-- [Goal 单一当前状态与缓存友好上下文](goal-state-context/index.md) — 每会话一份当前状态、历史分支不回滚 Goal、稳定模型上下文、受控续跑与公共提醒交付。
-
 当前实现与开发方式见 [doc/current](../current/index.md)。完整设计、上游按文件处置与既有验收证据保存在 [设计与实施记录](../finished/pi-suite/design/index.md)，原设计细节保留。新增交互与启动需求及 tmux 复制的环境与验收范围已归档到 [对应专项](../finished/pi-suite/interaction-improvements/index.md)。
 
 ## 规则

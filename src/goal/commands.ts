@@ -38,29 +38,27 @@ export function registerGoalCommand(pi: ExtensionAPI, manager: GoalManager, dock
     handler: async (args, ctx) => {
       const trimmed = args.trim();
       if (!trimmed || trimmed === "status") { await details(ctx); return; }
-      if (trimmed === "pause") { manager.pause(ctx); return; }
+      if (trimmed === "pause") { await manager.pause(ctx); return; }
       if (trimmed === 'resume') {
-        const previous = manager.goal && goalDetails(manager.goal, manager.schedule, manager.elapsedMs);
         // Hold control delivery until the explicit result is stored. The display message never
         // triggers execution; the existing requestId queue owns the one continuation.
         const release = notifications.hold();
         try {
-          const result = manager.resume();
+          const result = await manager.resume();
           const summary = result === 'running' ? 'Goal already running' : result === 'waiting_host' ? 'Goal resumed · waiting' : 'Goal resumed';
           // A custom message is deferred until turn_end while streaming. This receipt is
           // display-only, so an entry can appear immediately without entering model history.
-          pi.appendEntry(GOAL_RESUME, { resumeVersion: 1, summary,
-            text: `${previous}${result === 'waiting_host' ? '\n\nWaiting for the current response, cancellation or host operation.' : ''}` } satisfies ResumeDetails & { summary: string });
+          pi.appendEntry(GOAL_RESUME, { resumeVersion: 1, summary, text: summary } satisfies ResumeDetails & { summary: string });
         } finally { release(); }
         return;
       }
       // Removed control words must not fall through to objective creation.
       if (/^stop(?:\s|$)/.test(trimmed)) throw new Error('Unknown goal command: stop');
-      if (trimmed === "clear") { manager.clear(ctx); return; }
+      if (trimmed === "clear") { await manager.clear(ctx); return; }
       if (trimmed === "edit" || trimmed.startsWith("edit ")) {
         const input = parseGoalArgs(trimmed.slice(4));
         if (input.text === undefined && input.budget === undefined) throw new Error("Supply an objective or --tokens budget to edit");
-        manager.edit(input.text, input.budget, ctx); return;
+        await manager.edit(input.text, input.budget, ctx); return;
       }
       const input = parseGoalArgs(trimmed);
       if (!input.text) throw new Error("Supply a goal objective");
@@ -71,7 +69,7 @@ export function registerGoalCommand(pi: ExtensionAPI, manager: GoalManager, dock
         if (!ctx.hasUI || !await ctx.ui.confirm("Replace unfinished goal?", `${old.text}\n\nNew goal: ${input.text}`)) return;
         if (!manager.isCurrent(captured) || ctx.signal?.aborted) return;
       }
-      manager.start(input.text, ctx, input.budget);
+      await manager.start(input.text, ctx, input.budget);
     },
   });
 }

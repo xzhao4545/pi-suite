@@ -11,7 +11,7 @@ import {
 import piSuite from "../../src/index.ts";
 import type { AutocompleteProvider } from "@earendil-works/pi-tui";
 import { terminal } from "./terminal.ts";
-import { GOAL_ENTRY } from '../../src/goal/snapshot.ts';
+import { goalStore } from '../../src/goal/store.ts';
 import type { Goal } from '../../src/goal/state.ts';
 
 /** Real SDK session with the SDK's own offline provider; no credentials or network. */
@@ -70,10 +70,7 @@ export async function host(options: {
     }),
   } as unknown as ExtensionUIContext;
   await session.bindExtensions({ uiContext: options.ui?.(uiContext) ?? uiContext, mode: "tui" });
-  const goal = (): Goal | undefined => {
-    const entry = session.sessionManager.getBranch().findLast(e => e.type === "custom" && e.customType === GOAL_ENTRY);
-    return entry?.type === "custom" ? (entry.data as { goal: Goal | null }).goal ?? undefined : undefined;
-  };
+  const goal = (): Goal | undefined => goalStore(session.extensionRunner.createContext(), root).current.goal ?? undefined;
   return { session, extensionsResult, faux, goal, statuses, writes, autocomplete, notices,
     services: { cwd: root, agentDir: root, modelRuntime: session.modelRuntime, settingsManager, resourceLoader, diagnostics: [] },
     async idle() { await session.waitForIdle(); },
@@ -86,13 +83,16 @@ export async function host(options: {
   };
 }
 
-export function goalView(context: TranscriptContext): { goalId: string; revision: number; objective: string; status: string; access: string; usedTokens: number; automatic: boolean; progress: string; budget: number | null; waiting?: string } {
-  // Custom conversation context survives Pi's final forced-system projection.
-  const message = context.messages.findLast(message => message.role === "user" &&
-    contentText(message.content).startsWith("Current Goal contract (request-only"));
-  assert.ok(message?.role === "user", "admitted goal must reach the provider's request contract");
-  const text = contentText(message.content);
-  return JSON.parse(text.slice(text.lastIndexOf("\n") + 1));
+export function goalView(context: TranscriptContext): { goalId: string; revision: number; objective: string; status: string; access: string; budget: number | null } {
+  let view: ReturnType<typeof goalView> | undefined;
+  for (const message of context.messages) {
+    if (message.role !== 'user') continue;
+    const text = contentText(message.content);
+    if (text.startsWith('Current Goal instruction:')) view = JSON.parse(text.slice(text.lastIndexOf('\n') + 1));
+    else if (text.startsWith('Current Goal control')) view = { ...view, ...JSON.parse(text.slice(text.lastIndexOf('\n') + 1)) };
+  }
+  assert.ok(view, 'current Goal instruction must reach the provider');
+  return view;
 }
 
 export function goalId(context: TranscriptContext): string { return goalView(context).goalId; }

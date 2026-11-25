@@ -20,7 +20,7 @@ const legacySchema = Type.Object({ ...fields,
   stoppedFrom: Type.Optional(Type.String({ enum: ['active', 'paused', 'blocked', 'failed', 'budget_limited'] })),
   autoStopReason: Type.Optional(Type.String({ enum: ['no_tools', 'repeated_tools'] })),
 }, { additionalProperties: false });
-const goalSchema = Type.Object({ ...fields,
+export const goalSchema = Type.Object({ ...fields,
   status: Type.String({ enum: ['active', 'paused', 'completed'] }),
   reason: Type.Optional(Type.Object({
     kind: Type.String({ enum: ['manual', 'blocked', 'request_failed', 'budget', 'no_tools', 'repeated_tools', 'shutdown', 'startup', 'cancelled', 'compaction_failed', 'historical_stop', 'permission'] }),
@@ -70,29 +70,9 @@ export function readGoalSnapshot(data: unknown): Goal | undefined {
   }
   return goal;
 }
-export function restoreGoal(ctx: ExtensionContext): Goal | undefined {
-  const entry = ctx.sessionManager.getBranch().findLast(entry => entry.type === 'custom' && entry.customType === GOAL_ENTRY);
+export function importGoal(ctx: ExtensionContext): Goal | undefined {
+  // getEntries preserves physical append order across every leaf. A damaged latest
+  // record must fail migration rather than reviving an earlier successful goal.
+  const entry = ctx.sessionManager.getEntries().findLast(entry => entry.type === 'custom' && entry.customType === GOAL_ENTRY);
   return entry?.type === 'custom' ? readGoalSnapshot(entry.data) : undefined;
-}
-export function goalRequiresResume(ctx: ExtensionContext, goal: Goal): Goal | undefined {
-  // Permission lives in the same snapshot stream. An explicit grant applies to its revision
-  // only; selecting an earlier branch cannot undo a manual or cold-start revocation.
-  const entries = ctx.sessionManager.getEntries();
-  const permission = entries.findLast(entry => {
-    if (entry.type !== 'custom' || entry.customType !== GOAL_ENTRY) return false;
-    const saved = (entry.data as { goal?: Goal } | undefined)?.goal;
-    return saved?.id === goal.id && saved.resumeRequired !== undefined;
-  });
-  const saved = permission?.type === 'custom' ? readGoalSnapshot(permission.data) : undefined;
-  if (saved && (saved.resumeRequired || saved.revision !== goal.revision)) return saved;
-  // v1 explicit resume cleared autoStopReason without necessarily writing resumeRequired.
-  // Read its latest same-revision phase too, preserving that grant without bypassing the
-  // independent cold/manual marker above. Both facts still come from the one snapshot stream.
-  const phase = entries.findLast(entry => {
-    if (entry.type !== 'custom' || entry.customType !== GOAL_ENTRY) return false;
-    const saved = (entry.data as { goal?: Goal } | undefined)?.goal;
-    return saved?.id === goal.id && saved.revision === goal.revision;
-  });
-  const latest = phase?.type === 'custom' ? readGoalSnapshot(phase.data) : undefined;
-  return latest?.resumeRequired && (latest.reason?.kind === 'no_tools' || latest.reason?.kind === 'repeated_tools' || latest.reason?.automaticStop) ? latest : undefined;
 }

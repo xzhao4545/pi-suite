@@ -41,7 +41,7 @@ export async function childSuite(pi: ExtensionAPI, run: Execution, manager: Agen
       const { result, questions } = await ask.ask(params, undefined, undefined, signal);
       return { ...askToolResult(params, questions, result, 'parent'), terminate: result.status !== 'answered' };
     } }, 'initial');
-  if (tasks) { registerTaskTools(pi, tasks); tasks.registerReminders(pi, () => config); }
+  if (tasks) { registerTaskTools(pi, tasks); tasks.registerReminders(pi, () => config, notices); }
   if (jobs) {
     const viewer = { jobs, dock, notifications: notices, keys: () => config.jobs };
     registerJobTools(pi, jobs, viewer, { config: () => config, tasks,

@@ -52,7 +52,8 @@ export class JsonStore<Data> {
   private observers = new Map<() => void, (error: unknown) => void>();
   private watcher?: FSWatcher;
   private refreshTimer?: NodeJS.Timeout;
-  constructor(readonly path: string | undefined, initial: Data, private decode: (value: unknown) => Data, private prefix: string) { this.data = initial; }
+  constructor(readonly path: string | undefined, initial: Data, private decode: (value: unknown) => Data, private prefix: string,
+    private options: { missing?: () => Data; skipUnchanged?: boolean } = {}) { this.data = initial; }
   subscribe(listener: () => void, onExternalError?: (error: unknown) => void): () => void {
     this.listeners.add(listener);
     if (onExternalError) { this.observers.set(listener, onExternalError); this.observe(); }
@@ -93,7 +94,7 @@ export class JsonStore<Data> {
   private async load(): Promise<Data> {
     if (!this.path) return this.data;
     let text: string;
-    try { text = await readFile(this.path, 'utf8'); } catch (error) { if (code(error) === 'ENOENT') return this.data; throw error; }
+    try { text = await readFile(this.path, 'utf8'); } catch (error) { if (code(error) === 'ENOENT') return this.options.missing ? this.options.missing() : this.data; throw error; }
     try {
       const value: unknown = JSON.parse(text);
       return this.decode(value);
@@ -113,7 +114,13 @@ export class JsonStore<Data> {
       // or open a target that could appear concurrently without participating in the lock.
       if (lockPath) {
         try { await access(this.path!); }
-        catch (error) { if (code(error) === 'ENOENT') return structuredClone(this.data); throw error; }
+        catch (error) { if (code(error) === 'ENOENT') {
+            const data = this.options.missing ? this.options.missing() : this.data;
+            const changed = JSON.stringify(data) !== JSON.stringify(this.data);
+            this.data = data;
+            if (changed) for (const listener of this.listeners) listener();
+            return structuredClone(this.data);
+          } throw error; }
       }
       const token = lockPath ? await lock(lockPath, this.prefix) : undefined;
       try {
@@ -129,18 +136,20 @@ export class JsonStore<Data> {
     return this.serial(async () => {
       const token = this.path ? await lock(`${this.path}.lock`, this.prefix, signal) : undefined;
       try {
-        const data = structuredClone(await this.load());
+        const loaded = await this.load(), data = structuredClone(loaded);
         signal?.throwIfAborted();
         const result = apply(data);
-        if (this.path) {
+        const changed = JSON.stringify(data) !== JSON.stringify(loaded);
+        if (this.path && (!this.options.skipUnchanged || changed)) {
           const tmp = `${this.path}.${token!.split(':')[1]}.tmp`;
           try {
             await writeFile(tmp, JSON.stringify(data, null, 2), { mode: 0o600 });
             signal?.throwIfAborted(); await rename(tmp, this.path);
           } finally { await remove(tmp); }
         }
+        const cacheChanged = JSON.stringify(data) !== JSON.stringify(this.data);
         this.data = data;
-        for (const listener of this.listeners) listener();
+        if (!this.options.skipUnchanged || cacheChanged) for (const listener of this.listeners) listener();
         return result;
       } finally { if (this.path && token) await unlock(`${this.path}.lock`, token); }
     });

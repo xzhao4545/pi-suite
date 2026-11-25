@@ -90,7 +90,7 @@ test("Esc preserves the goal, foreign work cannot resume it, and explicit resume
     assert.equal(h.goal()?.status, 'paused'); assert.equal(h.goal()?.automatic, false);
     assert.match(h.statuses.get("goal") ?? "", /^⏸ goal \d+:\d{2}(?::\d{2})?$/);
     h.faux.setResponses([context => {
-      assert.ok(!JSON.stringify(context.messages).includes("Current Goal contract (request-only"), "foreign work cannot receive a goal contract");
+      assert.equal(goalView(context).access, 'none', 'foreign work receives no current Goal permission');
       assert.ok(context.messages.filter(m => m.role === "system").every(m => !("pi-suite-goal" in (m.sections ?? {}))), "foreign work removes the stale goal section");
       return fauxAssistantMessage("foreign work finished");
     }]);
@@ -164,7 +164,7 @@ test("real host manual compact and overflow recovery keep one continuation and g
   } finally { await h.dispose(); }
 });
 
-test("reload preserves an arranged wait; branch navigation restores its own goal without copying state", { timeout: 15000 }, async () => {
+test("reload/tree share the current Goal and never roll back to selected branch state", { timeout: 15000 }, async () => {
   const h = await host();
   try {
     const emptyBranch = h.session.sessionManager.appendCustomEntry("test:anchor", {});
@@ -174,19 +174,20 @@ test("reload preserves an arranged wait; branch navigation restores its own goal
     await h.session.reload(); assert.equal(h.goal()?.id, id); assert.equal(h.goal()?.waiting, "jobs");
     const count = h.session.sessionManager.getEntryCount();
     await h.session.navigateTree(emptyBranch);
-    assert.equal(h.goal(), undefined); assert.equal(h.statuses.get("goal"), undefined);
+    assert.equal(h.goal()?.id, id); assert.equal(h.goal()?.waiting, 'jobs');
     assert.equal(h.session.sessionManager.getEntryCount(), count, "navigation must not append outgoing goal into the selected branch");
     await h.session.navigateTree(leaf);
     assert.equal(h.goal()?.id, id); assert.match(h.statuses.get("goal") ?? "", /^⏳ goal \d+:\d{2}(?::\d{2})?$/);
     assert.equal(h.faux.state.callCount, 1);
-    const activeEntry = h.session.sessionManager.getBranch().find(e => e.type === "custom" && e.customType === "pi-suite:goal" &&
-      (e.data as { goal: { status: string; waiting?: string } }).goal.status === "active" && !(e.data as { goal: { waiting?: string } }).goal.waiting)!;
+    const activeEntry = h.session.sessionManager.getBranch().find(e => e.type === 'custom_message' && e.customType === 'pi-suite:goal-context')!;
     const resumed = Promise.withResolvers<void>();
     h.faux.setResponses([context => { resumed.resolve(); return complete(context); }]);
-    await h.session.navigateTree(activeEntry.id); await resumed.promise; await h.idle();
+    await h.session.navigateTree(activeEntry.id);
+    assert.equal(h.goal()?.waiting, 'jobs', 'navigation cannot restore earlier execution');
+    await h.session.prompt('/goal resume'); await resumed.promise; await h.idle();
     assert.equal(h.goal()?.id, id); assert.equal(h.goal()?.status, "completed"); assert.equal(h.faux.state.callCount, 2);
     await h.session.navigateTree(leaf);
-    assert.equal(h.goal()?.waiting, "jobs", "completion in another branch must not change the selected branch");
+    assert.equal(h.goal()?.status, 'completed', 'current completion is shared across every history leaf');
   } finally { await h.dispose(); }
 });
 

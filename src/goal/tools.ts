@@ -15,7 +15,7 @@ export function registerGoalTools(pi: ExtensionAPI, manager: GoalManager): void 
     parameters: Type.Object({ goalId, summary: Type.String({ minLength: 1, maxLength: 4000 }) }),
     async execute(_id, params, signal, _update, ctx) {
       if (!params.summary.trim()) throw new ToolError("INVALID_ARGS", "Completion summary must include verification evidence", params.goalId);
-      const changed = manager.complete(params.goalId, params.summary, ctx, signal);
+      const changed = await manager.complete(params.goalId, params.summary, ctx, signal);
       const summary = manager.goal!.progress;
       return { content: [{ type: "text", text: `${changed ? "Goal complete" : "Goal already completed"}: ${summary}` }],
         details: { goalId: params.goalId, summary }, terminate: true };
@@ -29,7 +29,7 @@ export function registerGoalTools(pi: ExtensionAPI, manager: GoalManager): void 
       evidence: Type.String({ minLength: 1, maxLength: 4000 }), repeatedTurns: Type.Integer({ minimum: 3 }) }),
     async execute(_id, params, signal, _update, ctx) {
       if (!params.reason.trim() || !params.evidence.trim()) throw new ToolError("INVALID_ARGS", "Blocking requires a reason and concrete evidence", params.goalId);
-      manager.block(params.goalId, params.reason, params.evidence, ctx, signal);
+      await manager.block(params.goalId, params.reason, params.evidence, ctx, signal);
       return { content: [{ type: "text", text: `Goal paused: ${params.reason}` }], details: params, terminate: true };
     },
   }, 'initial');
@@ -43,7 +43,7 @@ export function registerGoalTools(pi: ExtensionAPI, manager: GoalManager): void 
       resumeAfterMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 2147483647 })) }, { additionalProperties: false }),
     async execute(_id, params, signal, _update, ctx) {
       if (!params.reason.trim()) throw new ToolError("INVALID_ARGS", "Waiting requires an external wake reason", params.goalId);
-      const { waiting, settled } = manager.wait(params.goalId, params.reason, params.resumeAfterMs, ctx, params.waitFor, signal);
+      const { waiting, settled } = await manager.wait(params.goalId, params.reason, params.resumeAfterMs, ctx, params.waitFor, signal);
       const note = settled.length ? `already settled: ${settled.join(", ")}` : undefined;
       if (!waiting) {
         return { content: [{ type: "text", text: `Not waiting: every waitFor object has already settled (${settled.join(", ")}). Read their results and continue.` }],

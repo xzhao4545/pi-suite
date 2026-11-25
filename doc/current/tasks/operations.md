@@ -45,8 +45,8 @@ child 的 task_list 与默认 scope:local 的 task_get/task_edit 操作自己的
 
 ## 提醒
 
-配置 tasks.reminders 默认 true，用户或项目的 pi-suite.json 可设置 false。未使用任务工具的间隔达到 4 轮时，在下一次模型请求加入一次任务提醒；存在 doing 子任务时缩短为 2 轮。task_list/task_get/task_edit 使用重置间隔并允许下一次提醒。
+配置 tasks.reminders 默认 true，用户或项目的 pi-suite.json 可设置 false。未使用任务工具的间隔达到 4 轮时，在自然 completed turn_end 追加一次任务提醒；存在 doing 子任务时缩短为 2 轮。仅下一次本来需要的模型请求看到提醒，不为提醒发起新请求。task_list/task_get/task_edit 使用重置间隔并允许下一次提醒。
 
-提醒最多回显 10 个未完成清单项，仅进入当次 context，不持久保存到会话，也不修改工具结果。child 提醒读取其私有清单，并说明分配任务 ID 与 scope:assigned 的受限入口，不回显父级清单。提醒不会修改任务、停止执行或自动完成 goal。
+提醒最多回显 10 个未完成清单项与读取时的 generation，使用共享 Notifications 的 `reminder` 来源 envelope 持久追加，不修改工具结果。提醒交付前核对 Binding 与取消信号；既有提醒留在稳定模型历史，不因任务更新、使用重置或关闭配置而删除。旧 generation 仍由任务工具拒绝，提醒文字不提供操作权限。child 提醒读取其私有清单，并说明分配任务 ID 与 scope:assigned 的受限入口，不回显父级清单。提醒不会修改任务、停止执行或自动完成 goal。
 
 [返回任务索引](index.md)

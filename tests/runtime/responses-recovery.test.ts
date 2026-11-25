@@ -14,6 +14,7 @@ import {
 import piSuite from '../../src/index.ts';
 import type {Goal} from '../../src/goal/state.ts';
 import {GOAL_ENTRY} from '../../src/goal/snapshot.ts';
+import { goalStore } from '../../src/goal/store.ts';
 import {RECOVERY_ENTRY, ResponsesRecovery} from '../../src/runtime/responses/index.ts';
 import {SessionBinding} from '../../src/runtime/binding.ts';
 
@@ -22,7 +23,7 @@ import {SessionBinding} from '../../src/runtime/binding.ts';
 type Item = {type?: string; id?: string; [key: string]: unknown};
 type Wire = {model: string; input: Item[]; [key: string]: unknown};
 type HttpError = {status: number; message: string; code?: string};
-type Step = number | HttpError | 'complete' | 'partial' | 'hold' | 'network';
+type Step = number | HttpError | 'complete' | 'progress' | 'partial' | 'hold' | 'network';
 type Unsafe = 'reference' | 'previous' | 'store' | 'unknown' | 'compaction';
 const mismatch = "Item 'rs_seed' belongs to a different OpenAI resource";
 const cpaMismatch = 'cpa API error (400): ' + JSON.stringify({code: null,
@@ -59,10 +60,10 @@ function sse(response: ServerResponse, items: Item[], partial = false): void {
   response.end();
 }
 function goalId(wire: Wire): string {
-  for (const item of wire.input) {
+  for (const item of wire.input.toReversed()) {
     const content = typeof item.content === 'string' ? item.content : Array.isArray(item.content)
       ? item.content.map(block => block.text ?? '').join('\n') : '';
-    if (content.startsWith('Current Goal contract (request-only')) return JSON.parse(content.slice(content.lastIndexOf('\n') + 1)).goalId;
+    if (content.startsWith('Current Goal instruction:') || content.startsWith('Current Goal control')) return JSON.parse(content.slice(content.lastIndexOf('\n') + 1)).goalId;
   }
   throw new Error('Missing real Goal request contract');
 }
@@ -81,10 +82,7 @@ async function fixture(options: {
   let effects = 0, armed = false, externalRepairs = 0;
   const held = Promise.withResolvers<{wire: Wire; response: ServerResponse}>(), disconnected = Promise.withResolvers<void>();
   const manager = SessionManager.inMemory(root);
-  const goal = (): Goal | undefined => {
-    const entry = manager.getBranch().findLast(entry => entry.type === 'custom' && entry.customType === GOAL_ENTRY);
-    return entry?.type === 'custom' ? (entry.data as {goal: Goal | null}).goal ?? undefined : undefined;
-  };
+  const goal = (): Goal | undefined => goalStore({sessionManager: manager} as unknown as ExtensionContext, user).current.goal ?? undefined;
   const server = createServer(async (request, response) => {
     const chunks: Buffer[] = []; for await (const chunk of request) chunks.push(chunk);
     const wire = JSON.parse(Buffer.concat(chunks).toString()) as Wire;
@@ -104,6 +102,7 @@ async function fixture(options: {
       response.writeHead(error.status, {'content-type': 'application/json'});
       response.end(JSON.stringify({error: {message: error.message, code: error.code, type: 'invalid_request_error'}}));
     } else if (step === 'partial') sse(response, [text('msg_partial', 'partial output must not replay')], true);
+    else if (step === 'progress') sse(response, [text('msg_progress', 'Work remains; continue verification')]);
     else sse(response, goal()?.status === 'active' ? [call('fc_complete', 'goal_complete', {goalId: goalId(wire), summary: 'Verified recovery'})] :
       [text('msg_success', 'RECOVERY_OK')]);
   });
@@ -183,13 +182,21 @@ const stripped = (input: Item[]) => input.map(item => {
   const {id: _id, ...rest} = item; return rest;
 });
 
-const replayWire = (wire: Wire): Wire => ({...wire, input: wire.input.filter(item => {
-  const content = typeof item.content === 'string' ? item.content : Array.isArray(item.content)
-    ? item.content.map(block => block.text ?? '').join('\n') : '';
-  // Goal's request-only contract legitimately advances its attempt counters;
-  // the replay history and the rest of the wire envelope must remain identical.
-  return !content.startsWith('Current Goal contract (request-only');
-})});
+const replayWire = (wire: Wire): Wire => wire;
+
+test('normal Goal continuation preserves the entire previous Responses input prefix without request-only contracts', {timeout: 20000}, async () => {
+  const h = await fixture({steps: ['progress', 'complete']});
+  try {
+    await h.seed(); await h.run();
+    const first = h.requests[2], second = h.requests[3];
+    assert.equal(h.requests.length, 4); assert.equal(h.goal()?.status, 'completed');
+    assert.deepEqual(second.input.slice(0, first.input.length), first.input);
+    const {input: _first, ...a} = first, {input: _second, ...b} = second;
+    assert.deepEqual(a, b, 'system/tools/cache key and envelope are stable');
+    assert.equal(h.manager.getEntries().filter(entry => entry.type === 'custom' && entry.customType === GOAL_ENTRY).length, 0);
+    assert.equal(JSON.stringify(second.input).split('Current Goal instruction:').length - 1, 1);
+  } finally {await h.dispose();}
+});
 
 for (const transient of [false, true, 'network'] as const) test(`actual SDK repairs Responses IDs${transient === 'network' ? ' across a native network retry' : transient ? ' across native 429/503 retries' : ' without discarding replay content'}`, {timeout: 20000}, async () => {
   const steps: Step[] = transient === 'network' ? ['network'] : transient ? [429, 503] : [];

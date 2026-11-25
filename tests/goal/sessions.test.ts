@@ -7,7 +7,7 @@ import { AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { host, goalId, complete } from "../support/host.ts";
 
-test("actual runtime new/resume/fork keeps goals branch-local and restores original identity", { timeout: 15000 }, async () => {
+test("actual runtime new/resume/fork isolates the single current Goal by session identity", { timeout: 15000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), "pi-suite-replace-"));
   let current = await host({ root, persisted: true });
   const runtime = new AgentSessionRuntime(current.session, current.services, async options => {
@@ -29,8 +29,8 @@ test("actual runtime new/resume/fork keeps goals branch-local and restores origi
     const leaf = current.session.sessionManager.getLeafId()!;
     await runtime.fork(leaf, { position: "at" });
     assert.notEqual(current.session.sessionFile, originalPath);
-    assert.equal(current.goal()?.id, id); assert.equal(current.faux.state.callCount, 0);
-    current.faux.setResponses([complete]); await current.session.prompt("/goal resume"); await current.idle();
+    assert.equal(current.goal(), undefined); assert.equal(current.faux.state.callCount, 0);
+    current.faux.setResponses([complete]); await current.session.prompt('/goal Independent fork objective'); await current.idle();
     assert.equal(current.goal()?.status, "completed");
     await runtime.switchSession(originalPath);
     assert.equal(current.goal()?.status, "active"); assert.equal(current.goal()?.waiting, "jobs");

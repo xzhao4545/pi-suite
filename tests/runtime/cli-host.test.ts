@@ -10,11 +10,14 @@ import {RpcClient} from '@earendil-works/pi-coding-agent';
 import {foregroundAnsi, parseColor} from '@earendil-works/pi-tui';
 import {createPtyProcess} from '../../src/jobs/backends/pty.ts';
 import {agentDir, bashPath} from '../support/jobs.ts';
-import {GOAL_ENTRY} from '../../src/goal/snapshot.ts';
+import {goalPath} from '../../src/goal/store.ts';
 import type {Goal} from '../../src/goal/state.ts';
 
-const storedGoal = (file: string): Goal | undefined => readFileSync(file, 'utf8').split('\n').filter(Boolean)
-  .map(line => JSON.parse(line)).findLast(entry => entry.type === 'custom' && entry.customType === GOAL_ENTRY)?.data.goal ?? undefined;
+const storedGoal = (file: string): Goal | undefined => {
+  const header = JSON.parse(readFileSync(file, 'utf8').split('\n')[0]);
+  const state = goalPath(join(header.cwd, 'user'), header.id);
+  return existsSync(state) ? JSON.parse(readFileSync(state, 'utf8')).goal ?? undefined : undefined;
+};
 
 const packageDir = dirname(dirname(fileURLToPath(import.meta.resolve('@earendil-works/pi-coding-agent'))));
 const bin = resolve(packageDir, JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8')).bin.pi);

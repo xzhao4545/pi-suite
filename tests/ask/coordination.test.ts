@@ -15,7 +15,7 @@ import { terminal } from '../support/terminal.ts';
 import type { Dock } from '../../src/ui/dock.ts';
 
 function userText(context: TranscriptContext): string {
-  const message = context.messages.findLast(message => message.role === 'user' && !contentText(message.content).startsWith('Current Goal contract (request-only'));
+  const message = context.messages.findLast(message => message.role === 'user' && !contentText(message.content).startsWith('Current Goal instruction:') && !contentText(message.content).startsWith('Current Goal control'));
   return message ? contentText(message.content) : '';
 }
 const toolText = (context: TranscriptContext) => context.messages.findLast(message => message.role === 'toolResult')?.content

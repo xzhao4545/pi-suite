@@ -65,8 +65,16 @@ test('real workflow tool is background, shares schema/gates/wait and restores ch
     assert.equal(((await invoke(h, 'job_list', {state: 'all'})).details as {jobs: unknown[]}).jobs.length, 0);
     assert.equal(h.manager.jobManager().activeIds(h.ctx.sessionManager.getSessionId()).length, 0);
     const before = h.faux.state.callCount;
-    const replay = await launch(h, {scriptPath: task.scriptPath!, resumeFromRunId: task.id});
-    await invoke(h, 'wait', {ids: [replay.id]}); assert.equal(replay.replayedCount, 2); assert.equal(h.faux.state.callCount, before);
+    // Replay through an occupied real host: an idle direct launch may legitimately
+    // deliver its result before the caller has entered wait. That is not a replayed child.
+    h.faux.setResponses([
+      fauxAssistantMessage(fauxToolCall('agent_workflow', {scriptPath: task.scriptPath!, resumeFromRunId: task.id})),
+      () => fauxAssistantMessage(fauxToolCall('wait', {ids: [[...h.manager.tasks.keys()].at(-1)!]})),
+      fauxAssistantMessage('Replay inspected'),
+    ]);
+    await h.session.prompt('Replay the workflow and inspect its result'); await h.idle();
+    const replay = [...h.manager.tasks.values()].at(-1)!;
+    assert.equal(replay.replayedCount, 2); assert.equal(h.faux.state.callCount, before + 3);
     const entries = workflowEntries(h.session.sessionManager.getBranch());
     const restoredAgents = new AgentManager(async () => {}, async () => []);
     const restored = new WorkflowManager(restoredAgents, () => h.manager.jobManager()); restored.restore(entries);

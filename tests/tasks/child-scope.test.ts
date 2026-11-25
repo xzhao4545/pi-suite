@@ -19,7 +19,7 @@ test('SDK child CRUD and reminders stay private; memory resume reuses the child 
   const parent = taskStore(`memory:${root}:${ctx.sessionManager.getSessionId()}`);
   try {
     await parent.edit([{op: 'add', title: 'parent-only group', children: ['parent-only work']}], parent.current.generation);
-    const before = await parent.snapshot(); let updates = 0;
+    const before = await parent.snapshot(); let updates = 0, reminders = '';
     const off = parent.subscribe(() => { updates++; });
     h.faux.setResponses([
       listTasks(),
@@ -28,7 +28,12 @@ test('SDK child CRUD and reminders stay private; memory resume reuses the child 
           {op: 'update', id: '1.1', title: 'private actual work'}, {op: 'delete', id: '1.2'}, {op: 'start', id: '1.1'}]})),
       async context => {
         assert.equal(context.messages.findLast(message => message.role === 'toolResult')?.isError, false);
-        entered.resolve(); await finish.promise; return fauxAssistantMessage('private result');
+        entered.resolve(); await finish.promise; return fauxAssistantMessage(fauxToolCall('bash', {command: 'printf child-step-one'}));
+      },
+      fauxAssistantMessage(fauxToolCall('bash', {command: 'printf child-step-two'})),
+      context => {
+        reminders = JSON.stringify(context.messages.filter(message => message.role === 'user' && JSON.stringify(message.content).includes('Task reminder:')));
+        return fauxAssistantMessage('private result');
       },
     ]);
     const run = await manager.start({prompt: 'organize privately', background: false}, {ctx, taskStore: parent}, config);
@@ -37,13 +42,11 @@ test('SDK child CRUD and reminders stay private; memory resume reuses the child 
     assert.strictEqual(store, taskStore(`memory:${root}:${run.sessionManager!.getSessionId()}`));
     assert.notStrictEqual(store, parent);
     assert.deepEqual(store.current.tasks.map(task => task.title), ['private group', 'private actual work']);
-    for (let turnIndex = 0; turnIndex < 2; turnIndex++) await runner.emit({type: 'turn_start', turnIndex, timestamp: Date.now()});
-    const reminders = JSON.stringify(await runner.emitContext([]));
-    assert.match(reminders, /private actual work/); assert.doesNotMatch(reminders, /parent-only/);
     const tool = run.session!.getToolDefinition('task_get')!;
     await assert.rejects(tool.execute('no-assignment', {scope: 'assigned', id: '1.1', generation: store.current.generation}, new AbortController().signal, undefined,
       runner.createContext() as never), scopeError);
     finish.resolve(); assert.equal((await run.done.promise).state, 'completed', run.record.error);
+    assert.match(reminders, /private actual work/); assert.doesNotMatch(reminders, /parent-only/);
     h.faux.setResponses([fauxAssistantMessage('resumed private result')]);
     const resumed = await manager.send(run.record.id, 'continue privately', {ctx, taskStore: parent}, config);
     assert.equal((await resumed.run.done.promise).state, 'completed', resumed.run.record.error);

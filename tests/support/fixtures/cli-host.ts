@@ -19,7 +19,7 @@ export default function cliHost(pi: ExtensionAPI) {
     return generation;
   };
   const goalReply: FauxResponseFactory = context => {
-    const contract = context.messages.findLast(message => message.role === 'user' && contentText(message.content).startsWith('Current Goal contract (request-only'));
+    const contract = context.messages.findLast(message => message.role === 'user' && (contentText(message.content).startsWith('Current Goal instruction:') || contentText(message.content).startsWith('Current Goal control')));
     if (!contract) throw new Error('Expected the actual bound Goal contract');
     const text = contentText(contract.content);
     const {goalId, access} = JSON.parse(text.slice(text.lastIndexOf('\n') + 1));

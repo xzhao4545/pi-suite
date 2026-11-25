@@ -40,7 +40,7 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
     ? (await import('./responses/index.ts')).registerResponsesRecovery(pi, binding, true) : undefined;
   const tasks = config.modules.tasks ? new taskApi![0].TasksModule(binding, dock) : undefined;
   if (tasks) {
-    taskApi![1].registerTaskTools(pi, tasks); taskApi![2].registerTasksCommand(pi, tasks, dock, notifications, binding); tasks.registerReminders(pi, () => config);
+    taskApi![1].registerTaskTools(pi, tasks); taskApi![2].registerTasksCommand(pi, tasks, dock, notifications, binding); tasks.registerReminders(pi, () => config, notifications);
     dock.setOpen('tasks', async (rowId, ctx) => {
       const current = binding.current;
       if (!current) return;
@@ -141,7 +141,7 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
     recovery?.reset(ctx);
     dock.bind(ctx, config.ui.maxRows);
     status.bind(ctx.ui, { goal: config.goal.display, agents: config.agents.display, jobs: config.jobs.display }, goal !== undefined);
-    goal?.restore(ctx, goalReason);
+    await goal?.restore(ctx, goalReason);
     await tasks?.bind(ctx, { reason, previousSessionFile });
     agents?.manager.configure(config); agents?.bind();
     jobs?.bind();
@@ -154,7 +154,7 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
   pi.on("session_shutdown", async event => {
     agentRpc?.detach();
     schedules?.stop();
-    ask?.cancel(); goal?.shutdown(event.reason);
+    ask?.cancel(); await goal?.shutdown(event.reason);
     tasks?.detach();
     // Detach before revoking so pending job notices are cancelled under the old session ID.
     (jobs ?? agentJobViewer?.viewer.jobs)?.detach();
@@ -172,19 +172,15 @@ export async function createSuite(pi: ExtensionAPI, initial: ExtensionContext) {
     notifications.detach(); status.detach(); dock.detach(binding.current?.ctx); binding.revoke();
     return Promise.all([quit, agentQuit, workflowQuit, scheduleQuit]).then(() => { if (agents) pi.events.emit('subagents:disposed', {}); });
   });
-  pi.on("context_with_system", (event, ctx) => {
-    const view = goal?.contextView(ctx);
-    return { messages: notifications.project(event.messages, view?.access === "execute" ? `goal:${view.goal.id}` : undefined) };
-  });
-  pi.on("agent_before_settle", event => {
+  pi.on("agent_before_settle", async event => {
     const repair = recovery?.beforeSettle(event);
     const proposed = repair ? { ...event, ...repair } : event;
-    goal?.beforeSettle(proposed);
+    await goal?.beforeSettle(proposed);
     return notifications.beforeSettle(proposed) ?? repair;
   });
-  pi.on("agent_settled", event => {
+  pi.on("agent_settled", async event => {
     recovery?.settled();
-    waits.steeringDelivered(); goal?.settled(event.aborted);
+    waits.steeringDelivered(); await goal?.settled(event.aborted);
     if (event.aborted) jobs?.pauseWakes();
     notifications.flush();
   });

@@ -22,8 +22,7 @@ test("five empty or identical automatic rounds stop with a persisted reason; onl
       assert.equal(h.goal()?.reason?.kind, repeated ? 'repeated_tools' : 'no_tools'); assert.equal(h.goal()?.error, undefined);
       assert.ok(h.notices.some(notice => notice.type === 'warning'));
       let elapsed = h.goal()!.elapsedMs;
-      const earlier = h.session.sessionManager.getBranch().find(entry => entry.type === "custom" && entry.customType === "pi-suite:goal" &&
-        (entry.data as { goal?: { turns: number; automatic: boolean } }).goal?.turns === 3 && (entry.data as { goal: { automatic: boolean } }).goal.automatic)!;
+      const earlier = h.session.sessionManager.getBranch().filter(entry => entry.type === 'message' && entry.message.role === 'assistant')[2];
       await h.session.reload(); assert.equal(h.faux.state.callCount, 5); assert.equal(h.goal()?.automatic, false);
       await h.session.compact(); await h.idle(); assert.equal(h.faux.state.callCount, 5); assert.equal(h.goal()?.elapsedMs, elapsed);
       await h.session.navigateTree(earlier.id); await sleep(50); await h.idle();

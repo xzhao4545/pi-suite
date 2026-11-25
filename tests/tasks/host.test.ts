@@ -121,26 +121,26 @@ test('real runtime new/resume/fork and reload preserve independent versioned lis
   } finally { await runtime.dispose(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test('task reminders use request context only, shorten for doing children, reset on use and honor project disable', { timeout: 20000 }, async () => {
+test('task reminders append stable history at natural boundaries, preserve generation and honor disable', { timeout: 20000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), 'pi-suite-tasks-reminder-')), h = await host({ root, tools: TOOLS });
-  const shown: boolean[] = [];
+  const shown: number[] = [];
   const ask = async () => {
-    h.faux.setResponses([context => { shown.push(JSON.stringify(context.messages).includes('Task reminder:')); return fauxAssistantMessage('working'); }]);
+    h.faux.setResponses([context => { shown.push(context.messages.filter(message => message.role === 'user' && JSON.stringify(message.content).includes('Task reminder:')).length); return fauxAssistantMessage('working'); }]);
     await h.session.prompt('Continue work'); await h.idle();
   };
   try {
     const receipt = await direct(h, 'task_list', {});
     const generation = generationOf(receipt.content.map(part => part.type === 'text' ? part.text : '').join('\n'));
     await direct(h, 'task_edit', { generation, op: 'batch', changes: [{ op: 'add', title: 'group', children: ['child'] }] });
-    await ask(); await ask(); await ask(); await ask();
-    assert.deepEqual(shown, [false, false, false, true], 'todo interval is four turns from the task call');
+    await ask(); await ask(); await ask(); await ask(); await ask();
+    assert.deepEqual(shown, [0, 0, 0, 0, 1], 'todo interval appends at turn four without waking the model');
     await direct(h, 'task_edit', { generation, op: 'batch', changes: [{ op: 'update', id: '1.1', status: 'doing' }] });
     shown.length = 0; await ask(); await ask(); await ask();
-    assert.deepEqual(shown, [false, true, false], 'doing interval is two turns, injected once until task usage resets it');
-    assert.ok(!JSON.stringify(h.session.sessionManager.getEntries()).includes('Task reminder:'), 'reminders never persist in the transcript');
+    assert.deepEqual(shown, [1, 1, 2], 'doing interval appends at turn two; historical reminders remain stable');
+    assert.equal(h.session.sessionManager.getEntries().filter(entry => entry.type === 'custom_message' && JSON.stringify(entry.content).includes('Task reminder:')).length, 2);
     mkdirSync(join(root, '.pi'), { recursive: true }); writeFileSync(join(root, '.pi', 'pi-suite.json'), JSON.stringify({ tasks: { reminders: false } }));
     await h.session.reload(); shown.length = 0;
     await direct(h, 'task_list', {}); await ask(); await ask(); await ask(); await ask();
-    assert.deepEqual(shown, [false, false, false, false]);
+    assert.deepEqual(shown, [2, 2, 2, 2], 'disable stops new delivery, not deletion of earlier history');
   } finally { await h.dispose(); rmSync(root, { recursive: true, force: true }); }
 });
