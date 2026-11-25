@@ -22,7 +22,7 @@ GoalManager 是状态、归属与执行许可的唯一来源。`pi-suite:goal` v
 
 自动继续仍经 Notifications，以 `goal:<ID>` 合并未送达请求。通知只携带简短模型唤醒信号，不复制目标正文、预算、进度或审计全文。纯 Goal 自动控制批次隐藏显示；混合通知由原生 message renderer 只隐藏 `source=goal-continuation` 的块，job/agent 等真实事件正文保留。已有宿主继续、待处理消息、用户输入、取消、重试、压缩和等待准入保持优先级；一个送达批次只产生一次唤醒。
 
-显式 `/goal resume` 单独保存一条可见 `pi-suite:goal-resume` 自定义消息：正文为简短恢复结果，details 保存恢复前目标、原因、预算/用量、耗时、进度和必要等待信息。命令在共享通知 hold 内保存结果，再释放控制交付，不由展示消息启动模型。请求级投影移除该展示消息，不把用户摘要作为执行合同。注册在 factory 的轻量 renderer 使用宿主 expanded 选项与原生键盘展开，历史重建使用同一显示定义；阅读不改变执行许可或发起请求。
+显式 `/goal resume` 单独保存一条可见 `pi-suite:goal-resume` 自定义会话条目：data.summary 保存简短恢复结果，data.text 保存恢复前目标、原因、预算/用量、耗时、进度和必要等待信息。命令在共享通知 hold 内保存结果，再释放控制交付，不由展示条目启动模型。该条目不进入模型上下文，不把用户摘要作为执行合同。注册在 factory 的轻量 renderer 使用宿主 expanded 选项与原生键盘展开，历史重建使用同一显示定义；阅读不改变执行许可或发起请求。
 
 `pi-suite:notification` 的正文由文本块组成，`details.notificationVersion=1` 的 segments 与正文块一一对应，包含 requestId 和 source（`goal-continuation` 或 `event`）。job 结算、monitor/update、agent 结果/提问和 workflow 的实际来源由 requestId 区分；metadata 不重复保存事件正文。
 
