@@ -13,6 +13,7 @@ import { questionText } from './questions.ts';
 import { agentRuntime } from './runtime.ts';
 import type { AgentManager } from './manager.ts';
 import { toolRenderer } from '../runtime/tools.ts';
+import { ToolError } from '../runtime/errors.ts';
 import type { TasksModule } from '../tasks/index.ts';
 
 export function summaryLine(record: AgentRecord): string {
@@ -34,13 +35,30 @@ function resultSummary(record: AgentRecord): string {
 export class AgentsModule implements Waitable {
   readonly prefix = 'agent_';
   readonly manager: AgentManager;
+  /** Set when the process owner comes from an earlier module load and is still busy. */
+  readonly stale?: string;
+  private warned = false;
   private unsubscribe?: () => void;
   private timer?: NodeJS.Timeout;
   private queued = new Set<string>();
   private saved = new Map<string, string>();
   constructor(private pi: ExtensionAPI, private binding: SessionBinding, private notifications: Notifications,
     private status: StatusPublisher, private tasks?: TasksModule, private parentRun?: Execution, manager?: AgentManager) {
-    this.manager = manager ?? agentRuntime();
+    if (manager) this.manager = manager;
+    else ({ owner: this.manager, stale: this.stale } = agentRuntime());
+  }
+  /** New runs need this load's implementation; a stale busy owner only finishes and reports its runs. */
+  admit(): AgentManager {
+    if (this.stale) throw new ToolError('RUNTIME_UNAVAILABLE', this.stale);
+    return this.manager;
+  }
+  /** Steering or answering a live run stays available; resuming a settled one would start a new run. */
+  admitSend(id: string): AgentManager {
+    if (this.stale) {
+      const { record, run } = this.manager.get(id);
+      if (!run || !active(record.state)) return this.admit();
+    }
+    return this.manager;
   }
   /** Collected runs have no live renderer map; their transcript uses the same registered display lookup. */
   renderer(name: string) { return toolRenderer(this.pi, name); }
@@ -53,6 +71,10 @@ export class AgentsModule implements Waitable {
     this.detach();
     const current = this.binding.current;
     if (!current) return;
+    if (this.stale && !this.warned) {
+      this.warned = true;
+      current.ctx.ui.notify(this.stale, 'warning');
+    }
     const records = recordsIn(current.ctx.sessionManager.getBranch());
     this.manager.restore(records);
     for (const record of records) this.saved.set(record.runId, this.revision(record));

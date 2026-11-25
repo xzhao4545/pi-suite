@@ -90,7 +90,7 @@ test("published pi-starship footer coexists with real suite execution and ask at
       {op: "add", title: "当前任务中文长标题".repeat(7), children: ["执行任务一", "执行任务二"]},
       {op: "update", id: "1.1", status: "doing"},
     ]}, new AbortController().signal, undefined, ctx as never);
-    const child = await agentRuntime().start({prompt: "FOOTER_CHILD", background: true}, {ctx}, loadConfig(root)); await entered.promise;
+    const child = await agentRuntime().owner.start({prompt: "FOOTER_CHILD", background: true}, {ctx}, loadConfig(root)); await entered.promise;
     const runtime = acquireRuntime(root); assert.equal(runtime.mode, "active"); if (runtime.mode !== "active") assert.fail("jobs unavailable");
     await runtime.manager.start({command: "read line", cwd: root, ownerSessionId: ctx.sessionManager.getSessionId(), anchorEntryId: null}, testShell());
     const calls = h.faux.state.callCount, initial = render();

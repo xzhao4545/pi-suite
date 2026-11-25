@@ -71,7 +71,7 @@ test('SDK uses real project module admission, preserves child config and joins d
     assert.equal(ctx.cwd, project); admitted(initial);
     assert.equal(completions, 1, 'first startup initializes mentions despite the SDK handler snapshot');
 
-    const manager = agentRuntime();
+    const manager = agentRuntime().owner;
     faux.setResponses([() => {
       const run = [...manager.runs.values()][0];
       assert.equal(run.record.cwd, target); assert.equal(run.configCwd, project);
@@ -100,7 +100,7 @@ test('SDK uses real project module admission, preserves child config and joins d
     write(project, enabled); await session.reload(); admitted(enabled);
     const owner = ctx.sessionManager.getSessionId(), runtime = acquireRuntime(user);
     assert.ok(runtime.mode === 'active');
-    const jobs = runtime.manager, workflow = workflowRuntime(), entered = Promise.withResolvers<void>();
+    const jobs = runtime.manager, workflow = workflowRuntime().owner, entered = Promise.withResolvers<void>();
     // The provider ends only on the SDK's real abort signal, so quit must join its child.
     faux.setResponses([async (_context, options) => {
       entered.resolve();

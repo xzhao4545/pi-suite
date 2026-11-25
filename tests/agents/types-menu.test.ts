@@ -93,7 +93,7 @@ test('disabled types reject ordinary, nested, workflow and restored launches whi
   definition(root, 'switchable', true);
   let ctx!: ExtensionContext;
   const h = await host({ root, persisted: true, extend: pi => { pi.on('session_start', (_event, context) => { ctx = context; }); } });
-  const manager = agentRuntime(), scope = { ctx }, config = loadConfig(root, root);
+  const manager = agentRuntime().owner, scope = { ctx }, config = loadConfig(root, root);
   try {
     h.faux.setResponses([async () => {
       entered.resolve(); await release.promise;
@@ -161,7 +161,7 @@ test('/subagents types manages disabled types with native selection and immediat
     assert.deepEqual(await complete(), []);
     await menu(`${name} · disabled`, 'Enable');
     other.setResponses([fauxAssistantMessage('enabled result')]);
-    const run = await agentRuntime().start({ type: name, prompt: 'enabled', background: false }, { ctx }, loadConfig(root, root));
+    const run = await agentRuntime().owner.start({ type: name, prompt: 'enabled', background: false }, { ctx }, loadConfig(root, root));
     assert.equal((await run.done.promise).state, 'completed');
     await menu(`${name} · enabled`, 'Disable');
     assert.ok((await complete()).some(item => item.value === `@${run.record.handle}`), 'historical handles remain available after a type toggle');

@@ -23,7 +23,7 @@ async function setup(config: object = {}) {
     pi.on('session_start', (_event, context) => { ctx = context; });
   } });
   await h.session.modelRuntime.refresh({ allowNetwork: false });
-  return { ...h, root, ctx, metered, manager: agentRuntime(), config: loadConfig(root, root),
+  return { ...h, root, ctx, metered, manager: agentRuntime().owner, config: loadConfig(root, root),
     invoke: (name: string, params: object) => h.session.getToolDefinition(name)!.execute('progress', params, new AbortController().signal, undefined, ctx as never),
     async cleanup() { await h.dispose(); rmSync(root, { recursive: true, force: true }); } };
 }

@@ -113,7 +113,7 @@ export class AgentScheduler {
       occurrence = new Date(now).toISOString();
       const updated = activation.store.current.jobs.find(item => item.id === id)!;
       this.arm(activation, updated);
-      const run = await this.agents.manager.start(job.request, this.agents.scope(activation.binding.ctx), this.config(), undefined,
+      const run = await this.agents.admit().start(job.request, this.agents.scope(activation.binding.ctx), this.config(), undefined,
         { scheduleId: id, bypassQueue: true, signal: activation.controller.signal });
       await activation.store.setRun(id, occurrence, run.record.id, run.record.runId);
       this.pi.events.emit('subagents:scheduled', { type: 'fired', jobId: id, agentId: run.record.id, name: job.name });

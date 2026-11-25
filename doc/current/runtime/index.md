@@ -60,7 +60,9 @@ Responses 的会话持久化、resume 与跨模型消息转换使用官方 Pi 1.
 
 ## 会话和通知
 
-SessionBinding 为当前主会话保存上下文、会话 ID 和绑定代次。session_start 建立绑定；session_shutdown 保存目标、取消询问、清除本包 UI 并撤销绑定。quit 按当前 agentDir 查询进程全局注册的既有 jobs、agents 与 workflow owner，并等待真实清理结算；模块全部关闭也适用，不依赖当前模块实例，不创建新的 owner。reload 与普通会话切换只重绑，执行 owner 保活。session_tree 撤销出站绑定与等待资源，重新读取该会话的单一当前 Goal；不按所选分支恢复目标、不写离开分支的状态。旧绑定的排队询问不得在新会话展示。
+SessionBinding 为当前主会话保存上下文、会话 ID 和绑定代次。session_start 建立绑定；session_shutdown 保存目标、取消询问、清除本包 UI 并撤销绑定。quit 按当前 agentDir 查询进程全局注册的既有 jobs、agents 与 workflow owner，并等待真实清理结算；模块全部关闭也适用，不依赖当前模块实例，不创建新的 owner。session_tree 撤销出站绑定与等待资源，重新读取该会话的单一当前 Goal；不按所选分支恢复目标、不写离开分支的状态。旧绑定的排队询问不得在新会话展示。
+
+`runtime/owner.ts` 为每次模块加载创建独立实现标识，agents 和 workflow 按 agentDir 保存标识及 owner。同一实现直接复用。`/reload` 遇到其他实现的空闲 owner 时关闭它，再用当前实现创建 owner。遇到忙碌 owner 时保留既有执行及通知，绑定时提示一次，并以 `RUNTIME_UNAVAILABLE` 拒绝新的执行。待工作结算、普通结果送达后再次 `/reload`；无法报告忙碌状态的 owner 需要重启 Pi。Jobs 使用独立的[版本协议与控制桥](../jobs/index.md)。
 
 Notifications 按主会话 ID 保存消息，以请求 ID 合并尚未投递的通知。询问与目标详情占用阻塞令牌；释放后仅在当前宿主 idle 且没有待处理消息、目标允许自动工作时投递合并 follow-up。非当前会话的通知保留到对应会话绑定。agent_before_settle 先计算 Responses 修复提案，再处理 Goal 与通知；completed 边界把合并消息作为一份 custom_message 请求一次继续，并保留前序 entries；已存在宿主继续或待处理消息时保留批次。agent_settled 确认 Goal 最终结果后检查 idle 投递。Pi 1.5.0 的手动压缩与树切换成功事件先于 busy 标记清除，仅在这些事件存在待投递消息时使用受绑定代次限制的短期 idle 检查。界面查看器没有模型调度或进程控制权。
 

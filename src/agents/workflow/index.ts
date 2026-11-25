@@ -4,6 +4,7 @@ import type { Notifications } from '../../runtime/notifications.ts';
 import type { Settlement, Waitable } from '../../runtime/wait.ts';
 import type { Dock } from '../../ui/dock.ts';
 import { sanitizeText } from '../../runtime/text.ts';
+import { ToolError } from '../../runtime/errors.ts';
 import type { AgentsModule } from '../index.ts';
 import { WORKFLOW_ENTRY_TYPE, workflowEntryData, workflowEntries, type OwnedWorkflowTask } from './entry.ts';
 import { WorkflowManager, workflowRuntime, workflowActive } from './manager.ts';
@@ -17,16 +18,23 @@ export function workflowSummary(task: OwnedWorkflowTask): string {
 export class WorkflowsModule implements Waitable {
   readonly prefix = 'wf_';
   readonly manager: WorkflowManager;
+  readonly stale?: string;
+  private warned = false;
   private unsubscribe?: () => void;
   private queued = new Set<string>();
   private saved = new Map<string, string>();
   constructor(private pi: ExtensionAPI, private binding: SessionBinding, private notices: Notifications,
     private dock: Dock, private agents: AgentsModule, manager?: WorkflowManager) {
-    this.manager = manager ?? workflowRuntime();
+    if (manager) { this.manager = manager; this.stale = agents.stale; }
+    else ({ owner: this.manager, stale: this.stale } = workflowRuntime({ owner: agents.manager, stale: agents.stale }));
     dock.register('workflows', { title: 'Workflows', rows: () => this.list().filter(task => !this.manager.settled(task.id)).map(task => ({
       id: task.id, text: `${task.id} ${task.workflowName ?? 'workflow'}`, priority: 60,
       suffix: `${task.status} · ${task.doneCount}/${task.agentCount}`,
     })) });
+  }
+  admit(): WorkflowManager {
+    if (this.stale) throw new ToolError('RUNTIME_UNAVAILABLE', this.stale);
+    return this.manager;
   }
   list(): OwnedWorkflowTask[] {
     const current = this.binding.current;
@@ -35,6 +43,10 @@ export class WorkflowsModule implements Waitable {
   bind(): void {
     this.detach();
     const current = this.binding.current; if (!current) return;
+    if (this.stale && !this.warned) {
+      this.warned = true;
+      current.ctx.ui.notify(this.stale, 'warning');
+    }
     const entries = workflowEntries(current.ctx.sessionManager.getBranch()); this.manager.restore(entries);
     for (const entry of entries) this.saved.set(entry.id, `${entry.status}:${entry.endTime ?? ''}:${entry.notified}:${entry.error ?? ''}`);
     this.unsubscribe = this.manager.subscribe(() => this.refresh()); this.refresh();

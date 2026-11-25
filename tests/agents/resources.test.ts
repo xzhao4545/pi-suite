@@ -20,7 +20,7 @@ function type(root: string, name: string, fields: Record<string, unknown>, proje
 async function setup() {
   const root = agentDir(); let ctx!: ExtensionContext;
   const h = await host({ root, tools: ['read'], extend: pi => { pi.on('session_start', (_event, context) => { ctx = context; }); } });
-  return { ...h, root, ctx, manager: agentRuntime(), config: loadConfig(root, root),
+  return { ...h, root, ctx, manager: agentRuntime().owner, config: loadConfig(root, root),
     async cleanup() { await h.dispose(); rmSync(root, { recursive: true, force: true }); } };
 }
 

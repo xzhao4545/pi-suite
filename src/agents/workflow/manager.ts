@@ -9,6 +9,8 @@ import type { JobManager } from '../../jobs/manager.ts';
 import type { ParentScope } from '../types.ts';
 import { captureParent } from '../parent.ts';
 import { agentRuntime } from '../runtime.ts';
+import { WORKFLOW_OWNER } from '../registry.ts';
+import { acquireOwner, existingOwner, type OwnerHandle } from '../../runtime/owner.ts';
 import type { AgentManager } from '../manager.ts';
 import { appendJournal, readJournal } from './journal.ts';
 import { taskFromEntry, workflowEntryData, type OwnedWorkflowTask, type WorkflowEntryData } from './entry.ts';
@@ -24,6 +26,7 @@ export class WorkflowManager {
   private runs = new Map<string, {done: Promise<void>; store: WorkflowStore; settled: boolean}>();
   private listeners = new Set<() => void>();
   private runtime?: Promise<typeof import('./runtime/run.ts')>;
+  private starting = 0;
   closed = false;
   constructor(readonly agents: AgentManager, private jobs: () => JobManager) {}
   subscribe(listener: () => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
@@ -70,7 +73,9 @@ export class WorkflowManager {
     {cwd: scope.ctx.cwd, ...scope.owner!, recordPath: files.recordPath, resultPath: files.resultPath, notified: false, children: [] as OwnedWorkflowTask['children']});
     if (replay?.truncated) updateWorkflowProgressBatch(task, [{type: 'workflow_log', message: 'Resume journal has an incomplete final append; only its complete prefix is available.'}]);
     const store = new WorkflowStore(workflowEntryData(task));
-    await store.save(workflowEntryData(task));
+    this.starting++;
+    try { await store.save(workflowEntryData(task)); }
+    finally { this.starting--; }
     // Quit can race the initial disk write, before a Worker has been admitted.
     if (this.closed || this.agents.closed) throw new ToolError('CLOSING', 'Pi quit before workflow launch');
     this.tasks.set(id, task);
@@ -127,27 +132,32 @@ export class WorkflowManager {
     if (requested) task.abortController.abort();
     await this.finished(id); return requested;
   }
+  /** Keep the owner through initial admission and the final result write, as well as Worker execution. */
+  busy(): boolean {
+    if (this.starting) return true;
+    for (const run of this.runs.values()) if (!run.settled) return true;
+    return false;
+  }
   async shutdown(): Promise<void> {
     this.closed = true;
     for (const task of this.tasks.values()) if (workflowActive(task)) task.abortController.abort();
     await Promise.all([...this.runs.values()].map(run => run.done));
   }
 }
-const key = Symbol.for('pi-suite.workflows.runtime.v1');
-const globals = globalThis as unknown as Record<symbol, Map<string, WorkflowManager> | undefined>;
-export function workflowRuntime(): WorkflowManager {
-  const managers = globals[key] ??= new Map(), agentDir = getAgentDir();
-  if (!managers.has(agentDir) || managers.get(agentDir)!.closed) {
+export function workflowRuntime(agents = agentRuntime()): OwnerHandle<WorkflowManager> {
+  const agentDir = getAgentDir();
+  const handle = acquireOwner(WORKFLOW_OWNER, 'workflow', agentDir, () => {
     const runtime = acquireRuntime(agentDir);
-    managers.set(agentDir, new WorkflowManager(agentRuntime(), () => {
+    return new WorkflowManager(agents.owner, () => {
       if (runtime.mode !== 'active') throw new ToolError('RUNTIME_UNAVAILABLE', 'Workflow gate/cleanup requires the active jobs execution runtime');
       return runtime.manager;
-    }));
-  }
-  return managers.get(agentDir)!;
+    });
+  }, { matches: owner => owner.agents === agents.owner });
+  // A workflow cannot accept new runs while its agents owner is stale.
+  return { owner: handle.owner, stale: handle.stale ?? agents.stale };
 }
 
 /** Module admission does not own the lifetime of an already running Worker. */
 export function quitExistingWorkflowRuntime(agentDir: string): Promise<void> | undefined {
-  return globals[key]?.get(agentDir)?.shutdown();
+  return existingOwner(WORKFLOW_OWNER, agentDir)?.shutdown();
 }

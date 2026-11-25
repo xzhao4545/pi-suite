@@ -206,7 +206,7 @@ test('named agent tools and wait render names without changing model IDs or init
   assert.equal(agentDisplayName(id), id);
   assert.equal(existsSync(process.env.PI_CODING_AGENT_DIR), false, 'display lookup does not acquire a disk-backed owner');
   process.env.PI_CODING_AGENT_DIR = root;
-  const manager = agentRuntime();
+  const manager = agentRuntime().owner;
   const record: AgentRecord = { version: 1, id, runId: 'run_00000001', name: 'Review', type: 'general-purpose', prompt: 'Inspect code',
     state: 'completed', elapsedMs: 1200, background: false, persisted: false, cwd: root, ownerSessionId: 'owner', anchorEntryId: null,
     ancestors: [], createdAt: new Date().toISOString(), model: 'offline/model', modelSource: 'inherited', thinking: 'off', thinkingSource: 'inherited' };

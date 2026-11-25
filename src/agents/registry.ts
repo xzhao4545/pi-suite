@@ -1,18 +1,15 @@
 import { getAgentDir } from '@earendil-works/pi-coding-agent';
 import type { AgentManager } from './manager.ts';
+import { existingOwner } from '../runtime/owner.ts';
 
 // Reloaded factories and display-only imports share the execution owners, not a
 // second name cache that would need synchronization on every lifecycle change.
-const key = Symbol.for('pi-suite.agents.runtime.v1');
-const registry = globalThis as unknown as Record<symbol, Map<string, AgentManager> | undefined>;
+export const AGENT_OWNER = 'pi-suite.agents.runtime.v1';
+export const WORKFLOW_OWNER = 'pi-suite.workflows.runtime.v1';
 
-/** Only the execution path creates the registry; renderer queries never acquire an owner. */
-export function agentOwners(): Map<string, AgentManager> {
-  return registry[key] ??= new Map();
-}
-
+/** Query only: renderers and quit never acquire or replace an owner. */
 export function existingAgentRuntime(agentDir: string): AgentManager | undefined {
-  return registry[key]?.get(agentDir);
+  return existingOwner(AGENT_OWNER, agentDir) as AgentManager | undefined;
 }
 
 /** Queries are process-local: missing/history-only owners keep their original ID. */

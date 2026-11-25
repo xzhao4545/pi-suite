@@ -120,7 +120,7 @@ test('empty editor enters Dock with left and Enter opens the selected agent thro
     h.faux.setResponses([async () => {started.resolve(); await gate.promise; return fauxAssistantMessage('done');}]);
     await h.session.getToolDefinition('agent_start')!.execute('dock-start', {prompt: 'Dock agent', name: 'Dock contract'}, new AbortController().signal, undefined, ctx as never);
     await started.promise;
-    const manager = agentRuntime(), run = [...manager.runs.values()][0];
+    const manager = agentRuntime().owner, run = [...manager.runs.values()][0];
     run.record.usage = {tokens: {input: 12000, output: 3400, cacheRead: 0, cacheWrite: 0, total: 15400}, cost: 0};
     run.record.toolUses = 4; manager.changed();
     const entries = h.session.sessionManager.getBranch().length;
@@ -142,7 +142,7 @@ test('empty editor enters Dock with left and Enter opens the selected agent thro
     assert.ok(dock.render(120).every(line => !line.includes('Enter open')));
     assert.equal(h.notices.some(notice => notice.type === 'error'), false);
   } finally {
-    gate.resolve(); await Promise.all([...agentRuntime().runs.values()].map(run => run.done.promise));
+    gate.resolve(); await Promise.all([...agentRuntime().owner.runs.values()].map(run => run.done.promise));
     await h.dispose(); t.mock.timers.reset(); assert.equal(detached, 1, 'shutdown releases the terminal listener');
   }
 });

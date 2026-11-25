@@ -53,7 +53,7 @@ export function registerAgentMentions(pi: ExtensionAPI, agents: AgentsModule, bi
     if (!target) return { action: 'continue' };
     if (target.kind === 'record') {
       try {
-        const result = await agents.manager.send(target.record.id, mention.message, agents.scope(ctx), config());
+        const result = await agents.admitSend(target.record.id).send(target.record.id, mention.message, agents.scope(ctx), config());
         // Mentions have no foreground tool result. Answers to a resumed foreground type
         // or an already-consumed active run must use the ordinary completion notification.
         result.run.notifyResult = true; result.run.consumed = false; agents.manager.changed();
@@ -61,6 +61,8 @@ export function registerAgentMentions(pi: ExtensionAPI, agents: AgentsModule, bi
       } catch (error) { ctx.ui.notify(`Could not send to @${target.handle}: ${String(error)}`, 'error'); }
       return { action: 'handled' };
     }
+    try { agents.admit(); }
+    catch (error) { ctx.ui.notify(String(error), 'error'); return { action: 'handled' }; }
     const current = binding.current!, controller = new AbortController();
     clones.add(controller); ctx.ui.notify(`Prompting @${target.handle}…`, 'info');
     // Return control to the editor while the off-screen model writes the task. Cancellation

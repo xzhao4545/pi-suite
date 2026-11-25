@@ -6,6 +6,8 @@
 
 当前实现与开发方式见 [doc/current](../current/index.md)。完整设计、上游按文件处置与既有验收证据保存在 [设计与实施记录](../finished/pi-suite/design/index.md)，原设计细节保留。新增交互与启动需求及 tmux 复制的环境与验收范围已归档到 [对应专项](../finished/pi-suite/interaction-improvements/index.md)。
 
+- [Jobs Dock 计时](./execution-owner-and-dock-timer.md) — Jobs Dock 运行时间每秒刷新，并与 Agents 共用展示计时器。
+
 ## 规则
 
 - 每个待办文件应聚焦一个主题或一组强相关任务。

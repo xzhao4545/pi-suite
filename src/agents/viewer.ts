@@ -65,13 +65,14 @@ export function agentControls(ctx: ExtensionContext, agents: Pick<AgentsModule, 
   return { get, canStop, canMessage };
 }
 
-export function agentMessage(ctx: ExtensionContext, agents: Pick<AgentsModule, 'manager' | 'scope'>, id: string, runId: string,
+export function agentMessage(ctx: ExtensionContext, agents: Pick<AgentsModule, 'manager' | 'scope' | 'admitSend'>, id: string, runId: string,
   readonly: boolean, config: () => SuiteConfig, sent?: () => void): InlineRequest {
   const {get, canMessage} = agentControls(ctx, agents, id, runId, readonly);
   return {multiline: true, prompt: get().run?.question ? 'Answer parent question: ' : `Message ${get().record.name}: `, submit: async message => {
+    const manager = agents.admitSend(id);
     // The composer can outlive a run; never send an old reader's input to its successor.
     if (!canMessage()) throw new Error('This run no longer accepts messages');
-    const result = await agents.manager.send(id, message, agents.scope(ctx), config());
+    const result = await manager.send(id, message, agents.scope(ctx), config());
     sent?.();
     return `${get().record.name}: ${result.action}`;
   }};
@@ -91,7 +92,7 @@ export async function performAgentAction(action: string, ctx: ExtensionContext, 
 export const showAgent = (...args: Parameters<typeof readAgent>): Promise<void> =>
   withReadingScreen(args[0], () => readAgent(...args));
 
-async function readAgent(ctx: ExtensionContext, agents: Pick<AgentsModule, 'manager' | 'scope' | 'renderer'>, dock: Dock, id: string, runId: string, config: () => SuiteConfig, readonly = false, jobs?: AgentJobViewer, navigation = new ViewerNavigation()): Promise<void> {
+async function readAgent(ctx: ExtensionContext, agents: Pick<AgentsModule, 'manager' | 'scope' | 'renderer' | 'admitSend'>, dock: Dock, id: string, runId: string, config: () => SuiteConfig, readonly = false, jobs?: AgentJobViewer, navigation = new ViewerNavigation()): Promise<void> {
   const release = agents.manager.retain(runId);
   let content: Transcript | undefined, reader: ScrollView | undefined;
   const { get, canStop, canMessage } = agentControls(ctx, agents, id, runId, readonly);

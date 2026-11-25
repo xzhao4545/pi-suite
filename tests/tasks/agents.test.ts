@@ -24,7 +24,7 @@ test('two SDK children update only their assigned progress concurrently without 
   let ctx!: ExtensionContext, arrived = 0;
   const h = await host({root, persisted: true, tools: ['task_edit', 'agent_start'],
     extend: pi => { pi.on('session_start', (_event, context) => { ctx = context; }); }});
-  const manager = agentRuntime();
+  const manager = agentRuntime().owner;
   const invoke = (name: string, params: object) => h.session.getToolDefinition(name)!.execute('tasks-concurrent', params,
     new AbortController().signal, undefined, ctx as never);
   try {
@@ -74,7 +74,7 @@ test('SDK child retains private and assigned stores across parent reload/fork an
   };
   const tools = ['task_edit', 'task_list', 'task_get', 'agent_send'];
   let current = await host({root, persisted: true, tools, extend});
-  const first = current, manager = agentRuntime();
+  const first = current, manager = agentRuntime().owner;
   const runtime = new AgentSessionRuntime(current.session, current.services, async options => {
     current = await host({root, tools, extend, sessionManager: options.sessionManager, sessionStartEvent: options.sessionStartEvent});
     return {...current, diagnostics: []};
@@ -97,7 +97,7 @@ test('SDK child retains private and assigned stores across parent reload/fork an
     const run = await manager.start({prompt: 'continue owner task', taskId: '1.1', taskGeneration: ownerGeneration, background: false}, {ctx, taskStore: originalStore}, loadConfig(root, root));
     await entered.promise;
     await first.session.reload();
-    assert.strictEqual(agentRuntime(), manager); assert.strictEqual(run.parent.taskStore, originalStore);
+    assert.strictEqual(agentRuntime().owner, manager); assert.strictEqual(run.parent.taskStore, originalStore);
     await runtime.fork(current.session.sessionManager.getLeafId()!, {position: 'at'});
     const forkId = ctx.sessionManager.getSessionId(); assert.notEqual(forkId, originalId);
     const forkPath = taskPath(root, forkId), forkStore = taskStore(forkPath, forkPath);

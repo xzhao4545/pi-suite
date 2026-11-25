@@ -10,9 +10,11 @@
 
 状态包括 queued、starting、running、waiting、stopping、completed、failed、stopped 和 limited。排队项在 queued 列表单独查看；启动、运行、等待与清理中的 child 计入活动数量。等待父级回答仍计入活动数量；maxTurns 限制的执行为 limited。用量按 Pi SessionStats 计算本次执行的差值；耗时从实际开始到结束，包含工具与父级回答等待。
 
-后台启动立即返回 ID。前台启动等待最终结果，当前父级的任一直接 child 提问都会使其提前返回；提前返回后的最终结果进入统一通知。父级 Esc 取消尚未返回的前台调用与其 child，后台 child 继续运行。reload、会话切换和树导航更换监听绑定，执行 owner 保持稳定；quit 从当前 agentDir 的既有进程注册取消并等待活动执行，即使 agents/jobs 模块全部关闭也适用，不为退出清理创建新 Manager。
+后台启动立即返回 ID。前台启动等待最终结果，当前父级的任一直接 child 提问都会使其提前返回；提前返回后的最终结果进入统一通知。父级 Esc 取消尚未返回的前台调用与其 child，后台 child 继续运行。会话切换和树导航更换监听绑定；`/reload` 按[执行 owner 规则](../runtime/index.md#会话和通知)重绑。活动、排队或正在结算和清理的 run、待投递的父级问题或普通结果、以及尚未结算的 workflow 都使 agents owner 保持忙碌。
 
 agents/registry.ts 是执行与显示共享的轻量进程注册边界，保留 `Symbol.for('pi-suite.agents.runtime.v1')` 与按 agentDir 隔离的 owner map；对 AgentManager 只使用类型依赖。runtime.ts 负责创建/复用 owner、顺序加载 runner/child 与 quit，renderer 的名称查询不经过创建路径；查询按 id、可选 runId 匹配且排除 workflow child，没有当前进程记录时返回原 ID，不维护另一份名称缓存或读取历史文件。
+
+绑定提示 owner 来自先前加载时，`agent_start`（含登记调度）、已结束会话的 `agent_send`、定时触发、RPC spawn 和新建或恢复型 `@` 提及返回 `RUNTIME_UNAVAILABLE`。查看器提交消息也检查该限制。查询、停止、引导活动 run、回答父级问题和接收结果仍可使用。定时触发的错误记入该次调度结果。
 
 正在等待真实 agent_start 前台调用的顶级普通 child 可从查看器单向转为后台；queued、stopping、已结算、嵌套、workflow、RPC 与普通恢复运行不具备该调用契约。Manager 将 chargedPool 从 foreground 转为 background，释放前台槽位并唤醒队列；后台池已满也允许既有执行转入，实际占用计数仍参与后续排队。前台工具返回 backgrounded:true，撤销其等待和 abort 绑定，父级后续取消不停止该 child；background 写入既有 run 记录，最终结果由统一通知消费。
 
@@ -38,7 +40,7 @@ agent_stop 不指定 runId 时覆盖该 agent 各次运行及其后代创建的�
 
 父级和 child 保存 `pi-suite:agent-record` custom entry；记录包含输入、结果、错误、状态、时间、用量、模型来源、单独模型覆盖 individual 和 child sessionFile。父级离开后，历史读取仍可从 startup 引用解析 child 的最终记录；workspace 查询通过默认/配置会话目录和持久引用发现完整分支历史，读取不修复或重写原会话文件，范围与合并规则见 [持久历史](history.md)。
 
-每次结算保存 endLeafId。该次 transcript 验证并从对应叶子读取，后续恢复新增消息属于新 run；缺失叶子明确报错。非持久会话在其 Execution 回收前可于同一 Pi 进程读取和恢复；进程退出后仅持久引用可用。保存的活动状态没有本进程执行 owner 时规范为 failed，持久 transcript 仍可读取，不计入活动数量或触发通知。
+每次结算保存 endLeafId。该次 transcript 验证并从对应叶子读取，后续恢复新增消息属于新 run；缺失叶子明确报错。非持久会话在其 Execution 回收或 owner 替换前可于同一 Pi 进程读取和恢复；进程退出后仅持久引用可用。保存的活动状态没有本进程执行 owner 时规范为 failed，持久 transcript 仍可读取，不计入活动数量或触发通知。
 
 Pi 1.5.0 的 ExtensionContext 提供 ModelRegistry，而 createAgentSession 只接受 ModelRuntime。执行层沿用上游在该边界读取 registry.runtime，保持父级认证、Provider 和虚拟模型路由；此访问集中在 runner，公共 context.modelRuntime 可用时替换。
 

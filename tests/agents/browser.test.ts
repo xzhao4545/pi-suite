@@ -21,7 +21,7 @@ test('subagents navigates pages and empty filters without menu rows or model wor
   let ctx!: ExtensionContext;
   const h = await host({root, extend: pi => pi.on('session_start', (_event, context) => {ctx = context;})});
   try {
-    const manager = agentRuntime(), config = loadConfig(root);
+    const manager = agentRuntime().owner, config = loadConfig(root);
     h.faux.setResponses([async () => { entered.resolve(); await gate.promise; return fauxAssistantMessage('running finished'); }]);
     const running = await manager.start({prompt: 'long running prompt\n'.repeat(50), name: 'probe long running name '.repeat(4).slice(0, 80)}, {ctx}, config); await entered.promise;
     const queued = await manager.start({prompt: 'queued prompt', name: 'probe queued'}, {ctx}, config);
@@ -92,7 +92,7 @@ test('Runs and Jobs reopen in All and keep activity ahead of newer completed rec
   let ctx!: ExtensionContext;
   const h = await host({root, extend: pi => pi.on('session_start', (_event, context) => {ctx = context;})});
   try {
-    const agents = agentRuntime(), config = loadConfig(root);
+    const agents = agentRuntime().owner, config = loadConfig(root);
     h.faux.setResponses([async () => {entered.resolve(); await gate.promise; return fauxAssistantMessage('finished');}, fauxAssistantMessage('new completion')]);
     const running = await agents.start({prompt: 'keep running', name: 'active run'}, {ctx}, config); await entered.promise;
     const finished = await agents.start({prompt: 'finish now', name: 'new finished run'}, {ctx}, config); await finished.done.promise;

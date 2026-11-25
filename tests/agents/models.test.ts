@@ -30,7 +30,7 @@ async function setup() {
     pi.on('session_start', (_event, context) => { ctx = context; });
   } });
   await h.session.modelRuntime.refresh({ allowNetwork: false });
-  return { ...h, root, other, ctx, manager: agentRuntime(), config: loadConfig(root, root),
+  return { ...h, root, other, ctx, manager: agentRuntime().owner, config: loadConfig(root, root),
     async loseAuth() { authenticated = false; await h.session.modelRuntime.refresh({ allowNetwork: false }); },
     async cleanup() { await h.dispose(); rmSync(root, { recursive: true, force: true }); } };
 }

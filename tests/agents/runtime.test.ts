@@ -24,7 +24,7 @@ async function setup(persisted = false) {
   const h = await host({ root, persisted, tools: ['agent_start', 'agent_send', 'agent_read', 'agent_list', 'agent_stop', 'wait',
     'task_list', 'task_get', 'task_edit'],
     extend: pi => { pi.on('session_start', (_event, context) => { ctx = context; }); } });
-  return { ...h, root, ctx, manager: agentRuntime(), config: loadConfig(root, root),
+  return { ...h, root, ctx, manager: agentRuntime().owner, config: loadConfig(root, root),
     async cleanup() { await h.dispose(); rmSync(root, { recursive: true, force: true }); } };
 }
 function until(manager: AgentManager, condition: () => boolean): Promise<void> {
@@ -61,7 +61,7 @@ test('SDK child persists a bounded run leaf, resumes with a fresh run ID and ret
     assert.equal(h.faux.state.callCount, 2, 'reading history performs no requests');
     assert.ok(recordsIn(h.session.sessionManager.getBranch()).some(record => record.runId === second.runId));
     await h.session.reload();
-    assert.equal(agentRuntime().get(first.record.id).record.runId, second.runId);
+    assert.equal(agentRuntime().owner.get(first.record.id).record.runId, second.runId);
   } finally { await h.cleanup(); }
 });
 

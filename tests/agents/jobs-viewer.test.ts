@@ -56,7 +56,7 @@ test('agent Transcript reuses owned job UI across child cwd and collected runs, 
   writeFileSync(join(root, 'input.txt'), 'TOOL_FOLD_CONTENT\n'.repeat(35));
   let ctx!: ExtensionContext;
   const h = await host({root, persisted: true, extend: pi => { pi.on('session_start', (_event, context) => { ctx = context; }); }});
-  const agents = agentRuntime(), runtime = acquireRuntime(root); assert.equal(runtime.mode, 'active'); if (runtime.mode !== 'active') assert.fail('Jobs unavailable');
+  const agents = agentRuntime().owner, runtime = acquireRuntime(root); assert.equal(runtime.mode, 'active'); if (runtime.mode !== 'active') assert.fail('Jobs unavailable');
   const jobs = runtime.manager, config = loadConfig(root, root);
   let disposed = false;
   try {
@@ -125,7 +125,7 @@ test('agent Transcript reuses owned job UI across child cwd and collected runs, 
 test('new-session workspace history opens owned PTY readonly without input or stop and releases held notifications', {timeout: 15000}, async () => {
   const root = agentDir(); let ctx!: ExtensionContext;
   let current = await host({root, persisted: true, extend: pi => { pi.on('session_start', (_event, context) => { ctx = context; }); }});
-  const agents = agentRuntime(), owner = ctx.sessionManager.getSessionId();
+  const agents = agentRuntime().owner, owner = ctx.sessionManager.getSessionId();
   const runtime = new AgentSessionRuntime(current.session, current.services, async options => {
     current = await host({root, sessionManager: options.sessionManager, sessionStartEvent: options.sessionStartEvent,
       extend: pi => { pi.on('session_start', (_event, context) => { ctx = context; }); }});

@@ -14,7 +14,7 @@ const scopeError = (error: unknown) => error instanceof ToolError && error.code 
 
 test('SDK child CRUD and reminders stay private; memory resume reuses the child session target', {timeout: 15000}, async () => {
   const root = agentDir(), entered = Promise.withResolvers<void>(), finish = Promise.withResolvers<void>();
-  const h = await host({root}), manager = agentRuntime(), ctx = h.session.extensionRunner.createContext();
+  const h = await host({root}), manager = agentRuntime().owner, ctx = h.session.extensionRunner.createContext();
   const config = loadConfig(root, root); config.agents.persistSessions = false;
   const parent = taskStore(`memory:${root}:${ctx.sessionManager.getSessionId()}`);
   try {
@@ -57,7 +57,7 @@ test('SDK child CRUD and reminders stay private; memory resume reuses the child 
 
 test('assigned scope reads and changes only the delegated task; colliding private IDs and denied batches never redirect writes', {timeout: 15000}, async () => {
   const root = agentDir(), entered = Promise.withResolvers<void>(), finish = Promise.withResolvers<void>();
-  const h = await host({root}), manager = agentRuntime(), ctx = h.session.extensionRunner.createContext();
+  const h = await host({root}), manager = agentRuntime().owner, ctx = h.session.extensionRunner.createContext();
   const parent = taskStore(`memory:${root}:${ctx.sessionManager.getSessionId()}`);
   try {
     await parent.edit([{op: 'add', title: 'parent group', children: ['assigned work', 'parent secret']},

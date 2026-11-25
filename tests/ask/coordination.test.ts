@@ -36,7 +36,7 @@ test('native asks hold real child questions and job completion; only system canc
     const h = await host({ root, tools: ['job_start', 'job_read', 'job_write', 'agent_send', 'agent_read'],
       extend: pi => { pi.on('session_start', (_event, context) => { ctx = context; }); },
       ui: ui => ({...ui, setWidget(_key, factory) { if (typeof factory === 'function') dock = factory(terminal(), ui.theme) as Dock; }}) });
-    const agents = agentRuntime(), config = loadConfig(root, root), runtime = acquireRuntime(root);
+    const agents = agentRuntime().owner, config = loadConfig(root, root), runtime = acquireRuntime(root);
     if (runtime.mode !== 'active') throw new Error('Expected live jobs runtime');
     const jobs = runtime.manager, forms = new Map<string, AskView>(), shown: string[] = [];
     const gateReady = Promise.withResolvers<void>(), childReady = Promise.withResolvers<void>();

@@ -6,6 +6,7 @@
 
 以下 patched 宿主 UI/入口记录保留迁移前开发依赖组合的审计与验收细节，不作为现状或消费者安装证明。U1/T1/M1、净化及三组补丁清理已实施，当前官方未修改 Pi 1.5.0 的加载/运行范围见 [官方 Pi 插件兼容实施](./pi-suite/official-pi-compatibility/index.md)；消费者安装按用户指示 [延期](./pi-suite/official-pi-compatibility/index.md#状态与执行权限)，未实际 npm 发布。
 
+- [Subagent 与 Workflow 执行 owner 跨加载替换](./pi-suite/agents/execution-owner-reload.md) — 忙时保留执行与控制、空闲替换和持久记录恢复，官方 Pi CLI 启动与同进程 `/reload` 验证。
 - [Goal 单一当前状态与缓存友好上下文](./pi-suite/goal/goal-state-context/index.md) — 每会话一份当前状态、tree 分支不回滚、稳定持久说明/控制与自然边界提醒；官方 Pi 1.5.0 SDK/CLI、本地 Responses 完整前缀及存储/绑定链路验证，不追加收费请求。
 - [UI 文案、Goal 状态与 Responses 跨资源恢复](./pi-suite/goal/goal-responses-recovery.md) — 三态、恢复展示和跨资源 ID 隔离已实施，保留 Linux 官方 Pi 1.5.0 的验收结果；真实上游密文解密及 Windows 新交互未验证。
 - [源码入口启动性能优化](./pi-suite/interaction-improvements/source-startup-performance.md) — 按需加载实现与测量结果阶段性归档；冷首次 Tasks 命令等待增加，性能验收未达成，剩余复测暂缓。

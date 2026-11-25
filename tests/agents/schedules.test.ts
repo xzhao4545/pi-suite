@@ -22,7 +22,7 @@ async function setup(settings = {}) {
   const h = await host({ root, persisted: true, tools: ['agent_start'], extend: pi => {
     pi.on('session_start', (_event, context) => { ctx = context; });
   } });
-  return { ...h, root, ctx, manager: agentRuntime(), config: loadConfig(root, root),
+  return { ...h, root, ctx, manager: agentRuntime().owner, config: loadConfig(root, root),
     async cleanup() { await h.dispose(); rmSync(root, { recursive: true, force: true }); } };
 }
 async function until(condition: () => boolean | Promise<boolean>) {
@@ -203,7 +203,7 @@ test('real session new/resume/reload retain only owner schedules; unavailable fi
     current.faux.setResponses([fauxAssistantMessage('reported failure')]);
     const path = schedulePath(root, owner);
     await until(() => JSON.parse(readFileSync(path, 'utf8')).jobs[0].lastStatus === 'error');
-    assert.equal(agentRuntime().runs.size, 0, 'model resolution never substitutes another provider');
+    assert.equal(agentRuntime().owner.runs.size, 0, 'model resolution never substitutes another provider');
     assert.match((await new ScheduleStore(path).snapshot()).jobs[0].lastError!, /missing\/unavailable/);
     await until(() => current.session.sessionManager.getBranch().some(entry => entry.type === 'custom_message' && JSON.stringify(entry.content).includes('Schedule')));
     await current.idle();

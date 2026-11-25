@@ -25,7 +25,7 @@ export function registerWorkflowTool(pi: ExtensionAPI, workflows: WorkflowsModul
     async execute(id, params, signal, _update, ctx) {
       signal?.throwIfAborted();
       if (!enabled || !config().agents.workflows) throw new ToolError('INVALID_ARGS', 'Workflow launch is disabled for this session');
-      const task = await workflows.manager.start(params, agents.scope(ctx), config(), id);
+      const task = await workflows.admit().start(params, agents.scope(ctx), config(), id);
       return textResult([workflowSummary(task), task.logs.at(-1), `resultPath: ${task.resultPath}`],
       {id: task.id, status: task.status, scriptPath: task.scriptPath, resultPath: task.resultPath, resumedFrom: task.resumedFrom});
     },

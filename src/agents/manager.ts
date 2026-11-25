@@ -34,6 +34,18 @@ export class AgentManager {
   private cleanupTimer?: NodeJS.Timeout;
   constructor(private execute: (run: Execution) => Promise<void>, private stopJobs: (ids: string[]) => Promise<StopOutcome['affected']>) {}
   get closed(): boolean { return this.closing; }
+  /** Replacing the owner drops in-memory executions: keep it while any run, question or unread result depends on it. */
+  busy(): boolean {
+    if (this.stops.size) return true;
+    for (const run of this.runs.values()) if (!run.settled || run.question && !run.question.seen || this.resultPending(run)) return true;
+    return false;
+  }
+  private resultPending(run: Execution): boolean {
+    const parent = run.record.parentRunId ? this.runs.get(run.record.parentRunId) : undefined;
+    // The workflow host consumes its own results; only a live nested parent can receive notices.
+    return !run.consumed && Boolean(run.record.background || run.notifyResult)
+      && (run.record.parentRunId ? Boolean(parent && !parent.settled) : !run.record.workflowId);
+  }
   configure(config: SuiteConfig): void {
     this.limits = { background: config.agents.maxConcurrent, foreground: config.agents.maxConcurrentForeground };
     this.drain();
@@ -83,12 +95,7 @@ export class AgentManager {
     let changed = false;
     for (const [runId, run] of this.runs) {
       if (!run.settled || this.retained.has(runId) || Date.parse(run.record.endedAt!) >= now - 10 * 60_000) continue;
-      const parent = run.record.parentRunId ? this.runs.get(run.record.parentRunId) : undefined;
-      // The host consumes top-level workflow results; a closed nested parent cannot receive notices.
-      // Ordinary unread results must survive even when their parent UI is detached.
-      const unread = !run.consumed && (run.record.background || run.notifyResult)
-        && (run.record.parentRunId ? parent && !parent.settled : !run.record.workflowId);
-      if (unread) continue;
+      if (this.resultPending(run)) continue;
       this.histories.set(runId, {record: this.view(run), updatedAt: Date.now()});
       this.runs.delete(runId); this.closedRuns.delete(runId); changed = true;
     }

@@ -11,6 +11,7 @@ import { agentDir } from '../support/jobs.ts';
 import { terminal } from '../support/terminal.ts';
 import { agentRuntime } from '../../src/agents/runtime.ts';
 import { AgentManager } from '../../src/agents/manager.ts';
+import { AGENT_OWNER, WORKFLOW_OWNER } from '../../src/agents/registry.ts';
 import { transcriptText, transcript } from '../../src/agents/records.ts';
 import { workflowRuntime, WorkflowManager } from '../../src/agents/workflow/manager.ts';
 import { workflowEntries, workflowEntryData, taskFromEntry } from '../../src/agents/workflow/entry.ts';
@@ -32,10 +33,10 @@ async function until(condition: () => boolean | Promise<boolean>) {
 }
 async function setup() {
   const root = agentDir(); let ctx!: ExtensionContext, pi!: ExtensionAPI;
-  const h = await host({root, persisted: true, tools: ['agent_workflow', 'agent_list', 'agent_send', 'job_list', 'wait'], extend: api => {
+  const h = await host({root, persisted: true, tools: ['agent_workflow', 'agent_start', 'agent_list', 'agent_send', 'job_list', 'wait'], extend: api => {
     pi = api; api.on('session_start', (_event, current) => { ctx = current; });
   }});
-  return {...h, root, get ctx() { return ctx; }, get pi() { return pi; }, manager: workflowRuntime(), agents: agentRuntime(),
+  return {...h, root, get ctx() { return ctx; }, get pi() { return pi; }, manager: workflowRuntime().owner, agents: agentRuntime().owner,
     async cleanup() { await h.dispose(); rmSync(root, {recursive: true, force: true}); }};
 }
 async function invoke(h: Awaited<ReturnType<typeof setup>>, name: string, args: JsonObject) {
@@ -134,7 +135,7 @@ test('reload/new/resume preserve workflow and queued-agent owners; quit waits fo
   const root = agentDir(); file(join(root, 'pi-suite.json'), '{"agents":{"maxConcurrent":1}}');
   let current = await host({root, persisted: true, tools: ['agent_workflow']});
   const owner = current.session.sessionManager.getSessionId(), original = current.session.sessionFile!;
-  const workflow = workflowRuntime(), agents = agentRuntime();
+  const workflow = workflowRuntime().owner, agents = agentRuntime().owner;
   const block = Promise.withResolvers<void>(), entered = Promise.withResolvers<void>();
   let ctx!: ExtensionContext;
   const runtime = new AgentSessionRuntime(current.session, current.services, async options => {
@@ -163,7 +164,7 @@ test('reload/new/resume preserve workflow and queued-agent owners; quit waits fo
     for (const record of agents.records()) assert.equal(record.ownerSessionId, owner);
     assert.equal(current.session.sessionManager.getBranch().filter(e => e.type === 'custom_message' && JSON.stringify(e.content).includes(task.id)).length, 0);
     await runtime.switchSession(original); await until(() => task.notified); await current.idle();
-    assert.strictEqual(workflowRuntime(), workflow); assert.equal(task.notified, true);
+    assert.strictEqual(workflowRuntime().owner, workflow); assert.equal(task.notified, true);
     const notices = () => current.session.sessionManager.getBranch().filter(e => e.type === 'custom_message' && JSON.stringify(e.content).includes(task.id));
     assert.equal(notices().length, 1); await current.session.reload(); assert.equal(notices().length, 1);
     current.faux.setResponses([fauxAssistantMessage('long gate')]);
@@ -174,6 +175,48 @@ test('reload/new/resume preserve workflow and queued-agent owners; quit waits fo
     assert.equal(stopped.status, 'killed', stopped.error); assert.equal(workflow.settled(stopped.id), true);
     assert.equal(workflow.jobManager().peek(jobId).cleanup.state, 'managed_scope_confirmed');
   } finally { block.resolve(); await runtime.dispose(); rmSync(root, {recursive: true, force: true}); }
+});
+
+test('cross-load owners preserve active controls, then replace both runtimes when idle', {timeout: 15000}, async () => {
+  const h = await setup();
+  try {
+    h.faux.setResponses([fauxAssistantMessage('finished')]);
+    const finished = await h.agents.start({prompt: 'completed run', background: false}, {ctx: h.ctx}, loadConfig(h.root));
+    await finished.done.promise;
+    const workflow = await launch(h, {script: script('while (true) {}')});
+    assert.equal(h.agents.busy(), false);
+    // The SDK reloads extension factories but leaves their ESM modules cached. Mark the
+    // registered owners with a different identity to exercise production admission.
+    const globals = globalThis as unknown as Record<symbol, Map<string, {implementation: symbol}>>;
+    const previous = Symbol('previous load');
+    for (const key of [AGENT_OWNER, WORKFLOW_OWNER]) globals[Symbol.for(key)].get(h.root)!.implementation = previous;
+    assert.equal(agentRuntime().owner, h.agents, 'the workflow still depends on the idle agents owner');
+    assert.ok(agentRuntime().stale);
+
+    h.faux.setResponses([fauxAssistantMessage(fauxToolCall('ask_user', {question: 'Continue?'})),
+      ...Array(4).fill((context: TranscriptContext) => fauxAssistantMessage(context.messages.some(message => message.role === 'toolResult'
+        && message.toolName === 'ask_user') ? 'answered' : 'parent notice'))]);
+    const waiting = await h.agents.start({prompt: 'ask parent', background: false}, {ctx: h.ctx}, loadConfig(h.root));
+    await until(() => Boolean(waiting.question));
+    await h.session.reload();
+    assert.ok(h.notices.some(notice => notice.type === 'warning' && notice.text.includes('earlier pi-suite load')));
+    await assert.rejects(invoke(h, 'agent_start', {prompt: 'new run'}), /RUNTIME_UNAVAILABLE/);
+    await assert.rejects(invoke(h, 'agent_send', {id: finished.record.id, message: 'resume'}), /RUNTIME_UNAVAILABLE/);
+    await assert.rejects(invoke(h, 'agent_workflow', {script: script('return 1;')}), /RUNTIME_UNAVAILABLE/);
+    const reply = await invoke(h, 'agent_send', {id: waiting.record.id, message: 'yes'});
+    assert.equal((reply.details as {action: string}).action, 'answered');
+    assert.equal((await waiting.done.promise).result, 'answered');
+    await h.manager.stop(workflow.id);
+    await h.idle();
+    assert.equal(h.agents.busy(), false);
+    await h.session.reload();
+    assert.notEqual(agentRuntime().owner, h.agents);
+    assert.notEqual(workflowRuntime().owner, h.manager);
+    assert.equal(workflowRuntime().owner.agents, agentRuntime().owner);
+    assert.ok(h.agents.closed && h.manager.closed);
+    assert.equal(agentRuntime().owner.get(finished.record.id).record.runId, finished.record.runId);
+    assert.equal(workflowRuntime().owner.get(workflow.id).status, 'killed');
+  } finally { await h.cleanup(); }
 });
 
 test('saved workflow precedence/trust/packages, malformed journals and persistence errors stay explicit', {timeout: 15000}, async () => {

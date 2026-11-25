@@ -39,7 +39,7 @@ async function setup() {
     pi.events.on('subagents:ready', () => ready++);
     pi.on('session_start', (_event, context) => { ctx = context; });
   } });
-  return { ...h, root, get events() { return events; }, get ctx() { return ctx; }, manager: agentRuntime(), ready: () => ready,
+  return { ...h, root, get events() { return events; }, get ctx() { return ctx; }, manager: agentRuntime().owner, ready: () => ready,
     async cleanup() { await h.dispose(); rmSync(root, { recursive: true, force: true }); } };
 }
 

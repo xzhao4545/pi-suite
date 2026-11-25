@@ -29,7 +29,7 @@ export class AgentRpc {
         const captured = binding.current;
         if (!captured) throw new Error('No active session');
         const { request, options } = normalizeSpawn(type, prompt, raw);
-        const run = await manager.start(request, agents.scope(captured.ctx), this.config(), undefined, options);
+        const run = await agents.admit().start(request, agents.scope(captured.ctx), this.config(), undefined, options);
         await manager.awaitStartup(run);
         return { id: run.record.id };
       },

@@ -22,7 +22,7 @@ async function setup() {
   writeFileSync(join(root, 'agents', 'archive.md'), `---\nname: archive\nsession_dir: ${customDir}\nextensions: false\nskills: false\n---\nARCHIVE_CHILD`);
   let ctx!: ExtensionContext;
   const source = await host({ root, persisted: true, extend: pi => { pi.on('session_start', (_event, context) => { ctx = context; }); } });
-  const sourceManager = agentRuntime(), config = loadConfig(root, root);
+  const sourceManager = agentRuntime().owner, config = loadConfig(root, root);
   source.faux.setResponses([fauxAssistantMessage('parent seed')]); await source.session.prompt('seed durable parent');
   source.faux.setResponses(['first saved answer', 'second saved answer', 'ordinary saved answer', 'workflow saved answer', 'other workspace answer'].map(value => fauxAssistantMessage(value)));
   const first = await sourceManager.start({ type: 'archive', prompt: 'first saved prompt', background: false,
@@ -39,7 +39,7 @@ async function setup() {
   await source.dispose();
   const h = await host({ root, persisted: true, tools: ['agent_list', 'agent_get', 'agent_read', 'agent_send', 'agent_stop'],
     extend: pi => { pi.on('session_start', (_event, context) => { ctx = context; }); } });
-  const manager = agentRuntime();
+  const manager = agentRuntime().owner;
   const invoke = async (name: string, params: object) => h.session.getToolDefinition(name)!.execute('history-query', params, new AbortController().signal, undefined, ctx as never);
   return { ...h, root, customDir, target, ctx, manager, config, previous, foreign, ordinary, workflow, outside, invoke,
     async cleanup() { await h.dispose(); rmSync(root, { recursive: true, force: true }); } };

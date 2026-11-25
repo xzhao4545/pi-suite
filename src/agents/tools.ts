@@ -44,13 +44,14 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
     parameters: startSchema,
     async execute(_id, params, signal, _update, ctx) {
       if (signal?.aborted) throw signal.reason;
+      const manager = agents.admit();
       const { schedule, ...request } = params;
       if (schedule !== undefined) {
         if (!scheduler || !config().agents.scheduling) throw new ToolError('INVALID_ARGS', 'Scheduling is disabled');
         const job = await scheduler.add(request, schedule, ctx, signal);
         return text([`${job.id} ${job.scheduleType} · next ${job.nextRun}`], { schedule: job });
       }
-      const run = await agents.manager.start(request, agents.scope(ctx), config());
+      const run = await manager.start(request, agents.scope(ctx), config());
       // A mention clone has no real parent tool-call ID. Its transient result cannot
       // consume the child's answer, even when frontmatter selects a foreground run.
       if (!_id) { run.notifyResult = true; agents.manager.changed(); }
@@ -145,7 +146,7 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
     async execute(_id, params, signal, _update, ctx) {
       const scope = agents.scope(ctx);
       await agents.manager.lookup(params.id, scope, config(), undefined, signal);
-      const result = await agents.manager.send(params.id, params.message, scope, config());
+      const result = await agents.admitSend(params.id).send(params.id, params.message, scope, config());
       return text([summaryLine(agents.manager.view(result.run)), `action: ${result.action}`], { agent: agentSummary(agents.manager.view(result.run)), action: result.action });
     } }, 'initial');
   registerBoundTool(pi, { name: 'agent_stop', ...stopRenderers, label: 'Stop agent',

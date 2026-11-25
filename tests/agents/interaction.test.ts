@@ -15,7 +15,7 @@ async function setup() {
   const root = agentDir(); let ctx!: ExtensionContext;
   const h = await host({ root, tools: ['agent_start', 'agent_send', 'agent_read', 'agent_list', 'agent_get', 'wait'],
     extend: pi => { pi.on('session_start', (_event, context) => { ctx = context; }); } });
-  return { ...h, root, ctx, manager: agentRuntime(), config: loadConfig(root, root),
+  return { ...h, root, ctx, manager: agentRuntime().owner, config: loadConfig(root, root),
     invoke: (name: string, params: object, signal = new AbortController().signal) => h.session.getToolDefinition(name)!.execute('interaction', params, signal, undefined, ctx as never),
     notices: () => h.session.sessionManager.getBranch().filter(entry => entry.type === 'custom_message' && entry.customType === 'pi-suite:notification'),
     async cleanup() { await h.dispose(); rmSync(root, { recursive: true, force: true }); } };

@@ -24,7 +24,7 @@ test('foreground handoff wakes its real caller, transfers pool charges and prese
   };
   const h = await host({root, tools: ['agent_start', 'wait'], responses: Array(12).fill(response),
     extend: pi => { pi.on('session_start', (_event, context) => { ctx = context; }); }});
-  const manager = agentRuntime(), abort = new AbortController();
+  const manager = agentRuntime().owner, abort = new AbortController();
   const start = (prompt: string, signal: AbortSignal) => h.session.getToolDefinition('agent_start')!.execute(prompt,
     {prompt, background: false}, signal, undefined, ctx as never);
   try {

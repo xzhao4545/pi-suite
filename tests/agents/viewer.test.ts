@@ -78,7 +78,7 @@ test('viewer answers workflow questions, preserves search through input and requ
       assert.ok(!visibleActions(view).includes('Stop subtree')); view.handleInput('x'); view.handleInput('x'); view.handleInput('\x1b');
     }];
     const ctx = scripted(h.ctx, steps);
-    await showAgent(ctx, {manager: h.manager, renderer: () => undefined, scope: context => ({ctx: context})}, new Dock(), run.record.id, run.record.runId, () => h.config);
+    await showAgent(ctx, {manager: h.manager, admitSend: () => h.manager, renderer: () => undefined, scope: context => ({ctx: context})}, new Dock(), run.record.id, run.record.runId, () => h.config);
     assert.equal(steps.length, 0); assert.equal(run.record.state, 'stopped');
     assert.ok(h.notices.some(notice => /cleanup confirmed/.test(notice.text)));
   } finally { gate.resolve(); await h.cleanup(); }
@@ -86,7 +86,7 @@ test('viewer answers workflow questions, preserves search through input and requ
 
 test('viewer b hands off a real foreground caller and leaves the child running', {timeout: 15000}, async () => {
   const h = await setup(), gate = Promise.withResolvers<void>(), entered = Promise.withResolvers<void>();
-  const manager = agentRuntime();
+  const manager = agentRuntime().owner;
   try {
     h.faux.setResponses([async () => { entered.resolve(); await gate.promise; return fauxAssistantMessage('background result'); }, fauxAssistantMessage('parent received')]);
     const pending = h.session.getToolDefinition('agent_start')!.execute('viewer-start', {prompt: 'foreground task', background: false}, new AbortController().signal, undefined, h.ctx as never);
@@ -96,7 +96,7 @@ test('viewer b hands off a real foreground caller and leaves the child running',
       assert.equal(run.record.background, true); assert.equal(run.controller.signal.aborted, false);
       assert.ok(!visibleActions(view).includes('Background')); view.handleInput('\x1b');
     }];
-    await showAgent(scripted(h.ctx, steps), {manager, renderer: () => undefined, scope: context => ({ctx: context})}, new Dock(), run.record.id, run.record.runId, () => h.config);
+    await showAgent(scripted(h.ctx, steps), {manager, admitSend: () => manager, renderer: () => undefined, scope: context => ({ctx: context})}, new Dock(), run.record.id, run.record.runId, () => h.config);
     assert.equal(((await pending).details as {backgrounded: boolean}).backgrounded, true); assert.equal(run.settled, undefined);
     gate.resolve(); assert.equal((await run.done.promise).state, 'completed');
   } finally { gate.resolve(); await h.cleanup(); }
@@ -135,7 +135,7 @@ test('viewer refreshes every streaming identity in child cwd and refuses late in
       view.handleInput('\x1b'); view.handleInput('\x1b');
     }];
     const ctx = scripted(h.ctx, steps);
-    await showAgent(ctx, {manager: h.manager, renderer: () => undefined, scope: context => ({ctx: context})}, new Dock(), run.record.id, run.record.runId, () => h.config);
+    await showAgent(ctx, {manager: h.manager, admitSend: () => h.manager, renderer: () => undefined, scope: context => ({ctx: context})}, new Dock(), run.record.id, run.record.runId, () => h.config);
     assert.equal(h.faux.state.callCount, 2); assert.ok(!h.notices.some(notice => /no longer accepts messages/.test(notice.text)));
     resumedGate.resolve(); await resumed!.run.done.promise;
   } finally { gate.resolve(); resumedGate.resolve(); await h.cleanup(); }

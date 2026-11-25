@@ -1,6 +1,8 @@
 # 宿主、资源与记录
 
-WorkflowManager 按 agentDir 保存在进程级运行时中；WorkflowsModule 按当前会话与分支绑定读取、等待、Dock 和通知。运行在准入时捕获 cwd、模型目录、thinking、项目信任、系统提示与 owner/anchor；reload、new、resume 和树导航只更换监听绑定。Pi 1.5 的 ExtensionContext 在替换会话后失效，后台执行使用捕获的父级事实。
+WorkflowManager 按 agentDir 保存在进程级运行时中；WorkflowsModule 按当前会话与分支绑定读取、等待、Dock 和通知。运行在准入时捕获 cwd、模型目录、thinking、项目信任、系统提示与 owner/anchor。Pi 1.5 的 ExtensionContext 在替换会话后失效，后台执行使用捕获的父级事实。
+
+Workflow 从写入初始快照到完成最终结算都占用 workflow 和 agents owner，包括暂停期间。`/reload` 遵循[执行 owner 规则](../../runtime/index.md#会话和通知)。任一 owner 来自先前加载且仍需保留时，Workflow 的新启动与 journal 重放返回 `RUNTIME_UNAVAILABLE`；暂停、继续、停止和读取仍可使用。
 
 ## Child 与 gate
 

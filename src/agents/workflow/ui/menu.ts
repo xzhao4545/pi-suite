@@ -32,7 +32,7 @@ async function controlWorkflow(action: string, ctx: ExtensionContext, deps: Deps
   else if (action === 'Resume') await manager.resume(task.id);
   else if (action === 'Stop') await manager.stop(task.id);
   else if (action === 'Replay journal') {
-    const replay = await manager.start({scriptPath: task.scriptPath, args: task.args, resumeFromRunId: task.id}, deps.agents.scope(ctx), deps.config());
+    const replay = await deps.workflows.admit().start({scriptPath: task.scriptPath, args: task.args, resumeFromRunId: task.id}, deps.agents.scope(ctx), deps.config());
     await showWorkflow(ctx, deps, replay, navigation);
   }
 }
@@ -135,10 +135,11 @@ export async function showWorkflows(ctx: ExtensionContext, deps: Deps, page: Wor
     if (!source.ok) throw new Error(source.message);
     if (action === 'View script') await showDetails(ctx, deps.dock, selected, `\`\`\`javascript\n${source.script}\n\`\`\``, 'markdown', navigation);
     else if (action === 'Start') {
+      const manager = deps.workflows.admit();
       const input = await ctx.ui.input('Workflow args (JSON; empty uses no args)');
       if (input === undefined) continue;
       const args: unknown = input.trim() ? JSON.parse(input) : undefined;
-      const task = await deps.workflows.manager.start({name: selected, args}, deps.agents.scope(ctx), deps.config());
+      const task = await manager.start({name: selected, args}, deps.agents.scope(ctx), deps.config());
       await showWorkflow(ctx, deps, task, navigation);
     }
   }

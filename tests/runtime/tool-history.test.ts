@@ -160,7 +160,7 @@ test('actual loader resolves historical renderers before binding, during reload 
     // childSuite and use the admitted config snapshot, even for a different execution directory.
     const target = join(root, 'child-target'); mkdirSync(join(target, '.pi'), { recursive: true });
     mkdirSync(join(root, '.pi'), { recursive: true });
-    const manager = agentRuntime();
+    const manager = agentRuntime().owner;
     for (const highlightEnabled of [true, false]) {
       writeFileSync(join(target, '.pi', 'pi-suite.json'), JSON.stringify({ ui: { highlightBuiltinCommands: !highlightEnabled } }));
       // Ordinary runs refresh their snapshot at slot admission, from configCwd on disk.

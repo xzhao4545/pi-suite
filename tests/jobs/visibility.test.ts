@@ -37,7 +37,7 @@ test('SDK session list and activity share branch and creator scope across workin
   const h = await host({root, tools: ['job_list', 'job_read', 'job_write'], extend: pi => {
     pi.on('session_start', (_event, context) => { ctx = context; });
   }});
-  const agents = agentRuntime(), config = loadConfig(root, root), runtime = acquireRuntime(root);
+  const agents = agentRuntime().owner, config = loadConfig(root, root), runtime = acquireRuntime(root);
   assert.equal(runtime.mode, 'active'); if (runtime.mode !== 'active') throw new Error('jobs unavailable');
   const jobs = runtime.manager;
   h.faux.setResponses(Array(40).fill((context => {
