@@ -66,7 +66,7 @@ README（中英文）、`docs/en`、`docs/zh` 用户文档首版、MIT `LICENSE`
 
 ## 相关 current 文档
 
-[当前文档索引](../current/index.md)、[执行任务](../current/jobs/index.md)、[目标操作](../current/goal/operations.md)、[Workflow 操作](../current/agents/workflow/operations.md)
+[当前文档索引](../../current/index.md)、[执行任务](../../current/jobs/index.md)、[目标操作](../../current/goal/operations.md)、[Workflow 操作](../../current/agents/workflow/operations.md)
 
 ## 任务列表
 
@@ -75,5 +75,5 @@ README（中英文）、`docs/en`、`docs/zh` 用户文档首版、MIT `LICENSE`
 - [x] 改代码三项
 - [x] 用户文档修正（中英文同步）
 - [x] doc/current 与 AGENTS.md 修正
-- [ ] 链接检查、typecheck 与受影响测试
-- [ ] 交付审阅
+- [x] 链接检查、typecheck 与受影响测试
+- [x] 交付审阅

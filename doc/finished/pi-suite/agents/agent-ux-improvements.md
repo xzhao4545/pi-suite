@@ -76,4 +76,4 @@
 - [x] 2 一个 agent 一行（Runs 页与 Dock）
 - [x] 3 网络或上游错误自动恢复
 - [x] 4 wait 显示时长
-- [ ] 同步 doc/current 与 docs
+- [x] 同步 doc/current 与 docs

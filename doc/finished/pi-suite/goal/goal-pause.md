@@ -34,7 +34,7 @@
 
 ## 相关 current 文档
 
-[Goal 生命周期](../current/goal/lifecycle.md)、[请求与续跑](../current/goal/context.md)、[Goal 操作](../current/goal/operations.md)
+[Goal 生命周期](../../../current/goal/lifecycle.md)、[请求与续跑](../../../current/goal/context.md)、[Goal 操作](../../../current/goal/operations.md)
 
 ## 任务列表
 

@@ -10,7 +10,7 @@
 | `args?` | 任意 JSON 值，原样传给脚本 |
 | `resumeFromRunId?` | `wf_` 加 12 位十六进制，见 [恢复运行](#恢复运行) |
 
-工具总在后台启动运行。初始文件写入后立即返回摘要行（含 workflow ID）、最后一条日志和 `resultPath`；details 包含 `id`、真实`status`、`scriptPath`、`resultPath` 与 `resumedFrom`。运行结束时通过统一通知告知模型。
+工具总在后台启动运行。初始文件写入后立即返回摘要行（含 workflow ID）、最后一条日志和 `resultPath`；details 包含 `id`、真实`status`、`scriptPath`、`resultPath`、`resumedFrom`，以及启动时的进度快照 `snapshot`（`data` 为 workflow 条目数据，`capturedAt` 为捕获时间）。运行结束时通过统一通知告知模型。
 
 工具描述（`src/agents/workflow/tool-description.ts`，约 1 KB）只写调用前提、参数、后台返回与完成通知，并要求编写或修改脚本前先读 `pi-suite-workflow` skill。调用前提：用户明确要求 workflow/编排、用户调用的 skill 或命令要求使用该工具，或要求运行保存的 workflow；其余情况使用 agent_start，或先说明方案与大致成本并征求同意。绑定会话时描述末尾填入当前启用的 agent 类型名称，不附类型说明；完整说明见 `/subagents types`。
 
@@ -18,7 +18,7 @@
 
 ## 工具行与等待
 
-- 折叠、展开与错误显示使用[公共工具行](../operations.md#工具显示)。Workflow 展开项包括脚本或 `scriptPath`、`resultPath`、阶段、child、尝试、日志和完整结果；用量行显示 tokens、tools 和 replayed 计数。
+- 折叠、展开与错误显示使用[公共工具行](../operations.md#工具显示)。Workflow 展开项包括脚本或 `scriptPath`、`resultPath`、阶段、child、尝试、日志和完整结果；用量行显示 tokens、tools 和 replayed 计数。进程中有同 ID 的运行时显示实时进度；没有时按 `snapshot` 显示，用时停在 `capturedAt`；没有快照的历史结果只显示 ID 和状态。
 - `wait({"ids":["wf_…"]})` 使用[公共等待规则](../../runtime/tools.md)。运行结束后用 `read` 读取 `resultPath` 获取完整输出。
 
 ## /subagents workflows

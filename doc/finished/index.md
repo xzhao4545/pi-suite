@@ -6,6 +6,11 @@
 
 以下 patched 宿主 UI/入口记录保留迁移前开发依赖组合的审计与验收细节，不作为现状或消费者安装证明。U1/T1/M1、净化及三组补丁清理已实施，当前官方未修改 Pi 1.5.0 的加载/运行范围见 [官方 Pi 插件兼容实施](./pi-suite/official-pi-compatibility/index.md)；消费者安装按用户指示 [延期](./pi-suite/official-pi-compatibility/index.md#状态与执行权限)，未实际 npm 发布。
 
+- [工具与通知渲染完善](./pi-suite/ui/render-coverage.md) — 通知按来源折叠、job 屏幕共用渲染、Transcript 使用注册的渲染器、StructuredOutput 与错误折叠、展开只显示 details 字段、workflow 快照回放、Details 着色；全量 260/260 与 typecheck 通过。
+- [Agent UX 改进](./pi-suite/agents/agent-ux-improvements.md) — Runs 页恢复已结束的 agent、同一 agent 只占一行、网络或上游错误自动恢复同一 agent、wait 显示等待时长。
+- [Goal 暂停与用户轮](./pi-suite/goal/goal-pause.md) — 暂停只停止自动续跑，按暂停原因决定用户消息是否恢复。
+- [用户文档首版与审查修正](./pi-suite/user-docs-review.md) — README 与 docs 中英文、MIT 许可，独立模型审查及代码与文档修正。
+
 - [Subagent 与 Workflow 执行 owner 跨加载替换](./pi-suite/agents/execution-owner-reload.md) — 忙时保留执行与控制、空闲替换和持久记录恢复，官方 Pi CLI 启动与同进程 `/reload` 验证。
 - [Goal 单一当前状态与缓存友好上下文](./pi-suite/goal/goal-state-context/index.md) — 每会话一份当前状态、tree 分支不回滚、稳定持久说明/控制与自然边界提醒；官方 Pi 1.5.0 SDK/CLI、本地 Responses 完整前缀及存储/绑定链路验证，不追加收费请求。
 - [UI 文案、Goal 状态与 Responses 跨资源恢复](./pi-suite/goal/goal-responses-recovery.md) — 三态、恢复展示和跨资源 ID 隔离已实施，保留 Linux 官方 Pi 1.5.0 的验收结果；真实上游密文解密及 Windows 新交互未验证。

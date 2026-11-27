@@ -5,11 +5,7 @@
 ## 任务索引
 
 - [Dock 显示修正](./dock-display.md) — 运行时间每秒刷新与单位显示、token 紧凑显示、Agents 行显示模型；Tasks 分区按组 ID 排序并只展开焦点组。
-- [用户文档首版与审查修正](./user-docs-review.md) — README 与 docs 中英文、MIT 许可；审查发现的代码与文档修正。
-- [Goal 暂停与用户轮](./goal-pause.md) — 暂停只停止自动续跑；按暂停原因决定用户消息是否恢复。
 - [文本整理](./text-cleanup.md) — doc/current、模型可见文本、UI 文本与注释按统一写作标准整理。
-- [Agent UX 改进](./agent-ux-improvements.md) — Runs 页恢复已结束的 agent；同一 agent 只占一行；网络或上游错误自动恢复同一 agent；wait 显示等待时长。
-- [工具与通知渲染完善](./render-coverage.md) — 通知按来源折叠渲染；job 屏幕共用渲染；Transcript 使用注册的渲染器；StructuredOutput 渲染；错误折叠。
 
 ## 规则
 
