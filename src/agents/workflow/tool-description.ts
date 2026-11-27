@@ -17,14 +17,16 @@
  * the current session. Names only: the built-in type descriptions alone exceed this
  * whole description, and agent_start likewise lists names without descriptions.
  */
-export const workflowToolDescription = `Execute a workflow script that orchestrates multiple subagents deterministically.
+export const workflowToolDescription = `Run a JavaScript workflow to coordinate subagents.
 
-ONLY call this tool when the user has explicitly opted into multi-agent orchestration: asked for a workflow or orchestration in their own words, invoked a skill/command that tells you to call agent_workflow, or requested a saved workflow. Otherwise use agent_start, or describe the workflow and rough cost and ask.
+Call only if the user requests a workflow or orchestration, invokes a skill or command that requires this tool, or requests a saved workflow. Otherwise use agent_start, or explain the plan and rough cost and ask for approval.
 
-Before writing or editing a script, read the pi-suite-workflow skill.
+Read the pi-suite-workflow skill before you write or edit a workflow script.
 
-Pass exactly one of script (inline plain JavaScript beginning with \`export const meta = {...}\`), scriptPath (persisted/edited script) or name (saved workflow). args: JSON value passed verbatim to the script; use arrays/objects, not JSON-encoded strings. resumeFromRunId: a finished wf_ run in this session; reuse its unchanged successful agent() prefix.
+- Choose one source: script (inline JavaScript with \`export const meta = {...}\`), scriptPath (relative to the working directory or absolute), or name (saved workflow).
+- args: optional JSON value. Pass arrays and objects directly.
+- resumeFromRunId: optional finished wf_ run on the current session branch. Reuse its unchanged, successful agent() prefix.
 
-Runs in the background; returns immediately with a wf_ ID and resultPath (scriptPath in details). You are notified when it completes.
+Starts in the background. Returns a wf_ ID and resultPath; details include the saved scriptPath. On completion, use read on resultPath for the full result.
 
-Enabled agentType values: {{typeList}}`;
+Enabled agentType names: {{typeList}}`;

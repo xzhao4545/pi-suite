@@ -14,13 +14,15 @@ export async function resolveWorkspace(cwd: string): Promise<Workspace> {
     root = await realpath(cwd);
     if (!(await stat(root)).isDirectory()) throw new Error('cwd is not a directory');
   } catch (error) { throw new ToolError('INVALID_CWD', String(error)); }
+  let stdout: string | undefined;
   try {
-    const { stdout } = await execute(process.platform === 'win32' ? 'git.exe' : 'git',
-      ['-C', root, 'rev-parse', '--show-toplevel'], { timeout: 3000, windowsHide: true, env: { ...process.env, LC_ALL: 'C' } });
+    ({ stdout } = await execute(process.platform === 'win32' ? 'git.exe' : 'git',
+      ['-C', root, 'rev-parse', '--show-toplevel'], { timeout: 3000, windowsHide: true, env: { ...process.env, LC_ALL: 'C' } }));
     root = await realpath(stdout.trim());
   } catch (error) {
     const failure = error as NodeJS.ErrnoException & { stderr?: string };
-    if (!failure.stderr?.trim().startsWith('fatal: not a git repository')) {
+    // Git is optional for jobs; if no repository can be queried, keep the canonical cwd.
+    if (stdout !== undefined || (failure.code !== 'ENOENT' && !failure.stderr?.trim().startsWith('fatal: not a git repository'))) {
       throw new ToolError('WORKSPACE_QUERY_FAILED', String(error));
     }
   }

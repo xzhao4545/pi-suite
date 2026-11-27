@@ -10,7 +10,7 @@ export function installExtensionToolScope(
     disallowedSet: Set<string> | undefined;
     extNames: Set<string>;
     narrowing: Map<string, Set<string>>;
-    /** Bare `mcp__` entries from `tools:`; undefined leaves MCP tools to the rules above. */
+    /** MCP patterns from tools; undefined leaves MCP tools to the ordinary selection rules. */
     mcpToolPatterns: string[] | undefined;
     /** Selected injected tools, including parent questions, nested delegation and memory. */
     readmitToolNames: Set<string>;
@@ -24,10 +24,8 @@ export function installExtensionToolScope(
   // Resolve file/package aliases once, rather than re-read manifests on every tool invocation.
   const aliases = new Map(loader.getExtensions().extensions.map(extension => [extension.path, extensionCanonicalNames(extension.path)]));
 
-  // The names allowed right now. Mirrors the `ext:` opt-in flip: when any `ext:`
-  // selector is present, extension tools become an explicit allowlist — a loaded
-  // extension not named by a selector contributes nothing (its handlers still ran),
-  // and `ext:foo/bar` narrows `foo` to just `bar`.
+  // Any ext: selector turns extension tools into an allowlist: an unnamed extension still
+  // loads and runs its handlers but contributes no tools, and ext:foo/bar narrows foo to bar.
   const inScope = (): Set<string> => {
     const denied = (name: string) => matchesToolPattern(name, [...disallowedSet ?? []]);
     const keep = new Set(session.getAllTools().map(tool => tool.name).filter(name => matchesToolPattern(name, toolNames) && !denied(name)));
@@ -38,8 +36,7 @@ export function installExtensionToolScope(
       if (extension.path === '<inline:pi-suite-child>' || extension.path === '<inline:pi-suite-scope>') continue;
       const canons = aliases.get(extension.path)!;
       if (optInActive && !canons.some((c) => extNames.has(c))) continue;
-      // First alias that carries a narrowing set — a user won't narrow one
-      // extension under two different names, so first-match is correct.
+      // First narrowing alias wins: one extension is not narrowed under two different names.
       const narrowed = canons.map((c) => narrowing.get(c)).find(Boolean);
       for (const name of extension.tools.keys()) {
         if (narrowed && !narrowed.has(name)) continue;
@@ -65,10 +62,8 @@ export function installExtensionToolScope(
         }
       }
     }
-    // Injected tools are legitimately active for this agent — re-admit them so
-    // the renarrow keeps them in the active set and beforeToolCall doesn't
-    // block them. Already vetted against `disallowed_tools` by the caller,
-    // which is the only place that knows which kind may be taken back.
+    // Injected tools (parent questions, nested delegation, memory) belong to this agent even
+    // when tools: omits them. The caller already applied disallowed_tools to this set.
     for (const name of readmitToolNames) if (!denied(name)) keep.add(name);
     return keep;
   };
@@ -123,7 +118,7 @@ export function installExtensionToolScope(
     if (!inScope().has(context.toolCall.name)) {
       return {
         block: true,
-        reason: `Tool "${context.toolCall.name}" is not available to this subagent.`,
+        reason: `Tool "${context.toolCall.name}" is not available to this subagent. Use one of your listed tools.`,
       };
     }
     return priorBeforeToolCall?.(context, signal);
@@ -133,15 +128,9 @@ export function installExtensionToolScope(
 /** Set once the child's tool scope is installed; until then the gate admits everything. */
 export type NestedCallGate = { allows?: (name: string) => boolean };
 
-/**
- * Inline extension that applies the subagent's tool scope to calls a tool makes
- * through `ctx.executeTool()` — codemode scripts calling MCP tools. pi runs those
- * past extensions' `tool_call` handlers only, never `agent.beforeToolCall`, and
- * every registered `codemode`/`deferred` tool is callable there whether or not
- * it is in scope.
- */
 const SCOPE_GATE_NAME = "pi-suite-scope";
 
+/** Pi sends ctx.executeTool calls (including codemode) through tool_call, not agent.beforeToolCall. */
 export function scopeGateExtension(gate: NestedCallGate): InlineExtension {
   return {
     name: SCOPE_GATE_NAME,
@@ -149,7 +138,7 @@ export function scopeGateExtension(gate: NestedCallGate): InlineExtension {
     factory: (ext) => {
       ext.on("tool_call", (event) =>
         gate.allows?.(event.toolName) === false
-          ? { block: true, reason: `Tool "${event.toolName}" is not available to this subagent.` }
+          ? { block: true, reason: `Tool "${event.toolName}" is not available to this subagent. Use one of your listed tools.` }
           : undefined,
       );
     },

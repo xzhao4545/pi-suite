@@ -22,8 +22,8 @@ import { startRenderers, listRenderers, getRenderers, readRenderers, sendRendere
 const id = objectId('agent', 'agent_3fa1c2d0'), runId = objectId('run', 'run_3fa1c2d0');
 const listSchema = Type.Object({ agentId: Type.Optional(id), ...listFields(['active', 'queued', 'finished', 'all'] as const) }, { additionalProperties: false });
 const getSchema = Type.Object({ id, runId: Type.Optional(runId), detail: Type.Optional(Type.Boolean()) }, { additionalProperties: false });
-const queryHint = 'List history: agent_list({"agentId":"agent_3fa1c2d0","state":"all"}); one run: agent_get({"id":"agent_3fa1c2d0"}).';
-export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits: WaitRegistry, config: () => SuiteConfig, scheduler?: AgentScheduler, jobs?: Pick<JobsModule, 'createdBy'>) {
+const queryHint = 'Use agent_list({agentId, state:"all"}) for history or agent_get({id, runId}) for one run.';
+export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits: WaitRegistry, config: () => SuiteConfig, scheduler: AgentScheduler | undefined, jobs: Pick<JobsModule, 'createdBy'>) {
   let scheduling = Boolean(scheduler && config().agents.scheduling);
   const startFields = { prompt: Type.String({ minLength: 1 }), type: Type.Optional(Type.String({ minLength: 1 })),
     name: Type.Optional(Type.String({ maxLength: 80 })), background: Type.Optional(Type.Boolean()),
@@ -36,9 +36,10 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
     return Type.Object(fields, { additionalProperties: false });
   };
   const startSchema = buildStartSchema();
-  const description = 'Start a same-process Pi child session. background=true (default) returns an ID immediately; false waits and returns early on any direct child question. ' +
-    'Types: general-purpose, Explore, Plan or a configured agent markdown file. Read with agent_read, answer/steer/resume with agent_send, stop its subtree with agent_stop, wait with wait. taskId requires taskGeneration from the source task_list; expired assignments cannot be resumed or rebound to reused IDs.';
-  const scheduleDescription = ' schedule registers a future job instead of starting now: six-field cron, interval 5m/1h, or one-shot +10m/ISO. Do not combine with background:false or inheritContext. Manage via /subagents schedules.';
+  const description = 'Start a child agent with a task prompt. Set type to general-purpose (default), Explore, Plan, or a configured type. ' +
+    'Background is the default and returns an ID; foreground waits for the result or a child question. The type can override background. ' +
+    'Use agent_read for output, agent_send to reply or resume, and agent_stop to stop. If you pass taskId, copy taskGeneration from task_list.';
+  const scheduleDescription = ' To schedule instead, pass schedule: six-field cron, an interval (5m), or a time (+10m or ISO). Omit inheritContext and do not set background:false. Manage in /subagents schedules.';
   const startTool: ToolDefinition<typeof startSchema> = { name: 'agent_start', ...startRenderers, label: 'Start agent',
     description: description + (scheduling ? scheduleDescription : ''),
     parameters: startSchema,
@@ -47,45 +48,51 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
       const manager = agents.admit();
       const { schedule, ...request } = params;
       if (schedule !== undefined) {
-        if (!scheduler || !config().agents.scheduling) throw new ToolError('INVALID_ARGS', 'Scheduling is disabled');
+        if (!scheduler || !config().agents.scheduling) throw new ToolError('INVALID_ARGS', 'Scheduling is disabled. Omit schedule to start now.');
         const job = await scheduler.add(request, schedule, ctx, signal);
         return text([`${job.id} ${job.scheduleType} · next ${job.nextRun}`], { schedule: job });
       }
       const run = await manager.start(request, agents.scope(ctx), config());
-      // A mention clone has no real parent tool-call ID. Its transient result cannot
-      // consume the child's answer, even when frontmatter selects a foreground run.
+      // A mention clone cannot deliver a foreground result to the parent.
       if (!_id) { run.notifyResult = true; agents.manager.changed(); }
       if (run.record.background || !_id) return text([summaryLine(agents.manager.view(run)), run.record.error], { agent: agentSummary(agents.manager.view(run)) });
-      // Esc cancels only the active foreground call. Returning for a question removes this
-      // listener, so answering the parent later can continue the same child in the background.
-      const abort = () => { if (!run.record.background) void agents.manager.stop(run.record.id, run.record.runId); };
+      // Bind Esc only while this tool call is waiting, so an early return leaves the child running.
+      let current = run;
+      const latest = () => { while (current.replacement) current = current.replacement; return current; };
+      const abort = () => {
+        const { record } = latest();
+        if (!record.background) void agents.manager.stop(record.id, record.runId);
+      };
       const waiter = new AbortController();
-      run.foreground = Promise.withResolvers<undefined>();
+      const foreground = run.foreground = Promise.withResolvers<undefined>();
       const waitSignal = signal ? AbortSignal.any([signal, waiter.signal]) : waiter.signal;
       signal?.addEventListener('abort', abort, { once: true });
       try {
-        if (signal?.aborted) { await agents.manager.stop(run.record.id, run.record.runId); throw signal.reason; }
+        if (signal?.aborted) { await agents.manager.stop(run.record.id, latest().record.runId); throw signal.reason; }
         let waiting;
         do {
-          waiting = await Promise.race([waits.wait([run.record.id], 'all', 3600000, waitSignal), run.foreground.promise]);
-          if (!waiting) return text([summaryLine(agents.manager.view(run)), 'Continuing in background; the result will be notified.',
-            `read: agent_read({"id":"${run.record.id}"})`], { agent: agentSummary(agents.manager.view(run)), backgrounded: true });
+          waiting = await Promise.race([waits.wait([run.record.id], 'all', 3600000, waitSignal), foreground.promise]);
+          if (!waiting) {
+            const record = agents.manager.view(latest());
+            return text([summaryLine(record), 'Continuing in background; the result will be notified.',
+              `read: agent_read({"id":"${record.id}"})`], { agent: agentSummary(record), backgrounded: true });
+          }
         }
-        while ((waiting.reason === 'other' || waiting.reason === 'event') && active(run.record.state));
-        const record = agents.manager.view(run);
+        while ((waiting.reason === 'other' || waiting.reason === 'event') && active(latest().record.state));
+        const record = agents.manager.view(latest());
         if (!active(record.state)) agents.consume({ ...agents.settlement(record.id), runId: record.runId });
-        else { run.notifyResult = true; agents.manager.changed(); }
+        else { latest().notifyResult = true; agents.manager.changed(); }
         return text([...waiting.reason !== 'condition' ? [`wait: ${waiting.reason}${waiting.pending.length ? ` · pending ${waiting.pending.join(', ')}` : ''}`] : [],
           ...waiting.results.map(item => item.summary), ...waiting.others.map(item => item.summary)], { agent: agentSummary(record), wait: waiting });
       } finally {
-        run.foreground = undefined;
+        latest().foreground = undefined;
         waiter.abort(new Error('Foreground caller released its wait'));
         signal?.removeEventListener('abort', abort);
       }
     } };
   registerBoundTool(pi, startTool, 'initial');
   registerBoundTool(pi, { name: 'agent_list', ...listRenderers, label: 'List agents',
-    description: 'List child runs. state=active (default), queued, finished or all; session scope shows direct children, workspace discovers saved records. agentId filters history and combines with all list fields. One run uses agent_get({id,runId?}).',
+    description: 'List child runs. state: active (default, excludes queued), queued, finished, or all. scope: session (direct children, default) or workspace (includes saved runs). Pass agentId to filter history; pass runId to agent_get to inspect one run.',
     parameters: listSchema, prepareArguments: checkedArguments(listSchema, queryHint),
     async execute(_id, params, signal, _update, ctx) {
       const scope = agents.scope(ctx);
@@ -102,12 +109,12 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
         nextCursor ? `more: agent_list(${JSON.stringify({ ...params, cursor: nextCursor })})` : undefined], { agents: page.map(agentSummary), nextCursor });
     } }, 'initial');
   registerBoundTool(pi, { name: 'agent_get', ...getRenderers, label: 'Agent',
-    description: 'Get current or specified run status, progress, model/thinking and task reference. detail:true adds configuration sources, usage and owned active jobs. Discover previous runIds with agent_list({agentId,state:"all"}); results/transcript use agent_read.',
+    description: 'Inspect the current run or a specific runId, including pending questions. Set detail:true for model sources, context, usage, and active jobs. Find run IDs with agent_list; read output with agent_read.',
     parameters: getSchema, prepareArguments: checkedArguments(getSchema, queryHint),
     async execute(_id, params, signal, _update, ctx) {
       const scope = agents.scope(ctx), { record, run } = await agents.manager.lookup(params.id, scope, config(), params.runId, signal);
       const lines = [summaryLine(record) + (!agents.manager.visible(record, scope) ? ' · read-only' : ''),
-        `model: ${record.model} · thinking: ${record.thinking} · turns ${record.turns ?? 0} · tools ${record.toolUses ?? 0}${record.taskId ? ` · task ${record.taskId} @ ${record.taskGeneration ?? 'unavailable (legacy link expired)'}` : ''}`,
+        `model: ${record.model} · thinking: ${record.thinking} · turns ${record.turns ?? 0} · tools ${record.toolUses ?? 0}${record.taskId ? ` · task ${record.taskId} @ ${record.taskGeneration ?? 'unavailable (assignment expired)'}` : ''}`,
         record.activity ? `activity: ${record.activity}` : undefined, record.error,
         run?.question ? questionText(run) : undefined];
       let created: JobSummary[] = [], jobsUnavailable: string | undefined;
@@ -118,9 +125,8 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
         // Explicit runId scopes ownership to that execution; an agent-level detail
         // must also reveal jobs left by earlier executions of this same agent.
         const roots = params.runId ? [record.runId] : agents.manager.records().filter(item => item.id === record.id).map(item => item.runId);
-        if (jobs) try { created = (await jobs.createdBy(roots)).filter(jobActive); }
+        try { created = (await jobs.createdBy(roots)).filter(jobActive); }
         catch (error) { if (!(error instanceof ToolError) || error.code !== 'RUNTIME_UNAVAILABLE') throw error; jobsUnavailable = error.message; }
-        else jobsUnavailable = 'Owned job query unavailable';
         lines.push(jobsUnavailable ? `jobs unavailable: ${jobsUnavailable}` : `jobs: ${created.length} active`,
           ...created.map(job => `${job.id} ${job.state} · cleanup ${job.cleanup.state}${job.cleanup.error ? ` · ${job.cleanup.error}` : ''}`));
       }
@@ -128,7 +134,7 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
         waitingFor: run?.question ? 'parent' : undefined });
     } }, 'initial');
   registerBoundTool(pi, { name: 'agent_read', ...readRenderers, label: 'Read agent',
-    description: 'Read result (default when settled) or transcript (default while active). runId selects a previous execution of the same agent. Byte paging and regex search follow job_read; reading never resumes a model.',
+    description: 'Read output without resuming. stream defaults to transcript until the run ends, then result. Pass runId for an earlier run. Byte paging and regex search work like job_read.',
     parameters: Type.Object({ id, runId: Type.Optional(runId), stream: Type.Optional(Type.Union([Type.Literal('result'), Type.Literal('transcript')])), ...readFields }, { additionalProperties: false }),
     async execute(_id, params, signal, _update, ctx) {
       rejectContextWithoutSearch(params);
@@ -141,7 +147,7 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
         page.endOfStream ? undefined : `more: agent_read(${JSON.stringify({ id: record.id, runId: record.runId, stream, ...readContinuation(params, page.nextOffset) })})`], { ...page, stream, agent: agentSummary(record) });
     } }, 'initial');
   registerBoundTool(pi, { name: 'agent_send', ...sendRenderers, label: 'Send to agent',
-    description: 'Answer a waiting child, steer an active child, queue during creation or resume a settled session as a new run. Answers match option IDs/titles or use freeform; batch answers are a JSON array of strings. Only the direct parent may send.',
+    description: 'Send to a direct child: answer, steer, queue a message, or resume a finished session. Answer with text or an exact option ID/title. For multiple selections use a JSON array of IDs/titles; for a batch use a JSON array with one answer per question.',
     parameters: Type.Object({ id, message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
     async execute(_id, params, signal, _update, ctx) {
       const scope = agents.scope(ctx);
@@ -150,12 +156,12 @@ export function registerAgentTools(pi: ExtensionAPI, agents: AgentsModule, waits
       return text([summaryLine(agents.manager.view(result.run)), `action: ${result.action}`], { agent: agentSummary(agents.manager.view(result.run)), action: result.action });
     } }, 'initial');
   registerBoundTool(pi, { name: 'agent_stop', ...stopRenderers, label: 'Stop agent',
-    description: 'Stop the child, its nested sessions and every job they created. Without runId includes jobs left by earlier runs; runId limits the subtree. Join repeated stops, await real abort/cleanup and retain transcript.',
+    description: 'Stop an agent and its descendants, and clean up their active jobs, including jobs left by earlier runs. Pass runId to limit cleanup to that run and its descendants. Waits for abort and cleanup, then reports both states.',
     parameters: Type.Object({ id, runId: Type.Optional(runId) }, { additionalProperties: false }),
     async execute(_id, params, signal, _update, ctx) {
       const scope = agents.scope(ctx);
       const { record } = await agents.manager.lookup(params.id, scope, config(), params.runId, signal);
-      if (scope.run && !agents.manager.visible(record, scope)) throw new ToolError('NOT_OWNER', `${params.id} is not a direct child of this run`);
+      if (scope.run && !agents.manager.visible(record, scope)) throw new ToolError('NOT_OWNER', `${params.id} is not your direct child. Pick a child from agent_list.`);
       const outcome = await agents.manager.stop(params.id, params.runId);
       return text([`${params.id} ${outcome.state} · cleanup ${outcome.cleanup} · ${record.runId} · requested ${outcome.requested}`,
         ...outcome.affected.map(item => `${item.id} ${item.state}${item.cleanup ? ` · ${item.cleanup}` : ''}`)], { ...outcome, runId: record.runId, name: record.name });

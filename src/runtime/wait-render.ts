@@ -1,6 +1,7 @@
 import { agentDisplayName } from '../agents/registry.ts';
 import { sanitizeText } from './text.ts';
 import { toolRenderers, stateLine } from '../ui/tool-render.ts';
+import { elapsedText } from '../ui/format.ts';
 import type { WaitResult } from './wait.ts';
 
 export const waitRenderers = toolRenderers<{ ids: string[] }, WaitResult>({
@@ -29,4 +30,4 @@ export const waitRenderers = toolRenderers<{ ids: string[] }, WaitResult>({
       title: agentDisplayName(item.id, item.runId), meta: [{ text: item.state, tone: stateLine(item.state).tone! }] })),
     ...[...data.results, ...data.others].filter(item => item.state === 'failed').map(item => ({ label: 'error', value: item.summary, tone: 'error' as const })), display];
   },
-});
+}, { timing: elapsedText });

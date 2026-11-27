@@ -32,7 +32,7 @@ export const newOutputHint = (theme?: Theme, compact = false) => compact ? `${pa
 export function readerHeading(title: string, position: string, hasNewOutput: boolean, width: number, theme?: Theme, active?: boolean): string {
   const suffix = (compact: boolean) => `${paint('muted', ` · ${position}`, theme)}${hasNewOutput ? ` · ${newOutputHint(theme, compact)}` : ''}`;
   const tail = width - visibleWidth(suffix(false)) >= 16 ? suffix(false) : suffix(true);
-  const shownTitle = truncateToWidth(title, Math.max(0, width - visibleWidth(tail) - (active === undefined ? 0 : 2)));
+  const shownTitle = truncateToWidth(sanitizeText(title).replace(/[\n\t]/g, ' '), Math.max(0, width - visibleWidth(tail) - (active === undefined ? 0 : 2)));
   const caption = (active === undefined ? heading(shownTitle, theme) : focusLabel(shownTitle, active, theme)) + tail;
   return active === undefined ? truncateToWidth(caption, width) : ruled(caption, width, active, theme);
 }
@@ -56,8 +56,21 @@ export const selectedRow = (text: string, width: number, theme?: Theme, active =
 const stateTones: Record<string, ThemeColor> = { running: 'success', starting: 'success', waiting: 'warning', 'waiting(parent)': 'warning',
   'cleanup pending': 'warning', 'cleanup unconfirmed': 'warning', stopping: 'warning', queued: 'warning',
   failed: 'error', limited: 'error', timed_out: 'error', completed: 'dim', stopped: 'dim', doing: 'success', blocked: 'warning', done: 'dim',
-  enabled: 'success', disabled: 'dim', paused: 'warning', todo: 'accent' };
+  enabled: 'success', disabled: 'dim', paused: 'warning', todo: 'accent', success: 'success', error: 'error' };
 export const stateTone = (state: string): ThemeColor | undefined => stateTones[state];
+
+const detailTones = { label: 'muted', id: 'accent', meta: 'dim', number: 'toolOutput', error: 'error' } as const;
+export interface DetailPart extends Pick<DisplayField, 'text' | 'state'> {
+  role?: 'heading' | keyof typeof detailTones;
+}
+export function detailPartText(part: DetailPart, theme?: Theme): string {
+  const text = sanitizeText(part.text);
+  const tone = part.state ? stateTone(part.state) : part.role && part.role !== 'heading' ? detailTones[part.role] : undefined;
+  if (!theme || (!tone && part.role !== 'heading')) return text;
+  // Reset before whitespace: Pi's native wrapper can emit an extra blank row
+  // between long words if an active style is the only content on that row.
+  return text.replace(/\S+/g, word => tone ? paint(tone, word, theme) : heading(word, theme));
+}
 /** Structured fields are literal domain data; sanitize before adding trusted theme escapes. */
 export function displayText(value: DisplayText, theme?: Theme, fallbackTone?: ThemeColor): string {
   if (typeof value === 'string') return fallbackTone && value ? paint(fallbackTone, value, theme) : value;

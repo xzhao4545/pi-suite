@@ -36,7 +36,7 @@ export async function childSuite(pi: ExtensionAPI, run: Execution, manager: Agen
   const jobs = config.modules.jobs ? new JobsModule(pi, binding, notices, status, creatorRoots) : undefined;
   const ask = { ask: (params: AskParams, _ctx: unknown, _config: unknown, signal?: AbortSignal) => askParent(run, params, config.ask.timeout, manager.changed, signal) };
   registerBoundTool(pi, { ...askRenderers('Ask parent'), name: 'ask_user', label: 'Ask parent', parameters: askSchema, executionMode: 'sequential',
-    description: 'Ask your direct parent for information; wait for its explicit answer. timed_out/cancelled never means consent.',
+    description: 'Ask your direct parent and wait for an answer. A timeout or cancellation is never consent; it ends this run without an answer.',
     async execute(_id, params, signal) {
       const { result, questions } = await ask.ask(params, undefined, undefined, signal);
       return { ...askToolResult(params, questions, result, 'parent'), terminate: result.status !== 'answered' };
@@ -49,8 +49,7 @@ export async function childSuite(pi: ExtensionAPI, run: Execution, manager: Agen
         ancestors: [...run.record.ancestors, ...run.record.workflowId ? [run.record.workflowId] : []] } });
     waits.register(jobs);
   }
-  // A type toggle changes admission for newly requested descendants, even while their
-  // parent keeps the tools/resources with which it already started.
+  // Read fresh type settings for each nested start; the parent's own tool list stays fixed.
   if (run.type.allowedSubagents && !run.isolated && run.record.ancestors.length + 1 < config.agents.maxDepth) {
     // Turning off job tools does not erase jobs created before reload. This unbound
     // facade reads the same process owner without registering tools or notifications.

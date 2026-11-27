@@ -12,7 +12,7 @@ export function existingAgentRuntime(agentDir: string): AgentManager | undefined
   return existingOwner(AGENT_OWNER, agentDir) as AgentManager | undefined;
 }
 
-/** Queries are process-local: missing/history-only owners keep their original ID. */
+/** Only consult records already loaded in this process; renderers do not scan session files. */
 export function agentDisplayName(id: string, runId?: string): string {
   if (!id?.startsWith('agent_')) return id;
   return existingAgentRuntime(getAgentDir())?.records()

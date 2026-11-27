@@ -258,7 +258,7 @@ test('tmux preparation uses native clipboard routing, skips non-tui and reports 
     await prepareClipboard(pi, ctx); assert.deepEqual(calls[1], ['set-option', '-s', 'set-clipboard', 'on']);
     await prepareClipboard(pi, {...ctx, mode: 'rpc'}); assert.equal(calls.length, 2);
     await prepareClipboard({exec: async () => ({code: 0, stdout: 'external|focus', stderr: '', killed: false, truncated: false})}, ctx);
-    assert.match(warnings[0], /no clipboard capability/);
+    assert.match(warnings[0], /tmux clipboard unavailable.*Enable OSC 52/);
     await assert.rejects(prepareClipboard({exec: async () => ({code: 1, stdout: '', stderr: 'no server', killed: false, truncated: false})}, ctx), /no server/);
   } finally {if (original === undefined) delete process.env.TMUX; else process.env.TMUX = original;}
 });

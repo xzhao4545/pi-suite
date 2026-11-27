@@ -5,9 +5,10 @@ import { showDetails } from '../ui/details.ts';
 import { TerminalView, type TerminalExit, type TerminalKeys } from '../ui/terminal.ts';
 import { ToolError } from '../runtime/errors.ts';
 import { isActive } from './state.ts';
+import { JOB_SCREEN, type JobScreenDetails } from './render.ts';
 import { resolveWorkspace } from './workspace.ts';
 import { JobsModule, displayName, summaryLine, jobLabel } from './index.ts';
-import { jobDetail, type ListScope } from './query.ts';
+import { jobViewerDetails, type ListScope } from './query.ts';
 import type { JobSummary } from './types.ts';
 import { browse, browseState, compareActivity } from '../ui/browser.ts';
 import { openReading } from '../ui/reading.ts';
@@ -92,7 +93,7 @@ async function pickJob(pi: ExtensionAPI, ctx: ExtensionCommandContext, deps: Vie
         return items.map(({ job, live }) => ({ value: job.id, status: job.state,
         label: displayName(job), display: jobLabel(job),
         search: `${job.id} ${displayName(job)} ${job.state} ${job.command} ${job.cwd}`,
-        details: () => [`ID: ${job.id}`, ...jobDetail(job, true), ...live ? [] : ['history only: not controlled by this Pi process']].join('\n'),
+        details: () => jobViewerDetails(job, live),
         }));
       },
     });
@@ -109,7 +110,7 @@ export async function jobActions(pi: ExtensionAPI, ctx: ExtensionContext, deps: 
   const control = deps.jobs.control();
   const {job, live} = await control.get(id, await resolveWorkspace(cwd));
   if (ctx.mode !== 'tui') {
-    await showDetails(ctx, deps.dock, 'Job details', [`ID: ${id}`, ...jobDetail(job, true)].join('\n'), 'text', navigation); return;
+    await showDetails(ctx, deps.dock, 'Job details', jobViewerDetails(job), 'text', navigation); return;
   }
   const manager = deps.jobs.executionAvailable ? deps.jobs.manager() : undefined;
   const ownedScreen = live ? manager?.terminal(id) : undefined;
@@ -126,8 +127,11 @@ export async function jobActions(pi: ExtensionAPI, ctx: ExtensionContext, deps: 
         source: ownedScreen ?? restored, keys: deps.keys(), navigation}, done);
       await view.initialize(); return view;
     });
-    if (exit?.action === 'transfer') pi.sendMessage({customType: 'pi-suite:job-screen', content: screenMessage(control.peek(id), exit.screen), display: true},
-      {triggerTurn: true, deliverAs: 'followUp'});
+    if (exit?.action === 'transfer') {
+      const current = control.peek(id);
+      pi.sendMessage<JobScreenDetails>({customType: JOB_SCREEN, content: screenMessage(current, exit.screen), display: true,
+        details: {id, state: current.state, screenLines: exit.screen}}, {triggerTurn: true, deliverAs: 'followUp'});
+    }
   } finally { view?.dispose(); restored?.dispose(); deps.dock.setDetail(false); release(); }
 }
 

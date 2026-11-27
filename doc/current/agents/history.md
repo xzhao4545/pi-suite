@@ -1,39 +1,79 @@
 # 持久历史发现与只读查询
 
-AgentManager 的 workspace 查询从 Pi 会话文件和既有 suite 记录发现当前配置工作区的历史。AgentHistory 只缓存文件解析结果；运行句柄、历史记录、handle/alias、模型覆盖与 job 归属仍由公共 Manager 和既有记录承载。
+workspace 范围的查询会从 Pi 会话文件中找出当前配置工作区（`configCwd ?? ctx.cwd`）的 agent 历史，并合并到 `AgentManager` 的记录中。`AgentHistory`（`src/agents/history.ts`）只缓存文件解析结果。运行句柄、历史记录、handle/alias、模型覆盖和 job 归属都由 `AgentManager` 与已保存的记录负责。
 
 ## 发现范围
 
-默认扫描 `<agentDir>/sessions` 下一层 SDK 工作区编码目录中的 `.jsonl`，包括该层指向会话目录的符号链接。额外扫描当前打开主会话的 sessionDir、`PI_CODING_AGENT_SESSION_DIR`、SettingsManager 的 sessionDir 配置，以及当前信任/包门控范围内 catalog 类型的 `session_dir`；各配置目录读取其直接子级 `.jsonl`，自定义目录按当前 configCwd 解析。
+扫描以下目录中直接包含的 `.jsonl` 文件。目录不存在时跳过：
 
-扫描主会话的全部 entries，包含当前分支之外的记录，并沿以下持久引用继续发现。`subagents/` 不加入扫描目录；其中的 child、嵌套与 workflow 会话通过父级记录中的绝对 sessionFile 或 workflow 快照引用到达，不依赖与主会话同目录：
-
-| 引用 | 读取范围 |
+| 目录 | 说明 |
 | --- | --- |
-| pi-suite:agent-record.sessionFile | 对应 child SDK 会话中的全部 run 记录 |
-| pi-suite:workflow-record.recordPath | 既有 workflow 快照中的 children，以及各 child.sessionFile |
-| pi-suite:workflow-record.children | 保存于父级记录的 child 引用及其 SDK 会话 |
-| SDK session header.parentSession | fork 的父会话文件及其引用 |
+| `<agentDir>/sessions/*/` | SDK 按工作区编码的会话目录，包括这一层指向目录的符号链接 |
+| 当前主会话的 sessionDir | `sessionManager.getSessionDir()` |
+| `PI_CODING_AGENT_SESSION_DIR` | 环境变量 |
+| Pi settings 的 sessionDir | 按 configCwd 和项目信任状态读取 |
+| 类型的 `session_dir` | 当前信任与 `agents.packageAgents` 范围内的全部类型 |
 
-最终记录按 `configCwd ?? cwd` 归入当前配置工作区。child 的实际工具 cwd 可以是其他目标目录，查询仍按 configCwd 归属。发现范围是默认目录、当前配置目录及上述可达引用；未配置且没有持久引用的外部归档目录不参与发现。
+自定义目录按 configCwd 解析，`~` 展开为用户主目录。
+
+除了扫描这些目录，还会读取当前主会话的全部 entries（包括当前分支之外的），并沿持久引用继续读取其他文件：
+
+| 引用 | 读取内容 |
+| --- | --- |
+| `pi-suite:agent-record` 的 sessionFile | 对应 child 会话文件中的全部 run 记录 |
+| `pi-suite:workflow-record` 的 recordPath | workflow 快照中的 children 及各 child 的 sessionFile |
+| `pi-suite:workflow-record` 的 children | 父级记录中保存的 child 及其会话文件 |
+| 会话 header 的 parentSession | fork 来源的会话文件及其中的引用 |
+
+默认扫描不会深入 `subagents/`。其中的 child、嵌套 child 和 workflow child 会话通过父级记录里的绝对 sessionFile 或 workflow 快照找到，所以不要求与主会话在同一目录。带工作区目录的引用仅在该目录等于当前工作区时跟随。
+
+只保留 `configCwd ?? cwd` 等于当前工作区的记录。child 的工具 cwd 可以是其他目录，归属仍按 configCwd。既没有配置、也没有持久引用指向的目录不会被发现。
 
 ## 读取与合并
 
-发现扫描以文件 mtime 和 size 判断是否重新解析，缓存归属于文件，查询时再按工作区筛选记录和引用。主会话使用公共 getEntries；磁盘会话使用公共 parseSessionEntries 和 SessionManager.inMemory 完成版本迁移、树构建和分支读取。查询不会调用 SDK 的磁盘 open 修复路径，也不修复或重写原始 JSONL；显式恢复开始新执行仍使用 SDK 的执行会话路径。
+1. 每个文件按 mtime 和 size 判断是否需要重新解析。缓存按文件保存，不绑定某个工作区；每次查询时再按当前工作区筛选记录和引用。本次扫描未访问到的文件从缓存中移除。
+2. 主会话通过 `sessionManager.getEntries()` 读取。磁盘会话文件由 `records.ts` 的 `readAgentSession` 读取：先用 Pi 的 `parseSessionEntries` 解析，再用 `SessionManager.inMemory` 完成版本迁移和树构建。查询不走 SDK 打开磁盘文件时的修复路径，不修改原始 JSONL。显式恢复执行时仍使用 SDK 的正常会话路径。
+3. 同一 runId 的多条记录按 custom entry 的 timestamp 合并，较新的字段覆盖较旧的：
+   - workflow 快照不含 result 正文，合并时保留已有的 result。
+   - 较新的记录是活动状态、较旧的已结束时，保留结束时的 state、endedAt、endLeafId 和 error，避免启动时的引用把终态改回活动状态。
+4. 合并进 `AgentManager` 时：本进程中存在 `Execution`（单次 run 的运行对象）的 run 不使用发现结果；已有历史记录只在发现结果的 updatedAt 更新时才被替换。本地恢复或模型编辑写入的记录 updatedAt 为写入时间，因此不会被更早的文件覆盖。
 
-同一 runId 的保存记录按 custom entry timestamp 合并。workflow 引用或快照没有 result 正文时保留已有最终结果，较新的启动引用不能把终态退回活动状态。Manager.runs 中的真实 Execution 始终优先；已有 histories 附 updatedAt，使本地 restore 或模型编辑的新事实不会被更早文件覆盖。发现只补充记录，不新增会话数据库、独立 handle 注册表或通知 owner。
+发现只补充记录，不新增会话数据库、handle 注册表或通知 owner。
 
-没有本进程 Execution 的保存活动状态规范为 failed，错误说明运行 owner 已中断；保存的 transcript 仍可读取，其结束位置绑定持久文件的叶子。这些记录不计入活动数量，不触发完成通知，也不因阅读转移 ownerSession、anchor、parentRunId 或 ancestors。
+### 中断的运行
 
-## 数据与叶子边界
+保存的状态仍是活动状态、但本进程没有对应 `Execution` 时，记录改为 failed：
 
-缺失或未来版本的会话 header、损坏 JSONL、无效 agent/workflow 记录数据与 suite entry timestamp、不可读取的持久 child 引用均明确报错。读取指定 run 的 transcript 时验证 endLeafId 存在，再读取该分支；错误叶子不能回退为整份文件的最新输出。非持久 transcript 的读取与恢复范围遵循 [Execution 回收规则](runtime.md#执行引用回收)。
+| 情况 | error | endLeafId |
+| --- | --- | --- |
+| 有 sessionFile | 提示用 agent_read 读取保存的 transcript | 该会话文件当前的叶子 |
+| 无 sessionFile | 提示没有保存 transcript，可以新建 agent | 不变 |
+
+这些记录不计入活动数量，不触发完成通知。阅读它们不会改变 ownerSession、anchor、parentRunId 或 ancestors。
+
+## 错误
+
+以下情况报 AGENT_HISTORY，不跳过：
+
+| 情况 | 消息 |
+| --- | --- |
+| JSONL 中有无法解析的行 | `Malformed session JSONL in <路径>` |
+| header 缺失、字段不对，或版本高于当前 SDK 支持的版本 | `Invalid or unsupported session header in <路径>` |
+| agent 记录数据不符合 schema | `Invalid agent record version or data in <来源>` |
+| suite entry 的 timestamp 无法解析 | `Invalid suite record timestamp in <来源>` |
+| 指定 run 的 endLeafId 在会话文件中不存在 | `Missing history leaf <id> in <路径>` |
+
+workflow 父级记录无效时报 WORKFLOW_HISTORY；workflow 快照无效时也会报错。持久引用指向的文件不存在或无法读取时，读取错误直接抛出。
+
+读取指定 run 的 transcript 时，先检查 endLeafId 存在，再读取到该叶子为止的分支；叶子错误时报错，不会改为读取整份文件的最新输出。非持久 transcript 的读取与恢复范围见 [执行引用回收](runtime.md#执行引用回收)。
 
 ## 查询与操作归属
 
-`agent_list({scope:"workspace"})` 和 `/subagents workspace` 先发现历史，再按既有筛选与分页读取。未知 ID 的 agent_get、agent_read、agent_send 和 agent_stop 使用公共 lookup 发现，并核对当前 configCwd；agent_send 继续核对直接父级与当前分支，发现历史不赋予发送或恢复权限。
-
-原生 workspace 菜单中，其他 owner 或当前分支之外的已结算记录提供 Transcript 和只读 Jobs；其查看器保留阅读、Tools/Thinking 展开、Jobs 和 Back。Jobs 复用 job 详情和日志，隐藏 attach 与 stop，创建归属查询不可用时明确报错。当前 owner/分支可见的结束记录仍可修改之后恢复使用的模型覆盖，或通过记录菜单清理遗留 job。真实运行句柄保留既有控制契约；工具 agent_stop 仍按当前工作区和运行子树处理，嵌套调用保持直接 child 准入。
+- `agent_list({scope:"workspace"})` 和 `/subagents workspace` 先发现历史，再按已有筛选与分页读取。
+- agent_get、agent_read、agent_send、agent_stop 遇到本进程不认识的 ID 时，先发现历史，再检查记录属于当前工作区，否则报 NOT_FOUND。agent_send 另外检查调用方是直接父级且记录在当前分支；被发现的历史不会因此获得发送或恢复权限。
+- 原生 workspace 菜单中，其他 owner 的记录或当前分支之外的已结算记录只提供 Transcript 和只读 Jobs。查看器保留阅读、Tools/Thinking 展开、Jobs 和 Back。Jobs 复用 job 详情和日志，隐藏 attach 和 stop；无法查询 job 的创建归属时报错。
+- 当前 owner 和分支可见的已结束记录仍可修改之后恢复使用的模型覆盖，或在记录菜单中清理遗留 job。
+- 本进程的运行句柄保持原有控制方式。agent_stop 工具按当前工作区和运行子树处理，嵌套调用只能操作直接 child。
 
 完整命令、默认筛选和键位见 [工具与操作](operations.md)。
 

@@ -1,6 +1,6 @@
 import { Type, type TSchema, type Static } from 'typebox';
 import { Value } from 'typebox/value';
-import type { ExtensionAPI, ToolDefinition, ToolRenderers } from '@earendil-works/pi-coding-agent';
+import type { EntryRenderer, ExtensionAPI, MessageRenderer, ToolDefinition, ToolRenderers } from '@earendil-works/pi-coding-agent';
 import { READ_LIMITS } from './read.ts';
 import { ToolError } from './errors.ts';
 
@@ -14,14 +14,42 @@ export const objectId = (prefix: 'job' | 'agent' | 'run' | 'wf', example: string
   Type.String({ pattern: `^${prefix}_[a-f0-9]{${prefix === 'wf' ? 12 : 8}}$`, description: `${prefix} ID, e.g. ${example}` });
 export const WAIT_ID_PATTERN = '^(?:(?:job|agent)_[a-f0-9]{8}|wf_[a-f0-9]{12})$';
 
-// Child and main sessions may give ask_user different renderers; scope lookup to their API.
-const renderers = new WeakMap<ExtensionAPI, Map<string, ToolRenderers>>();
-export const toolRenderer = (pi: ExtensionAPI, name: string): ToolRenderers | undefined => renderers.get(pi)?.get(name);
+// Child and main sessions may give the same name different renderers; scope lookup to their API.
+type Renderers = { tools: Map<string, ToolRenderers>; messages: Map<string, MessageRenderer>; entries: Map<string, EntryRenderer> };
+const renderers = new WeakMap<ExtensionAPI, Renderers>();
+function rendererRegistry(pi: ExtensionAPI): Renderers {
+  let registry = renderers.get(pi);
+  if (!registry) { registry = { tools: new Map(), messages: new Map(), entries: new Map() }; renderers.set(pi, registry); }
+  return registry;
+}
+export const toolRenderer = (pi: ExtensionAPI, name: string): ToolRenderers | undefined => renderers.get(pi)?.tools.get(name);
+export function customRendererLookup(pi: ExtensionAPI) {
+  return {
+    getMessageRenderer: (type: string) => renderers.get(pi)?.messages.get(type),
+    getEntryRenderer: (type: string) => renderers.get(pi)?.entries.get(type),
+  };
+}
+/** Main-session extensions can register renderers, but only SDK session owners can query Pi's runner.
+ * Forward Suite's registrations unchanged and retain those same callbacks for its overlay readers.
+ */
+export function captureCustomRenderers(host: ExtensionAPI): ExtensionAPI {
+  const pi: ExtensionAPI = { ...host,
+    registerMessageRenderer(type, renderer) {
+      host.registerMessageRenderer(type, renderer);
+      rendererRegistry(pi).messages.set(type, renderer as MessageRenderer);
+    },
+    registerEntryRenderer(type, renderer) {
+      host.registerEntryRenderer(type, renderer);
+      rendererRegistry(pi).entries.set(type, renderer as EntryRenderer);
+    },
+  };
+  return pi;
+}
 /** History is rebuilt before session_start; rendering must not wait for module admission. */
 export function registerToolRenderers(pi: ExtensionAPI, defaults: Record<string, ToolRenderers>,
   compose: Record<string, (base: ToolRenderers) => ToolRenderers> = {}): void {
   const lookup = new Map(Object.entries(defaults).map(([name, base]) => [name, compose[name]?.(base) ?? base]));
-  renderers.set(pi, lookup);
+  rendererRegistry(pi).tools = lookup;
   // Both live resolution and read-only lookup use the same display composition. next() preserves
   // registered/native definitions and other extensions; no execution tool is registered here.
   pi.registerToolRenderer((name, next) => {
@@ -31,10 +59,8 @@ export function registerToolRenderers(pi: ExtensionAPI, defaults: Record<string,
 }
 /** Initial load has no runtime API yet; late refreshes preserve the active selection. */
 export function registerBoundTool<P extends TSchema>(pi: ExtensionAPI, tool: ToolDefinition<P>, activate: boolean | 'initial' = false): void {
-  let lookup = renderers.get(pi);
-  if (!lookup) { lookup = new Map(); renderers.set(pi, lookup); }
   // Lookup erases the parameter schema; the host supplies this tool's own arguments.
-  lookup.set(tool.name, tool as unknown as ToolRenderers);
+  rendererRegistry(pi).tools.set(tool.name, tool as unknown as ToolRenderers);
   if (activate === 'initial') { pi.registerTool(tool); return; }
   const active = pi.getActiveTools();
   pi.registerTool(tool);
@@ -64,14 +90,14 @@ type Position = { createdAt: string; id: string };
 export function newestFirst(a: Position, b: Position): number {
   return b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id);
 }
-/** Sorts newest first and returns one page after cursor; the cursor encodes the last row's position. */
+/** Resume from the last row's position, even if that row has since been removed. */
 export function paginate<T>(items: T[], position: (item: T) => Position, cursor: string | undefined, limit: number,
   options: { oldest?: boolean; size?: (item: T) => number; budgetBytes?: number } = {}): { page: T[]; nextCursor?: string } {
   const compare = (a: Position, b: Position) => newestFirst(a, b) * (options.oldest ? -1 : 1);
   let rows = [...items].sort((a, b) => compare(position(a), position(b)));
   if (cursor) {
     const [createdAt, id] = Buffer.from(cursor, 'base64url').toString().split('|');
-    if (!createdAt || !id) throw new ToolError('INVALID_ARGS', 'cursor is not a nextCursor from this list; restart the same list without cursor');
+    if (!createdAt || !id) throw new ToolError('INVALID_ARGS', 'Invalid cursor. Use nextCursor from the same list or omit cursor.');
     rows = rows.filter(row => compare(position(row), { createdAt, id }) > 0);
   }
   const page: T[] = []; let bytes = 0;
@@ -92,14 +118,14 @@ export const readFields = {
   context: Type.Optional(Type.Integer({ minimum: 0, maximum: READ_LIMITS.maxContext, description: `Lines around matches, default ${READ_LIMITS.defaultContext}` })),
 };
 export function rejectContextWithoutSearch(params: { search?: string; context?: number }): void {
-  if (params.context !== undefined && params.search === undefined) throw new ToolError('INVALID_ARGS', 'context requires search');
+  if (params.context !== undefined && params.search === undefined) throw new ToolError('INVALID_ARGS', 'context requires search. Add search or omit context.');
 }
 
 /** stop result shared by job_stop and agent_stop; affected lists every cascaded object's real state. */
 export type StopAffected = { id: string; state: string; cleanup?: string };
 export type StopOutcome = { requested: boolean; state: string; cleanup: string; affected: StopAffected[] };
 
-/** First line summary, optional lines, last line the next call; undefined lines are dropped. */
+/** First line is the summary and the last line is the next call; undefined lines are dropped. */
 export function textResult<D>(lines: (string | undefined)[], details: D) {
   return { content: [{ type: 'text' as const, text: lines.filter(line => line !== undefined).join('\n') }], details };
 }

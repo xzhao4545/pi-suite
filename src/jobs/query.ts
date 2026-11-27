@@ -4,6 +4,7 @@ import { bucket } from './state.ts';
 import type { JobReader } from './control.ts';
 import { isWorkflowGate, type JobSummary, type Workspace } from './types.ts';
 import { displayName, summaryLine } from './index.ts';
+import { field, part, plainDetailLines, statePart, type StructuredDetails } from '../ui/structured-details.ts';
 export { readJobLog, renderInput, streamsOf } from './output.ts';
 
 /** Filters shared by job_list and /jobs: same buckets and session scope as the status count. */
@@ -28,18 +29,34 @@ export async function listJobs(manager: JobReader, workspace: Workspace, query: 
     { budgetBytes: query.budgetBytes, size: row => Buffer.byteLength(summaryLine(row.job) + boundedText(displayName(row.job), 200) + (row.job.error ?? '')) + 80 });
   return { rows: page, nextCursor, errors };
 }
-export function jobDetail(job: JobSummary, fullCommand = false): string[] {
-  return [
-    `name: ${displayName(job)}`, `cwd: ${job.cwd}`,
-    `mode: ${job.mode}`, `state: ${job.state}`, `runtime: ${job.elapsedMs === undefined ? 'not started' : `${(job.elapsedMs / 1000).toFixed(1)}s`}`,
-    `command: ${!fullCommand && job.command.length > 2000 ? `${job.command.slice(0, 2000)}… [${job.command.length} chars]` : job.command}`,
-    `created ${job.createdAt}${job.startedAt ? ` · started ${job.startedAt}` : ''}${job.endedAt ? ` · ended ${job.endedAt}` : ''}`,
-    ...(job.exitCode !== null || job.signal ? [`exit: ${job.exitCode ?? job.signal}`] : []),
-    ...(job.timeoutMs ? [`timeoutMs: ${job.timeoutMs}`] : []),
-    ...(job.handsFree ? [`supervision: ${job.handsFree.config.mode} · updates ${job.handsFree.updates} · output budget ${job.handsFree.totalCharsSent}/${job.handsFree.config.maxTotalChars} chars`] : []),
-    `cleanup: ${job.cleanup.state}${job.cleanup.error ? ` (${job.cleanup.error})` : ''}`,
-    ...(job.error ? [`error: ${job.error}`] : []),
-    ...(job.taskId ? [`task: ${job.taskId} · source generation: ${job.taskGeneration ?? 'unavailable (legacy link expired)'}`] : []),
-    ...(job.creator ? [`created by ${job.creator.agentId ?? job.creator.workflowId} ${job.creator.runId}`] : []),
-  ];
+/** One field list feeds both the model-visible receipt and the colored Details pane. */
+export function jobDetailView(job: JobSummary, fullCommand = false): StructuredDetails {
+  const command = !fullCommand && job.command.length > 2000 ? `${job.command.slice(0, 2000)}… [${job.command.length} chars]` : job.command;
+  const {cleanup} = job;
+  const exit = job.exitCode ?? job.signal;
+  const details: StructuredDetails = {rows: [
+    field('name:', part(displayName(job), 'heading')), field('cwd:', part(job.cwd, 'meta')),
+    field('mode:', job.mode), field('state:', statePart(job.state)),
+    field('runtime:', job.elapsedMs === undefined ? 'not started' : part(`${(job.elapsedMs / 1000).toFixed(1)}s`, 'number')), null,
+    field('command:', command), null,
+    field('created', part(job.createdAt, 'meta'),
+      ...(job.startedAt ? [part(' · started ', 'label'), part(job.startedAt, 'meta')] : []),
+      ...(job.endedAt ? [part(' · ended ', 'label'), part(job.endedAt, 'meta')] : [])),
+    job.exitCode !== null || job.signal ? field('exit:', part(`${exit}`, typeof exit === 'number' ? 'number' : undefined)) : undefined,
+    job.timeoutMs ? field('timeoutMs:', part(job.timeoutMs, 'number')) : undefined,
+    job.handsFree ? field('supervision:', job.handsFree.config.mode, part(' · updates ', 'label'), part(job.handsFree.updates, 'number'),
+      part(' · output budget ', 'label'), part(`${job.handsFree.totalCharsSent}/${job.handsFree.config.maxTotalChars} chars`, 'number')) : undefined,
+    field('cleanup:', statePart(cleanup.state, cleanup.state === 'pending' ? 'cleanup pending' : cleanup.state === 'unconfirmed' ? 'cleanup unconfirmed' : 'completed'),
+      ...(cleanup.error ? [part(` (${cleanup.error})`, 'error')] : [])),
+    ...(job.error ? [null, field('error:', part(job.error, 'error'))] : []), null,
+    job.taskId ? field('task:', part(job.taskId, 'id'), part(' · source generation: ', 'label'), part(job.taskGeneration ?? 'unavailable (legacy link expired)', 'id')) : undefined,
+    job.creator ? field('created by', part(`${job.creator.agentId ?? job.creator.workflowId}`, 'id'), part(' '), part(job.creator.runId, 'id')) : undefined,
+  ]};
+  return details;
+}
+export const jobDetail = (job: JobSummary, fullCommand = false): string[] => plainDetailLines(jobDetailView(job, fullCommand));
+
+export function jobViewerDetails(job: JobSummary, live = true): StructuredDetails {
+  return {rows: [field('ID:', part(job.id, 'id')), ...jobDetailView(job, true).rows,
+    live ? undefined : [part('history only: not controlled by this Pi process', 'meta')]]};
 }

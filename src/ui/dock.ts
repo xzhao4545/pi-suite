@@ -14,14 +14,17 @@ export interface DockRow {
 }
 export interface DockSource {
   title: string;
-  rows: () => DockRow[];
+  /** Active selected row in this source, if any; sources can expand around it. */
+  rows: (selectedId?: string) => DockRow[];
+  /** Sources with their own overflow rows can opt out of generated gap hints. */
+  gapHints?: boolean;
   summary?: () => string;
   subtitle?: () => string;
   aside?: () => DisplayText;
   footer?: () => string;
   progress?: () => number;
   open?: (rowId: string, ctx: ExtensionContext) => void | Promise<void>;
-  /** Read-only viewers participate in navigation without admitting mutation actions. */
+  /** Rows stay selectable, but Enter only views them; the hint says `Enter view`. */
   readOnly?: boolean;
 }
 type Section = { id: string; source: DockSource; rows: DockRow[] };
@@ -67,7 +70,9 @@ export class Dock implements Component {
   askBudget(rows: number): number { return Math.max(1, Math.floor(rows * 0.7) - 1 - 2 - Number(this.statusRow)); }
 
   private sections(): Section[] {
-    return [...this.sources].map(([id, source]) => ({ id, source, rows: source.rows() })).filter(item => item.rows.length)
+    const selection = this.active ? this.selection : undefined;
+    return [...this.sources].map(([id, source]) => ({ id, source, rows: source.rows(selection?.sourceId === id ? selection.rowId : undefined) }))
+      .filter(item => item.rows.length)
       .sort((a, b) => (sourceOrder.indexOf(a.id) < 0 ? sourceOrder.length : sourceOrder.indexOf(a.id))
         - (sourceOrder.indexOf(b.id) < 0 ? sourceOrder.length : sourceOrder.indexOf(b.id)));
   }
@@ -84,6 +89,18 @@ export class Dock implements Component {
     this.selection = { sourceId: choice.section.id, rowId: choice.row.id, index };
     return choice;
   }
+  private layout(): { sections: Section[]; choices: Choice[]; choice?: Choice } {
+    let sections = this.sections();
+    if (!this.active) return { sections, choices: [] };
+    const previous = this.selection;
+    let choices = this.choices(sections), choice = this.reconcile(choices);
+    if (choice && (choice.section.id !== previous?.sourceId || choice.row.id !== previous.rowId)) {
+      // A removed row can move selection to a collapsed group. Use the new
+      // group's expanded rows before drawing or computing the next key step.
+      sections = this.sections(); choices = this.choices(sections); choice = this.reconcile(choices);
+    }
+    return { sections, choices, choice };
+  }
   private deactivate(): void { if (this.active) { this.active = false; this.invalidate(); } }
   private editorHasFocus(): boolean {
     // The broad injected TUI interface omits the concrete host's public focus getter.
@@ -99,10 +116,12 @@ export class Dock implements Component {
     }
     // Kitty releases also match matchesKey; held-key repeats remain useful navigation.
     if (isKeyRelease(data)) return;
-    if (!this.active && !matchesKey(data, 'left')) return;
-    const choices = this.choices(this.sections()), choice = this.reconcile(choices);
+    const entering = !this.active;
+    if (entering && !matchesKey(data, 'left')) return;
+    this.active = true;
+    const { choices, choice } = this.layout();
     if (!choice) return;
-    if (!this.active) { this.active = true; this.invalidate(); return { consume: true }; }
+    if (entering) { this.invalidate(); return { consume: true }; }
     if (matchesKey(data, 'up') || matchesKey(data, 'down')) {
       const index = Math.max(0, Math.min(choices.length - 1, this.selection!.index + (matchesKey(data, 'up') ? -1 : 1)));
       const next = choices[index]; this.selection = { sourceId: next.section.id, rowId: next.row.id, index };
@@ -163,7 +182,7 @@ export class Dock implements Component {
     if (!focus && rows.length === 1 && source.aside?.() && limit >= 2) return [this.header(source, width), this.row(rows[0], width)];
     if (!focus && (rows.length === 1 || limit <= 3)) return [this.summary(source, rows, width)];
     const tail = limit >= 4 ? 1 : 0;
-    const window = dockWindow(rows, limit - 1 - tail, selectedId, source.title === 'Tasks' ? 'groups' : 'items');
+    const window = dockWindow(rows, limit - 1 - tail, selectedId, source.title === 'Tasks' ? 'groups' : 'items', source.gapHints);
     const shown = window.rows.length ? window.rows : [{id: 'summary', priority: 0, text: source.summary?.() ?? this.row(rows[0], width)}];
     const tree = width >= 40, ratio = source.progress?.() ?? 0;
     const branch = (text: string, index: number): string => this.color(index < Math.round((shown.length + 1) * ratio) ? 'accent' : 'borderMuted', text);
@@ -182,8 +201,7 @@ export class Dock implements Component {
     if (this.ask || this.detail) return [];
     const limit = this.budget();
     if (!limit) return [];
-    const sources = this.sections();
-    const choice = this.active ? this.reconcile(this.choices(sources)) : undefined;
+    const { sections: sources, choice } = this.layout();
     // A visible Tasks section owns the idle expansion budget. Domain urgency still
     // ranks its rows and other sections; active selection always overrides this default.
     const preferred = choice?.section.id ?? sources.find(section => section.id === 'tasks')?.id;

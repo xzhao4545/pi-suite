@@ -1,73 +1,227 @@
 # 公共运行时与配置
 
-唯一扩展入口为 src/index.ts；入口先注册 CLI prompt 协议，首次真实 session_start 按需加载 runtime/suite.ts，根据 ctx.cwd 读取配置并创建本次扩展激活的模块集合，工具、命令和宿主事件由公共运行时与对应模块注册。当前工具为 ask_user、goal_complete、goal_blocked、goal_wait、task_list、task_edit、job_start、job_list、job_read、job_write、job_stop、agent_start、agent_list、agent_read、agent_send、agent_stop、agent_workflow 和共享 wait，本文说明的操作命令为 /goal、/tasks、/jobs、/subagents、/suite 和默认启用的 /exit。
+扩展入口是 `src/index.ts`，`src/runtime` 提供各模块共用的配置、会话绑定、通知、等待、工具注册和 JSON 存储。
 
-runtime/tools.ts 的 registerBoundTool 共用 Pi 公开工具注册，刷新描述/schema 时保留当前 active-tool 选择；首次晚注册只按该入口的启用规则加入本工具。agent_start 调度 schema 与 workflow 动态类型描述复用此入口。共享 ID、列表/读取 schema、等待/停止返回类型与错误边界见 [模型工具契约](tools.md)。
+| 页面 | 内容 |
+| --- | --- |
+| [模型工具契约](tools.md) | 共享 ID、列表、读取、等待、停止的参数与返回，工具显示，错误码 |
+| [设置与退出操作](settings.md) | `/suite` 设置页与 `/exit` |
+| [Responses 历史 ID 恢复](responses-recovery.md) | `runtime.openAIResponsesAutoRecovery` |
+
+## 入口与注册
+
+1. `src/index.ts` 在扩展工厂中注册 CLI 提示参数（`runtime/cli-prompt.ts`）和全部工具/消息 renderer（`runtime/renderers.ts`）。
+2. 首次 `session_start` 导入 `runtime/suite.ts`，`createSuite` 按该会话的 cwd 读取配置，注册已开启模块的工具、命令和事件处理器，然后返回 `bindSession`。
+3. 之后每次 `session_start`（reload 除外，见下）都等待同一个 `createSuite` 结果，再调用 `bindSession` 重新绑定。
+
+模型工具：ask_user、goal_complete、goal_blocked、goal_wait、task_list、task_get、task_edit、job_start、job_list、job_get、job_read、job_write、job_stop、agent_start、agent_list、agent_get、agent_read、agent_send、agent_stop、agent_workflow 和共享的 wait。命令：/goal、/tasks、/jobs、/subagents、/suite 和 /exit（`commands.exit`，默认开启）。
+
+`runtime/tools.ts` 的 `registerBoundTool` 是所有模块注册工具的入口：
+
+- 首次加载（`'initial'`）直接注册。
+- 绑定时刷新描述或 schema 会先读取当前活动工具，重新注册后恢复该选择；只有显式要求启用时才把本工具加入活动列表。
+- agent_start 的调度 schema 和 agent_workflow 的类型列表描述都通过它刷新。
 
 ## 配置
 
-配置按内置默认、用户文件 `<getAgentDir()>/pi-suite.json`、项目 `.pi/pi-suite.json` 的顺序覆盖，各节逐字段合并。getAgentDir() 遵循 Pi 的 PI_CODING_AGENT_DIR。缺失文件表示无覆盖；无效 JSON、未知字段、数值范围错误及读取失败会报告错误。
+配置按三层逐节、逐字段合并，后者覆盖前者：
+
+| 层 | 路径 |
+| --- | --- |
+| 内置默认 | `runtime/config.ts` 的 `defaults` |
+| 用户 | `<agentDir>/pi-suite.json`；agentDir 为 Pi 的 `getAgentDir()`，遵循 `PI_CODING_AGENT_DIR` |
+| 项目 | `<会话 cwd>/.pi/pi-suite.json`，不向父目录查找 |
+
+`jobs.agents` 按 CLI 键、`agents.types` 按类型名再逐字段合并。文件不存在表示该层无覆盖。JSON 无效、出现未知字段、数值越界或读取失败（如权限错误）时报错，不静默忽略。
 
 ```json
 {
   "commands": { "exit": true },
-  "modules": { "ask": true },
+  "modules": { "ask": true, "tasks": true, "jobs": true, "goal": true, "agents": true },
   "runtime": { "openAIResponsesAutoRecovery": false },
-  "ui": { "maxRows": 12 },
+  "ui": { "maxRows": 12, "highlightBuiltinCommands": true },
   "ask": { "timeout": 600000, "historyKey": "ctrl+h" },
   "goal": { "display": "status" },
   "tasks": { "reminders": true },
-  "agents": { "display": "status", "maxConcurrent": 10, "maxConcurrentForeground": 0, "maxDepth": 3, "persistSessions": true, "workflows": true, "types": {} },
+  "agents": { "display": "status", "maxConcurrent": 10, "maxConcurrentForeground": 0, "maxDepth": 3, "persistSessions": true,
+    "types": {}, "mentions": true, "scheduling": true, "workflows": true },
   "jobs": { "display": "status", "detachKey": "ctrl+]", "returnKey": "ctrl+g", "transferKey": "ctrl+t" }
 }
 ```
 
-modules.ask、modules.goal、modules.tasks、modules.jobs 与 modules.agents 在本次激活首次真实 session_start 时决定是否注册对应模块；改变开关后使用 /reload 创建新激活，按该会话 cwd 重新准入。new/resume/fork/tree 只重新绑定，沿用本次模块集合；其他配置在绑定时按当前 cwd 读取。共享 goal 状态键的 ownership 按本次是否实际创建 GoalManager 传给 StatusPublisher，不因重绑时配置值变化而越权写入或清除其他 provider 的状态。modules.jobs=false 关闭 job 工具与绑定，agents 的所属 job 查询/查看和主会话 quit 清理仍使用同一进程 owner，边界见 [jobs](../jobs/index.md#结算与停止)。maxRows 默认 12、范围为 1–30，只限制空闲 Dock 行数，询问独立使用 70% 终端高度上限；timeout 为 0–2147483647 的整数毫秒，表示用户空闲时长，默认 10 分钟；0 不设期限。historyKey 与 jobs 终端视图的 detachKey（离开视图，默认 Ctrl+]）、returnKey（交还模型，默认 Ctrl+G）、transferKey（发送屏幕，默认 Ctrl+T）使用 Pi 的按键标识。默认离开键避开 tmux 的 Ctrl+B 前缀；显式 user/project 键位仍按配置优先级生效，修改后 /reload。公共显示配置接受 status/dock/hidden，不接管 footer。tasks.reminders 控制任务提醒，默认 true；任务摘要共用 Dock，见 [任务操作](../tasks/operations.md)。
+### 生效时机
 
-`/suite` 使用原生 SettingsList 搜索和编辑全部配置字段，展示默认、用户、项目来源与有效值。通用设置保存后 `/reload` 生效，模块和命令另显示当前激活值。`commands.exit` 默认 true，控制 `/exit` 是否注册；其 handler 取消忙碌操作并通过公开 shutdown 进入原生 quit 清理链。字段编辑、继承恢复、复杂 JSON 设置和生效方式见 [设置与退出操作](settings.md)。类型启用、模型与 thinking 也可通过 `/subagents types` 编辑。
+- `createSuite` 用首次 `session_start` 的 `modules.*` 决定注册哪些模块。修改后需 `/reload`；new、resume、fork 和树切换只重新绑定，模块集合不变。
+- 重新绑定时按当前 cwd 重读配置。设置如何应用，见[设置与退出操作](settings.md)。
+- StatusPublisher（状态栏发布器）的 goal 状态键只在本次实际创建了 GoalManager 时由本扩展写入和清除，重新绑定时配置值变化不改变这一点。
+- `modules.jobs=false` 只撤销 job 工具、/jobs 和 Dock 入口。agents 仍需要查询和查看自己创建的 job，所以 `modules.agents` 开启时照样加载 jobs 代码；quit 清理也不依赖该开关，见 [jobs 结算与停止](../jobs/index.md#结算与停止)。
 
-jobs.agents 配置 CLI 键对应的 command 与 args，按键和字段合并用户/项目覆盖。job_start 检查参数后直接执行普通命令、CLI 预设与 monitor，规则见 [CLI 预设与直接启动](../jobs/launch.md)。AskManager 按 modules.ask 准入，与 job 启动相互独立。
+### 字段
 
-runtime/text.ts 提供安全字面量文本转换，供任务说明、pipe 日志与 monitor 事件共用；终端回车覆写等 PTY 语义由 jobs 的终端模块处理。
+| 字段 | 默认 | 说明 |
+| --- | --- | --- |
+| `commands.exit` | true | 注册 /exit，见 [设置与退出操作](settings.md) |
+| `modules.ask/tasks/jobs/goal/agents` | true | 模块开关 |
+| `runtime.openAIResponsesAutoRecovery` | false | 见 [Responses 历史 ID 恢复](responses-recovery.md) |
+| `ui.maxRows` | 12 | 空闲 Dock 最多行数，1–30；询问另用 70% 终端高度上限，见 [统一界面](../ui/index.md#高度与状态) |
+| `ui.highlightBuiltinCommands` | true | 内置 bash/powershell 调用区的命令高亮，见 [设置与退出操作](settings.md) |
+| `ask.timeout` | 600000 | 用户空闲多久后询问超时，整数毫秒 0–2147483647；0 不设期限 |
+| `ask.historyKey` | ctrl+h | 询问历史键 |
+| `goal.display`、`agents.display`、`jobs.display` | status | status、dock 或 hidden；不接管 footer |
+| `tasks.reminders` | true | 任务提醒，见 [任务操作](../tasks/operations.md) |
+| `jobs.detachKey` | ctrl+] | 终端视图：离开视图。默认避开 tmux 前缀 Ctrl+B |
+| `jobs.returnKey` | ctrl+g | 终端视图：把输入交还模型 |
+| `jobs.transferKey` | ctrl+t | 终端视图：把屏幕发送给模型 |
+| `jobs.agents` | 内置预设 | CLI 键对应的 command 与 args，见 [CLI 预设与直接启动](../jobs/launch.md) |
+| `agents.maxConcurrent` | 10 | 后台 child 并发上限，≥1 |
+| `agents.maxConcurrentForeground` | 0 | 前台并发上限，0 为不限 |
+| `agents.maxDepth` | 3 | 包含顶级在内的会话层数，≥1 |
+| `agents.persistSessions` | true | 顶级 child 是否保存会话到磁盘 |
+| `agents.defaultModel` | 无 | 默认模型 |
+| `agents.types.<类型名>` | {} | `enabled`、`model`、`thinking` 覆盖，见 [类型配置](../agents/models.md) |
+| `agents.packageAgents` | 无（全部声明包） | boolean 或包名/source 数组；false 或空数组关闭，见 [类型与资源](../agents/resources.md) |
+| `agents.mentions` | true | TUI 的 @handle 投递与补全，见 [agents 操作](../agents/operations.md) |
+| `agents.scheduling` | true | agent_start 的 schedule 参数、计时器和 Scheduled agents 菜单，见 [定时调度](../agents/schedules.md) |
+| `agents.workflows` | true | agent_workflow 和 Workflows 菜单，见 [Workflow 操作](../agents/workflow/operations.md) |
+| `agents.packageWorkflows` | 无（全部声明包） | boolean 或包名/source 数组 |
 
-runtime/json-store.ts 为 ConfigStore、TaskStore、GoalStore、ScheduleStore 与 WorkflowStore 提供按目标串行入口、异步 pid:uuid 文件锁、锁内重读、复制后修改、原子保存和快照；领域 schema 与修改规则由具体 Store 定义。可按领域选择缺失文件的空值工厂与无变化不提交策略，其他 Store 保持默认语义；GoalStore 缺失为空且仅实际修改写入，详见 [Goal 存储](../goal/storage.md)。Windows 对已有文件的快照也取得同一跨进程锁，避免读取句柄阻止原子替换；缺失文件的快照不创建目录、锁或数据。Windows 删除中的锁文件可能暂时返回 EPERM，仅锁的创建/竞争读取按既有有界等待处理；数据读取、解析和保存错误仍上报。损坏数据保留已有有效缓存并禁止覆盖，锁超时与数据错误使用领域前缀报告。
+按键字段使用 Pi 的按键标识（`ctrl`/`alt`/`shift`/`super` 修饰加按键名），修改后 `/reload`。`/subagents types` 也能编辑 `agents.types`，保存后立即生效，见 [类型配置](../agents/models.md)。
 
-agents.maxConcurrent 限制后台池，maxConcurrentForeground=0 表示前台不限；maxDepth 为包含顶级的会话层数。persistSessions 控制顶级默认持久化；defaultModel 和 types.<规范类型名>.enabled/model/thinking 提供逐字段覆盖。enabled 覆盖 frontmatter 与默认 true，所有新调用共用 catalog 准入。`/subagents types` 按字段定位写入用户或项目配置，保存后立即更新内存与 @类型/workflow 说明；已准入执行及 workflow 固定 child resume 保留契约。写入复用共享 schema 与最新文件内容，无效文件拒绝覆盖。启用状态、模型来源、认证要求和单 agent 操作见 [类型配置](../agents/models.md)。
+### JSON 存储
 
-agents.packageAgents 接受 boolean 或包名/source 数组，默认加载 Pi 已安装包显式声明的类型；false 和空数组关闭。包根由 Pi 的公共包管理器解析，项目包受父级信任约束，声明与资源范围见 [类型与资源](../agents/resources.md)。
+`runtime/json-store.ts` 的 `JsonStore` 是 ConfigStore、TaskStore、GoalStore、ScheduleStore 和 WorkflowStore 的基类。各 Store 自己定义 schema 和修改规则。
 
-agents.mentions 默认 true，控制 TUI 的 @handle 输入投递与补全。统一 bindSession 在资源与 schema 就绪后直接初始化 mentions，首次补全与后续重绑使用同一路径。类型首次提及由仅持有 agent_start 的内存会话克隆生成任务，结果接入共享通知；已有实例复用 Manager.send。关闭开关时保留 Pi 原生文件补全，操作见 [agents 操作](../agents/operations.md)。
+每次修改（`mutate`）的步骤：
 
-agents.scheduling 默认 true，控制顶级 agent_start 的 schedule 参数、主会话计时器与 Scheduled agents 菜单。绑定时按开关更新工具 schema；关闭后使用 /reload，原调度文件保留。时间和生命周期见 [定时调度](../agents/schedules.md)。
+1. 进入本实例的串行队列。
+2. 以 `wx` 创建跨进程锁 `<文件>.lock`（权限 0600），写入 `pid:uuid`。最多尝试 100 次；持有者仍存活时等待 50 ms。持有者进程已退出，或到第三次尝试仍读不到有效 PID 时，核对内容后回收锁。仍拿不到锁时报 `<前缀>_LOCK_TIMEOUT`。
+3. 在锁内重新读取文件，复制一份后应用修改并校验。
+4. 写入 `<文件>.<uuid>.tmp`（权限 0600），再原子重命名为目标文件。
+5. 只删除内容仍为自己 token 的锁文件。
 
-agents.workflows 默认 true，控制主会话 agent_workflow 和 Workflows 菜单；配置或默认工具冲突可撤销本工具，显式启用时报告同名冲突。agents.packageWorkflows 使用 boolean 或包名/source 数组控制包 workflow 发现，项目资源受信任约束。工具、运行控制和恢复见 [Workflow 操作](../agents/workflow/operations.md)。共享 wait 与 goal_wait.waitFor 接受 job_、agent_ 和 wf_ ID，结果消费复用公共通知。
+其他规则：
+
+- 文件缺失时默认使用当前内存值，Store 可以提供空值工厂（`missing`）。设置 `skipUnchanged` 后，修改没有改变文件内容时跳过写盘，只有内存值变化才通知订阅者。GoalStore 同时使用两项，见 [Goal 存储](../goal/storage.md)。
+- 快照（`snapshot`）在 Windows 上也取同一把锁，因为读句柄未关闭时目标文件不能被原子替换；文件缺失时不创建目录、锁或数据。
+- Windows 上正在删除的锁文件会短暂返回 EPERM；只有锁的创建和读取把它当作等待。数据的读取、解析和保存错误照常上报。
+- 文件无法解析时报 `<前缀>_STORE_INVALID`，保留内存中已有的有效数据，不覆盖文件。
+- 订阅外部变化时监视父目录（目标文件每次提交都会换 inode），目录尚未创建时监视最近的已存在祖先目录；变化后 25 ms 重新快照。
+
+其他 JSON 文件（jobs 的 job.json、terminal.json 等）同样先写临时文件再重命名，但不取跨进程锁。
 
 ## 宿主加载边界
 
-开发依赖使用官方未修改的 Pi 1.5.0，Pi 包的 `pi` bin 与 `./rpc-entry` 分别为 `dist/bundle/cli.js`、`dist/bundle/rpc-entry.js`。官方 bundle loader 通过虚拟模块向扩展提供宿主使用的类定义，SDK 入口按原版模块解析加载；Suite 不修改宿主或另建模块身份适配层。UI 使用公开 Container、ScrollView、VStack/HStack 与 focused overlay，阅读能力见 [统一界面](../ui/index.md#原生会话查看)。子代理启动通过受守卫的私有结构读取父模型运行时，见 [模型运行时桥接](../agents/models.md#模型运行时桥接)。依赖升级后须重启宿主；`/reload` 只重载扩展，不替换已载入的宿主模块。
+| 项 | 当前值 |
+| --- | --- |
+| 支持的宿主 | 官方未修改的 Pi 1.5.0 |
+| 依赖 | `@earendil-works/pi-ai`、`pi-coding-agent`、`pi-tui` 的 peer 与开发依赖均精确为 `1.5.0` |
+| 加载入口 | Pi 包的 `pi` bin 为 `dist/bundle/cli.js`，`./rpc-entry` 为 `dist/bundle/rpc-entry.js`；regular/fullscreen 与 RPC 均可加载 |
+| 发布 | `package.json` 为 `private: true`，未发布到 npm |
+| 未验收 | Git、本地路径和 tarball 安装；其他 Pi 版本 |
 
-Responses 的会话持久化、resume 与跨模型消息转换使用官方 Pi 1.5.0 的协议：同 provider/api/model 的文本签名保留 message ID 与 commentary/final_answer phase；跨模型转换按原版规则移除文本签名和不适用的 thinking，再生成请求。可选的 [Responses 历史 ID 恢复](responses-recovery.md) 在最终 payload 隔离失败历史的上游 item ID；默认关闭，主/child 实例独立，不改写源会话或恢复跨模型 phase，不注册净化命令或 API aliases。
-
-`package.json` 保持 `private: true`；`@earendil-works/pi-ai`、`@earendil-works/pi-coding-agent`、`@earendil-works/pi-tui` 的 peer 与开发依赖均精确固定为 `1.5.0`。支持范围为官方未修改的 Pi 1.5.0，实际 Node bin 的 regular/fullscreen 与 RPC 加载入口已通过。加载入口支持不等于消费者安装链路完成验收：Git/本地包及 tarball 安装尚未验收，本包未实际 npm 发布；其他 Pi 版本不在当前支持声明内。
+- 官方 bundle loader 通过虚拟模块向扩展提供宿主的类定义，SDK 入口按原版模块解析加载。Suite 不修改宿主，也不做模块身份适配。
+- UI 只用公开的 Container、ScrollView、VStack/HStack 和 focused overlay，见 [统一界面](../ui/index.md#原生会话查看)。
+- 子代理启动时通过带守卫的私有结构读取父模型运行时，见 [模型运行时桥接](../agents/models.md#模型运行时桥接)。
+- `/reload` 只重载扩展，不替换已载入的宿主模块；依赖升级后要重启 Pi。
+- Responses 会话的持久化、resume 和跨模型消息转换都使用 Pi 1.5.0 原版协议：同 provider/api/model 的文本签名保留 message ID 与 commentary/final_answer phase；跨模型时按原版规则移除文本签名和不适用的 thinking。可选的恢复功能见 [Responses 历史 ID 恢复](responses-recovery.md)。
 
 ## 加载与首次就绪
 
-仅加载已准入模块的注册栈；agents 所属 job 查询沿用 jobs 模块能力。Tasks 的 commands.ts 只注册命令和非 TUI 文本查询，viewer.ts 在首次交互 `/tasks` 或 Dock 详情打开时导入；Goal 的 showDetails 在实际详情路径导入，控制命令不依赖阅读组件。Jobs/Subagents 查看器在首次打开、Ask 界面在首次询问、Suite 设置页面在首次命令、PTY 后端在首次 PTY 启动、child 执行栈在首次 agent 启动、workflow Worker 在首次编排启动时加载。异步 Tasks 查看入口捕获 SessionBinding，导入、任务读取和返回选择后复查绑定身份及取消信号；Goal 详情在导入后核对其捕获的绑定。失效调用不挂载旧页面、不改变新绑定的 Dock。共享依赖的模块按顺序导入，首次并发执行共享加载 Promise，避免 Pi 的 Jiti 加载器暴露未完成导出。加载失败向原有命令/工具错误边界报告。
+`createSuite` 只导入已开启模块的代码，并按顺序逐个导入：Pi 用 Jiti 加载扩展，共享依赖被并发导入时可能暴露未完成的导出。注册在 `session_start` 返回前全部完成，所以首次请求就能用到全部工具、调度、RPC 和补全。
 
-首次准入与绑定共享配置快照；每次绑定为 workflow 描述和 mentions 共用一次类型目录快照，关闭 mentions 或非 TUI 时省去该补全的发现工作。类型保存、显式发送刷新、reload 与会话/分支绑定更新快照；所有启用工具、调度、RPC 和首次补全在 session_start 返回前就绪。UI 时钟只读取 Manager 元数据，不扫描历史文件或日志。
+以下部分在首次使用时才导入：
 
-历史工具 renderer 在 factory 提前注册。agents/render.ts 与 wait-render.ts 的名称查询只依赖 agents/registry.ts，读取按 agentDir 隔离的同一进程 owner；无 owner 时保留原 ID，不创建 AgentManager/jobs runtime 或扫描磁盘历史。资源路径展开使用 agents/resources/paths.ts，history 与 runner 共用而不为路径查询加载 child resource loader。runtime/tools.ts 统一持有按 ExtensionAPI 隔离的 WeakMap，提前 renderer 注册、只读 lookup 和执行工具注册共享一份显示映射，主会话与 child 的 Ask 显示可分别登记。
+| 部分 | 首次导入时机 |
+| --- | --- |
+| Tasks 查看器（tasks/viewer.ts） | 首次交互 `/tasks` 或打开 Dock 任务详情；tasks/commands.ts 只注册命令和非 TUI 文本查询 |
+| Goal 详情（ui/details.ts） | 首次打开详情；/goal 控制命令不依赖它 |
+| Jobs、Subagents 查看器 | 首次打开 |
+| Ask 界面 | 首次询问 |
+| `/suite` 设置页 | 首次执行命令 |
+| PTY 后端 | 首次启动 PTY job |
+| child 执行代码（agents/runner.ts、child.ts） | 首次启动 agent |
+| workflow 运行代码 | 首次启动 workflow |
+| Responses 恢复 | 配置开启时在 `createSuite` 中导入；关闭时不导入 |
+
+异步打开的入口先记下当前 `Binding`（`SessionBinding` 的一次绑定），导入完成、任务读取完成和用户返回选择后再检查它是否仍是当前绑定，Tasks 还检查取消信号。绑定已变时不挂载页面，也不改动新绑定的 Dock。导入失败从原命令或工具的错误路径报告。
+
+每次绑定为 workflow 描述和 mentions 共用一份类型目录快照；mentions 关闭或非 TUI 时不为补全做类型发现。类型保存、显式发送刷新、reload 和会话/分支绑定会刷新这份快照。UI 时钟只读取 Manager 的内存元数据，不扫描历史文件或日志。
+
+### renderer 提前注册
+
+会话历史在 `session_start` 之前就会重绘，所以 `registerSuiteRenderers` 在扩展工厂中注册全部工具 renderer，不等模块注册：
+
+- `runtime/tools.ts` 的 `registerToolRenderers` 按 ExtensionAPI 保存一份 WeakMap 显示映射。提前注册、只读查询（`toolRenderer`）和 `registerBoundTool` 共用它；主会话和 child 的 ask_user 可分别登记不同的 renderer。
+- agents/render.ts 和 wait-render.ts 只依赖 agents/registry.ts 查询 agent 名称：读取本 agentDir 已有的进程内 owner，没有 owner 时显示原 ID，不创建 AgentManager 或 jobs 运行时，也不扫描磁盘。
+- 资源路径展开使用 agents/resources/paths.ts，history 与 runner 共用，不为查路径加载 child 资源加载器。
 
 ## 会话和通知
 
-SessionBinding 为当前主会话保存上下文、会话 ID 和绑定代次。session_start 建立绑定；session_shutdown 保存目标、取消询问、清除本包 UI 并撤销绑定。quit 按当前 agentDir 查询进程全局注册的既有 jobs、agents 与 workflow owner，并等待真实清理结算；模块全部关闭也适用，不依赖当前模块实例，不创建新的 owner。session_tree 撤销出站绑定与等待资源，重新读取该会话的单一当前 Goal；不按所选分支恢复目标、不写离开分支的状态。旧绑定的排队询问不得在新会话展示。
+### 会话绑定
 
-`runtime/owner.ts` 为每次模块加载创建独立实现标识，agents 和 workflow 按 agentDir 保存标识及 owner。同一实现直接复用。`/reload` 遇到其他实现的空闲 owner 时关闭它，再用当前实现创建 owner。遇到忙碌 owner 时保留既有执行及通知，绑定时提示一次，并以 `RUNTIME_UNAVAILABLE` 拒绝新的执行。待工作结算、普通结果送达后再次 `/reload`；无法报告忙碌状态的 owner 需要重启 Pi。Jobs 使用独立的[版本协议与控制桥](../jobs/index.md)。
+`SessionBinding`（`runtime/binding.ts`）保存当前主会话的 ctx、会话 ID 和递增的绑定序号。各模块用 `isCurrent` 判断异步结果是否仍属于当前绑定。
 
-Notifications 按主会话 ID 保存消息，以请求 ID 合并尚未投递的通知。询问与目标详情占用阻塞令牌；释放后仅在当前宿主 idle 且没有待处理消息、目标允许自动工作时投递合并 follow-up。非当前会话的通知保留到对应会话绑定。agent_before_settle 先计算 Responses 修复提案，再处理 Goal 与通知；completed 边界把合并消息作为一份 custom_message 请求一次继续，并保留前序 entries；已存在宿主继续或待处理消息时保留批次。agent_settled 确认 Goal 最终结果后检查 idle 投递。Pi 1.5.0 的手动压缩与树切换成功事件先于 busy 标记清除，仅在这些事件存在待投递消息时使用受绑定代次限制的短期 idle 检查。界面查看器没有模型调度或进程控制权。
+| 事件 | 处理 |
+| --- | --- |
+| `session_start` | 先撤销旧的读取器、计时器和询问，重读配置（首次除外），再建立新绑定并依次绑定各模块，最后尝试投递通知 |
+| `session_tree` | 与重新绑定相同，但不向所选分支写入离开分支的状态；Goal 重新读取该会话唯一的当前目标，不按分支恢复。然后检查 idle 投递 |
+| `session_shutdown` | 保存目标、取消询问、清除本扩展的 UI、撤销绑定。reason 为 quit 时，按当前 agentDir 查找进程中已有的 jobs、agents 和 workflow owner 并等待它们真正清理完毕；模块全部关闭时也执行，且不创建新 owner |
 
-合并通知使用一条 custom_message 的文本块与一一对应的 `details.notificationVersion=1` segments；各片段记录 requestId/source，不重复保存正文。source 区分 Goal 自动续跑、真实事件与不唤醒的 reminder，job/agent/workflow 的结果、提问和指定更新由 requestId 保留身份。混合唤醒批次以真实事件提供正文，Goal 自动轮交付回调保持一次，不额外复制继续文本。已交付正文稳定保留，不通过 context/context_with_system 删除旧 Goal 控制；无 provenance 的历史不做文本清洗。纯自动续跑不可见；显式 `/goal resume` 的展示条目只保存短结果，完整状态统一查看当前 Goal。Tasks reminder 在自然 turn_end 使用同一 provenance envelope 追加，不请求模型继续。Goal 稳定说明、短控制与五轮自动停跑见 [请求与续跑](../goal/context.md)。
+旧绑定排队的询问不会在新会话中显示。
 
-WaitRegistry 按 `(id, runId)` 区分 results 中的执行与其他未读结果；等待同一 agent 的新 run 时，旧 run 的未读结算进入 others，以 reason=other 提前返回，仅消费旧结果，新 run 继续保留在 pending。job/workflow 没有 runId 时沿用 ID 语义，monitor/hands-free 进度仍按独立计数消费。已取消的 signal 在 wait 入口立即拒绝；运行中取消也只结束等待，不取消 child 或进程。
+### reload 与执行 owner
+
+agents 和 workflow 的 owner（持有运行中 child 和 workflow 的对象）按 agentDir 保存在进程全局槽位，`/reload` 后仍在。`runtime/owner.ts` 给每次模块加载一个独立的实现标识 `implementation`，新代码调用 `acquireOwner` 时：
+
+| 已有 owner | 结果 |
+| --- | --- |
+| 同一次加载创建 | 直接复用 |
+| 其他加载创建且空闲 | 关闭它，用当前代码新建 |
+| 其他加载创建且忙碌（含依赖它的 workflow 在运行） | 保留，原有执行和通知继续；每次绑定提示一次，新执行返回 `RUNTIME_UNAVAILABLE`。等工作结束、结果送达后再 `/reload` |
+| 没有实现标识或无法报告是否忙碌 | 同忙碌处理，提示需要重启 Pi |
+
+旧 owner 带着旧代码的闭包，所以不能直接复用。Jobs 有独立的协议版本与控制桥，见 [jobs](../jobs/index.md#协议升级与控制桥)。
+
+### 通知投递
+
+`Notifications`（`runtime/notifications.ts`）汇总 job、agent、workflow 的结果和 Goal 自动续跑消息。只读界面不发送模型 follow-up。
+
+- 消息按主会话 ID 排队，同一请求 ID 的未投递消息被新消息替换。非当前会话的消息保留到该会话重新绑定。
+- 询问与目标详情打开期间持有阻塞令牌（`hold()`），暂不投递。
+- Goal 通过 `setAdmission` 根据队列中的请求 ID 决定本批能否唤醒模型。
+
+投递时机：
+
+1. 空闲投递（`flush`）：当前绑定存在、无阻塞令牌、宿主 idle 且没有待处理消息、Goal 允许时，以 followUp 发送一条消息并触发新一轮。
+2. 轮次结算（`agent_before_settle`）：先计算 Responses 修复，再交给 Goal，最后由通知处理。outcome 为 completed、宿主没有已安排的继续、也没有待处理消息时，把合并消息追加到原有 entries 之后，请求继续一次；否则留到下一个边界。
+3. `agent_settled`：Goal 确认最终结果后再尝试空闲投递。
+4. 手动压缩和树切换：Pi 1.5.0 在 busy 标记清除前就发出这两个成功事件，所以此时若有待投递消息，每 25 ms 检查一次 idle，绑定变化后停止。
+
+### 通知消息格式
+
+一次投递是一条 customType 为 `pi-suite:notification` 的 custom_message：
+
+- content 是文本块列表；`details` 为 `{ notificationVersion: 1, segments }`，segments 与文本块一一对应，每项只记录 requestId 和 source，不重复保存正文。
+- source 取值：`event`（真实结果、提问、更新）、`goal-continuation`（Goal 自动续跑）、`reminder`（不唤醒模型的提醒）。
+- 一批中既有真实事件又有 Goal 续跑时，只发送真实事件的正文；Goal 的交付回调仍执行一次。只有 Goal 续跑时消息不显示。
+- 已交付的正文保留在会话中，不通过 context 事件删除旧的 Goal 控制文本；没有 segments 的历史消息不做文本清洗。
+- 显式 `/goal resume` 的显示条目只保存短结果，完整状态看当前 Goal。Goal 的说明文本、续跑规则和五轮自动停跑见 [请求与续跑](../goal/context.md)。
+- Tasks 提醒在自然的 turn_end 以同一格式追加，source 为 reminder，不请求模型继续。
+
+### 共享等待
+
+`WaitRegistry`（`runtime/wait.ts`）为 wait 和 goal_wait.waitFor 提供等待，接受 job_、agent_ 和 wf_ ID，参数见 [模型工具契约](tools.md#共享参数与返回)。
+
+- 结果按 `(id, runId)` 区分。等待同一 agent 的新 run 时，旧 run 未读的结算放入 others，以 reason=other 提前返回，只消费旧结果，新 run 留在 pending。
+- job 与 workflow 没有 runId，按 ID 区分；monitor 事件和 hands-free 更新按各自计数消费，不消费结果本身。
+- wait 把返回的结果标为已读，并撤销其待投递通知。
+- 用户插话（非扩展来源的 steer 输入）结束等待；在等待开始前已排队的插话也会让等待立即返回。
+- 已取消的 signal 在入口直接拒绝；等待中取消只结束等待，不停止 child 或进程。
+
+### 其他公共工具
+
+- `runtime/text.ts` 的 `sanitizeText` 去除终端控制序列和控制字符，保留换行和制表符；任务说明、pipe 日志和 monitor 事件共用。PTY 的回车覆写等语义由 jobs 终端模块处理。
+- `runtime/clipboard.ts`：在 tmux 内的 TUI 会话中，绑定时把 tmux 的 `set-clipboard` 设为 on，使 Pi 的 OSC 52 复制生效；tmux 客户端不支持 clipboard 特性时发出警告。
+- `runtime/cli-prompt.ts`：`--suite-prompt` 参数携带原文初始提示。只在 startup 时生效；交互输入以 `pi-suite:cli-prompt` 结尾时，把该标记替换为参数原文，保留前面的 @file 附件文本。这样绕过 Pi 1.5 在输入钩子之前对 @file 的解析。
 
 [返回当前文档](../index.md)

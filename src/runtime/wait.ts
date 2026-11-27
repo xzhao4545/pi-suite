@@ -4,15 +4,7 @@ import { ToolError } from './errors.ts';
 import { WAIT_ID_PATTERN, registerBoundTool } from './tools.ts';
 import { waitRenderers } from './wait-render.ts';
 
-/**
- * One wait over jobs and agents. Each module registers a Waitable for its ID prefix; wait
- * observes their change signals and never stops anything. A settlement the model has seen
- * through wait is consumed, so the shared notifier does not deliver it again.
- */
-/**
- * event/update: newest monitor event or hands-free update reported. Separate counters keep a
- * monitor and supervision on the same job independent; consuming progress leaves its result pending.
- */
+/** Separate progress counters let wait consume monitor and hands-free updates without consuming the result. */
 export type Settlement = { id: string; runId?: string; state: string; summary: string; settled: boolean; question?: boolean; event?: number; update?: number };
 export interface Waitable {
   readonly prefix: string;
@@ -39,7 +31,7 @@ export class WaitRegistry {
   register(source: Waitable): void { this.sources[source.prefix] = source; }
   private source(id: string): Waitable {
     const source = this.sources[id.slice(0, id.indexOf('_') + 1)];
-    if (!source) throw new ToolError('NOT_FOUND', `No waitable object for ${id}`, id);
+    if (!source) throw new ToolError('NOT_FOUND', `No wait source for ${id}. Check the ID and that its module is enabled.`, id);
     return source;
   }
   has(id: string): boolean { return Boolean(this.sources[id.slice(0, id.indexOf('_') + 1)]); }
@@ -120,13 +112,11 @@ export function registerWait(pi: ExtensionAPI, registry: WaitRegistry): void {
   registerBoundTool(pi, {
     ...waitRenderers,
     name: 'wait', label: 'Wait',
-    description: 'Wait for jobs, agents or workflows (job_… / agent_… / wf_…) to settle. mode=all (default) or any. ' +
-      'Also returns early when any other job, agent run or workflow of this session settles (including earlier runs of a waited agent), a monitor event or hands-free update arrives (including on a waited job), a child agent asks a question, or the user sends a message; ' +
-      'check pending and call wait again if still needed. Timeout or cancel only ends the wait; nothing is stopped.',
+    description: 'Wait for jobs, agents or workflows to settle. Also returns early when any other job, agent run or workflow in this session settles (including earlier runs of a waited agent), a monitor event or hands-free update arrives, a child asks a question, or the user sends a message. Check pending and wait again if needed. Timeout and cancellation stop nothing.',
     parameters: Type.Object({
-      ids: Type.Array(Type.String({ pattern: WAIT_ID_PATTERN }), { minItems: 1, maxItems: WAIT_LIMITS.maxIds }),
-      mode: Type.Optional(Type.Union([Type.Literal('any'), Type.Literal('all')])),
-      timeoutMs: Type.Optional(Type.Integer({ minimum: 1, maximum: WAIT_LIMITS.maxMs, description: `Default ${WAIT_LIMITS.defaultMs}` })),
+      ids: Type.Array(Type.String({ pattern: WAIT_ID_PATTERN }), { minItems: 1, maxItems: WAIT_LIMITS.maxIds, description: 'job_, agent_ or wf_ IDs' }),
+      mode: Type.Optional(Type.Union([Type.Literal('any'), Type.Literal('all')], { description: 'Wait for any listed ID or all (default).' })),
+      timeoutMs: Type.Optional(Type.Integer({ minimum: 1, maximum: WAIT_LIMITS.maxMs, description: `Wait limit in milliseconds; default ${WAIT_LIMITS.defaultMs}.` })),
     }, { additionalProperties: false }),
     async execute(_id, params, signal) {
       const value = await registry.wait(params.ids, params.mode ?? 'all', params.timeoutMs ?? WAIT_LIMITS.defaultMs, signal);

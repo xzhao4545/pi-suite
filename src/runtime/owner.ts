@@ -41,9 +41,9 @@ export function acquireOwner<T extends ExecutionOwner>(key: string, label: strin
       const owner = slot.owner as T;
       if (slot.implementation === implementation && (options.matches?.(owner) ?? true)) return { owner };
       if (!slot.implementation || !slot.owner.busy) return { owner,
-        stale: `Restart Pi to update the ${label} runtime; the previous load cannot report when it is idle` };
+        stale: `The ${label} runtime from an earlier pi-suite load cannot report when it is idle. Restart Pi.` };
       if (slot.owner.busy() || options.dependants?.()) return { owner,
-        stale: `The ${label} runtime from an earlier pi-suite load still has running work; new runs are disabled. Let it finish or stop it, then /reload (or restart Pi)` };
+        stale: `The ${label} runtime from an earlier pi-suite load still has running work, so new runs are disabled. Let it finish or stop it, then /reload.` };
       // Idle: nothing runs under the old closures, so closing it loses no execution.
       void slot.owner.shutdown().catch(error => process.emitWarning(`pi-suite ${label} runtime retirement failed: ${String(error)}`));
     }

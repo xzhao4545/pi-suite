@@ -78,9 +78,9 @@ function extensionPackageName(extPath: string): string | undefined {
  * All names an extension answers to for allowlist matching (lowercased): its
  * path-derived {@link extensionCanonicalName} plus, when a pi package manifest
  * declares this entry, that package's unscoped short name (`@scope/foo` → `foo`).
- * #143: an extension installed via `pi.extensions: ["./src/index.ts"]` would
- * otherwise only ever match as `src` (the source directory), never by its
- * package name. The path-derived name is preserved, so it keeps matching too.
+ * Without the package name, an extension installed via
+ * `pi.extensions: ["./src/index.ts"]` would only match as `src` (the source
+ * directory). The path-derived name is kept, so it still matches too.
  */
 export function extensionCanonicalNames(extPath: string): string[] {
   const canonical = extensionCanonicalName(extPath);

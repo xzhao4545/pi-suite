@@ -22,7 +22,7 @@ async function editValue(ctx: ExtensionCommandContext, field: Field, current: un
   }
   if (field.schema.type === 'string' || field.schema.type === 'integer') {
     const choice = await ctx.ui.input(title, current === undefined ? '' : String(current));
-    if (field.schema.type === 'integer' && choice !== undefined && !choice.trim()) throw new Error(`${title} requires an integer`);
+    if (field.schema.type === 'integer' && choice !== undefined && !choice.trim()) throw new Error(`Enter an integer for ${title}.`);
     return choice === undefined ? undefined : { value: field.schema.type === 'integer' ? Number(choice) : choice };
   }
   const text = await ctx.ui.editor(`${title} · JSON`, JSON.stringify(current ?? (field.schema.type === 'object' ? {} : []), null, 2));
@@ -46,7 +46,7 @@ export async function showSuiteSettings(ctx: ExtensionCommandContext, dock: Dock
         : configField(layers.user, field.path) !== undefined ? 'user' : 'default';
       const active = configField(config(), field.path);
       return { id: field.path.join('.'), label: field.path.join(' · '), currentValue: describe(effective(field)), values: ['Edit…'],
-        description: `${field.schema.description ? `${field.schema.description}\n` : ''}Source: ${source}\nDefault: ${describe(configField(defaults, field.path))}\nUser: ${describe(configField(layers.user, field.path))}\nProject: ${describe(configField(layers.project, field.path))}\nEffective: ${describe(effective(field))}\n${field.path[0] === 'modules' || field.path[0] === 'commands' ? `Active: ${describe(active)}\n` : ''}Save changes, then /reload to apply.` };
+        description: `${field.schema.description ? `${field.schema.description}\n` : ''}Source: ${source}\nDefault: ${describe(configField(defaults, field.path))}\nUser: ${describe(configField(layers.user, field.path))}\nProject: ${describe(configField(layers.project, field.path))}\nEffective: ${describe(effective(field))}${field.path[0] === 'modules' || field.path[0] === 'commands' ? `\nActive: ${describe(active)}` : ''}` };
     });
     dock.setDetail(true);
     let selected: string | undefined;
@@ -57,7 +57,7 @@ export async function showSuiteSettings(ctx: ExtensionCommandContext, dock: Dock
         let listRows = 0;
         return { render: width => {
           const content = list.render(width); listRows = content.length;
-          return commandFrame(width, [truncateToWidth('Pi Suite · saved settings · /reload applies changes', width), ...content], theme);
+          return commandFrame(width, [truncateToWidth('Pi Suite · Settings', width), ...content], theme);
         }, invalidate: () => list.invalidate(), handleInput: data => { list.handleInput(data); tui.requestRender(); },
         handleMouse: event => event.y >= 2 && event.y < listRows + 2 ? list.handleMouse({ ...event, y: event.y - 2 }) : undefined };
       });
@@ -65,9 +65,9 @@ export async function showSuiteSettings(ctx: ExtensionCommandContext, dock: Dock
     if (selected === undefined) return;
     initial = selected;
     const field = fields.find(field => field.path.join('.') === selected)!;
-    const actions = [{ value: 'edit:user', label: 'Edit user value' }, { value: 'edit:project', label: 'Edit project value' },
-      { value: 'clear:user', label: 'Restore user inheritance' }, { value: 'clear:project', label: 'Restore project inheritance' },
-      ...selected === 'agents.types' && types ? [{ value: 'types', label: 'Agent types · models / thinking' }] : []];
+    const actions = [{ value: 'edit:user', label: 'Edit user' }, { value: 'edit:project', label: 'Edit project' },
+      { value: 'clear:user', label: 'Clear user override' }, { value: 'clear:project', label: 'Clear project override' },
+      ...selected === 'agents.types' && types ? [{ value: 'types', label: 'Agent types' }] : []];
     const source = configField(layers.project, field.path) === undefined ? 'user' : 'project';
     const action = await selectValue(ctx, `${selected} · saved ${describe(effective(field))}`, actions, `edit:${source}`);
     if (action === undefined) continue;

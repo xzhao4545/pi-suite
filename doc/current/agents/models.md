@@ -1,14 +1,66 @@
 # 类型、模型与 thinking 配置
 
-`/subagents types` 或 `/subagents` 的 Types 页面配置启用状态、模型与 thinking；运行记录和 Transcript 的 `c Model / thinking` 操作配置单个 run。Types 页 Enter 或 `c` 配置类型默认值，对之后新建的执行生效；Runs 页与 Transcript 的 `c` 修改所选 run 的覆盖，从它下一次请求生效，Read only 记录不提供。模型修改依次选择模型与 thinking，任一步 Esc 取消整次修改。
+模型和 thinking 可以在两处配置：
 
-Types 按无调用参数、无 individual 覆盖的默认启动设置解析来源，已配置 thinking 使用 Pi 的模型能力约束。模型来源为 inherited 时，列表与详情显示 `not configured`，而不是父级主会话当前模型；详情在 Model 字段内标明从启动时父级继承。thinking 来源为 inherited 时同样显示 `not configured`，Thinking 字段内标明启动时继承父级思考强度并按实际模型能力调整，不另加运行机制说明段。此展示不改变运行时解析顺序。列表显示类型、●/○ 启用状态、模型名称和 thinking；窄列表中两个字段均未配置时合并为 `M/H not configured`（model/thinking），避免重复标记挤掉类型名，详情仍分别列出两个字段及来源。右侧显示配置的完整 provider/modelId 及各字段来源；不可用模型在详情显示具体错误并允许进入修正，预览不创建 child 会话。Enter 或 `c` 直接打开模型选择，返回保留筛选、所选类型和阅读位置。
+| 入口 | 作用对象 | 生效时间 |
+| --- | --- | --- |
+| `/subagents types` 或 `/subagents` 的 Types 页，Enter 或 `c` | 类型默认值 | 之后新建的执行 |
+| Runs 页或 Transcript 的 `c Model / thinking` | 所选 run 的 individual 覆盖 | 该 agent 的下一次请求 |
 
-模型列表来自 Pi 的 `modelRegistry.getAvailable()`，包含全部已认证模型，不受父会话 scoped models 限制。共享选择器复用 Pi 原生 Input、fuzzyFilter 与 SelectList，显示 provider/modelId 和模型显示名；直接输入文字按 provider、model ID 与显示名模糊过滤，Backspace 清除输入，无匹配时显示 `No matching items`。No override 作为可搜索候选保留。长行按可见宽度截断，完整值保持独立；↑↓ 和 PageUp/PageDown 移动，Enter 提交，Esc 取消，按键遵循宿主注入的 keybindings；resize 保留查询与选中对象，过滤输入时焦点与原生光标保持一致。thinking 使用 pi-ai 的模型能力列表，非推理模型仅提供 No override 与 off。
+Read only 记录没有 `c`。每次修改先选模型，再选 thinking；任一步按 Esc 都取消整次修改。
+
+## 解析与来源
+
+模型和 thinking 各自取下表中第一个有值的来源（`resolveSettings`，`models.ts`）：
+
+| 顺序 | 来源标记 | 模型 | thinking |
+| --- | --- | --- | --- |
+| 1 | parameter | 本次调用的 model | 本次调用的 thinking |
+| 2 | individual | 该 agent 的 individual.model | individual.thinking |
+| 3 | type | `agents.types.<类型>.model` | `agents.types.<类型>.thinking` |
+| 4 | frontmatter | 类型文件的 model | 类型文件的 thinking |
+| 5 | default | `agents.defaultModel` | — |
+| 6 | inherited | 父会话当前模型 | 父会话当前 thinking，没有时为 off |
+
+- individual 是启动后编辑的，可以覆盖当时的调用参数。之后恢复时显式传入的参数仍然优先。
+- 调用参数和 frontmatter 可以写模糊名。先精确匹配 `provider/modelId`，或在不带 `/` 时匹配 model ID；没有精确匹配时才在 model ID 和显示名中做不区分大小写的子串匹配，且结果必须唯一。配置和界面写入的值只按精确身份匹配。
+- 带 provider 前缀的名称只匹配该 provider，不会换成其他 provider 的同名模型。
+- 显式模型不可用或匹配不唯一时报 MODEL_UNAVAILABLE，错误中给出来源字段，例如 `agents.types.Explore.model`。新执行和普通恢复在建立 run 和发送请求前就报错。修正方法：在类型或 individual 配置中选可用模型，或取消覆盖。
+- 来源为 inherited 且父会话没有模型时，同样报 MODEL_UNAVAILABLE。
+
+agent_get 详情与记录操作界面显示实际模型、thinking 和来源标记。
+
+## 模型选择器
+
+- 候选来自 Pi 的 `modelRegistry.getAvailable()`，即全部已认证模型，不受父会话 scoped models 限制，按 `provider/modelId` 排序。第一项是 No override。认证变化后列表只含当前可用的模型。
+- 选择器（`src/ui/select.ts`）复用 Pi 原生 Input、fuzzyFilter 与 SelectList。每行显示 `provider/modelId` 和模型显示名。
+- 直接输入文字按 provider、model ID 和显示名模糊过滤；No override 也参与过滤。Backspace 删除输入；无匹配时显示 `No matching items`。
+- ↑↓、PageUp/PageDown 移动，Enter 提交，Esc 取消，按键遵循宿主注入的 keybindings。长行按可见宽度截断。resize 后保留查询和选中项；过滤输入时原生光标跟随焦点。
+- thinking 候选是 No override 加 pi-ai `getSupportedThinkingLevels` 对实际模型给出的级别；非推理模型只有 No override 与 off。
+
+## Types 页
+
+类型列表包含当前信任与包门控范围内的全部类型：内置、包、项目和用户定义，包括 disabled 类型。
+
+每个类型按默认启动设置（无调用参数、无 individual 覆盖）解析：
+
+- 列表每行显示类型名、启用状态（● 启用、○ 禁用）、模型和 thinking。宽度小于 48 列且两个字段都未配置时，合并显示为 `M/H not configured`。
+- 来源为 inherited 的字段显示 `not configured`，不显示父会话当前的模型。详情的 Model 字段注明 `inherit from parent at start`，Thinking 字段注明 `inherit from parent at start, adjusted to model capabilities`。
+- 已配置的 thinking 按模型能力收紧后显示（pi-ai `clampThinkingLevel`）。
+- 详情显示完整的 `provider/modelId` 和每个字段的来源。模型不可用时显示 `unavailable` 和具体错误，仍然可以进入修改。
+- 预览不创建 child 会话。
+
+操作键：
+
+| 键 | 操作 |
+| --- | --- |
+| Enter、`c` | Model / thinking：打开模型选择，返回后保留筛选、所选类型和阅读位置 |
+| `d` | Enable 或 Disable，见 [类型启用状态](#类型启用状态) |
+| `u` | Use definition，只在存在 enabled 配置时出现 |
 
 ## 类型配置与写入
 
-类型覆盖保存在 `pi-suite.json` 的 `agents.types.<规范类型名>.enabled/model/thinking`，模型写入精确的 provider/modelId，不修改 agent Markdown 文件。配置逐类型逐字段合并，启用状态与模型/thinking 单独写入，互相保留。
+类型覆盖保存在 `pi-suite.json` 的 `agents.types.<类型名>`，字段为 `enabled`、`model`、`thinking`。类型名使用 catalog 的规范名（精确大小写）。模型写入精确的 `provider/modelId`。不修改 agent Markdown 文件。
 
 ```json
 {
@@ -20,45 +72,72 @@ Types 按无调用参数、无 individual 覆盖的默认启动设置解析来�
 }
 ```
 
-model 与 thinking 分别定位写入文件：项目 `.pi/pi-suite.json` 已设置该字段时修改项目，否则修改用户 `<agentDir>/pi-suite.json`。界面说明各字段的位置；保存前读取最新内容，保留其他配置，校验共享 schema，再以临时文件与 rename 替换各文件。无变化不写入，无效文件拒绝覆盖并报告错误。
+加载时用户与项目配置逐类型、逐字段合并，项目字段优先。
 
-No override 删除对应位置的字段；删除项目字段后，用户级对应值可以生效。模型选择的 No override 按删除后实际生效的模型提供 thinking 选项。
+写入（`src/runtime/config-edit.ts`、`config-fields.ts`）：
 
-保存后立即更新共享内存配置，之后的新执行和普通会话恢复直接读取，无需 /reload。已准入执行保留当时解析的类型、模型与 thinking，workflow 固定 child resume 沿用原契约。普通 child 的操作配置在实际开始执行时读取，见 [执行与记录](runtime.md)。会话重新绑定时读取外部修改的配置。
+1. 每个字段单独确定写入层：项目 `.pi/pi-suite.json` 已有该字段时写项目，否则写用户 `<agentDir>/pi-suite.json`。界面在修改前提示 model 和 thinking 各自的写入文件。
+2. No override 删除对应层的字段。删除项目字段后，用户层的值生效。模型选 No override 时，thinking 候选按删除后实际生效的模型给出。
+3. 要删除的字段不存在时，该层不写入。
+4. 写入任一层之前，先按共享 schema 校验两层修改后的结果。
+5. 每层在文件锁内重新读取、修改、再次校验，然后写临时文件并 rename 替换。
+6. 现有配置文件无效时拒绝写入并报错。
 
-调度登记保存显式启动参数，触发时的新执行读取当前类型配置；登记后的类型修改可以作用于未来触发，显式 model/thinking 仍优先。workflow 的新 child 同样读取当前类型配置，显式 model/effort 优先；已准入 child 的固定 resume 保持原模型、thinking、类型与结构化 schema。
+两个字段写在不同文件时，一个文件写入失败不撤销另一个；无论成败都会重新加载配置。
 
-`@类型` 的会话克隆使用父模型整理任务，实际 child 经普通启动入口解析类型配置；`@handle` 对活动执行发送引导，对已结束记录恢复执行时读取新类型配置，记录的 individual 优先于类型配置。回收内存 Execution 后的持久恢复使用同一优先级，不改写历史实际模型。
+### 生效时机
+
+- 保存后立即重新加载共享内存配置，并刷新 `@类型` 补全和 workflow 工具中的类型说明，无需 /reload。会话重新绑定时也会重新读取配置，所以外部修改同样生效。
+- 新执行和普通会话恢复读取当前配置。已经启动的执行保留启动时解析的类型、模型与 thinking。普通 child 的配置读取时间见 [执行与记录](runtime.md)。
+- 调度：登记时保存显式启动参数；每次触发都是新执行，读取当前类型配置，显式 model/thinking 仍优先。
+- workflow：新 child 读取当前类型配置，显式 model/effort 优先。workflow 的固定 child resume 沿用原 run 的类型、模型、thinking 与结构化 schema。
+- `@类型`：会话克隆使用父模型整理任务，实际 child 经普通启动入口解析类型配置。
+- `@handle`：对活动执行发送引导；对已结束记录恢复执行，按上表解析，individual 优先于类型配置。内存中的 `Execution`（单次 run 的运行对象）被回收后，从持久记录恢复也按同一顺序，不改写历史记录中的实际模型。
 
 ## 类型启用状态
 
-类型列表包含当前信任与包门控范围内的内置、包、项目和用户定义的全部类型，包括 disabled 类型。底部 `d` 按启用状态执行 Enable 或 Disable，存在 enabled 配置覆盖时显示 `u Use definition`，并提供 `c Model / thinking`。Enable/Disable 写入 enabled：项目已经设置该字段时写项目配置，否则写用户配置；Use definition 删除用户和项目两层的 enabled，回到 frontmatter 的 enabled 或默认 true，不修改 model/thinking。
+启用状态按以下顺序取第一个有值的来源：项目配置、用户配置、frontmatter 的 enabled、默认 true。
 
-启用状态按项目配置、用户配置、frontmatter、默认 true 解析，配置键使用 catalog 的规范类型名。普通新执行、普通会话恢复、嵌套、调度、workflow 新 child 和 RPC 共用 catalog 准入；已准入执行继续运行，workflow 的固定 child resume 沿用其原契约。
+| 操作 | 写入 |
+| --- | --- |
+| Enable / Disable | enabled。项目已有该字段时写项目，否则写用户 |
+| Use definition | 删除用户和项目两层的 enabled，回到 frontmatter 或默认值；不改 model/thinking |
 
-保存后立即刷新当前 @类型 补全和 workflow 的动态类型说明，无需 /reload；禁用类型保留在类型菜单中，便于重新启用。禁用类型不删除已有 agent 的 handle、历史记录或阅读入口；对话内容的可读范围遵循 [回收规则](runtime.md#执行引用回收)。
+- 所有新执行都由 catalog 检查启用状态：普通启动、普通会话恢复、嵌套、调度、workflow 新 child 和 RPC。类型被禁用时报 AGENT_TYPE。
+- 已经启动的执行继续运行；workflow 的固定 child resume 沿用原 run。
+- 禁用类型仍留在 Types 页，可以重新启用。已有 agent 的 handle、历史记录和阅读入口不受影响；对话内容能读多久见 [回收规则](runtime.md#执行引用回收)。
 
 ## 单个 agent
 
-运行中通过 child 的 `setModel(..., {persist:false})` 与 `setThinkingLevel(..., {persist:false})` 修改下一次请求，当前请求不中断；不修改主会话、其他 agent 或 Pi 全局默认。尚未建立 child 会话的执行在第一请求前应用修改，thinking 由 Pi 按实际模型能力收紧。
-
-覆盖保存在既有 `pi-suite:agent-record` 的 individual 字段；查看器将选中 runId 贯穿选择与写入，即使选择期间 agent 恢复为新 run，也不会改写新 run。已结束记录保持该次运行的实际模型与 thinking，编辑只改变之后恢复使用的覆盖。取消单独覆盖时，活动执行恢复其启动参数与启动配置；查看器打开选择器前关闭当前 custom UI，返回后保留原生 transcript 的滚动、搜索和展开状态。所选 run 的 retain 引用覆盖整次详情、输入与模型选择往返，直到最终退出阅读后释放。
-
-workspace 发现的其他 owner 或当前分支之外的已结算记录只提供阅读；当前 owner/分支可见的结束记录仍可编辑 individual。历史合并保留本地编辑的新事实，不让较早保存记录覆盖，见 [持久历史](history.md)。
-## 解析与来源
-
-模型与 thinking 各自按本次调用参数、该 agent 的 individual、类型配置、frontmatter、agents.defaultModel（仅模型）、父级当前值依次取第一个有值的来源。单独编辑发生在启动之后，可覆盖当时的调用参数；下一次恢复显式传入参数仍优先。
-
-agent_get 详情与记录操作界面显示实际模型、thinking 及来源：parameter、individual、type、frontmatter、default、inherited。显式模型不可用或匹配不唯一时报告来源与错误，不跨 provider 替换；调用参数和 frontmatter 可使用匹配唯一的模糊名，配置和界面存储使用精确身份。
-
-认证目录变化后，模型选择仅提供当前可用模型及 No override。新准入或普通恢复引用失去认证的显式配置时报告 MODEL_UNAVAILABLE 并指出对应字段，在建立新 run 与请求前拒绝；用户可通过类型或 individual 配置选择可用模型或取消覆盖。
+- 覆盖保存在该 run 的 `pi-suite:agent-record` 的 `individual` 字段。
+- 选择模型时立即校验，不可用的模型在编辑时就报错，空闲 agent 也一样。
+- 活动执行：通过 child 的 `setModel(..., {persist:false})` 和 `setThinkingLevel(..., {persist:false})` 修改，从下一次请求生效，当前请求不中断。不修改主会话、其他 agent 或 Pi 的全局默认。尚未建立 child 会话的执行在第一次请求前应用；thinking 由 Pi 按实际模型能力收紧。
+- 取消 individual 覆盖时，活动执行回到启动时的调用参数和启动时的配置，启动后的类型修改不会进入该执行。
+- 已结束记录保留该次运行的实际模型与 thinking，编辑只改变之后恢复时使用的覆盖。
+- 查看器把所选 runId 带到写入为止。选择期间 agent 恢复成新 run 时，修改仍然写入打开时的 run。
+- 查看器打开选择器前关闭当前 custom UI，返回后保留原生 transcript 的滚动、搜索和展开状态。所选 run 的 retain 引用保持到退出阅读，覆盖详情、输入和模型选择的整个往返。
+- 当前 owner 和分支可见的结束记录可以编辑 individual。workspace 发现的其他 owner 的记录、或当前分支之外的已结算记录只能阅读。历史合并不会让较早保存的记录覆盖本地编辑，见 [持久历史](history.md)。
 
 ## 模型运行时桥接
 
-普通 child 启动及 `@类型` 的任务整理克隆共用 `src/agents/models.ts` 的 parentModelRuntime helper，结构化读取父 `ctx.modelRegistry.runtime`，检查 getModel、streamSimple、resolveModel 方法后将同一父 runtime 传给 createAgentSession。原版 Pi 1.5.0 将该字段声明为 private；该结构依赖不是公开 ModelRegistry SDK 契约。
+child 与父会话共用同一个模型运行时（Provider、认证和路由状态），由 `models.ts` 的 `parentModelRuntime` 取得：
 
-Manager.start 在任务 I/O 和分配 run 前执行守卫；`src/agents/runner.ts` 在资源与 SDK 启动前再次检查捕获的父 registry，使 reload 保活的排队执行也遵守同一边界。`src/agents/mentions/clone.ts` 在异步克隆准备前检查并捕获父 runtime。字段或方法不可用时明确报 MODEL_RUNTIME_UNAVAILABLE，不静默创建独立 runtime；判断使用方法结构，不跨 bundle 使用 instanceof。桥接不向 Execution 增加持久字段，也不改变执行协议。
+1. 读取父 `ctx.modelRegistry.runtime`。Pi 1.5.0 把该字段声明为 private，这个依赖不属于公开 ModelRegistry SDK 契约。
+2. 检查它有 `getModel`、`streamSimple`、`resolveModel` 三个方法。按方法结构判断，不用 instanceof，因为 CLI bundle 与 SDK 模块的类身份可能不同。
+3. 把同一个 runtime 传给 `createAgentSession`。
 
-共享父 runtime 使 child 与克隆使用同一 Provider、认证和路由状态；单个 child 的模型/会话选择隔离不等于完整 runtime 状态独立。Pi 升级可能改变私有字段及对象协议，当前支持与 Pi peer 均限定为精确的 `1.5.0`，版本声明不能替代升级后的兼容核实，Provider、临时认证及虚拟路由继承仅按实际验证范围声明。
+字段或方法不存在时报 MODEL_RUNTIME_UNAVAILABLE，不另建独立 runtime；否则 `createAgentSession` 会静默创建新的 runtime。
+
+检查位置：
+
+| 位置 | 时机 |
+| --- | --- |
+| `AgentManager.start`（`manager.ts`） | 任务 I/O 和分配 run 之前 |
+| `runner.ts` | 加载资源和启动 SDK 会话之前，针对启动时捕获的父 registry；reload 后仍保留的排队执行也会检查 |
+| `mentions/clone.ts` | `@类型` 克隆的异步准备之前，同时捕获父 runtime |
+
+桥接不向 `Execution` 增加持久字段。
+
+共享 runtime 意味着 child 只隔离模型和会话选择，Provider、认证和路由状态与父会话相同。Pi 升级可能改变私有字段及对象协议，支持的 Pi 版本与 peer 依赖都固定为 `1.5.0`；升级后需要重新核实兼容性。Provider、临时认证及虚拟路由的继承只在已验证范围内保证。
 
 [返回 agents](index.md)

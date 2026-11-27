@@ -24,9 +24,9 @@ export function registerWorkflowTool(pi: ExtensionAPI, workflows: WorkflowsModul
     description: workflowToolDescription.replace('{{typeList}}', 'general-purpose, Explore, Plan and configured agent types.'),
     async execute(id, params, signal, _update, ctx) {
       signal?.throwIfAborted();
-      if (!enabled || !config().agents.workflows) throw new ToolError('INVALID_ARGS', 'Workflow launch is disabled for this session');
+      if (!enabled || !config().agents.workflows) throw new ToolError('INVALID_ARGS', 'Workflow launch is disabled in this session. Use agent_start instead.');
       const task = await workflows.admit().start(params, agents.scope(ctx), config(), id);
-      return textResult([workflowSummary(task), task.logs.at(-1), `resultPath: ${task.resultPath}`],
+      return textResult([workflowSummary(task, true), task.logs.at(-1), `resultPath: ${task.resultPath}`],
       {id: task.id, status: task.status, scriptPath: task.scriptPath, resultPath: task.resultPath, resumedFrom: task.resumedFrom});
     },
     ...workflowRenderers({

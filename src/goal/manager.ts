@@ -10,7 +10,7 @@ import { GoalActivity, autoStopMessage } from './activity.ts';
 import { GOAL_CONTINUATION } from './context.ts';
 import { importGoal } from './snapshot.ts';
 import { goalStore, type GoalStore } from './store.ts';
-import { goalSummary, type Goal, type PauseKind, type Schedule } from './state.ts';
+import { goalSummary, requiresExplicitResume, type Goal, type PauseKind, type Schedule } from './state.ts';
 import { GoalWaitResources } from './wait.ts';
 
 export class GoalManager {
@@ -87,7 +87,7 @@ export class GoalManager {
     let entered = false, applied = false;
     try {
       const result = await store.change(expected, data => {
-        if (!this.binding.isCurrent(captured) || this.store !== store) throw new ToolError('STALE_BINDING', 'Goal session binding was revoked');
+        if (!this.binding.isCurrent(captured) || this.store !== store) throw new ToolError('STALE_BINDING', 'The session changed during this call; retry in the current session');
         this.writing = true; entered = true; this.goal = data.goal ?? undefined; this.controlRevision = data.control;
         const result = apply(); applied = true;
         this.elapsed();
@@ -98,7 +98,7 @@ export class GoalManager {
       }, signal);
       // An atomic write may finish after a session switch; its result still belongs
       // to the captured store and must not replace the new binding's UI or authority.
-      if (!this.binding.isCurrent(captured) || this.store !== store) throw new ToolError('STALE_BINDING', 'Goal session binding was revoked');
+      if (!this.binding.isCurrent(captured) || this.store !== store) throw new ToolError('STALE_BINDING', 'The session changed during this call; retry in the current session');
       this.fault = false; this.goal = store.current.goal ?? undefined; this.controlRevision = store.current.control;
       if (this.schedule === 'running' && this.goal?.status === 'active') this.runningSince = performance.now();
       this.publish();
@@ -199,7 +199,7 @@ export class GoalManager {
       if (this.goal.budget !== undefined && this.goal.usedTokens >= this.goal.budget) throw new Error('Raise the token budget above current usage before resuming');
       if (this.owned && this.schedule === 'running' && this.goal.status === 'active' && this.goal.automatic) return 'running';
       this.activity.reset(); this.controlRevision++;
-      this.goal.status = 'active'; this.goal.automatic = true; delete this.goal.reason; this.goal.resumeRequired = false;
+      this.goal.status = 'active'; this.goal.automatic = true; delete this.goal.reason;
       this.clearWait(); delete this.goal.error; this.transition('idle'); this.request();
       return this.binding.current?.ctx.isIdle() ? 'scheduled' : 'waiting_host';
     });
@@ -211,13 +211,13 @@ export class GoalManager {
       this.goal = undefined; this.pendingElapsed = 0; this.transition('idle'); if (abortRun) ctx.abort();
     });
   }
-  private pauseFor(kind: PauseKind, error?: string, explicit = true): void {
+  private pauseFor(kind: PauseKind, error?: string): void {
     this.activity.reset(); this.cancelRequest(); this.controlRevision++;
     const goal = this.goal!;
     const wait = goal.waiting ? { waiting: goal.waiting, resumeAt: goal.resumeAt, waitFor: goal.waitFor } : goal.reason?.wait;
     const previous = kind === 'shutdown' || kind === 'startup' ? goal.reason?.kind : goal.reason?.previous;
     const automaticStop = goal.reason?.automaticStop;
-    goal.status = 'paused'; goal.automatic = false; goal.resumeRequired = explicit;
+    goal.status = 'paused'; goal.automatic = false;
     goal.reason = { kind, ...previous ? { previous } : {}, ...automaticStop ? { automaticStop } : {}, ...wait ? { wait } : {} };
     if (error) goal.error = error;
     this.clearWait(); this.transition('idle');
@@ -236,8 +236,13 @@ export class GoalManager {
     if (!this.store.current.goal) return false;
     return this.change(() => {
       const goal = this.goal;
-      if (userInput) this.activity.reset();
-      if (userInput && goal?.status === 'paused' && !goal.resumeRequired) { goal.status = 'active'; goal.automatic = true; delete goal.reason; }
+      if (userInput) {
+        this.activity.reset();
+        if (goal?.status === 'paused' && !requiresExplicitResume(goal.reason!.kind)) {
+          this.controlRevision++;
+          goal.status = 'active'; goal.automatic = true; delete goal.reason;
+        }
+      }
       this.runControlRevision = this.controlRevision;
       this.runAccess = goal?.status === 'active' && goal.automatic ? 'execute' : goal && userInput ? 'complete' : undefined;
       this.runGoalId = this.runAccess ? goal!.id : undefined; this.runRevision = goal?.revision; this.runBinding = this.binding.current;
@@ -292,7 +297,7 @@ export class GoalManager {
   async settled(aborted: boolean): Promise<void> {
     if (this.executing) await this.change(() => {
       if (this.runControlRevision === this.controlRevision) {
-        if (aborted && !this.goal!.waiting) this.pauseFor('cancelled', undefined, false);
+        if (aborted && !this.goal!.waiting) this.pauseFor('cancelled');
         else if (this.lastError) this.pauseFor('request_failed', this.lastError);
         else if (!this.goal!.waiting) this.transition('idle');
       } else if (!this.goal!.waiting && this.goal!.automatic) { this.transition('idle'); this.request(); }
@@ -305,25 +310,25 @@ export class GoalManager {
   async askResult(status: AskResult['status'], ctx: ExtensionContext): Promise<void> {
     if (!this.executing || ctx.sessionManager.getSessionId() !== this.binding.current?.sessionId) return;
     if (status === 'answered' || status === 'timed_out') this.transition('running');
-    else if (status === 'cancelled') await this.change(() => { this.goal!.waiting = 'user'; this.pauseFor('cancelled', undefined, false); });
+    else if (status === 'cancelled') await this.change(() => { this.goal!.waiting = 'user'; this.pauseFor('cancelled'); });
   }
   beforeCompact(): void { if (this.goal?.status === 'active') this.transition('waiting_host'); }
   async compacted(willRetry: boolean): Promise<void> {
     if (!this.goal || this.goal.status === 'completed') return;
     await this.change(() => {
-      if (this.goal?.status === 'paused' && !this.goal.resumeRequired && this.goal.reason?.kind === 'cancelled') { this.goal.status = 'active'; delete this.goal.reason; }
+      // Compaction can continue active work, but it is not a new user turn.
       if (this.goal?.status !== 'active') return;
       if (this.goal.waiting) { this.transition(this.goal.waiting === 'user' ? 'waiting_user' : 'waiting_jobs'); return; }
-      this.activity.reset(); this.goal.automatic = true;
+      this.activity.reset();
       if (!willRetry) { this.transition('idle'); this.request(); }
     });
     if (!willRetry) this.notifications.afterHostOperation();
   }
-  async compactFailed(error?: string): Promise<void> { if (this.goal?.status === 'active') await this.change(() => this.pauseFor('compaction_failed', error, false)); }
+  async compactFailed(error?: string): Promise<void> { if (this.goal?.status === 'active') await this.change(() => this.pauseFor('compaction_failed', error)); }
   requireOwned(id: string, ctx: ExtensionContext, access: 'execute' | 'complete' = 'execute', signal?: AbortSignal): Goal {
-    if (!this.goal || this.goal.id !== id) throw new ToolError('NOT_FOUND', 'Use the exact goalId from the current Goal instruction', id);
-    if (access === 'execute' && (this.goal.status !== 'active' || this.runAccess === 'complete')) throw new ToolError('NOT_RUNNING', `Goal is ${this.goal.status}; execution requires /goal resume, but a new user audit may complete it without resume`, id);
-    if (!this.currentAccess(ctx, signal)) throw new ToolError('STALE_BINDING', 'The tool call does not own the current goal revision and request; use a fresh owning run', id);
+    if (!this.goal || this.goal.id !== id) throw new ToolError('NOT_FOUND', 'No such goal; use the goalId from the latest Goal instruction', id);
+    if (access === 'execute' && (this.goal.status !== 'active' || this.runAccess === 'complete')) throw new ToolError('NOT_RUNNING', `Goal is ${this.goal.status}; goal_wait and goal_blocked only work while it runs automatically. Handle the user's request instead; the user can run /goal resume`, id);
+    if (!this.currentAccess(ctx, signal)) throw new ToolError('STALE_BINDING', 'This call belongs to an earlier goal revision or turn; use the goalId from the latest Goal instruction in a new turn', id);
     return this.goal;
   }
   async complete(id: string, summary: string, ctx: ExtensionContext, signal?: AbortSignal): Promise<boolean> {

@@ -127,7 +127,7 @@ export class TaskStore extends JsonStore<TaskData> {
     return this.mutate(data => {
       checkGeneration(data, generation);
       const task = data.tasks.find(task => task.id === id);
-      if (!task?.parentId) throw new ToolError('NOT_FOUND', `No execution task ${id}`);
+      if (!task?.parentId) throw new ToolError('NOT_FOUND', `No child task ${id} in this list. Use task_list({state:"all"}) to find a child ID.`);
       if (reference.agentId) task.owner = reference.agentId;
       if (reference.jobId && !task.jobIds.includes(reference.jobId)) task.jobIds.push(reference.jobId);
       task.updatedAt = Date.now();
@@ -144,10 +144,10 @@ type LegacyStore = Pick<TaskStore, 'current' | 'snapshot' | 'edit' | 'seed' | 'l
 const globals = globalThis as typeof globalThis & { [key]?: Map<string, TaskStore>; [oldKey]?: Map<string, LegacyStore> };
 function retire(store: LegacyStore): Promise<unknown> {
   const barrier = store.snapshot();
-  const reject = () => Promise.reject(new ToolError('TASK_STALE', 'This pre-generation task store is retired; restart task control with the current tools. Execution is not stopped.'));
+  const reject = () => Promise.reject(new ToolError('TASK_STALE', 'This task store comes from an earlier pi-suite load and is retired. Call task_list({}) and retry with the current tools; running executions are not stopped.'));
   for (const method of ['snapshot', 'edit', 'seed', 'link']) Object.defineProperty(store, method, { value: reject, configurable: true });
   return barrier.finally(() => {
-    Object.defineProperty(store, 'current', { get() { throw new ToolError('TASK_STALE', 'Pre-generation task store is retired'); }, configurable: true });
+    Object.defineProperty(store, 'current', { get() { throw new ToolError('TASK_STALE', 'This task store comes from an earlier pi-suite load and is retired. Call task_list({}) and retry with the current tools.'); }, configurable: true });
   });
 }
 export function taskStore(target: string, path?: string): TaskStore {

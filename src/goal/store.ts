@@ -4,12 +4,12 @@ import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { JsonStore } from '../runtime/json-store.ts';
 import { ToolError } from '../runtime/errors.ts';
-import { goalSchema, readGoalSnapshot } from './snapshot.ts';
+import { normalizeStoredGoal, storedGoalSchema } from './snapshot.ts';
 import type { Goal } from './state.ts';
 
 export interface GoalData { version: 1; sessionId: string; control: number; goal: Goal | null }
 const schema = Type.Object({ version: Type.Literal(1), sessionId: Type.String({ minLength: 1 }),
-  control: Type.Integer({ minimum: 0 }), goal: Type.Union([goalSchema, Type.Null()]) }, { additionalProperties: false });
+  control: Type.Integer({ minimum: 0 }), goal: Type.Union([storedGoalSchema, Type.Null()]) }, { additionalProperties: false });
 export function goalPath(agentDir: string, sessionId: string): string {
   // SDK IDs are not necessarily UUIDs. Prefix the encoded component so '.'/'..'
   // cannot escape the session directory, without truncating or conflating identities.
@@ -20,8 +20,7 @@ export class GoalStore extends JsonStore<GoalData> {
   constructor(path: string | undefined, readonly sessionId: string) {
     super(path, empty(), value => {
       if (!Value.Check(schema, value) || value.sessionId !== sessionId) throw new Error('Invalid Goal state or session ownership');
-      readGoalSnapshot({ version: 2, goal: value.goal });
-      return value as GoalData;
+      return { ...value, goal: value.goal ? normalizeStoredGoal(value.goal) : null };
     }, 'GOAL', { missing: empty, skipUnchanged: true });
   }
   initialize(imported: () => Goal | undefined): Promise<void> {

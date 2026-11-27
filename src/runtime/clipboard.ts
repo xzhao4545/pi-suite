@@ -7,7 +7,7 @@ export async function prepareClipboard(pi: Pick<ExtensionAPI, 'exec'>, ctx: Exte
   if (inspect.code !== 0) throw new Error(`Cannot inspect tmux clipboard: ${inspect.stderr}`);
   const [mode, features] = inspect.stdout.trim().split('|');
   if (!features?.split(',').includes('clipboard')) {
-    ctx.ui.notify('The tmux client has no clipboard capability. Enable OSC 52 in the SSH terminal and its tmux terminal-features before copying.', 'warning');
+    ctx.ui.notify('tmux clipboard unavailable. Enable OSC 52 and the tmux clipboard feature.', 'warning');
     return;
   }
   if (mode === 'on') return;

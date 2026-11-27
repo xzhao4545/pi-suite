@@ -45,7 +45,7 @@ export async function childResources(run: Execution, factory: ExtensionFactory) 
   const disabledBuiltins = process.argv.some(arg => arg === '--no-extensions' || arg === '-ne') ? ['codemode', 'tool-search', 'mcp'] : process.argv.includes('--no-mcp') ? ['mcp'] : [];
   const discovered = [...resolved, ...additional].filter(resource => resource.enabled);
   for (const name of excluded) if (!discovered.some(resource => extensionCanonicalNames(resource.path).includes(name))) {
-    throw new ToolError('AGENT_CONFIG', `${type.sourcePath ?? type.name}: excluded extension ${name} is not enabled or available`);
+    throw new ToolError('AGENT_CONFIG', `${type.sourcePath ?? type.name}: excluded extension ${name} is not enabled or available. Remove it from exclude_extensions or enable it in Pi settings.`);
   }
   const loadAll = extensions === true || spec?.wildcard;
   const paths = [...new Set(discovered.filter(resource => {
@@ -56,7 +56,7 @@ export async function childResources(run: Execution, factory: ExtensionFactory) 
   }).map(resource => resource.path))];
   const availableNames = new Set(paths.flatMap(extensionCanonicalNames));
   for (const name of [...spec?.names ?? [], ...selectors.extNames]) {
-    if (!availableNames.has(name) && !excluded.has(name)) throw new ToolError('AGENT_CONFIG', `${type.sourcePath ?? type.name}: extension ${name} is not enabled or available`);
+    if (!availableNames.has(name) && !excluded.has(name)) throw new ToolError('AGENT_CONFIG', `${type.sourcePath ?? type.name}: extension ${name} is not enabled or available. Enable it in Pi settings or remove it from extensions and ext: tools.`);
   }
   const gate: NestedCallGate = {}, preloaded: Skill[] = [];
   const memory = type.memory ? (writableMemory ? buildMemoryBlock : buildReadOnlyMemoryBlock)(type.name, type.memory, cwd) : '';
@@ -69,7 +69,7 @@ export async function childResources(run: Execution, factory: ExtensionFactory) 
     skillsOverride: base => {
       if (!Array.isArray(skills)) return base;
       preloaded.splice(0, preloaded.length, ...base.skills.filter(skill => skills.includes(skill.name)));
-      for (const name of skills) if (!preloaded.some(skill => skill.name === name)) throw new ToolError('AGENT_CONFIG', `${type.sourcePath ?? type.name}: skill ${name} is not enabled or available`);
+      for (const name of skills) if (!preloaded.some(skill => skill.name === name)) throw new ToolError('AGENT_CONFIG', `${type.sourcePath ?? type.name}: skill ${name} is not enabled or available. Enable it in Pi settings or remove it from skills.`);
       return { ...base, skills: [] };
     },
     systemPromptOverride: prompt, appendSystemPromptOverride: () => [],

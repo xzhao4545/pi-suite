@@ -97,7 +97,7 @@ test('saved agent reads never repair files and reject corrupt storage, invalid l
     manager.restore([orphan, {...orphan, id: 'agent_memory', runId: 'run_memory', sessionFile: undefined}]);
     assert.equal(manager.records().filter(record => active(record.state)).length, 0);
     const recovered = manager.get(orphan.id).record;
-    assert.equal(recovered.state, 'failed'); assert.match(recovered.error!, /no longer owned/);
+    assert.equal(recovered.state, 'failed'); assert.match(recovered.error!, /not active in this Pi process/);
     assert.match(transcriptText(transcript(recovered)), /saved output/);
     assert.throws(() => transcript(manager.get('agent_memory').record), /no saved transcript/);
   } finally { await manager.shutdown(); rmSync(root, {recursive: true, force: true}); }

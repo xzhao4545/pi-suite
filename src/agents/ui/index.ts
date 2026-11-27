@@ -11,7 +11,7 @@ export const showSubagents = (...args: Parameters<typeof readSubagents>): Promis
   withReadingSession(args[1], () => readSubagents(...args));
 
 async function readSubagents(args: string, ctx: ExtensionContext, deps: SubagentsDeps): Promise<void> {
-  if (ctx.mode !== 'tui') { ctx.ui.notify('Use agent_list and agent_read outside the terminal UI'); return; }
+  if (ctx.mode !== 'tui') { ctx.ui.notify('Outside the TUI, use agent_list or agent_read.'); return; }
   const words = args.trim().split(/\s+/).filter(Boolean), command = words[0] ?? 'all';
   const pages = ['runs', 'types', ...deps.scheduler?.isActive ? ['schedules'] : [], ...deps.workflows?.available() ? ['workflows'] : []];
   if (!(RUN_FILTERS as readonly string[]).includes(command) && command !== 'workspace' && !pages.includes(command)
@@ -23,7 +23,7 @@ async function readSubagents(args: string, ctx: ExtensionContext, deps: Subagent
   const exit = new ViewerNavigation();
   const states = new Map(pages.map(page => [page, page === 'runs' ? runs.browser : browseState()]));
   let next: string | undefined;
-  // Every page shares one switcher; each keeps its own list state so returning restores its selection.
+  // Store list state per page so switching tabs preserves the selection.
   const navigation: BrowseChoice = { selected: () => page,
     items: () => pages.map(value => ({ value, label: `${value[0].toUpperCase()}${value.slice(1)}` })),
     select: (value, done) => { next = value; done(); } };

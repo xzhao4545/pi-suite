@@ -4,16 +4,16 @@ import { sanitizeText } from '../../runtime/text.ts';
 import type { AgentRecord } from '../../agents/types.ts';
 import type { ScrollView } from '../scroll.ts';
 import { newOutputHint, stateTone } from '../browser-chrome.ts';
+import { countText, elapsedText } from '../format.ts';
 
-const compact = new Intl.NumberFormat('en', {notation: 'compact', maximumFractionDigits: 1});
 const literal = (text: string) => sanitizeText(text).replace(/[\r\n\t]/g, ' ');
 
 /** Names/state/runtime survive narrow layouts before optional model/usage fields. */
 export function agentInformation(record: AgentRecord, waiting: boolean, readonly: boolean, reader: ScrollView, width: number, theme: Theme): string[] {
   const state = waiting ? 'waiting(parent)' : record.state;
   const status = theme.fg(stateTone(state) ?? 'text', state);
-  const time = theme.fg('muted', record.elapsedMs === undefined ? 'not started' : `${(record.elapsedMs / 1000).toFixed(1)}s`);
-  const tokens = record.usage ? theme.fg('muted', `↑${compact.format(record.usage.tokens.input)} ↓${compact.format(record.usage.tokens.output)}`) : '';
+  const time = theme.fg('muted', record.elapsedMs === undefined ? 'not started' : elapsedText(record.elapsedMs));
+  const tokens = record.usage ? theme.fg('muted', `↑${countText(record.usage.tokens.input)} ↓${countText(record.usage.tokens.output)}`) : '';
   let tail = `${status} · ${time}${tokens ? ` · ${tokens}` : ''}${readonly ? theme.fg('muted', ' · read only') : ''}`;
   if (visibleWidth(tail) + 12 > width) tail = `${status} · ${time}`;
   if (visibleWidth(tail) + 8 > width) tail = status;

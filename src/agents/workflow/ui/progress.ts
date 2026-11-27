@@ -3,34 +3,46 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { toolLine, stateLine, type ToolExpandedRow, type ToolLine } from '../../../ui/tool-render.ts';
 import { Text } from '@earendil-works/pi-tui';
-import { sanitizeText } from '../../../runtime/text.ts';
+import { detailsText, field, part, statePart, type DetailRow, type StructuredDetails } from '../../../ui/structured-details.ts';
 import { workflowActive } from '../manager.ts';
 import { buildPhaseGroups, displayState, formatDuration, header } from '../progress/index.ts';
 import { workflowResultText, type WorkflowTask } from '../task.ts';
 
-export function workflowLines(task: WorkflowTask, expanded = true, now = Date.now()): string[] {
+export function workflowDetails(task: WorkflowTask, expanded = true, now = Date.now()): StructuredDetails {
   const groups = buildPhaseGroups(task.workflowProgress, task.meta?.phases);
   const title = header(task, task.meta, groups, task.agentCount, now);
-  const lines = [`${title.name} · ${title.stats}`, title.subtext,
-    `${task.totalTokens} tokens · ${task.totalToolCalls} tools${task.replayedCount ? ` · ${task.replayedCount} replayed` : ''}`];
+  const active = workflowActive(task);
+  const rows: DetailRow[] = [
+    [part(title.name, 'heading'), part(' · '), part(title.stats, 'number'), ...(title.state ? [part(' · '), statePart(title.state)] : [])],
+    title.subtext,
+    [part(`${task.totalTokens} tokens · ${task.totalToolCalls} tools${task.replayedCount ? ` · ${task.replayedCount} replayed` : ''}`, 'number')],
+  ];
   if (expanded) {
     for (const group of groups) {
-      lines.push('', `${group.title} · ${group.status} · ${group.doneCount}/${group.totalCount} · ${formatDuration(group.durationMs)}`);
+      rows.push('', [part(group.title, 'heading'), part(' · '), statePart(group.status, group.status === 'not-started' ? 'queued' : group.status),
+        part(' · '), part(`${group.doneCount}/${group.totalCount} · ${formatDuration(group.durationMs)}`, 'number')]);
       for (const agent of group.agents) {
-        lines.push(`  #${agent.index} ${agent.label} · ${displayState(agent, workflowActive(task))}${agent.cached ? ' · cached' : ''}`);
-        lines.push(`    ${[agent.agentType, agent.modelId ?? agent.model, agent.thinking && `thinking ${agent.thinking}`,
-          agent.requestedThinking && `(asked ${agent.requestedThinking})`, agent.attempt && `attempt ${agent.attempt}`,
-          agent.lastAttemptReason, agent.tokens !== undefined && `${agent.tokens} tokens`,
-          agent.toolCalls !== undefined && `${agent.toolCalls} tools`].filter(Boolean).join(' · ')}`);
-        for (const [label, value] of [['Prompt', agent.promptPreview], ['Result', agent.resultPreview], ['Error', agent.error]]) {
-          if (value) lines.push(`    ${label}: ${value}`);
-        }
+        const state = displayState(agent, active);
+        rows.push([part('  '), part(`#${agent.index}`, 'id'), part(' '), part(agent.label, 'heading'), part(' · '),
+          statePart(state, state === 'interrupted' || state === 'skipped' ? 'stopped' : state), part(agent.cached ? ' · cached' : '', 'meta')]);
+        const model = agent.modelId ?? agent.model;
+        const meta = [agent.agentType ? part(agent.agentType) : undefined, model ? part(model) : undefined,
+          agent.thinking ? part(`thinking ${agent.thinking}`) : undefined,
+          agent.requestedThinking ? part(`(asked ${agent.requestedThinking})`, 'meta') : undefined,
+          agent.attempt ? part(`attempt ${agent.attempt}`, 'number') : undefined,
+          agent.lastAttemptReason ? part(agent.lastAttemptReason) : undefined,
+          agent.tokens === undefined ? undefined : part(`${agent.tokens} tokens`, 'number'),
+          agent.toolCalls === undefined ? undefined : part(`${agent.toolCalls} tools`, 'number')].filter(value => value !== undefined);
+        rows.push([part('    '), ...meta.flatMap((value, index) => index ? [part(' · '), value] : [value])]);
+        if (agent.promptPreview) rows.push(field('    Prompt:', agent.promptPreview));
+        if (agent.resultPreview) rows.push(field('    Result:', agent.resultPreview));
+        if (agent.error) rows.push(field('    Error:', part(agent.error, 'error')));
       }
     }
-    if (task.logs.length) lines.push('', 'Logs', ...task.logs);
-    if (!workflowActive(task)) lines.push('', 'Result', workflowResultText(task));
+    if (task.logs.length) rows.push('', [part('Logs', 'label')], ...task.logs);
+    if (!active) rows.push('', [part('Result', 'label')], [part(workflowResultText(task), task.error === undefined ? undefined : 'error')]);
   }
-  return lines.filter(line => line !== undefined);
+  return {rows};
 }
 /** Structured tool expansion uses the same phase model as the inspector, not text pattern matching. */
 export function workflowToolRows(task: WorkflowTask): ToolExpandedRow[] {
@@ -59,7 +71,7 @@ export function workflowToolRows(task: WorkflowTask): ToolExpandedRow[] {
 export function workflowLine(task: WorkflowTask): ToolLine {
   const groups = buildPhaseGroups(task.workflowProgress, task.meta?.phases);
   const title = header(task, task.meta, groups, task.agentCount, Date.now());
-  return { ...stateLine(task.status === 'killed' ? 'stopped' : task.status === 'paused' ? 'queued' : task.status), title: 'Workflow', summary: `${title.name} · ${title.stats}`,
+  return { ...stateLine(task.status === 'killed' ? 'stopped' : task.status === 'paused' ? 'queued' : task.status), title: 'Workflow', summary: `${title.name} · ${title.stats}${title.state ? ` · ${title.state}` : ''}`,
     meta: [title.subtext ?? '', `${task.totalTokens} tokens · ${task.totalToolCalls} tools${task.replayedCount ? ` · ${task.replayedCount} replayed` : ''}`] };
 }
 
@@ -72,7 +84,7 @@ export class WorkflowProgress extends Text {
     const revision = `${task.progressVersion}:${task.status}:${task.endTime}:${task.error}:${Math.floor(now / 1000)}`;
     if (revision !== this.revision) {
       this.revision = revision;
-      this.setText(sanitizeText(workflowLines(task, this.expanded, now).join('\n')));
+      this.setText(detailsText(workflowDetails(task, this.expanded, now), this.theme));
     }
     return super.render(width);
   }

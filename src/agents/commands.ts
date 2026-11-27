@@ -12,6 +12,6 @@ export interface SubagentsDeps {
   scheduler?: AgentScheduler; workflows?: { available(): boolean; show(ctx: ExtensionContext, page: BrowsePage): Promise<void> }; jobs?: AgentJobViewer;
 }
 export function registerSubagentsCommand(pi: ExtensionAPI, deps: SubagentsDeps): void {
-  pi.registerCommand('subagents', { description: 'Filter child sessions and workspace history, configure models and stop execution trees',
+  pi.registerCommand('subagents', { description: 'Browse child runs, types, schedules, and workflows',
     handler: async (args, ctx) => { const { showSubagents } = await import('./ui/index.ts'); await showSubagents(args, ctx, deps); } });
 }

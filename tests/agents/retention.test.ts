@@ -48,7 +48,7 @@ test('sweep preserves active execution, unread results and readers while retaini
     gate.resolve(); await running.done.promise; running.consumed = true; manager.sweep(expired + 1000);
     assert.equal(manager.runs.size, 0);
     assert.deepEqual(manager.get(nested.record.id).record.ancestors, [running.record.runId]);
-    await assert.rejects(manager.start({prompt: 'late child'}, {ctx, run: running}, config), /no longer admits children/);
+    await assert.rejects(manager.start({prompt: 'late child'}, {ctx, run: running}, config), /Parent run has ended or is stopping/);
   } finally { gate.resolve(); await manager.shutdown(); await h.dispose(); rmSync(root, {recursive: true, force: true}); }
 });
 

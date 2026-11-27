@@ -25,8 +25,8 @@ function remaining(deadline: number): number {
 }
 function systemPath(file: string): string {
   if (process.platform !== 'win32') throw new Error('Only Windows has been validated');
-  // This first version is validated only on the actual C:\\Windows installation.
-  // Never allow a mutable env/PATH value to select a substitute control executable.
+  // Only the real C:\\Windows installation is trusted. A mutable env/PATH value must never
+  // select a substitute process-control executable.
   const trustedRoot = 'C:\\Windows';
   const declared = process.env.SystemRoot;
   if (!declared || !win32.isAbsolute(declared) || win32.normalize(declared).toLowerCase() !== trustedRoot.toLowerCase()) throw new Error('Unvalidated system root; trusted Windows controls refused');

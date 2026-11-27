@@ -1,56 +1,242 @@
 # ask 接口与操作
 
-ask_user 是顺序执行工具，等待用户作答或空闲期限结算。单题使用 question；批量使用 2–4 项 questions，顶层 question 只作为整批标题。批量各题可提供 `title`（1–60 个字符），作为简短页签标题；省略时从该题题干派生。标题仅用于导航，完整题干与回答结构保持不变。题目不提供 context；批量题型、options 和默认值必须放在各题内部，顶层批量题型参数会报告错误。
+`ask_user` 向用户展示一题或一批问题，用户作答、跳过、空闲到期或询问被取消后返回结果。工具按顺序执行（`executionMode: "sequential"`），同时发起的多个询问排队，逐个展示。
+
+## 运行条件
+
+| 调用方 | 行为 |
+| --- | --- |
+| 主会话 TUI | 在输入区展示询问表单 |
+| 主会话 print 或 RPC 模式 | 报错 `ask_user needs the interactive Pi terminal …`，询问不展示 |
+| 调用时绑定的会话已不是当前会话 | 直接返回 `cancelled` |
+| subagent | 问题交给直接父级回答，期限由父级回答单独计算，见 [父级回答](../agents/operations.md#父级回答) |
+
+`modules.ask` 为 `false` 时主会话不注册 `ask_user`。
+
+## 参数
+
+| 参数 | 说明 |
+| --- | --- |
+| `question` | 单题题干。批量时作为整批标题（heading），显示在上边框 |
+| `questions` | 批量询问，2–4 项。每项包含 `question`，可选 `title`、`options`、`allowMultiple` 和默认值 |
+| `title` | 批量页签标题，1–60 字符；省略时取题干。只用于页签，题干照常完整显示，答案结构不变 |
+| `options` | 字符串，或 `{id?, title, description?, recommended?}` |
+| `allowMultiple` | 是否多选，默认 `false` |
+| `defaultAnswer`、`defaultOptionId`、`defaultOptionIds` | 预填文字、单选预选、多选预勾选；三者互斥 |
+| `allowComment` | 为 `true` 时操作栏提供 Comment 输入，作用于所有题目 |
+| `timeoutMs` | 空闲期限，见 [超时](#超时与结果) |
+
+批量时 `options`、`allowMultiple` 和默认值只能写在 `questions` 各项内。题目没有 `context` 字段，选项说明放在 `description`，完整保留。没有 `allowFreeform` 参数：每题都接受自定义文字。
 
 ## 选项与默认值
 
-options 支持字符串或 `{id?, title, description?, recommended?}`。未指定 ID 时生成 option-1 等 ID；预选值按原始选项 ID 引用。description 为选项说明，完整保留，不是题目背景字段。
+- 未指定 `id` 的选项按列表位置生成 `option-1`、`option-2` 等 ID。默认值按选项 ID 引用。
+- 每题末尾都有一个自定义文字项（无选项的题只有这一项）。单选时它与预设项互斥；多选时可与预设项同时选中。自定义项没有选项 ID，不会与模型提供的 ID 冲突。
+- `recommended` 只显示 `(Recommended)` 标记，不预选，也不写进答案标题；空闲到期时作为自动答案的候选。
+- `defaultAnswer` 预填文字并选中自定义项，光标停在该项；`defaultOptionId` 只用于单选，`defaultOptionIds` 只用于多选。
+- 默认值只在表单创建时写入一次。搜索筛选、切题、打开历史或详情、终端缩放都不重置用户的编辑；被筛选隐藏的选项保留勾选状态。
+- 取消选中自定义项后保留文字草稿，但不提交这段文字。
 
-allowMultiple 默认 false。所有题目始终允许自由回复，单选与多选列表末尾均提供独立自定义项；单选与预设项互斥，多选可与预设项同时勾选。工具参数不包含 allowFreeform。推荐标记在人工操作时只用于展示，不预勾选，也不进入答案标题；空闲到期时作为自动作答的候选。defaultAnswer 预填并选中自定义项，defaultOptionId 预选单选，defaultOptionIds 预勾选多选。题型不匹配、默认值冲突和未知 ID 在展示前报错。
+参数在展示前校验，下列错误直接报给模型：
 
-默认值仅初始化一次；筛选、切题、查看历史、说明和终端缩放都保留用户编辑。多选按实际勾选集合提交；隐藏的选项继续保留真实勾选状态。自定义项取消选择后保留文字草稿，但不提交该文字；自定义项没有预设选项 ID，不占用模型提供的 ID。allowComment 为 true 时提供可选评论输入。
+| 错误 | 原因 |
+| --- | --- |
+| `No question supplied. …` | 两者都缺，或 `question` 为空白 |
+| `With questions, put options, allowMultiple and default* settings inside each questions entry …` | 批量时在顶层写了选项、题型或默认值 |
+| `Duplicate option IDs. …` | 同一题内选项 ID 重复 |
+| `Use only one of defaultAnswer, defaultOptionId and defaultOptionIds per question` | 同一题给了多个默认值参数 |
+| `defaultOptionId requires single choice; defaultOptionIds requires allowMultiple: true` | 单选用了 `defaultOptionIds`，或多选用了 `defaultOptionId` |
+| `Default references an unknown option ID. …` | 默认值引用了不存在的 ID |
 
 ## 超时与结果
 
-timeoutMs 单位为毫秒，表示用户持续不操作的空闲时长；省略使用配置 ask.timeout 的默认 600000（10 分钟），0 不设期限。计时从第一次展示开始，排队期间不计时，整批共用一个计时器。每次按键、粘贴和实际处理的鼠标点击/滚轮重置完整时长，历史与说明阅读也计为操作；终端缩放不重置计时。倒计时显示 idle 分:秒。
+`timeoutMs` 是用户连续不操作的毫秒数。省略时使用配置 `ask.timeout`（默认 600000，即 10 分钟），`0` 不设期限，最大 2147483647。
 
-返回 status 为 answered、skipped、timed_out 或 cancelled：
+- 计时从询问第一次渲染开始；排队等待期间不计时。整批共用一个计时器。
+- 每次按键、粘贴，以及被询问处理的鼠标点击和滚轮都把期限重置为完整时长；在历史或详情里的操作同样重置。终端缩放不重置。
+- 上边框显示剩余时间 `idle 分:秒`，无期限时显示 `no timeout`。
 
-| 状态 | 结果与执行 |
+### 状态
+
+| `status` | 触发 | 答案 | 后续 |
+| --- | --- | --- | --- |
+| `answered` | 用户提交 | 每题都有答案 | 模型继续；进行中的 goal 回到 `running` |
+| `skipped` | 顶层 Esc 或操作栏 Skip | 已有的选择和文字，未答题为空 | 模型继续；goal 状态不变 |
+| `timed_out` | 空闲到期 | 自动答案，每项带 `autoSelected: true` | 模型继续；进行中的 goal 回到 `running` |
+| `cancelled` | 工具 signal 中止、会话切换或 reload、排队中被撤销 | 无 | 工具返回 `terminate: true` 结束本轮；进行中的 goal 进入等待用户并暂停，见 [暂停原因与恢复](../goal/lifecycle.md#暂停原因与恢复) |
+
+`skipped`、`timed_out` 和 `cancelled` 都不是用户同意，不能作为破坏性操作或需要授权操作的依据。每次询问只结算一次；输入、到期和中止在同一时刻到达时以先到者为准。
+
+### 到期自动答案
+
+每题按以下顺序取第一个可用的答案：
+
+1. 当前已选中的答案，包括预选、预填，以及多选中已选的预设项与非空自定义文字。
+2. 推荐项：单选取第一个，多选取全部。
+3. 第一个选项。
+
+未选中的文字草稿不参与。没有选项、也没有已选文字的题保持未回答，不编造文字。非空的 comment 随答案一起提交，与 `allowComment` 是否显示输入入口无关。
+
+跳过只收集已有答案，不取推荐项或首项，也不加 `autoSelected`。
+
+### 返回给模型的文本
+
+`content` 由 `askToolResult` 生成，只含状态和答案，不回显未选项和选项说明：
+
+```text
+timed_out (not consent)
+1. 数据库选型 → PostgreSQL (auto-selected)
+2. 是否加缓存 → custom: 先不加
+   comment: 之后评估
+3. 部署区域 → unanswered
+```
+
+| 部分 | 格式 |
 | --- | --- |
-| answered | 用户提交答案，模型与目标继续运行 |
-| skipped | 顶层 Esc 或 Skip；返回已有选择与文字草稿，未答题保持未回答，模型继续，目标自动许可保持；不得当作整批确认或同意 |
-| timed_out | 空闲到期自动提交，可作为推荐方案继续；每个答案带 autoSelected: true，不能作为破坏性或需要同意操作的授权 |
-| cancelled | signal 中止、会话切换/reload 或队列撤销；无答案，通过 terminate 结束本轮，当前目标进入 waiting_user 并停止自动工作 |
+| 首行 | 状态；`timed_out` 和 `skipped` 追加 ` (not consent)`；`cancelled` 只有这一行 |
+| 题干 | 压缩空白后最多 24 个 Unicode 码点，超出以 `…` 结尾 |
+| 预设答案 | 选项标题，多个用 `, ` 连接；同一题有同名选项时加 `#N `（N 为原列表位置） |
+| 自定义文字 | 只有文字时为 `custom: …`；多选混合时追加 ` + custom: …` |
+| 其他 | 自动答案追加 ` (auto-selected)`；未答为 `unanswered`；comment 单独一行；subagent 末尾追加 `source: parent` |
 
-到期优先保留用户当前选中答案（含预选/预填）；多选的预设项与已选非空自定义项一并保留。没有已选答案时，单选取第一项推荐，多选取全部推荐；没有推荐时取第一个选项。未选中的文字草稿不参与答案；无选项文本题无草稿时保持未回答，不编造文字。非空评论随选择或文字提交，不受 allowComment 是否展示输入入口影响。
+答案和 comment 不截断。
 
-content 为共用格式化函数生成的文本：首行状态，单题与批量统一逐题输出编号、最多 24 个 Unicode 码点的题干摘要与所选答案，不回显未选项或选项说明。预设答案使用原始标题；同名选项按原列表位置加 `#N` 消歧，其余不重复 optionId。多选自定义文字追加 ` + custom: …`，仅自由文字使用 `custom: …`；未答位置为 `unanswered`。comment 放在对应答案下的 `comment: …` 行，child 追加 `source: parent`。timed_out 和 skipped 首行明示 `not consent`，自动作答的对应答案加 `auto-selected`；取消为 `cancelled`。答案与评论不因回执预算截断。
+### details
 
-details 保留 status、单题 question/options/response/cancelled 和批量 kind/heading/questions/answers/cancelled 字段，供本地渲染与历史展开；child 另带 source: parent。官方 Responses 使用 content 构造工具回传，不自动把本地 details 序列化成模型正文；模型自己的工具调用参数与回传是不同消息。cancelled 标记仅在 skipped/cancelled 时为 true。批量到期与跳过的答案按题目原顺序返回，未答题为 {status: "unanswered"}；单题无答案时 response 为 null。跳过只收集已有答案，不自动选择推荐或首项，也不添加 autoSelected 标记。
+`details` 供本地渲染和历史展开使用，不作为模型正文发送。
 
-selection 响应保留 selections 原始预设标题和 optionIds，多选同时选中自定义项时以独立 text 字段保存原始文字；仅提交自定义项时返回 freeform 与原始 text。两者可带 comment 与自动作答的 autoSelected 标记。Review、工具摘要与历史展示保留预设选择及带 ✎ 的文字。人工多题回答需要 Review 整批确认。回答、跳过、超时和取消只结算一次。
+| 形态 | 字段 |
+| --- | --- |
+| 单题 | `status`、`cancelled`、`question`、`options`、`response`（无答案时为 `null`） |
+| 批量 | `status`、`cancelled`、`kind: "batch"`、`heading`、`questions`、`answers` |
+
+- `cancelled` 在 `skipped` 和 `cancelled` 时为 `true`。
+- 批量 `answers` 按题目顺序排列，每项为 `{status: "answered", response}` 或 `{status: "unanswered"}`；`cancelled` 时为空数组。
+- subagent 结果另带 `source: "parent"`。
+
+`response` 有两种：
+
+| `kind` | 字段 |
+| --- | --- |
+| `selection` | `selections`（预设标题）、`optionIds`；多选同时选了自定义项时另有 `text` |
+| `freeform` | `text`，只提交了自定义文字 |
+
+两者都可带 `comment`，自动答案带 `autoSelected: true`。
 
 ## 操作
 
-- 默认 inline 询问位于输入区域，覆盖 Dock 并替换编辑器，保留主聊天与终端历史查阅。实际高度按整批内容测量并以终端 70% 为上限，切题与筛选时保持高度；缩放或展开切换时重算。圆角框区分询问与 footer，窄于 50 列省略侧边线，小于 12 行预算省略分隔线，小于 5 行预算使用紧凑回答。
-- 单选用 ○/◉，多选用 ☐/☑；自定义项在相同选择标记后始终带 ✎，无选项文本题使用 ✎。空自定义项显示 Type your own answer，输入后直接显示文字，不添加提示前缀。已选为 success 色，未选为 dim，光标 ❯ 和推荐为 accent。题目带题型与当前页信息，小终端保留当前答案行并压缩标签。
-- ↑/↓ 移动选项，空格选择/勾选；单选预设项 Enter 选中并确认，多选预设项 Enter 只确认、不切换勾选，空集合提示 Space to select。自定义项 Enter 进入编辑，再按 Enter 确认并前进；已有文字时空格按题型选择/取消该项，空文字时空格进入编辑。Shift+Enter 等原生换行按键继续交给编辑器。Tab 进入/离开操作栏，←/→ 选动作，Enter 执行。
-- `/` 搜索单选或多选；Enter 返回列表，筛选不修改勾选。PageUp/PageDown 翻页。
-- 终端支持的鼠标滚轮在选项区移动当前选项、在 Review 区选择阅读项；滚轮不勾选、不提交，也不改变当前键盘焦点。点击页签切题，点击列表选择当前项；空自定义项点击进入编辑，已有文字时点击按题型选择/取消，Enter 或 f 再次编辑。History 和全文使用键盘阅读，不保证正文滚轮或嵌套工具单项鼠标操作；说明预览的超出内容通过 `d` 全文查看。
-- 题干折叠为最多 4 行；选项标题折叠为一行，窄屏说明以内联 muted 文字显示最多 2 行。被折叠的内容以 `…` 标记，操作栏提示展开与全文入口。
-- `e` 或操作栏 Expand 切换整批 inline 展开，展开后提供 Collapse；只有当前页存在折叠内容时提供 Expand。选项标题、说明和 Review 题干/答案完整换行，问题区至少为选项预留 3 行，仍超出时显示 `… d full text`。展开列表的 PageUp/PageDown 按物理行滚动，可阅读高于窗口的选项。`e` 只在列表与 Review 回答焦点下生效；搜索、评论和自由输入的文字键交给原生输入组件，使用 Tab 进入操作栏执行展开或全文动作。
-- `d` 或操作栏 View details 打开 requester、heading、完整问题与当前选项的完整标题/说明；自定义项及无选项文本题同时显示带 ✎ 的完整文字草稿。自定义项长文字同样支持 e 展开与 d 全文。Review 页读取当前行的完整问题、答案与 comment。文本编辑中的 `d` 属于文字输入，通过 Tab → View details 阅读全文。
-- 宽度达到 100 列时提供右侧选项预览，说明不重复内联显示；预览按显式窗口预算显示，超出内容通过 `d` 全文阅读，不保证预览列滚轮。列表范围内的滚轮移动当前选项，continuation 行点击映射到所属选项，页签坐标包含外框偏移；操作栏在内容超出窗口时显示当前位置/总数。
-- `f` 或自定义项上的 Enter 进入自由输入并选中该项；单选取消预设选择，多选保留已有勾选。Esc 退出编辑，保留文本、光标与选中状态。无选项题与预填文字题默认停留在文字入口，Enter 才进入编辑，非编辑时允许左右切题。文本确认复用 Pi Editor 的 disableSubmit，由 Ask 前进并退出编辑，返回题目时保留草稿、光标及撤销状态。
-- History 操作或默认 Ctrl+H 打开上方历史、下方问题与草稿的独立视图；Tab 在历史、回答和操作栏间切换，Ctrl+H 返回 inline。
-- 历史/详情用 ↑/↓、PageUp/PageDown、Home/End 阅读；`/` 搜索，n/N 查下一/上一匹配。操作栏提供 Previous page、Next page、Back。历史中的 t/i 切换工具/thinking 展开；正文使用公开 ScrollView 的唯一 scrollTop 与显式 viewport 切片/补齐，scrollbar:hidden 无滚动条计时器，clamp 保留显式暂停。Transcript 保留原生消息与工具实例及缓存，滚动和搜索保持一份偏移，不初始化回答草稿；阅读能力与主会话工具鼠标的区别见 [终端交互边界](../ui/terminal.md#原生阅读与鼠标)。
-- 批量以各题短标题显示页签与 Review，不使用 Q1/Q2 标签；标题先清理字面量并压缩空白，再按最多 22 个可见列截断，已有答案的页签带 ✓。窄屏按预算缩短标题，无法同时容纳所有页签时保留当前页及空间允许的 Review，鼠标只命中实际可见标签；切页仍沿用完整页序。选项与 Review 焦点下 ←/→ 循环切页，第一题向左进入 Review，Review 向右回到第一题。文本编辑中的 ←/→ 留给光标移动；Enter 确认前进，最后一题进入 Review。Review 显示问题摘要与答案，↑/↓ 或滚轮查看，全部回答后 Enter 或 Submit 整批提交；有未回答题时提示数量并停留。单题确认直接提交，没有页签。
-- Esc 返回搜索、评论、操作栏、历史/详情及文本编辑的上一级；处于选项列表、Review 或未编辑的文本题时 Esc 跳过整个询问，操作栏 Skip 同样跳过，并将已有选择和文字发送给模型。底部提示 Esc back 或 Esc skip。跳过后焦点回到宿主输入框，模型继续生成，此时再按 Esc 是 Pi 原生中断。关闭说明或历史只结束查看。
-- /suite 显示当前询问开关、超时与空闲 Dock 行数；ui.maxRows 不限制询问高度。
+### 布局
 
-询问期间公共通知协调器暂存 job 完成和 child 父级问题，直到原生询问结束并到达可投递边界，和 goal 继续请求合并为一条消息；只有系统取消进入 waiting_user 后须由新的用户输入或 /goal resume 恢复；跳过保持自动许可，空闲到期继续运行。child 提问交给直接父级的协议期限独立管理，父级实际调用的原生询问从展示开始计时，排队不消耗期限。草稿不会因查看历史而初始化，历史操作重置空闲倒计时。
+询问显示在输入区，替换编辑器；Dock 在询问期间不输出任何行。聊天区和终端回滚仍可查看。
 
-ask_user 调用中只显示题干摘要或题目数；结果折叠为“题干 → 答案”或批量 answered 数，timed_out 带 auto-selected 与 unanswered 数，skipped 同时显示已有答案或 answered 数，cancelled 显示实际状态。展开保留每题题干、选项标记、自由文字和 comment；已选项使用 success。历史记录若含 context，renderer 按该记录展示；当前工具参数与新回执不含题目 context，不重写历史记录。子代理标题为 Ask parent。询问期间的 History 与主界面使用同一 Suite renderer；主会话工具结果的鼠标单项点击与 Pi 默认 Ctrl+O 由宿主管理，History 用 t 切换工具明细、i 切换 thinking，不将主会话鼠标能力泛化到历史阅读。
+高度取整批题目与 Review 中最高的内容，上限见 [询问高度](../ui/index.md#询问高度)；切题和筛选时高度不变，终端缩放或切换展开时重算。按可用行数选择外框：
+
+| 可用行数 / 宽度 | 外框 |
+| --- | --- |
+| 行数 < 5 | 无外框，只显示当前答案行和操作栏；只有 1 行时只显示答案行 |
+| 行数 ≥ 5 | 圆角外框，上边框左侧为 `Ask · requester · heading`，右侧为 `页码 · 剩余时间` |
+| 行数 ≥ 12 | 另在题干、列表和操作栏之间加分隔线 |
+| 宽度 < 50 列 | 省略左右边线 |
+
+页码为 `当前/总数` 加题型：`○` 单选、`☐N` 多选（N 为已选数）、`✎` 文本题；Review 页为 `Review`。
+
+### 标记
+
+| 标记 | 含义 |
+| --- | --- |
+| `○` / `◉` | 单选未选 / 已选 |
+| `☐` / `☑` | 多选未选 / 已选 |
+| `✎` | 自定义文字项（跟在选择标记后）；无选项的题只有 `✎` |
+| `❯` | 当前项 |
+| `(Recommended)` | 推荐项 |
+
+空的自定义项显示 `Type your own answer`，有文字后直接显示文字。已选标记为 success 色，未选为 dim，当前项和推荐标记为 accent。
+
+### 按键
+
+| 按键 | 列表 | 自定义项 |
+| --- | --- | --- |
+| ↑ / ↓ | 移动当前项 | — |
+| PageUp / PageDown | 按可见高度翻页；展开模式下按物理行滚动 | — |
+| 空格 | 单选选中，多选切换勾选 | 有文字时选中或取消；无文字时进入编辑 |
+| Enter | 单选：选中并确认；多选：只确认，不切换勾选 | 进入编辑；编辑中再按 Enter 确认并前进 |
+| `f` | 进入编辑 | 进入编辑 |
+| `/` | 搜索（按标题和说明模糊筛选）；Enter 返回列表，筛选不改变勾选 | — |
+| `e` | 切换展开 | — |
+| `d` | 打开详情 | — |
+| ← / → | 批量时切题 | — |
+| Tab | 进入或离开操作栏；操作栏内 ←/→ 或 ↑/↓ 选择，Enter 执行 | — |
+| Ctrl+H | 打开或关闭历史（`ask.historyKey`） | — |
+
+- 进入编辑时，单选清除预设选择，多选保留已有勾选。编辑器设为 `disableSubmit`（Pi Editor 不自行提交），编辑中的 Enter 由询问处理：确认并前进，同时退出编辑。编辑中 Esc 退出编辑，保留文字、光标和选中状态；Shift+Enter 等换行键由编辑器处理。返回某题时保留草稿、光标和撤销记录。
+- 无选项的题和带预填文字的题打开时停在文字项，按 Enter 才进入编辑；未编辑时可用 ←/→ 切题。
+- 编辑、搜索和评论输入中，`e`、`d`、`f`、`/` 和 ←/→ 都是普通输入，需通过 Tab 进入操作栏执行对应动作。
+- 确认时当前题没有答案，状态行提示 `Answer required`；多选未勾选任何项时提示 `Space to select`。
+- 操作栏：View details、Expand/Collapse、History、Search（有选项时）、Comment（`allowComment` 时）、Skip；Review 页为 Submit、View details、Expand/Collapse、History、Skip。Comment 输入按 Enter 保存并回到操作栏。
+
+### 鼠标
+
+终端支持鼠标时：
+
+- 点击页签切题。
+- 点击选项等同于移到该项后按空格；点击被折叠的续行归属其所在选项。点击 Review 行选中该行。
+- 滚轮在选项区移动当前项，在 Review 区移动当前行；滚轮不勾选、不提交，也不改变键盘焦点。
+
+历史、详情和右侧说明预览只用键盘阅读，见 [原生阅读与鼠标](../ui/terminal.md#原生阅读与鼠标)。
+
+### 折叠、展开与详情
+
+- 题干最多显示 4 行；选项标题显示一行；选项说明以 muted 色缩进显示，最多 2 行。被截断处以 `…` 结尾，操作栏右侧提示 `e expand` 和 `d full text`。
+- `e` 或 Expand 展开整批：选项标题、说明和 Review 内容完整换行，问题区至少为选项留 3 行，仍放不下时题干以 `… d full text` 结尾。只有当前页有被截断内容时才提供 Expand，展开后提供 Collapse。
+- `d` 或 View details 打开详情，显示 requester、heading、完整题干和当前选项的标题与说明；当前项为自定义项时显示 `✎` 加完整文字。Review 页显示当前行的题干、答案和 comment。
+- 终端宽度 ≥ 100 列时列表占左半边，右侧预览当前选项的标题与说明，此时说明不再内联显示；预览放不下的内容用 `d` 阅读。
+- 内容超出窗口时，状态行前显示 `当前/总数`。
+
+### 批量与 Review
+
+1. 批量询问在题干上方显示页签（可用行数 ≥ 6 时），末尾为 Review。页签取 `title` 或题干，压缩空白后最多 22 列；已答题带 `✓`。宽度不足时依次缩短最宽的标签；仍放不下时只显示当前页和空间允许的 Review，鼠标只命中可见页签，←/→ 仍按完整题序切换。
+2. 列表或 Review 焦点下 ←/→ 循环切题：第一题向左进入 Review，Review 向右回到第一题。
+3. 每题 Enter 确认后进入下一题，最后一题之后进入 Review。
+4. Review 列出每题的题干与答案（预设标题加 `✎ 文字`），未答题显示 `Unanswered`；↑/↓ 或滚轮移动。
+5. 全部回答后 Enter 或 Submit 提交整批；有未答题时提示 `N unanswered` 并停留。
+
+单题没有页签和 Review，确认即提交。
+
+### Esc 与跳过
+
+- 在搜索、评论、操作栏、历史、详情和文字编辑中，Esc 返回上一级。
+- 在选项列表、Review 或未编辑的文字项上，Esc 跳过整个询问；操作栏 Skip 相同。已有的选择和文字随 `skipped` 发给模型。
+- 状态行显示 `Esc back` 或 `Esc skip` 表示当前 Esc 的作用。
+- 跳过后焦点回到 Pi 输入框，模型继续生成；此时再按 Esc 是 Pi 原生中断。
+
+### 历史
+
+Ctrl+H 或 History 打开历史：上方为当前会话分支的 transcript，下方为当前题干和答案行。高度见 [询问高度](../ui/index.md#询问高度)。正文复用主会话的 [Transcript](../ui/index.md#transcript) 消息与工具组件及其缓存，滚动与搜索共用 [ScrollView](../ui/index.md#scrollview) 的同一个偏移。
+
+| 按键 | 作用 |
+| --- | --- |
+| Tab | 在历史、答案行和操作栏之间切换 |
+| ↑ / ↓、PageUp / PageDown、Home / End | 阅读 |
+| `/`，`n` / `N` | 搜索，下一个 / 上一个匹配 |
+| `t` / `i` | 展开或折叠工具结果 / thinking |
+| Esc 或 Ctrl+H | 返回询问 |
+
+详情使用相同的阅读按键（不含 `t`/`i`），操作栏为 Previous page、Next page、Back。打开历史或详情不改变草稿。
+
+### 配置与通知
+
+- `modules.ask`、`ask.timeout` 和 `ask.historyKey` 在 [`/suite`](../runtime/settings.md#suite) 中设置；`ui.maxRows` 不影响询问高度。
+- 询问期间 job 完成、subagent 问题等通知暂不投递；询问结束并到达可投递边界后，与 goal 继续请求合并为一条消息投递，见 [通知投递](../runtime/index.md#通知投递)。
+
+## 工具显示
+
+| 位置 | 内容 |
+| --- | --- |
+| 调用行 | 标题 `Ask`（subagent 为 `Ask parent`）；单题显示题干前 60 列，批量显示 `N questions` |
+| 折叠结果 | 单题为 `题干 → 答案`（题干前 40 列）；批量为 `N answered`；`skipped` 前加 `skipped · `；`cancelled` 只显示状态 |
+| 折叠标签 | `auto-selected`、`not consent`（`timed_out` 和 `skipped`）、`N unanswered`、`source: parent` |
+| 展开结果 | 状态、consent、source、heading，以及每题的题干、带标记的选项和说明、自定义文字、comment、自动答案标记和未答标记；已选项为 success 色 |
+
+询问期间的历史与主界面使用同一 renderer。主会话工具结果的单项点击与 Pi 默认 Ctrl+O 由宿主管理；历史中用 `t`/`i` 切换，不提供主会话的鼠标操作。较早记录中的题目若带 `context`，展开时按该记录显示；当前参数与新结果不含 `context`，旧记录不被改写。
 
 [返回当前文档](../index.md)

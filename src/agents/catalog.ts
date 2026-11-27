@@ -47,9 +47,9 @@ export function agentTypes(cwd: string, agentDir = getAgentDir(), options: Catal
   }
   for (const { path, packageName } of [...sources, ...local]) {
     const { frontmatter: raw, body } = parseFrontmatter<Record<string, unknown>>(readFileSync(path, 'utf8').replace(/^\uFEFF/, ''));
-    if (!Value.Check(frontmatter, raw)) throw new ToolError('AGENT_CONFIG', `Invalid agent frontmatter: ${path}`);
+    if (!Value.Check(frontmatter, raw)) throw new ToolError('AGENT_CONFIG', `Invalid agent frontmatter: ${path}. Check the field names and value types.`);
     const name = raw.name?.trim() || basename(path, '.md');
-    if (name.includes(':')) throw new ToolError('AGENT_CONFIG', `${path}: ':' is reserved for package type scopes`);
+    if (name.includes(':')) throw new ToolError('AGENT_CONFIG', `${path}: ':' is reserved for package type scopes. Choose a name without ':'.`);
     const allowed = raw.allowed_subagents;
     const allowedNames = typeof allowed === 'boolean' ? undefined : csv(allowed);
     const subagents = allowed === true || allowedNames?.some(name => name === '*' || name.toLowerCase() === 'all') ? 'all' : allowedNames?.length ? allowedNames : undefined;
@@ -57,8 +57,8 @@ export function agentTypes(cwd: string, agentDir = getAgentDir(), options: Catal
       ? tool.toLowerCase() : tool.toLowerCase() === 'glob' ? 'find' : tool.toLowerCase() === 'multiedit' ? 'edit' : tool;
     const tools = csv(raw.tools)?.flatMap(tool => tool === '*' || tool.toLowerCase() === 'all'
       ? ['read', 'write', 'edit', 'bash', 'grep', 'find', 'ls', 'powershell'] : [normalize(tool)]);
-    if (csv(raw.exclude_extensions)?.some(name => /[/\\*~]/.test(name))) throw new ToolError('AGENT_CONFIG', `${path}: exclude_extensions accepts canonical names only`);
-    if (raw.memory && (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(name) || name.length > 128)) throw new ToolError('AGENT_CONFIG', `${path}: memory requires a simple agent name`);
+    if (csv(raw.exclude_extensions)?.some(name => /[/\\*~]/.test(name))) throw new ToolError('AGENT_CONFIG', `${path}: exclude_extensions accepts names only. Replace paths or patterns with extension names.`);
+    if (raw.memory && (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(name) || name.length > 128)) throw new ToolError('AGENT_CONFIG', `${path}: memory requires a name of at most 128 ASCII characters. Start with a letter or digit and use only letters, digits, dots, underscores or hyphens.`);
     types.set(name, { name, displayName: raw.display_name, description: raw.description ?? '', systemPrompt: body.trim(), promptMode: raw.prompt_mode ?? 'replace',
       tools, excludeTools: csv(raw.disallowed_tools ?? raw.disallowedTools)?.flatMap(tool => [...new Set([tool, normalize(tool)])]), model: raw.model, thinking: raw.thinking,
       maxTurns: raw.max_turns, persistSession: raw.persist_session, allowedSubagents: subagents,
@@ -75,6 +75,6 @@ export function agentTypes(cwd: string, agentDir = getAgentDir(), options: Catal
 export function resolveType(cwd: string, name: string, options: CatalogOptions = {}): AgentType {
   const types = agentTypes(cwd, getAgentDir(), options), exact = types.find(type => type.name === name);
   const matches = exact ? [exact] : types.filter(type => type.name.toLowerCase() === name.toLowerCase());
-  if (matches.length !== 1 || matches[0].enabled === false) throw new ToolError('AGENT_TYPE', `Unknown, ambiguous or disabled agent type: ${name}`);
+  if (matches.length !== 1 || matches[0].enabled === false) throw new ToolError('AGENT_TYPE', `Unknown, ambiguous or disabled agent type: ${name}. Use the exact name of an enabled type.`);
   return matches[0];
 }

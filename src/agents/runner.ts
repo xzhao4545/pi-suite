@@ -9,13 +9,12 @@ import { createStructuredCapture, createStructuredOutputTool, structuredRetryPro
 import { sanitizeText } from '../runtime/text.ts';
 import { createChildSession } from './session.ts';
 import { parentModelRuntime } from './models.ts';
+import { ModelRequestError } from './retry.ts';
 
 export async function executeAgent(run: Execution, factory: ExtensionFactory, changed: () => void,
   emitEvent: (kind: AgentEventKind, details?: Record<string, unknown>) => void): Promise<void> {
   const { record, parent } = run, agentDir = getAgentDir();
-  // Reload retains global managers and old queued runs; their lazily loaded runner
-  // can be newer than admission. Read the captured source registry without extending
-  // Execution's shape, and reject a missing bridge before any SDK/resource startup.
+  // Queued runs can survive reload. Check the registry captured at launch before loading resources.
   const modelRuntime = parentModelRuntime(parent.ctx);
   const { settingsManager, loader, scope } = await childResources(run, factory);
   if (run.controller.signal.aborted) return;
@@ -38,11 +37,17 @@ export async function executeAgent(run: Execution, factory: ExtensionFactory, ch
   await session.bindExtensions({ mode: 'print', onError: error => { errors.push(error.error); } });
   if (errors.length) throw new Error(errors.join('; '));
   installExtensionToolScope(session, scope);
+  const extensionRunner = session.extensionRunner;
   run.renderers = new Map();
   for (const tool of session.getAllTools()) {
-    const renderer = session.extensionRunner.resolveToolRenderers(tool.name, () => session.getToolDefinition(tool.name));
+    const renderer = extensionRunner.resolveToolRenderers(tool.name, () => session.getToolDefinition(tool.name));
     if (renderer) run.renderers.set(tool.name, renderer);
   }
+  // Retained transcripts can still resolve the child's extensions after the session closes.
+  run.customRenderers = {
+    getMessageRenderer: extensionRunner.getMessageRenderer.bind(extensionRunner),
+    getEntryRenderer: extensionRunner.getEntryRenderer.bind(extensionRunner),
+  };
   run.liveResults = new Map();
   const before = session.getSessionStats();
   const updateUsage = () => {
@@ -90,28 +95,34 @@ export async function executeAgent(run: Execution, factory: ExtensionFactory, ch
   });
   const abort = () => { void session.abort(); };
   run.controller.signal.addEventListener('abort', abort, { once: true });
+  let requestError: string | undefined;
+  const prompt = async (message: string) => {
+    await session.prompt(message, { source: 'extension' });
+    const last = manager.getBranch().findLast(entry => entry.type === 'message' && entry.message.role === 'assistant');
+    if (last?.type === 'message' && last.message.role === 'assistant' && last.message.stopReason === 'error') {
+      requestError = last.message.errorMessage ?? 'Model request failed. Check the configured model and provider before retrying.';
+    }
+  };
   try {
     if (!run.controller.signal.aborted) {
       record.state = 'running'; emitEvent('started'); changed();
-      await session.prompt(`${run.inheritedContext ?? ''}${record.prompt}`, { source: 'extension' });
-      for (const message of run.pendingMessages.splice(0)) {
-        if (!run.controller.signal.aborted) await session.prompt(message, { source: 'extension' });
-      }
-      // The SDK cannot force tool choice. Preserve upstream's single explicit correction;
-      // absence after it is an error rather than returning prose as structured data.
-      if (run.options.structuredOutput && !capture.json && !run.controller.signal.aborted) {
+      await prompt(`${run.inheritedContext ?? ''}${record.prompt}`);
+      // Leave unsubmitted messages on the run so its replacement can still deliver them.
+      while (requestError === undefined && !run.controller.signal.aborted && run.pendingMessages.length) await prompt(run.pendingMessages.shift()!);
+      // The SDK cannot force a tool call; prompt once more rather than treating prose as structured output.
+      if (requestError === undefined && run.options.structuredOutput && !capture.json && !run.controller.signal.aborted) {
         record.structuredRetried = true;
-        await session.prompt(structuredRetryPrompt(capture), { source: 'extension' });
+        await prompt(structuredRetryPrompt(capture));
       }
     }
-    const entries = manager.getBranch(), last = entries.findLast(entry => entry.type === 'message' && entry.message.role === 'assistant');
+    const entries = manager.getBranch();
     record.result = resultText(entries); record.endLeafId = manager.getLeafId();
+    updateUsage();
+    if (requestError !== undefined) throw new ModelRequestError(requestError, settingsManager.getRetrySettings(), errors);
     if (run.options.structuredOutput && !run.controller.signal.aborted) {
-      if (capture.json === undefined) errors.push(capture.lastError ?? 'Agent did not report StructuredOutput');
+      if (capture.json === undefined) errors.push(capture.lastError ?? 'Agent did not report StructuredOutput. Retry with a task that asks it to call StructuredOutput.');
       else { record.structuredJson = capture.json; record.result = capture.json; }
     }
-    updateUsage();
-    if (last?.type === 'message' && last.message.role === 'assistant' && last.message.stopReason === 'error') errors.push(last.message.errorMessage ?? 'Model request failed');
     if (errors.length) throw new Error(errors.join('; '));
   } finally {
     record.activity = undefined;

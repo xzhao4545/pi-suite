@@ -172,8 +172,8 @@ test('dangerous shortcuts use shared two-step confirmation, report unconfirmed c
     await until(() => view.render(120).join('\n').includes('cleanup unconfirmed'));
     assert.ok(view.render(120).join('\n').includes('real cleanup evidence'));
     const readonly = create(true); await readonly.initialize(); readonly.handleInput('x'); readonly.handleInput('x');
-    assert.equal(stops, 1); assert.ok(!readonly.render(120).join('\n').includes('stop process'));
-    assert.ok(!readonly.render(120).join('\n').includes('delete history'));
+    assert.equal(stops, 1); assert.ok(!readonly.render(120).join('\n').includes('stop job'));
+    assert.ok(!readonly.render(120).join('\n').includes('delete job'));
     readonly.handleInput('d'); assert.match(readonly.render(120).join('\n'), new RegExp(job.id));
   } finally { for (const view of views) view.dispose(); await jobs.shutdown(Date.now() + 5000); rmSync(root, {recursive: true, force: true}); }
 });

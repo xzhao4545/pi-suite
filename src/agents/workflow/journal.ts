@@ -119,9 +119,9 @@ export function readJournal(path: string): { entries: WorkflowJournalEntry[]; tr
       // A process may die during its last append. Only this suffix can be dropped,
       // and the caller receives a flag so a resumed run can report the partial journal.
       if (i === lines.length - 1 && !raw.endsWith("\n")) { truncated = true; break; }
-      throw new Error(`Invalid workflow journal ${path}:${i + 1}: ${String(error)}`);
+      throw new Error(`Invalid workflow journal ${path}:${i + 1}: ${String(error)}. Omit resumeFromRunId to run without replay.`);
     }
-    if (!isEntry(parsed) || positions.has(parsed.index)) throw new Error(`Invalid workflow journal entry ${path}:${i + 1}`);
+    if (!isEntry(parsed) || positions.has(parsed.index)) throw new Error(`Invalid or duplicate workflow journal entry ${path}:${i + 1}. Omit resumeFromRunId to run without replay.`);
     positions.add(parsed.index); entries.push(parsed);
   }
   entries.sort((a, b) => a.index - b.index);

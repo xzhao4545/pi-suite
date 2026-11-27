@@ -7,11 +7,11 @@
  * error there. The block also has to be readable *before* execution, because the
  * declared phases seed the progress groups the UI renders from the first frame.
  *
- * Claude Code solves this by parsing with acorn and requiring `meta` to be a
- * pure literal (no variables, calls, spreads, or template interpolation). We
- * take the same contract without the dependency: scan to the matching brace,
- * verify the literal grammar, then evaluate only that fragment in an empty VM
- * to preserve JavaScript string escapes and numeric literal syntax.
+ * `meta` must be a pure literal (no variables, calls, spreads, or template
+ * interpolation). Without a JavaScript parser dependency, the scan finds the
+ * matching brace, `assertPureLiteral` checks the literal grammar, and only that
+ * fragment is evaluated in an empty VM so string escapes and numeric literals
+ * keep JavaScript semantics.
  *
  * The scanner is string-, comment-, and regex-aware. That matters: a workflow's
  * `detail` text routinely contains braces, and `phases: [{ title: "a}b" }]` must
@@ -25,14 +25,14 @@ import { assertPureLiteral } from "./literal.ts";
 export interface WorkflowPhaseMeta {
   title: string;
   detail?: string;
-  /** Set when a phase pins a model; display-only, the runtime does not read it. */
+  /** Display text; does not select the model used by calls in this phase. */
   model?: string;
 }
 
 export interface WorkflowMeta {
   name: string;
   description: string;
-  /** Shown in the saved-workflow listing. Not used by the runtime. */
+  /** Optional author guidance; the runtime does not use it for scheduling. */
   whenToUse?: string;
   phases?: WorkflowPhaseMeta[];
 }

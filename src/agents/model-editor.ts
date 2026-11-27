@@ -43,13 +43,13 @@ export async function editTypeModel(ctx: ExtensionContext, config: SuiteConfig, 
   ctx.ui.notify(`${type.name} · model: ${locations.model}\nthinking: ${locations.thinking}`);
   const fallback = () => resolveSettings(ctx, type, { prompt: '' }, { ...config, agents: { ...config.agents,
     types: { [type.name]: { model: agentTypeModelAfterClear(ctx.cwd, type.name) } } } }).model;
-  const changes = await chooseModelSettings(ctx, `${type.name} · model: ${locations.model} · thinking: ${locations.thinking}`, initial, fallback, navigation);
+  const changes = await chooseModelSettings(ctx, type.name, initial, fallback, navigation);
   if (!changes) return;
   try { await writeAgentType(ctx.cwd, type.name, changes); }
   // Model and thinking may live in different files; reload also reflects any field already
   // saved if the other file reports an I/O error. The write error remains visible to the host.
   finally { reload(ctx.cwd); }
-  ctx.ui.notify(`${type.name}: model/thinking settings saved for new executions`);
+  ctx.ui.notify(`${type.name}: model/thinking saved for new runs`);
 }
 
 export async function updateAgentModel(manager: AgentManager, ctx: ExtensionContext, id: string, changes: ModelOverrides, runId?: string): Promise<void> {
@@ -81,15 +81,15 @@ export async function updateAgentModel(manager: AgentManager, ctx: ExtensionCont
 export async function editAgentModel(ctx: ExtensionContext, manager: AgentManager, id: string, config: SuiteConfig, runId?: string, navigation?: ViewerNavigation): Promise<void> {
   const { record, run } = manager.get(id, runId);
   const inherited = () => {
-    // Historical records remain editable after disabling their type; admission is enforced
-    // by Manager when a new execution starts, not while inspecting the existing contract.
+    // Records stay editable after their type is disabled: the enabled check runs in
+    // resolveType when a new execution starts, not here. Look the type up without that check.
     const type = run?.type ?? agentTypes(ctx.cwd, getAgentDir(), { trusted: ctx.isProjectTrusted(), packageGate: config.agents.packageAgents }).find(type => type.name === record.type);
-    if (!type) throw new ToolError('AGENT_TYPE', `Unknown agent type: ${record.type}`);
+    if (!type) throw new ToolError('AGENT_TYPE', `Unknown agent type: ${record.type}. Restore its definition before clearing the model override.`);
     return resolveSettings(run?.parent.ctx ?? ctx, type, run?.request ?? { prompt: '' }, run?.config ?? config).model;
   };
   const changes = await chooseModelSettings(ctx, `${id} (${record.runId}) · next request`, record.individual ?? {}, inherited, navigation);
   if (!changes) return;
   // A selector may outlive a resume; bind the write to the run opened, never the agent's latest run.
   await updateAgentModel(manager, ctx, id, changes, record.runId);
-  ctx.ui.notify(`${id} (${record.runId}): model/thinking settings applied to its next request`);
+  ctx.ui.notify(`${id} (${record.runId}): model/thinking applies to its next request`);
 }

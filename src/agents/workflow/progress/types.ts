@@ -1,6 +1,6 @@
 // Imported/adapted from @tintinweb/pi-subagents 0.23.0 src/workflow/progress.ts (MIT).
 /**
- * progress.ts — the workflow progress model, ported from Claude Code.
+ * progress/types.ts — the workflow progress model.
  *
  * Progress is an **append-only event log**, not a tree. Agent entries are keyed
  * by `index` and last-write-wins, so a running agent is updated by appending a

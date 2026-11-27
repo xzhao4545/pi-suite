@@ -9,9 +9,8 @@ import type { ControlBridge } from './control.ts';
 
 /**
  * The manager lives in a process-global slot so reload re-imports this module without losing
- * running jobs. A different protocol cannot drive the old manager's internals, so an occupied
- * incompatible manager keeps running; its versioned control bridge remains usable without
- * allowing the new execution implementation to drive the old manager's internals.
+ * running jobs. New code cannot drive the internals of a manager built for another protocol, so
+ * an occupied incompatible manager keeps running and is reached only through its control bridge.
  */
 export const PROTOCOL_VERSION = 11;
 export type RuntimeHandle =
@@ -45,19 +44,19 @@ export function acquireRuntime(agentDir: string): RuntimeHandle {
   if (existing !== undefined) {
     if (compatible(existing, root) && !existing.manager.closed) return { mode: 'active', manager: existing.manager };
     if (occupied(existing)) {
-      const reason = 'Another pi-suite jobs runtime with running or unsaved jobs owns this Pi process; new execution is disabled. Finish or stop existing jobs, then reload to upgrade';
+      const reason = 'An older pi-suite jobs runtime still has running or unsaved jobs; starting jobs, input and attach are disabled. Stop or wait for those jobs, then /reload';
       if (existing.agentDir === root && (existing.control?.version === 1 || existing.control?.version === 2 || existing.control?.version === 3 || existing.control?.version === 4)) return { mode: 'restricted', reason, control: existing.control };
       return { mode: 'unavailable', reason: existing.agentDir !== root
-        ? 'The occupied pi-suite jobs runtime belongs to a different agent directory; use its original directory or restart Pi for exit cleanup'
-        : 'The occupied pi-suite jobs runtime has no compatible control bridge. Its owner and exit cleanup remain installed; restart Pi to upgrade' };
+        ? 'The running pi-suite jobs runtime uses a different agent directory; restart Pi to use jobs here'
+        : 'An incompatible pi-suite jobs runtime still has running or unsaved jobs; restart Pi to use jobs' };
     }
     // Idle or closed: retire the old registration before publishing a replacement.
     void existing.manager.shutdown(Date.now() + LIMITS.quitMs).catch(error => process.emitWarning(`pi-suite jobs retirement failed: ${String(error)}`));
     if (typeof existing.exitListener === 'function') process.removeListener('exit', existing.exitListener);
   }
   const manager = new JobManager({ agentDir: root, runtimeId: `rt_${randomBytes(4).toString('hex')}` });
-  // Closures stay with the owner implementation across reload. The bridge exposes only
-  // query/stop, so a different execution protocol cannot launch or write through it.
+  // These closures keep calling this implementation after reload. The bridge has no start or
+  // write operation, so newer code cannot launch jobs or send input through this manager.
   const control: ControlBridge = { version: 4, jobs: {
     peek: id => manager.peek(id), get: (id, workspace) => manager.get(id, workspace),
     list: workspace => manager.list(workspace), logPath: (job, stream) => manager.logPath(job, stream),

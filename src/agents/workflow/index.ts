@@ -11,8 +11,9 @@ import { WorkflowManager, workflowRuntime, workflowActive } from './manager.ts';
 import { workflowResultText } from './task.ts';
 import { formatDuration, elapsedMs } from './progress/index.ts';
 
-export function workflowSummary(task: OwnedWorkflowTask): string {
-  return `${task.id} ${task.status} · ${sanitizeText(task.workflowName ?? task.id).replace(/[\r\n\t]/g, ' ')} · ${task.doneCount}/${task.agentCount} agents · ${formatDuration(elapsedMs(task, Date.now()))}`;
+export function workflowSummary(task: OwnedWorkflowTask, modelFacing = false): string {
+  const elapsed = elapsedMs(task, Date.now());
+  return `${task.id} ${task.status} · ${sanitizeText(task.workflowName ?? task.id).replace(/[\r\n\t]/g, ' ')} · ${task.doneCount}/${task.agentCount} agents · ${modelFacing ? `${(elapsed / 1000).toFixed(1)}s` : formatDuration(elapsed)}`;
 }
 /** Per-binding workflow view; the process-wide owner survives reload and session switches. */
 export class WorkflowsModule implements Waitable {
@@ -76,8 +77,8 @@ export class WorkflowsModule implements Waitable {
   }
   settlement(id: string): Settlement {
     const task = this.manager.get(id), current = this.binding.current;
-    if (!current || !this.manager.visible(task, this.agents.scope(current.ctx))) throw new Error(`Workflow ${id} is outside this session branch`);
-    return {id, state: task.status, settled: this.manager.settled(id), summary: `${workflowSummary(task)}\n${workflowResultText(task).slice(0, 1000)}\nread: read({"path":${JSON.stringify(task.resultPath)}})`};
+    if (!current || !this.manager.visible(task, this.agents.scope(current.ctx))) throw new Error(`Workflow ${id} is not visible on this branch. Wait from the session branch that started it.`);
+    return {id, state: task.status, settled: this.manager.settled(id), summary: `${workflowSummary(task, true)}\n${workflowResultText(task).slice(0, 1000)}\nread: read({"path":${JSON.stringify(task.resultPath)}})`};
   }
   unread(): Settlement[] { return this.list().filter(task => this.manager.settled(task.id) && !task.notified).map(task => this.settlement(task.id)); }
   subscribe(listener: () => void): () => void { return this.manager.subscribe(listener); }

@@ -1,36 +1,12 @@
 // Imported/adapted from @tintinweb/pi-subagents 0.23.0 src/workflow/json-schema.ts (MIT).
-/**
- * json-schema.ts — validating a script-supplied JSON Schema.
- *
- * `agent(prompt, { schema })` hands us a raw JSON Schema written by a model, to
- * be used two ways: as a tool's `parameters` (so the provider fills the fields)
- * and as the check that decides whether what came back is usable.
- *
- * ## Which typebox
- *
- * **`typebox`, not `@sinclair/typebox`.** They are different packages.
- * `@sinclair/typebox` (0.34) dispatches on a `Kind` symbol that a schema
- * arriving over the wire does not carry, so `Value.Check` throws `Unknown type`
- * on a plain JSON Schema — and `Type.Unsafe` does not help, it stamps a `Kind`
- * that is not registered. `typebox` v1 is a standards JSON Schema validator and
- * takes the schema as-is. It is also the package pi itself types
- * `ToolDefinition.parameters` against and supplies to extensions at runtime
- * (a peer dependency here), so the same schema object serves both roles with no
- * conversion.
- *
- * ## Why we validate at all
- *
- * Pi 1.5.0 normalizes and validates model tool arguments before execute(). The
- * compiled checker also belongs to the workflow result contract: callers can
- * validate recovered/journal values independently of a live model tool call.
- *
- * Pure and pi-free on purpose, so `runtime.ts` can import it without dragging
- * sessions and models into the runtime's tests.
- */
+// TypeBox v1 accepts plain JSON Schema without a TypeBox Kind symbol. Pass the
+// same object to the provider and the checker so the two use the same contract.
+// Keep the checker independent of Pi so workflow recovery can validate stored
+// values without opening a child session. Pi also validates live tool inputs.
 
 import { Check, Errors } from "typebox/value";
 
-/** Largest schema we will accept, serialized. */
+/** Maximum length of the serialized schema in UTF-16 code units. */
 const MAX_SCHEMA_BYTES = 64 * 1024;
 
 /** How many validation errors are quoted back to the model. */
@@ -57,15 +33,13 @@ export type SchemaCompilation =
  */
 export function compileJsonSchema(schema: unknown): SchemaCompilation {
   if (typeof schema !== "object" || schema === null || Array.isArray(schema)) {
-    return { ok: false, message: "agent() opts.schema must be a JSON Schema object." };
+    return { ok: false, message: 'Invalid agent() opts.schema. Pass a JSON Schema object.' };
   }
   const root = schema as Record<string, unknown>;
   if (root.type !== "object") {
     return {
       ok: false,
-      message:
-        'agent() opts.schema must have `type: "object"` at its root — it becomes the tool\'s input schema, '
-        + "and a non-object root is not something a model can be asked to fill.",
+      message: 'agent() opts.schema has a non-object or missing root type. Set the root type to "object".',
     };
   }
 
@@ -73,12 +47,12 @@ export function compileJsonSchema(schema: unknown): SchemaCompilation {
   try {
     serialized = JSON.stringify(root);
   } catch {
-    return { ok: false, message: "agent() opts.schema must be JSON-serializable." };
+    return { ok: false, message: 'Cannot serialize agent() opts.schema. Pass a JSON-serializable schema.' };
   }
   if (serialized.length > MAX_SCHEMA_BYTES) {
     return {
       ok: false,
-      message: `agent() opts.schema is too large (${serialized.length} bytes; the limit is ${MAX_SCHEMA_BYTES}).`,
+      message: `agent() opts.schema is too large (${serialized.length} UTF-16 code units; max ${MAX_SCHEMA_BYTES}). Shorten the schema.`,
     };
   }
 
@@ -90,9 +64,9 @@ export function compileJsonSchema(schema: unknown): SchemaCompilation {
   } catch (error) {
     return {
       ok: false,
-      message: `agent() opts.schema is not a schema this runtime can validate: ${
+      message: `Cannot validate agent() opts.schema: ${
         error instanceof Error ? error.message : String(error)
-      }`,
+      }. Fix the schema before retrying.`,
     };
   }
 

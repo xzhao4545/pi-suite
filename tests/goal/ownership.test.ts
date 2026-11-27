@@ -106,9 +106,12 @@ test('quit/cold startup preserve diagnostics and current Goal across stale histo
     await g.start('Persistent current Goal', ctx); await run(); await g.wait(g.goal!.id, 'Deadline', undefined, ctx);
     const id = g.goal!.id; await g.shutdown('quit');
     assert.equal(g.goal!.status, 'paused'); assert.equal(g.goal!.reason?.kind, 'shutdown');
-    assert.equal(g.goal!.reason?.wait?.waiting, 'jobs'); assert.equal(g.goal!.resumeRequired, true);
+    assert.equal(g.goal!.reason?.wait?.waiting, 'jobs');
     await g.restore(ctx, 'startup'); await g.restore(ctx, 'tree');
-    assert.equal(g.goal!.id, id); assert.equal(g.goal!.status, 'paused');
+    assert.equal(g.goal!.id, id); assert.equal(g.goal!.reason?.kind, 'startup');
+    await run();
+    assert.equal(g.goal!.status, 'paused'); assert.equal(g.contextView(ctx)?.access, 'complete');
+    await g.beforeSettle(event); await g.settled(false);
     assert.equal(notifications.has(sessionId, `goal:${id}`), false);
     await g.resume(); await g.restore(ctx, 'tree'); assert.equal(g.goal!.status, 'active');
     await g.clear(ctx); await g.restore(ctx, 'tree'); assert.equal(g.goal, undefined);

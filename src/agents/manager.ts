@@ -9,6 +9,8 @@ import { ToolError } from '../runtime/errors.ts';
 import { resolveType } from './catalog.ts';
 import { parentModelRuntime, resolveSettings } from './models.ts';
 import { hydrate, transcript } from './records.ts';
+import { compareRunRecency } from './run-groups.ts';
+import { ModelRequestError, retryable } from './retry.ts';
 import { AgentHistory } from './history.ts';
 import { answerParent } from './questions.ts';
 import { closeAgent } from './session.ts';
@@ -78,7 +80,7 @@ export class AgentManager {
   async lookup(id: string, scope: ParentScope, config: SuiteConfig, runId?: string, signal?: AbortSignal) {
     if (!this.records().some(record => record.id === id && (!runId || record.runId === runId))) await this.discover(scope, config, signal);
     const found = this.get(id, runId);
-    if (recordWorkspace(found.record) !== (scope.run?.configCwd ?? scope.ctx.cwd)) throw new ToolError('NOT_FOUND', `No workspace agent ${id}`, id);
+    if (recordWorkspace(found.record) !== (scope.run?.configCwd ?? scope.ctx.cwd)) throw new ToolError('NOT_FOUND', `No workspace agent ${id}. Use agent_list with scope:"workspace" and state:"all" to find an agent in this workspace.`, id);
     return found;
   }
   /** Readers and workflow continuations keep their in-memory SDK tree until they close. */
@@ -112,10 +114,15 @@ export class AgentManager {
   }
   get(id: string, runId?: string): { record: AgentRecord; run?: Execution } {
     const records = this.records().filter(record => record.id === id && (!runId || record.runId === runId))
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.runId.localeCompare(a.runId));
+      .sort(compareRunRecency);
     const record = records[0];
     if (!record) throw new ToolError('NOT_FOUND', `No agent ${id}${runId ? ` run ${runId}` : ''}; discover with agent_list({"scope":"workspace","state":"all"})`, id);
     return { record, run: this.runs.get(record.runId) };
+  }
+  isStopping(id: string): boolean {
+    // A stop may still own job cleanup after the run itself has settled.
+    for (const key of this.stops.keys()) if (key.startsWith(`${id}:`)) return true;
+    return false;
   }
   visible(record: AgentRecord, scope: ParentScope): boolean {
     return visibleAgent(record, scope);
@@ -133,7 +140,7 @@ export class AgentManager {
     scope = captureParent({ ...scope, taskStore: scope.run ? scope.run.taskStore : scope.taskStore });
     options.signal?.throwIfAborted();
     if (this.closing || scope.run && (!active(scope.run.record.state) || this.closedRuns.has(scope.run.record.runId))) {
-      throw new ToolError('NOT_RUNNING', 'Parent run no longer admits children');
+      throw new ToolError('NOT_RUNNING', 'Parent run has ended or is stopping. Ask its parent to start a new agent.');
     }
     const configCwd = scope.run?.configCwd ?? scope.ctx.cwd;
     // A target-directory child reports its tools' cwd as untrusted. Carry the opened
@@ -142,10 +149,10 @@ export class AgentManager {
     const type = continuation?.type ?? resolveType(configCwd, previous?.type ?? request.type ?? 'general-purpose', {
       trusted: configTrusted, packageGate: config.agents.packageAgents, typeSettings: config.agents.types });
     if (scope.run) {
-      if (scope.run.isolated) throw new ToolError('AGENT_TYPE', 'An isolated child cannot start nested agents');
+      if (scope.run.isolated) throw new ToolError('AGENT_TYPE', 'An isolated child cannot start nested agents. Ask your parent to start another agent if needed.');
       const allowed = scope.run.type.allowedSubagents;
-      if (!allowed || allowed !== 'all' && !allowed.includes(type.name)) throw new ToolError('AGENT_TYPE', `${scope.run.record.type} cannot start ${type.name}`);
-      if (scope.run.record.ancestors.length + 1 >= config.agents.maxDepth) throw new ToolError('AGENT_DEPTH', 'agents.maxDepth reached');
+      if (!allowed || allowed !== 'all' && !allowed.includes(type.name)) throw new ToolError('AGENT_TYPE', `${scope.run.record.type} cannot start ${type.name}. Choose a type listed in allowed_subagents, or ask your parent to start it.`);
+      if (scope.run.record.ancestors.length + 1 >= config.agents.maxDepth) throw new ToolError('AGENT_DEPTH', 'agents.maxDepth reached. Ask your parent to delegate from a higher level.');
     }
     // Validate before task I/O or allocating a run. The runner also guards its
     // SDK boundary because reload can retain managers from before this admission check.
@@ -154,22 +161,43 @@ export class AgentManager {
       thinking: continuation.record.thinking, thinkingSource: continuation.record.thinkingSource }
       : resolveSettings(scope.ctx, type, request, config, previous?.individual);
     const taskStore = scope.taskStore, taskId = previous?.taskId ?? request.taskId;
-    // A restored execution's origin is authoritative. Missing legacy metadata cannot
-    // be borrowed from the new request/current list, even when numeric IDs collide.
+    // A resumed run keeps its original task generation, even when the numeric ID was reused.
     const taskGeneration = previous?.taskId ? previous.taskGeneration : request.taskGeneration;
     if (taskId) {
       requireGeneration(taskGeneration);
-      if (!taskStore) throw new ToolError('TASK_SCOPE', 'taskId requires the direct parent’s task list to be enabled');
+      if (!taskStore) throw new ToolError('TASK_SCOPE', 'The direct parent has no task list. Omit taskId or enable the tasks module in the parent.');
       const task = (await taskStore.snapshot(taskGeneration)).tasks.find(task => task.id === taskId);
-      if (!task?.parentId) throw new ToolError('NOT_FOUND', `No execution task ${taskId}`);
+      if (!task?.parentId) throw new ToolError('NOT_FOUND', `No child task ${taskId} in the parent's current list. Use task_list to find a child task ID and its generation.`);
     }
     // Recheck after task I/O: stop closes subtree admission before awaiting any abort/job cleanup.
     options.signal?.throwIfAborted();
-    if (this.closing || scope.run && (!active(scope.run.record.state) || this.closedRuns.has(scope.run.record.runId))) throw new ToolError('NOT_RUNNING', 'Parent run is stopping');
+    if (this.closing || scope.run && (!active(scope.run.record.state) || this.closedRuns.has(scope.run.record.runId))) throw new ToolError('NOT_RUNNING', 'Parent run is stopping or has ended. Ask its parent to start a new agent.');
     const id = previous?.id ?? allocate('agent');
     // A settled child can still have leftover jobs being cleaned up by its stop operation.
-    if ([...this.stops.keys()].some(key => key.startsWith(`${id}:`))) throw new ToolError('ALREADY_RUNNING', `${id} is still stopping or cleaning up`, id);
-    if ([...this.runs.values()].some(run => run.record.id === id && !run.settled)) throw new ToolError('ALREADY_RUNNING', `${id} already has an unsettled execution`, id);
+    if (this.isStopping(id)) throw new ToolError('ALREADY_RUNNING', `${id} is still stopping or cleaning up. Wait for agent_stop to finish before retrying.`, id);
+    if ([...this.runs.values()].some(run => run.record.id === id && !run.settled)) throw new ToolError('ALREADY_RUNNING', `${id} already has an active or finalizing run. Wait for it to finish before resuming.`, id);
+    const run = this.createRun(id, request, scope, config, options, type, settings, previous, continuation);
+    const { record } = run;
+    this.enqueue(run);
+    try { options.onSpawned?.(id); }
+    catch (error) { await this.stop(id, record.runId); throw error; }
+    this.bindAbort(run);
+    this.configure(config); this.changed();
+    if (record.state === 'queued') {
+      try { options.onQueued?.(id, this.queue.filter(item => item.record.background === record.background).indexOf(run)); }
+      catch (error) { await this.stop(id, record.runId); throw error; }
+    }
+    if (taskId && taskStore) {
+      try { await taskStore.link(taskId, { agentId: id }, taskGeneration!); }
+      catch (error) { throw new ToolError('TASK_LINK_FAILED', `Agent ${id} started, but linking task ${taskId} failed: ${String(error)}. Check the task before retrying the link; do not start another agent.`, id); }
+    }
+    return run;
+  }
+  private createRun(id: string, request: StartAgent, scope: ParentScope, config: SuiteConfig, options: StartOptions,
+    type: Execution['type'], settings: Pick<Execution, 'model'> & Pick<AgentRecord, 'modelSource' | 'thinking' | 'thinkingSource'>,
+    previous?: AgentRecord, continuation?: Execution): Execution {
+    const configCwd = scope.run?.configCwd ?? scope.ctx.cwd, configTrusted = scope.run?.configTrusted ?? scope.ctx.isProjectTrusted();
+    const taskId = previous?.taskId ?? request.taskId, taskGeneration = previous?.taskId ? previous.taskGeneration : request.taskGeneration;
     // Handles and user aliases share a namespace across this owner's runs. Persisting them
     // keeps a completed/resumed agent addressable without renumbering after reload or /tree.
     const taken = new Set(this.records().filter(record => record.ownerSessionId === scope.owner!.ownerSessionId && record.id !== id)
@@ -199,32 +227,25 @@ export class AgentManager {
       run.entries = transcript(previous, prior);
       run.sessionManager = prior?.sessionManager;
     }
-    this.runs.set(record.runId, run); this.queue.push(run);
+    return run;
+  }
+  private enqueue(run: Execution): void {
+    this.runs.set(run.record.runId, run); this.queue.push(run);
     this.cleanupTimer ??= setInterval(() => this.sweep(), 60_000).unref();
     this.event('created', run);
-    try { options.onSpawned?.(id); }
-    catch (error) { await this.stop(id, record.runId); throw error; }
-    if (options.signal) {
-      const abort = () => { void this.stop(id, record.runId); };
-      options.signal.addEventListener('abort', abort, { once: true });
-      run.detachAbort = () => options.signal!.removeEventListener('abort', abort);
-      if (options.signal.aborted) abort();
-    }
-    this.configure(config); this.changed();
-    if (record.state === 'queued') {
-      try { options.onQueued?.(id, this.queue.filter(item => item.record.background === record.background).indexOf(run)); }
-      catch (error) { await this.stop(id, record.runId); throw error; }
-    }
-    if (taskId && taskStore) {
-      try { await taskStore.link(taskId, { agentId: id }, taskGeneration!); }
-      catch (error) { throw new ToolError('TASK_LINK_FAILED', `${id} started but task ${taskId} could not be linked: ${String(error)}`, id); }
-    }
-    return run;
+  }
+  private bindAbort(run: Execution): void {
+    const { signal } = run.options;
+    if (!signal || run.settled) return;
+    const abort = () => { void this.stop(run.record.id, run.record.runId); };
+    signal.addEventListener('abort', abort, { once: true });
+    run.detachAbort = () => signal.removeEventListener('abort', abort);
+    if (signal.aborted) abort();
   }
   /** Workflow continuation keeps its launch contract while using the SDK's existing session tree. */
   resume(run: Execution, prompt: string, signal: AbortSignal, onSpawned?: (id: string) => void): Promise<Execution> {
-    if (!run.settled) throw new ToolError('ALREADY_RUNNING', `${run.record.id} is still settling`, run.record.id);
-    if (!run.sessionManager && !run.record.sessionFile) throw new ToolError('HISTORY_READ_ONLY', 'No workflow child session to continue', run.record.id);
+    if (!run.settled) throw new ToolError('ALREADY_RUNNING', `${run.record.id} is still finishing. Wait for this run to finish before resuming.`, run.record.id);
+    if (!run.sessionManager && !run.record.sessionFile) throw new ToolError('HISTORY_READ_ONLY', 'No workflow child session to continue. Start a new workflow child.', run.record.id);
     return this.start({ ...run.request, prompt }, run.parent, run.config, run.record, { ...run.options, signal, onSpawned }, run);
   }
   /** Only an actual waiting caller can release a foreground run; RPC and resumed runs cannot. */
@@ -255,7 +276,11 @@ export class AgentManager {
       // Choose the earliest runnable item for its own pool; a saturated foreground head must
       // not block background work. Nested children are uncharged to avoid parent/child deadlock.
       // Timed dispatches bypass saturation but still charge their ordinary pool below.
-      const index = this.queue.findIndex(run => { const pool = this.pool(run); return pool === undefined || run.bypassQueue || this.room(pool); });
+      const index = this.queue.findIndex(run => {
+        if (run.retry?.timer) return false;
+        const pool = this.pool(run);
+        return pool === undefined || run.bypassQueue || this.room(pool);
+      });
       if (index < 0) return;
       const [run] = this.queue.splice(index, 1);
       run.record.state = 'starting'; run.record.startedAt = new Date().toISOString(); run.startedMonotonic = performance.now();
@@ -265,13 +290,46 @@ export class AgentManager {
       void this.launch(run);
     }
   }
+  private canAutoResume(run: Execution): boolean {
+    const parent = run.parent.run;
+    return !run.record.workflowId && !run.controller.signal.aborted && !run.terminated && !run.options.signal?.aborted
+      && !this.closing && !this.isStopping(run.record.id)
+      && (!parent || active(parent.record.state) && !this.closedRuns.has(parent.record.runId));
+  }
+  private queueAutoResume(run: Execution, error: ModelRequestError, attempt: number): void {
+    const { record, parent, config, type, model } = run;
+    const { maxRetries, baseDelayMs, maxAgentDelayMs } = error.retry;
+    const prompt = `The previous request failed with a network or upstream error: ${error.requestError}. Continue the same task from where you stopped. Do not repeat completed steps.`;
+    // The scope, model and task assignment were already admitted. Reusing them avoids I/O
+    // between the failed run settling and its replacement becoming the latest active run.
+    const next = this.createRun(record.id, { ...run.request, prompt }, parent, config,
+      { ...run.options, onSpawned: undefined, onQueued: undefined }, type,
+      { model, modelSource: record.modelSource, thinking: record.thinking, thinkingSource: record.thinkingSource }, record, run);
+    next.record.background = record.background; next.notifyResult = run.notifyResult;
+    next.foreground = run.foreground; next.pendingMessages = run.pendingMessages.splice(0);
+    next.autoResumes = attempt;
+    const retry: NonNullable<Execution['retry']> = { attempt, max: maxRetries };
+    const deadline = performance.now() + Math.min(baseDelayMs * 2 ** (attempt - 1), maxAgentDelayMs);
+    const arm = () => {
+      // Node clamps delays above 2^31-1 to 1ms; keep waiting toward the same deadline.
+      retry.timer = setTimeout(() => {
+        if (performance.now() < deadline) arm();
+        else { retry.timer = undefined; this.drain(); }
+      }, Math.min(2_147_483_647, Math.ceil(deadline - performance.now()))).unref();
+    };
+    next.retry = retry; arm();
+    run.replacement = next; run.consumed = true;
+    this.enqueue(next); this.bindAbort(next);
+  }
   private async launch(run: Execution): Promise<void> {
+    let modelError: ModelRequestError | undefined;
     try {
       await this.execute(run);
       if (run.record.state !== 'limited') run.record.state = run.controller.signal.aborted || run.terminated ? 'stopped' : 'completed';
     } catch (error) {
       run.record.error = error instanceof Error ? error.message : String(error);
       if (run.record.state !== 'limited') run.record.state = run.controller.signal.aborted ? 'stopped' : 'failed';
+      if (error instanceof ModelRequestError && retryable(error)) modelError = error;
     } finally {
       // A settled direct parent cannot leave hidden nested sessions burning tokens.
       this.closedRuns.add(run.record.runId);
@@ -284,26 +342,45 @@ export class AgentManager {
         // A failed child cleanup must not bypass other children or the parent's own jobs.
         const outcomes = await Promise.allSettled(cleanup), failed = outcomes.find(outcome => outcome.status === 'rejected');
         if (failed?.status === 'rejected') throw failed.reason;
-      } catch (error) { run.record.error = [run.record.error, `Execution cleanup failed: ${String(error)}`].filter(Boolean).join('; '); run.record.state = 'failed'; }
+      } catch (error) {
+        modelError = undefined;
+        run.record.error = [run.record.error, `Execution cleanup failed: ${String(error)}`].filter(Boolean).join('; '); run.record.state = 'failed';
+      }
+      const attempt = (run.autoResumes ?? 0) + 1;
+      if (modelError && run.record.state === 'failed' && this.canAutoResume(run) && attempt > modelError.retry.maxRetries && run.autoResumes) {
+        run.record.error += ` · gave up after ${run.autoResumes} automatic resumes`;
+      }
       run.record.endedAt = new Date().toISOString(); run.record.elapsedMs = Math.round(performance.now() - run.startedMonotonic!);
       try { await closeAgent(run); }
-      catch (error) { run.record.error = [run.record.error, `Session finalization failed: ${String(error)}`].filter(Boolean).join('; '); run.record.state = 'failed'; }
+      catch (error) {
+        modelError = undefined;
+        run.record.error = [run.record.error, `Session finalization failed: ${String(error)}`].filter(Boolean).join('; '); run.record.state = 'failed';
+      }
       if (run.chargedPool) this.counts[run.chargedPool]--;
       run.settled = true; run.detachAbort?.();
-      run.startup?.resolve(run.record.error ?? 'Agent stopped before startup');
+      // Publish the replacement before done/events/changed can wake the parent or wait.
+      if (modelError && run.record.state === 'failed' && attempt <= modelError.retry.maxRetries && this.canAutoResume(run)) {
+        this.queueAutoResume(run, modelError, attempt);
+      }
+      run.autoResumes = undefined;
+      run.startup?.resolve(run.record.error ?? 'Agent stopped before startup. Start it again if the task is still needed.');
       run.done.resolve(this.view(run));
       // Synchronous completion consumers must run before changed() schedules a parent wake.
-      this.event(['failed', 'stopped', 'limited'].includes(run.record.state) ? 'failed' : 'completed', run);
+      if (!run.replacement) this.event(['failed', 'stopped', 'limited'].includes(run.record.state) ? 'failed' : 'completed', run);
       this.changed(); this.drain();
     }
   }
   async send(id: string, message: string, scope: ParentScope, config: SuiteConfig) {
     const { record, run } = this.get(id);
-    if (run?.question && this.questionVisible(record, scope)) { answerParent(run, message); return { action: 'answered' as const, run }; }
-    if (!this.visible(record, scope)) throw new ToolError('NOT_OWNER', `${id} is not a direct child of this session`, id);
-    if (run && !run.settled && !active(run.record.state)) throw new ToolError('NOT_RUNNING', `${id} is settling`, id);
-    if (record.state === 'stopping') throw new ToolError('NOT_RUNNING', `${id} is ${record.state}`, id);
+    if (run?.question && this.questionVisible(record, scope)) {
+      answerParent(run, message); run.autoResumes = undefined;
+      return { action: 'answered' as const, run };
+    }
+    if (!this.visible(record, scope)) throw new ToolError('NOT_OWNER', `${id} is not a direct child visible in this session. Send from its direct parent on the branch that started it.`, id);
+    if (run && !run.settled && !active(run.record.state)) throw new ToolError('NOT_RUNNING', `${id} is still finishing. Wait for it to finish before sending another message.`, id);
+    if (record.state === 'stopping') throw new ToolError('NOT_RUNNING', `${id} is stopping. Wait for agent_stop to finish before sending another message.`, id);
     if (run && active(record.state)) {
+      run.autoResumes = undefined;
       if (!run.session || !run.session.isStreaming) { run.pendingMessages.push(message); this.event('steered', run, { message }); return { action: 'queued' as const, run }; }
       await run.session.steer(message); this.event('steered', run, { message }); return { action: 'steered' as const, run };
     }
@@ -338,7 +415,9 @@ export class AgentManager {
       requested = true; this.closedRuns.add(target.record.runId);
       const queued = target.record.state === 'queued';
       cancelled.push({target, queued});
+      target.autoResumes = undefined;
       if (queued) {
+        clearTimeout(target.retry?.timer); target.retry = undefined;
         this.queue = this.queue.filter(item => item !== target);
         target.record.state = 'stopped'; target.record.endedAt = new Date().toISOString(); target.record.elapsedMs = 0;
         target.settled = true; target.detachAbort?.(); target.done.resolve(this.view(target));

@@ -10,6 +10,7 @@ import { commandFrame } from './frame.ts';
 import { openReading, readingRows, readingText, readingWindow } from './reading.ts';
 import { sanitizeText } from '../runtime/text.ts';
 import { DoubleLeft, type ViewerNavigation } from './viewer/navigation.ts';
+import { detailsContent, plainDetailLines, type StructuredDetails } from './structured-details.ts';
 
 export interface DetailOptions {
   title?: boolean;
@@ -97,11 +98,14 @@ export class DetailsView extends Container {
   }
 }
 
-export async function showDetails(ctx: ExtensionContext, dock: Dock, title: string, text: string, format: 'markdown' | 'text' = 'markdown', navigation?: ViewerNavigation): Promise<void> {
-  if (ctx.mode !== 'tui') { ctx.ui.notify(`${title}\n${text}`); return; }
+export async function showDetails(ctx: ExtensionContext, dock: Dock, title: string, content: string | StructuredDetails, format: 'markdown' | 'text' = 'markdown', navigation?: ViewerNavigation): Promise<void> {
+  if (ctx.mode !== 'tui') {
+    ctx.ui.notify(`${title}\n${typeof content === 'string' ? content : plainDetailLines(content).join('\n')}`); return;
+  }
   dock.setDetail(true);
   try {
     await openReading<void>(ctx, (tui, theme, keys, done) => new DetailsView(tui, () => title,
-      format === 'text' ? new Text(sanitizeText(text), 0, 0) : new Markdown(text, 0, 0, getMarkdownTheme()), done, [], undefined, theme, {navigation, keys}));
+      typeof content !== 'string' ? detailsContent(content, theme) : format === 'text' ? new Text(sanitizeText(content), 0, 0) : new Markdown(content, 0, 0, getMarkdownTheme()),
+      done, [], undefined, theme, {navigation, keys}));
   } finally { dock.setDetail(false); }
 }

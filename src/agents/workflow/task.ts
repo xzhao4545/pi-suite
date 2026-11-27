@@ -4,10 +4,8 @@
  *
  * An `agent_workflow` tool call returns a task id immediately and the run continues
  * without it, so the run's state cannot live in the tool call's closure: the
- * inline card, the completion notification and (later) the `/subagents → Workflows` dialog
- * all read it after `execute` has returned. This is that record, shaped after
- * Claude Code's `local_workflow` task so the fields line up with what the
- * renderers already expect.
+ * inline card, the completion notification and the `/subagents` Workflows page
+ * all read it after `execute` has returned. Field names keep the upstream shape.
  *
  * The progress log is append-only and collapses by index (see `progress/model.ts`),
  * so every derived counter here is recomputed from the log rather than
@@ -28,7 +26,7 @@ export function workflowRunId(): string {
 }
 
 export interface WorkflowTask {
-  /** Discriminator, alongside Claude Code's `local_agent` / `local_bash`. */
+  /** Fixed discriminator kept from the upstream task shape. */
   type: "local_workflow";
   id: string;
   status: WorkflowRunStatus;
@@ -211,7 +209,8 @@ export function completeWorkflowTask(task: WorkflowTask, result: WorkflowRunResu
 
 /**
  * Settle a task that never produced a result — a script rejected before the
- * worker started (bad `meta`, oversized source, non-JSON `args`).
+ * worker started (bad `meta`, oversized source, non-JSON `args`), or a restored
+ * running snapshot with no live execution owner.
  */
 export function failWorkflowTask(task: WorkflowTask, error: string): void {
   task.control = undefined;
@@ -237,6 +236,7 @@ export function workflowResultText(task: WorkflowTask): string {
  * nothing to replay — reporting that as "resumed" would be a lie the caller
  * could not see through. An unknown id is an error rather than a cold start,
  * because a caller that asked to resume is expecting not to pay.
+ * Post-identity checks in `WorkflowManager.start` refine this to current branch.
  */
 export function resolveResumeTarget(
   runId: string | undefined,
@@ -254,27 +254,24 @@ export function resolveResumeTarget(
     return {
       ok: false,
       message:
-        `No workflow run "${id}" in this session. ` +
-        (known.length > 0
-          ? `Runs this session: ${known.join(", ")}.`
-          : "Nothing has run yet — call this without `resumeFromRunId`."),
+        `No workflow run "${id}". Use a finished run from this branch or omit resumeFromRunId.` +
+        (known.length > 0 ? ` Known IDs: ${known.join(", ")}.` : ""),
     };
   }
   if (prior.status === "running" || prior.status === "paused") {
     return {
       ok: false,
-      message: `Workflow "${id}" is still running. Stop it from /subagents → Workflows before resuming it.`,
+      message: `Workflow "${id}" is ${prior.status}. Wait for it to finish or stop it in /subagents Workflows before replaying.`,
     };
   }
   if (prior.journalPath === undefined) {
-    return { ok: false, message: `Workflow "${id}" has no journal to resume from.` };
+    return { ok: false, message: `Workflow "${id}" has no journal. Choose a run with a journal or omit resumeFromRunId.` };
   }
   return {
     ok: true,
     runId: id,
     journalPath: prior.journalPath,
-    // The persisted copy, which is what `scriptPath` holds when the call had
-    // no file of its own.
+    // Use the saved copy, independent of how the caller supplied the script.
     scriptPath: prior.scriptPath ?? "",
   };
 }

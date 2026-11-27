@@ -2,14 +2,8 @@
 export const SCOPE_SOURCE = `const EFFORT_LEVELS = ["minimal", "low", "medium", "high", "xhigh", "max"];
 
 /**
- * Every option \`agent()\` understands.
- *
- * Checked rather than ignored, because the alternative is the worst failure a
- * ported script can have. Claude Code's \`agent()\` also takes \`schema\`, and its
- * own canonical example uses it; quietly dropping it hands the script the
- * agent's raw text where it expected a validated object, and the run then dies
- * several lines later reading a field off a string. A typo behaves the same
- * way. Naming the option costs one error message and no model calls.
+ * Reject unknown options before spawning a child. Silently dropping a typo
+ * such as \`scheam\` could return text where the script expects an object.
  */
 const AGENT_OPTIONS = [
   "label",
@@ -22,7 +16,6 @@ const AGENT_OPTIONS = [
   "schema",
 ];
 
-/** Claude Code options this runtime does not have, and why. */
 const UNSUPPORTED_AGENT_OPTIONS = { isolation: "git worktree isolation is not supported" };
 
 /* ------------------------------------------------------------------ *
@@ -140,7 +133,7 @@ async function agentIn(scope, prompt, opts) {
     const why = UNSUPPORTED_AGENT_OPTIONS[key];
     throw new Error(
       why !== undefined
-        ? "agent() opts." + key + " is not supported here: " + why
+        ? "agent() opts." + key + " is not supported here: " + why + ". Remove this option."
         : "agent() opts." + key + " is not a recognised option. Supported: " + AGENT_OPTIONS.join(", ") + "."
     );
   }

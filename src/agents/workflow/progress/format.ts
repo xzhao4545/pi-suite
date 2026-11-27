@@ -19,6 +19,7 @@ export interface WorkflowHeader {
   name: string;
   subtext: string;
   stats: string;
+  state?: 'done' | 'stopped' | 'paused' | 'failed';
 }
 
 /**
@@ -40,12 +41,8 @@ export function header(
   agentCount: number,
   now: number,
 ): WorkflowHeader {
-  const suffix =
-    task.status === "completed" ? " · done"
-    : task.status === "killed" ? " · stopped"
-    : task.status === "paused" ? " · paused"
-    : task.status === "failed" ? " · failed"
-    : "";
+  const state = task.status === 'completed' ? 'done' : task.status === 'killed' ? 'stopped'
+    : task.status === 'paused' || task.status === 'failed' ? task.status : undefined;
 
   let doneAgents = 0;
   let totalAgents = 0;
@@ -58,7 +55,8 @@ export function header(
   return {
     name: task.workflowName ?? meta?.name ?? task.summary ?? task.description ?? "workflow",
     subtext: meta?.description ?? task.description ?? task.summary ?? "",
-    stats: `${doneAgents}/${totalAgents} ${plural(totalAgents, "agent")} · ${formatDuration(elapsedMs(task, now))}${suffix}`,
+    stats: `${doneAgents}/${totalAgents} ${plural(totalAgents, "agent")} · ${formatDuration(elapsedMs(task, now))}`,
+    state,
   };
 }
 

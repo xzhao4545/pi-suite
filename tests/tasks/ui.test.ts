@@ -36,8 +36,9 @@ test('task dock and live browser share committed status; important children keep
     await tasks.edit(ctx, [{ op: 'start', id: '1.1' }, {op: 'block', id: '2.1', reason: 'waiting for server'}], tasks.current(ctx).generation);
     t.mock.timers.tick(1);
     await tasks.edit(ctx, [{op: 'start', id: '1.2'}], tasks.current(ctx).generation);
-    assert.equal(rows().filter(row => row.parentId === 'task:1')[0].id, 'task:1.1', 'task ID determines reading order, priority determines retention');
     tasks.selectGroup('2');
+    assert.deepEqual(rows().map(row => row.id), ['task:1', 'task:2', 'task:2.1', 'task:3'],
+      'the selected blocked group keeps its place in ID order');
     for (const width of [40, 60, 120]) {
       const rows = dock.render(width);
       assert.ok(rows.every(row => visibleWidth(row) <= width)); assert.ok(rows.length <= dock.budget());
@@ -57,7 +58,7 @@ test('task dock and live browser share committed status; important children keep
     assert.equal(rows().some(row => row.id === 'task:1'), false);
     assert.ok(dock.render(80).some(row => row.includes('1 completed groups')));
     await tasks.edit(ctx, [{op: 'unblock', id: '2.1'}], tasks.current(ctx).generation);
-    assert.equal(tasks.rows().length, 4, 'all visible groups offer their children for read-only Dock navigation');
+    assert.deepEqual(rows().map(row => row.id), ['task:2', 'task:2.1', 'task:3'], 'only the selected group stays expanded');
     assert.match(displayText(tasks.rows()[0].suffix!), /0\/1/);
     dock.setAsk(true); assert.equal(dock.render(40).length, 0); dock.setAsk(false);
     await tasks.edit(ctx, [{op: 'done', id: '2.1'}, {op: 'done', id: '3.1'}], tasks.current(ctx).generation);
@@ -163,6 +164,69 @@ const persistedTasks = (path: string, generation: string, nextId: number, tasks:
 const savedTask = (id: string, title: string, extra: Record<string, unknown> = {}) =>
   ({id, title, blockedBy: [], jobIds: [], createdAt: 1, updatedAt: 1, ...extra});
 const logicalIds = (rows: {id: string}[]) => rows.map(row => row.id.replace(/^task:[^:]+:/, 'task:'));
+
+test('task dock retains the focused group and current child when the height budget shrinks', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'pi-suite-task-retention-')), binding = new SessionBinding(), dock = new Dock();
+  const tasks = new TasksModule(binding, dock), ctx = taskContext(root, 'retention');
+  const budget = t.mock.method(dock, 'budget', () => 12);
+  try {
+    persistedTasks(taskPath(root, 'retention'), 'retention-generation', 3, [
+      savedTask('1', 'focus group', {nextChild: 7}),
+      savedTask('1.1', 'todo before current', {parentId: '1', status: 'todo'}),
+      savedTask('1.2', 'older done', {parentId: '1', status: 'done'}),
+      savedTask('1.3', 'recent done', {parentId: '1', status: 'done', updatedAt: 2}),
+      savedTask('1.4', 'earlier active child', {parentId: '1', status: 'doing'}),
+      savedTask('1.5', 'current focus child', {parentId: '1', status: 'doing', updatedAt: 3}),
+      savedTask('1.6', 'todo after current', {parentId: '1', status: 'todo'}),
+      savedTask('2', 'other group', {nextChild: 8}),
+      ...Array.from({length: 6}, (_, index) => savedTask(`2.${index + 1}`, 'done child', {parentId: '2', status: 'done'})),
+      savedTask('2.7', 'trailing todo', {parentId: '2', status: 'todo'}),
+    ]);
+    binding.bind(ctx); await tasks.bind(ctx, {reason: 'startup'});
+
+    assert.deepEqual(logicalIds(tasks.rows()), ['task:1', 'task:1.1', 'task:1.3', 'task:1.4', 'task:1.5', 'task:1.6', 'task:2']);
+    budget.mock.mockImplementation(() => 4);
+    assert.match(dock.render(80).join('\n'), /├─ .*1 focus group[^\n]*\n│    .*1\.5 current focus child/);
+    budget.mock.mockImplementation(() => 3);
+    assert.match(dock.render(80)[0], /1\.5 current focus child/);
+  } finally { tasks.detach(); binding.revoke(); rmSync(root, {recursive: true, force: true}); }
+});
+
+test('task dock caps the expanded group, summarizes overflow, and expands the selected title', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'pi-suite-task-window-')), binding = new SessionBinding(), dock = new Dock();
+  const tasks = new TasksModule(binding, dock), ctx = taskContext(root, 'window'), tui = terminal(40, 80);
+  let input!: (key: string) => unknown, opened: string | undefined;
+  Object.assign(ctx.ui, { getEditorText: () => '', onTerminalInput: (handler: typeof input) => {input = handler; return () => {};},
+    setWidget: (_key: string, factory?: (screen: typeof tui) => unknown) => factory?.(tui) });
+  dock.setOpen('tasks', id => {opened = id;});
+  try {
+    persistedTasks(taskPath(root, 'window'), 'window-generation', 8, [
+      ...Array.from({length: 7}, (_, index) => savedTask(String(index + 1), `Group ${index + 1}`,
+        {nextChild: index === 0 ? 7 : index === 1 ? 10 : 2})),
+      ...Array.from({length: 6}, (_, index) => savedTask(`1.${index + 1}`, 'pending work', {parentId: '1', status: 'todo'})),
+      ...['todo', 'done', 'todo', 'todo', 'done', 'blocked', 'todo', 'doing', 'todo'].map((status, index) =>
+        savedTask(`2.${index + 1}`, 'focused work', {parentId: '2', status, updatedAt: index === 1 ? 2 : 1})),
+      ...Array.from({length: 5}, (_, index) => savedTask(`${index + 3}.1`, 'collapsed work', {parentId: String(index + 3), status: 'todo'})),
+    ]);
+    binding.bind(ctx); dock.bind(ctx, 12); await tasks.bind(ctx, { reason: 'startup' });
+    const rows = tasks.rows();
+    const screen = () => dock.render(80).map(stripVTControlCharacters).join('\n');
+    assert.deepEqual(logicalIds(rows.filter(row => row.selectable !== false)),
+      ['task:1', 'task:2', 'task:2.1', 'task:2.2', 'task:2.3', 'task:2.6', 'task:2.8', 'task:2.9', 'task:3', 'task:4', 'task:5']);
+    assert.deepEqual(rows.filter(row => row.selectable === false).map(row => [row.parentId !== undefined, row.text]),
+      [[true, '… 2 more items'], [false, '… 2 more groups']]);
+    assert.equal(rows.at(-1)?.text, '… 2 more groups');
+    assert.match(screen(), /2\.9 focused work\n│    … 2 more items/);
+    assert.doesNotMatch(screen(), /[↑↕] …/);
+
+    input('\x1b[D'); // The first selectable title is Group 1, not the default focus.
+    assert.match(screen(), /│    ☐ 1\.6 pending work/, 'a single otherwise omitted child replaces its hint');
+    assert.doesNotMatch(screen(), /2\.\d|more items/);
+    input('\x1b[B'); input('\r'); await Promise.resolve();
+    assert.equal(opened, 'task:window-generation:1.1', 'down moves from the selected title into its newly visible children');
+    assert.match(screen(), /2\.8 focused work/, 'exiting selection restores the default focus');
+  } finally { dock.detach(); tasks.detach(); binding.revoke(); rmSync(root, {recursive: true, force: true}); }
+});
 
 test('task recovery clears finished lists silently and keeps exactly five seconds of live completion feedback', async t => {
   const root = mkdtempSync(join(tmpdir(), 'pi-suite-task-restore-')), binding = new SessionBinding(), dock = new Dock();

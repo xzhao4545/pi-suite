@@ -1,26 +1,14 @@
 // Imported from @tintinweb/pi-subagents 0.23.0 src/mention.ts (MIT).
-/**
- * Suggestion trigger: `@` at a token boundary plus the partial handle typed so
- * far. Ported from Claude Code, including the CJK sentence-ending punctuation
- * it accepts as a boundary.
- */
+// Suggestions also accept CJK sentence-ending punctuation as a token boundary.
 export const MENTION_TRIGGER = /(^|[\s。、？！])@([\w-]*)$/;
 
 /** Send grammar: leading `@handle`, then a non-empty message. */
 const MENTION_SEND = /^@([\w-]+)\s+([\s\S]+)$/;
 
-/**
- * Upper bound on a handle, matching Claude Code's `dSS`. Nothing here generates
- * a name this long, but an agent type or a model-supplied name can be arbitrary
- * text, and an unbounded handle would wrap the suggestion popup.
- */
+// Cap the base to keep long type names and aliases from wrapping the suggestion popup.
 const MAX_HANDLE_LENGTH = 64;
 
-/**
- * Handles that address something other than a subagent, and so can never be
- * allocated to one. Claude Code reserves exactly this name (`Vq = "main"`),
- * refusing it at spawn and routing it to the main conversation instead.
- */
+// `@main` routes to the main conversation.
 const RESERVED_HANDLES: ReadonlySet<string> = new Set(["main"]);
 
 /** Whether `@handle` names the main conversation rather than any subagent. */
@@ -54,13 +42,7 @@ export function assignHandle(base: string, taken: ReadonlySet<string>): string {
   return candidate;
 }
 
-/**
- * Claude Code documents `@agent-<name>` as the form you type by hand when the
- * picker isn't involved. Accepted here as an exact synonym: the caller tries the
- * handle as written first, so an agent genuinely called `agent-foo` still wins
- * over `@agent-` + `foo`, and only falls back to this when that finds nothing.
- * Returns undefined when the prefix is absent or is the whole handle.
- */
+// An exact match for `agent-foo` takes precedence over the shorthand for `foo`.
 export function stripAgentPrefix(handle: string): string | undefined {
   const rest = /^agent-(.+)$/i.exec(handle)?.[1];
   return rest || undefined;
@@ -78,5 +60,5 @@ export function parseMention(text: string): { handle: string; message: string } 
 }
 
 export function agentMentionReminder(type: string): string {
-  return `<system-reminder>\nThe user has expressed a desire to invoke the agent "${type}". Please invoke the agent appropriately, passing in the required context to it. \n</system-reminder>`;
+  return `<system-reminder>\nCall agent_start once for "${type}". Put the user's task and relevant context in prompt.\n</system-reminder>`;
 }

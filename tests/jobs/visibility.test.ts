@@ -101,9 +101,9 @@ test('SDK session list and activity share branch and creator scope across workin
     const {sessionJobs: _sessionJobs, ...v2Jobs} = bridge.jobs;
     registration.protocolVersion = PROTOCOL_VERSION - 1; registration.control = {version: 2, jobs: v2Jobs, quit: () => bridge.quit()};
     await h.session.reload();
-    assert.match(h.notices.at(-1)!.text, /Status shows direct jobs on this branch only/);
+    assert.match(h.notices.at(-1)!.text, /Status counts only jobs started on this branch/);
     assert.equal(h.statuses.get('pi-suite:runtime'), '⚙1');
-    await assert.rejects(invoke('job_list', {}), /RUNTIME_UNAVAILABLE.*complete session queries require v3/);
+    await assert.rejects(invoke('job_list', {}), /RUNTIME_UNAVAILABLE.*cannot list every job of this session/);
     assert.deepEqual((await list({scope: 'workspace'})).jobs, []);
     assert.match(output(await invoke('job_read', {id: childJobs[1].id})), /NESTED_JOB/);
   } finally {

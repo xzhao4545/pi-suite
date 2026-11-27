@@ -1,12 +1,15 @@
 import { normalize, type AskParams, type AskResult, type Question, type Response } from '../ask/schema.ts';
 import { ToolError } from '../runtime/errors.ts';
+import type { NotificationView } from '../runtime/notifications.ts';
 import type { Execution } from './types.ts';
 
-export function questionText(run: Execution): string {
-  return [`${run.record.id} ${run.record.name} waiting(parent)`,
-    ...run.question!.questions.flatMap(question => [question.question, ...question.options.map(option => `${option.id}: ${option.title}`)]),
-    `answer: agent_send({"id":"${run.record.id}","message":"…"})`].filter(Boolean).join('\n');
+export function questionNotification(run: Execution): { text: string; view: NotificationView } {
+  const { id, name } = run.record, state = 'waiting(parent)';
+  const body = [...run.question!.questions.flatMap(question => [question.question, ...question.options.map(option => `${option.id}: ${option.title}`)]),
+    `answer: agent_send({"id":"${id}","message":"…"})`].filter(Boolean).join('\n');
+  return { text: `${id} ${name} ${state}\n${body}`, view: { title: 'Agent question', state, meta: [id, name], body } };
 }
+export function questionText(run: Execution): string { return questionNotification(run).text; }
 export async function askParent(run: Execution, params: AskParams, timeoutMs: number, changed: () => void, signal?: AbortSignal): Promise<{ result: AskResult; questions: Question[] }> {
   const questions = normalize(params), done = Promise.withResolvers<AskResult>();
   if (run.controller.signal.aborted || signal?.aborted) return { result: { status: 'cancelled' as const, responses: [] }, questions };
@@ -37,16 +40,15 @@ export async function askParent(run: Execution, params: AskParams, timeoutMs: nu
   }
 }
 function answer(question: Question, text: string | string[]): Response {
-  if (Array.isArray(text) && !question.allowMultiple) throw new ToolError('INVALID_ANSWER', 'This question accepts a single selection');
+  if (Array.isArray(text) && !question.allowMultiple) throw new ToolError('INVALID_ANSWER', 'This is a single-choice question. Send one option ID, title, or text answer.');
   const inputs = Array.isArray(text) ? text : [text];
   const selected = inputs.map(input => question.options.filter(option => option.id === input || option.title === input));
   if (selected.every(matches => matches.length === 1) && inputs.length) {
-    // Selection titles and IDs are positional pairs in the model's compact result.
-    // Repeated IDs from a parent's array must not leave duplicate titles without IDs.
+    // Deduplicate IDs before building the paired title and ID lists.
     const options = [...new Map(selected.map(matches => matches[0]).map(option => [option.id, option])).values()];
     return { kind: 'selection', selections: options.map(option => option.title), optionIds: options.map(option => option.id) };
   }
-  if (Array.isArray(text)) throw new ToolError('INVALID_ANSWER', 'Every selection must match an option ID or title');
+  if (Array.isArray(text)) throw new ToolError('INVALID_ANSWER', 'The selection array needs valid choices. Send a nonempty array of exact option IDs or titles.');
   return { kind: 'freeform', text };
 }
 export function answerParent(run: Execution, message: string): void {
@@ -55,7 +57,7 @@ export function answerParent(run: Execution, message: string): void {
     : [questions[0].allowMultiple && message.trim().startsWith('[') ? JSON.parse(message) : message];
   if (!Array.isArray(inputs) || inputs.length !== questions.length || inputs.some(input => typeof input !== 'string'
     && (!Array.isArray(input) || input.some(item => typeof item !== 'string')))) {
-    throw new ToolError('INVALID_ANSWER', 'A batch answer needs one string or selection array per question');
+    throw new ToolError('INVALID_ANSWER', 'Answer shape does not match the questions. Send one string per question, or a string array for multiple selections.');
   }
   run.question!.finish({ status: 'answered', responses: questions.map((question, index) => answer(question, inputs[index])) });
 }

@@ -268,7 +268,7 @@ test('/subagents type edit applies to new tool launches without reload and leave
     const explicit = await h.manager.start({ type: 'Explore', prompt: 'override', background: false, model: `${h.ctx.model!.provider}/offline`, thinking: 'off' }, { ctx: h.ctx }, config);
     assert.equal((await explicit.done.promise).modelSource, 'parameter'); assert.equal(explicit.record.thinkingSource, 'parameter');
     await h.loseAuth();
-    await assert.rejects(h.manager.start({ type: 'Explore', prompt: 'unavailable' }, { ctx: h.ctx }, config), /agents.types.Explore.model.*unavailable/);
+    await assert.rejects(h.manager.start({ type: 'Explore', prompt: 'unavailable' }, { ctx: h.ctx }, config), /agents\.types\.Explore\.model.*Use an exact provider\/modelId/);
     gate.resolve(); assert.equal((await original.done.promise).state, 'completed');
   } finally { gate.resolve(); await h.cleanup(); }
 });

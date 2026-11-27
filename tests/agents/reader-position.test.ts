@@ -65,7 +65,9 @@ test('every first run reader starts at the end; settlement and details round tri
         const step = steps[opens++]; assert.ok(step); await step(component);
       }).catch(reject);
     })}} as typeof context;
-    const agents = {manager, admitSend: () => manager, renderer: () => undefined, scope: (ctx: typeof context) => ({ctx})};
+    const agents = {manager, admitSend: () => manager, renderer: () => undefined,
+      customRendererLookup: () => ({getMessageRenderer: () => undefined, getEntryRenderer: () => undefined}),
+      scope: (ctx: typeof context) => ({ctx})};
     await showAgent(ctx, agents, new Dock(), run.record.id, run.record.runId, () => config);
     await showAgent(ctx, agents, new Dock(), run.record.id, run.record.runId, () => config);
     await showAgent(ctx, agents, new Dock(), run.record.id, run.record.runId, () => config, true);

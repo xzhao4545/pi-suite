@@ -3,10 +3,23 @@ import {
   CompactionSummaryMessageComponent, BranchSummaryMessageComponent, BashExecutionComponent,
   createReadToolDefinition, createWriteToolDefinition, createEditToolDefinition, createBashToolDefinition,
   createPowerShellToolDefinition, createGrepToolDefinition, createFindToolDefinition, createLsToolDefinition,
-  getMarkdownTheme, type SessionEntry, type ToolRenderers,
-  truncateTail,
+  getMarkdownTheme, keyHint, keyText, type CustomEntry, type EntryRenderer, type ExtensionRunner,
+  type SessionEntry, type Theme, type ToolRenderers, truncateTail,
 } from "@earendil-works/pi-coding-agent";
-import { Container, type Component, type TUI } from "@earendil-works/pi-tui";
+import { Container, Spacer, type Component, type TUI } from "@earendil-works/pi-tui";
+
+export type TranscriptRenderers = Pick<ExtensionRunner, 'getMessageRenderer' | 'getEntryRenderer'> & { theme: Theme };
+
+// Pi does not export CustomEntryComponent. Keep entry chrome minimal and leave the
+// actual content to the registered renderer, including entries that only show when expanded.
+class RenderedEntry extends Container {
+  constructor(private entry: CustomEntry, private renderer: EntryRenderer, private theme: Theme) { super(); }
+  setExpanded(expanded: boolean): void {
+    const content = this.renderer(this.entry, { expanded, keyText, keyHint }, this.theme);
+    this.clear();
+    if (content) { this.addChild(new Spacer(1)); this.addChild(content); }
+  }
+}
 
 /** Uses public Pi components, including paired calls/results, rather than extracting plain text. */
 export class Transcript extends Container {
@@ -18,7 +31,8 @@ export class Transcript extends Container {
   private results = new WeakMap<ToolExecutionComponent, SessionEntry>();
   private arguments = new WeakMap<ToolExecutionComponent, unknown>();
 
-  constructor(private tui: TUI, private cwd: string, private renderer?: (name: string) => ToolRenderers | undefined) {
+  constructor(private tui: TUI, private cwd: string, private renderer?: (name: string) => ToolRenderers | undefined,
+    private custom?: TranscriptRenderers) {
     super();
     this.builtins = new Map([
       createReadToolDefinition(cwd), createWriteToolDefinition(cwd), createEditToolDefinition(cwd),
@@ -31,13 +45,18 @@ export class Transcript extends Container {
   toggleTools(): void {
     this.expanded = !this.expanded;
     for (const component of this.children) {
-      if (component instanceof ToolExecutionComponent || component instanceof CompactionSummaryMessageComponent
-        || component instanceof BranchSummaryMessageComponent || component instanceof BashExecutionComponent) component.setExpanded(this.expanded);
+      if ('setExpanded' in component && typeof component.setExpanded === 'function') component.setExpanded(this.expanded);
     }
   }
   toggleThinking(): void {
     this.thinking = !this.thinking;
     for (const component of this.children) if (component instanceof AssistantMessageComponent) component.setHideThinkingBlock(!this.thinking);
+  }
+
+  private customMessage(message: ConstructorParameters<typeof CustomMessageComponent>[0], theme: ReturnType<typeof getMarkdownTheme>): Component {
+    const component = new CustomMessageComponent(message, this.custom?.getMessageRenderer(message.customType), theme, 0);
+    component.setExpanded(this.expanded);
+    return component;
   }
 
   private rebuild(): void {
@@ -64,8 +83,14 @@ export class Transcript extends Container {
       } else if (entry.type === "branch_summary") {
         const component = new BranchSummaryMessageComponent({ role: "branchSummary", summary: entry.summary, fromId: entry.fromId, timestamp }, theme, 0);
         component.setExpanded(this.expanded); components.push(component);
+      } else if (entry.type === "custom" && this.custom) {
+        const renderer = this.custom.getEntryRenderer(entry.customType);
+        if (renderer) {
+          const component = new RenderedEntry(entry, renderer, this.custom.theme);
+          component.setExpanded(this.expanded); components.push(component);
+        }
       } else if (entry.type === "custom_message" && entry.display) {
-        components.push(new CustomMessageComponent({ ...entry, role: "custom", timestamp }, undefined, theme, 0));
+        components.push(this.customMessage({ ...entry, role: "custom", timestamp }, theme));
       } else if (entry.type === "message") {
         const message = entry.message;
         if (message.role === "user") {
@@ -99,7 +124,7 @@ export class Transcript extends Container {
           }
           if (this.results.get(tool) !== entry) { tool.updateResult(message, entry.id.startsWith('stream:')); this.results.set(tool, entry); }
         } else if (message.role === "custom" && message.display) {
-          components.push(new CustomMessageComponent(message, undefined, theme, 0));
+          components.push(this.customMessage(message, theme));
         } else if (message.role === "bashExecution") {
           const component = new BashExecutionComponent(message.command, this.tui, message.excludeFromContext, 0);
           component.appendOutput(message.output);

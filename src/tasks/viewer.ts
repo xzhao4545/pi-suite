@@ -5,7 +5,7 @@ import type { Dock } from '../ui/dock.ts';
 import type { SessionBinding } from '../runtime/binding.ts';
 import { parseTaskReference, taskReferenceKey, type TasksModule } from './index.ts';
 import { checkGeneration } from './types.ts';
-import { queryTasks, taskDetails, taskTitle, type TaskFilter } from './query.ts';
+import { queryTasks, taskDetailsView, taskTitle, type TaskFilter } from './query.ts';
 import { taskViews } from './model.ts';
 import { taskRow } from './presentation.ts';
 import type { TaskData, TaskView } from './types.ts';
@@ -36,7 +36,7 @@ export class TaskBrowserView extends BrowserView {
           label: taskRow(task),
           description: task.progress ? `${task.progress.done}/${task.progress.total}` : '',
           search: `${task.id} ${task.title} ${task.description ?? ''} ${task.blockedReason ?? ''} ${task.status}`,
-          details: () => taskDetails(task, byId).join('\n') }));
+          details: () => taskDetailsView(task, byId) }));
       } }, done, theme);
   }
 }
@@ -50,7 +50,7 @@ export async function showTask(ctx: ExtensionContext, tasks: TasksModule, dock: 
   if (!binding.isCurrent(current) || ctx.signal?.aborted) return;
   const { showDetails } = await import('../ui/details.ts');
   if (!binding.isCurrent(current) || ctx.signal?.aborted) return;
-  await showDetails(ctx, dock, `Tasks ▸ ${taskTitle(task)}`, taskDetails(task, views).join('\n'), 'text');
+  await showDetails(ctx, dock, `Tasks ▸ ${taskTitle(task)}`, taskDetailsView(task, views), 'text');
 }
 
 export async function showTasks(ctx: ExtensionContext, tasks: TasksModule, groupId: string | undefined, state: TaskFilter,

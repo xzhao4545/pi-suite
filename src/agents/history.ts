@@ -86,8 +86,8 @@ export class AgentHistory {
       // Saved startup state is evidence of an interrupted owner, not an active process.
       return {...candidate, record: {...record, state: 'failed',
         endLeafId: record.sessionFile ? this.files.get(resolve(record.sessionFile))?.leafId : record.endLeafId,
-        error: record.sessionFile ? 'Execution is no longer owned by this Pi process; the saved transcript is available'
-          : 'Execution is no longer owned by this Pi process; no transcript was saved'}};
+        error: record.sessionFile ? 'This run is not active in this Pi process. Use agent_read to read the saved transcript.'
+          : 'This run is not active in this Pi process and has no saved transcript. Start a new agent.'}};
     });
   }
   private entries(entries: readonly SessionEntry[], source: string): SavedFile {
@@ -95,7 +95,7 @@ export class AgentHistory {
     for (const entry of entries) if (entry.type === 'custom') {
       if (entry.customType !== AGENT_ENTRY && entry.customType !== WORKFLOW_ENTRY_TYPE) continue;
       const updatedAt = Date.parse(entry.timestamp);
-      if (!Number.isFinite(updatedAt)) throw new ToolError('AGENT_HISTORY', `Invalid suite record timestamp in ${source}`);
+      if (!Number.isFinite(updatedAt)) throw new ToolError('AGENT_HISTORY', `Invalid suite record timestamp in ${source}. Check the saved timestamp before retrying.`);
       if (entry.customType === AGENT_ENTRY) {
         const record = decodeAgentRecord(entry.data, source);
         file.records.push({record, updatedAt});

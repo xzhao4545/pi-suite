@@ -15,8 +15,8 @@ test('two-level batch changes recompute both groups; invalid batches are atomic 
   assert.deepEqual(queryTasks(data, { parentId: '1' }).map(task => task.id), ['1', '1.2']);
   assert.deepEqual(queryTasks(data, { parentId: '1' })[0].progress, { done: 1, total: 2 });
   assert.equal(queryTasks(data, { id: '1.1' })[0].status, 'done');
-  assert.throws(() => queryTasks(data, { id: '1.1', parentId: '1' }), /exclusive/);
-  assert.throws(() => queryTasks(data, { parentId: '1.1' }), /must identify a group/);
+  assert.throws(() => queryTasks(data, { id: '1.1', parentId: '1' }), /id and parentId cannot be combined/);
+  assert.throws(() => queryTasks(data, { parentId: '1.1' }), /cannot use a child ID/);
   await store.edit([{ op: 'update', id: '1.1', status: 'todo', description: 'acceptance' }], store.current.generation);
   assert.equal(Value.Check(changeSchema, { op: 'update', id: '1.2', parentId: '2' }), false);
   const before = await store.snapshot();

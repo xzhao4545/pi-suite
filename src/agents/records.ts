@@ -26,7 +26,7 @@ const recordSchema = Type.Object({
 }, {additionalProperties: true});
 /** Validate saved suite data once, before it can enter Manager or workflow history. */
 export function decodeAgentRecord(value: unknown, source = 'session entry'): AgentRecord {
-  if (!Value.Check(recordSchema, value)) throw new ToolError('AGENT_HISTORY', `Invalid agent record version or data in ${source}`);
+  if (!Value.Check(recordSchema, value)) throw new ToolError('AGENT_HISTORY', `Invalid agent record version or data in ${source}. Check that the record is complete and uses version 1.`);
   return value as AgentRecord;
 }
 /** Pi's disk open can repair files. Its in-memory tree migrates and reads without writes. */
@@ -35,11 +35,11 @@ export function readAgentSession(path: string): SessionManager {
   // Pi's parser skips malformed lines. Saved suite history must report corruption rather
   // than silently presenting an earlier result; migration/tree construction still use Pi.
   if (entries.length !== content.split('\n').reduce((count, line) => count + (line.trim() ? 1 : 0), 0)) {
-    throw new ToolError('AGENT_HISTORY', `Malformed session JSONL in ${path}`);
+    throw new ToolError('AGENT_HISTORY', `Malformed session JSONL in ${path}. Use an intact copy of the file.`);
   }
   if (!header || header.type !== 'session' || typeof header.id !== 'string' || typeof header.cwd !== 'string'
     || header.version !== undefined && (!Number.isInteger(header.version) || header.version < 1 || header.version > CURRENT_SESSION_VERSION)) {
-    throw new ToolError('AGENT_HISTORY', `Invalid or unsupported session header in ${path}`);
+    throw new ToolError('AGENT_HISTORY', `Invalid or unsupported session header in ${path}. Use an intact session file supported by this Pi version.`);
   }
   return SessionManager.inMemory(header.cwd, undefined, entries);
 }
@@ -54,19 +54,19 @@ export function recordsIn(entries: readonly SessionEntry[]): AgentRecord[] {
 /** A detached parent's startup entry still points to the child's durable final run entry. */
 export function hydrate(record: AgentRecord): AgentRecord {
   if (!record.sessionFile) return active(record.state) ? {...record, state: 'failed',
-    error: 'Execution is no longer owned by this Pi process; no transcript was saved'} : record;
+    error: 'This run is not active in this Pi process and has no saved transcript. Start a new agent.'} : record;
   if (!active(record.state) && record.result !== undefined) return record;
   const manager = readAgentSession(record.sessionFile);
   const saved = recordsIn(manager.getEntries()).find(run => run.runId === record.runId) ?? record;
   return active(saved.state) ? { ...saved, state: 'failed', endLeafId: manager.getLeafId(),
-    error: 'Execution is no longer owned by this Pi process; the saved transcript is available' } : saved;
+    error: 'This run is not active in this Pi process. Use agent_read to read the saved transcript.' } : saved;
 }
 export function transcript(record: AgentRecord, run?: Execution): SessionEntry[] {
   if (run?.session) return [...run.session.sessionManager.getBranch(record.endLeafId ?? undefined), ...run.streamingEntry ? [run.streamingEntry] : [], ...run.liveResults?.values() ?? []];
   if (run?.entries) return run.entries;
-  if (!record.sessionFile) throw new ToolError('HISTORY_UNAVAILABLE', `${record.id} has no saved transcript outside its live process`, record.id);
+  if (!record.sessionFile) throw new ToolError('HISTORY_UNAVAILABLE', `${record.id} has no saved transcript and its session is not in memory. Start a new agent.`, record.id);
   const manager = readAgentSession(record.sessionFile);
-  if (record.endLeafId && !manager.getEntry(record.endLeafId)) throw new ToolError('AGENT_HISTORY', `Missing history leaf ${record.endLeafId} in ${record.sessionFile}`, record.id);
+  if (record.endLeafId && !manager.getEntry(record.endLeafId)) throw new ToolError('AGENT_HISTORY', `Missing history leaf ${record.endLeafId} in ${record.sessionFile}. Use an intact session file.`, record.id);
   return manager.getBranch(record.endLeafId ?? undefined);
 }
 export function resultText(entries: SessionEntry[]): string {

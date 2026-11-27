@@ -1,5 +1,5 @@
 // Timer dispatch and lifecycle adapted from @tintinweb/pi-subagents 0.23.0
-// src/schedule.ts/index.ts (MIT). Runs keep the shared Manager/notification path.
+// src/schedule.ts/index.ts (MIT).
 import { randomBytes } from 'node:crypto';
 import { getAgentDir, type ExtensionAPI, type ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { Binding, SessionBinding } from '../../runtime/binding.ts';
@@ -37,8 +37,8 @@ export class AgentScheduler {
           // expired one-shots instead of replaying model work when a session is reopened.
           const nextRun = nextOccurrence(job, Date.now(), Date.parse(job.nextRun!));
           await activation.store.update(job.id, { nextRun, enabled: Boolean(nextRun),
-            ...nextRun ? {} : { lastStatus: 'error', lastError: 'Scheduled time passed while the session was inactive' } }, activation.controller.signal);
-          if (!nextRun) this.error(activation, job.id, job.nextRun!, 'Scheduled time passed while the session was inactive');
+            ...nextRun ? {} : { lastStatus: 'error', lastError: 'Scheduled time passed while the session was inactive. Schedule a future time.' } }, activation.controller.signal);
+          if (!nextRun) this.error(activation, job.id, job.nextRun!, 'Scheduled time passed while the session was inactive. Schedule a future time.');
         }
       }
       for (const job of activation.store.current.jobs) this.arm(activation, job);
@@ -56,8 +56,8 @@ export class AgentScheduler {
   }
   async add(request: StartAgent, schedule: string, ctx: ExtensionContext, signal?: AbortSignal): Promise<ScheduledAgent> {
     const activation = this.activation;
-    if (!activation || !this.current(activation) || ctx.sessionManager.getSessionId() !== activation.binding.sessionId) throw new ToolError('STALE_BINDING', 'Scheduler is not bound to this session');
-    if (request.background === false || request.inheritContext !== undefined) throw new ToolError('INVALID_ARGS', 'schedule cannot be combined with background:false or inheritContext');
+    if (!activation || !this.current(activation) || ctx.sessionManager.getSessionId() !== activation.binding.sessionId) throw new ToolError('STALE_BINDING', 'Scheduler is not bound to this session. Retry in the active session with scheduling enabled.');
+    if (request.background === false || request.inheritContext !== undefined) throw new ToolError('INVALID_ARGS', 'Scheduled runs are background-only and cannot inherit context. Omit background:false and inheritContext.');
     const config = this.config();
     const type = resolveType(ctx.cwd, request.type ?? 'general-purpose', { trusted: ctx.isProjectTrusted(),
       packageGate: config.agents.packageAgents, typeSettings: config.agents.types });
@@ -73,7 +73,7 @@ export class AgentScheduler {
   }
   async remove(id: string): Promise<void> {
     const activation = this.activation;
-    if (!activation || !this.current(activation)) throw new ToolError('STALE_BINDING', 'Scheduler is not active');
+    if (!activation || !this.current(activation)) throw new ToolError('STALE_BINDING', 'Scheduler is inactive. Open the owning session with scheduling enabled and retry.');
     await activation.store.remove(id, activation.controller.signal); this.unschedule(id);
     this.pi.events.emit('subagents:scheduled', { type: 'removed', jobId: id });
   }
@@ -97,7 +97,8 @@ export class AgentScheduler {
   }
   private error(activation: Activation, id: string, occurrence: string, error: string): void {
     this.pi.events.emit('subagents:scheduled', { type: 'error', jobId: id, error });
-    this.notices.enqueue(activation.binding.sessionId, `schedule:${id}:${occurrence}`, `Schedule ${id} failed: ${error}\nManage: /subagents schedules`);
+    this.notices.enqueue(activation.binding.sessionId, `schedule:${id}:${occurrence}`, `Schedule ${id} failed: ${error}\n/subagents schedules`,
+      undefined, 'event', { title: 'Schedule failed', state: 'failed', meta: [id], body: `${error}\n/subagents schedules` });
   }
   private dispatch(activation: Activation, id: string, deadline: string): void {
     const work = this.fire(activation, id, deadline).catch(error => this.error(activation, id, deadline, String(error)))
@@ -117,7 +118,14 @@ export class AgentScheduler {
         { scheduleId: id, bypassQueue: true, signal: activation.controller.signal });
       await activation.store.setRun(id, occurrence, run.record.id, run.record.runId);
       this.pi.events.emit('subagents:scheduled', { type: 'fired', jobId: id, agentId: run.record.id, name: job.name });
-      const result = await run.done.promise, success = result.state === 'completed';
+      let current = run, result = await current.done.promise;
+      // Automatic resumes are runs of this occurrence, not additional dispatches.
+      while (current.replacement) {
+        current = current.replacement;
+        await activation.store.setRun(id, occurrence, current.record.id, current.record.runId);
+        result = await current.done.promise;
+      }
+      const success = result.state === 'completed';
       await activation.store.finish(id, occurrence, success, result.error ?? (success ? undefined : result.state));
     } catch (error) {
       // File/dispatch failures are visible. An aborted, uncommitted claim is simply cancelled.

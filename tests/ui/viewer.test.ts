@@ -5,6 +5,9 @@ import { ToolExecutionComponent, initTheme, type Theme } from '@earendil-works/p
 import { CURSOR_MARKER, KeybindingsManager, TUI_KEYBINDINGS, Text, visibleWidth } from '@earendil-works/pi-tui';
 import { BrowserView, browseState } from '../../src/ui/browser.ts';
 import { DetailsView } from '../../src/ui/details.ts';
+import { detailsContent } from '../../src/ui/structured-details.ts';
+import { jobDetail, jobDetailView } from '../../src/jobs/query.ts';
+import type { JobSummary } from '../../src/jobs/types.ts';
 import { readingRows } from '../../src/ui/reading.ts';
 import { DoubleLeft, ViewerNavigation } from '../../src/ui/viewer/navigation.ts';
 import { agentInformation } from '../../src/ui/viewer/agent-information.ts';
@@ -21,6 +24,25 @@ function activeTheme(): Theme {
 }
 const plain = (lines: string[]) => stripVTControlCharacters(lines.join('\n'));
 const tick = () => new Promise(resolve => setImmediate(resolve));
+
+test('structured job details retain plain text after stripping theme colors', () => {
+  const job: JobSummary = {schemaVersion: 1, id: 'job_00000001', workspace: {root: '/work', key: '/work', hash: 'work'},
+    ownerRuntimeId: 'runtime', ownerSessionId: 'session', anchorEntryId: null, name: `${'a'.repeat(80)} ${'b'.repeat(80)}`, cwd: '/work',
+    mode: 'pipe', state: 'failed', command: 'echo "**literal**"\n  echo next', createdAt: '2025-01-01T00:00:00.000Z',
+    elapsedMs: 2500, exitCode: 1, cleanup: {state: 'not_required', scope: [], rootExited: true},
+    error: 'first line\nsecond line', taskId: '1.2', taskGeneration: 'generation'};
+  const legacy = [`name: ${job.name}`, 'cwd: /work', 'mode: pipe', 'state: failed', 'runtime: 2.5s', `command: ${job.command}`,
+    `created ${job.createdAt}`, 'exit: 1', 'cleanup: not_required', `error: ${job.error}`, 'task: 1.2 · source generation: generation'];
+  assert.deepEqual(jobDetail(job, true), legacy);
+  const grouped = [...legacy.slice(0, 5), '', legacy[5], '', ...legacy.slice(6, 9), '', legacy[9], '', legacy[10]].join('\n');
+  const view = detailsContent(jobDetailView(job, true), activeTheme());
+  const plainView = new Text(grouped, 0, 0);
+  for (const width of [18, 40, 120]) {
+    const lines = view.render(width);
+    assert.notEqual(lines.join('\n'), plain(lines));
+    assert.equal(plain(lines), plainView.render(width).join('\n'));
+  }
+});
 
 test('double Left is an explicit chain result, excludes repeat/release/modifiers and resets across other keys or timeout', () => {
   let now = 0;

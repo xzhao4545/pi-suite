@@ -37,7 +37,8 @@ export function createWorkflowHost(deps: {
       requestedThinking: run.request.thinking !== undefined && run.request.thinking !== record.thinking ? run.request.thinking : undefined});
   }
   function track(work: () => Promise<WorkflowSpawnResult>): Promise<WorkflowSpawnResult> {
-    // Startup rejection is this agent's business failure; callers see null with a visible error row.
+    // Startup rejection is this agent's business failure; the script receives null and the error goes to progress.
+    // This way callers that made early errors see them rolled up into the workflow result.
     const operation = work().catch(error => ({ok: false, error: error instanceof Error ? error.message : String(error)}));
     pending.add(operation); void operation.then(() => pending.delete(operation)); return operation;
   }
@@ -66,7 +67,7 @@ export function createWorkflowHost(deps: {
     resumeAgent(id, prompt, onResolved) {
       return track(async () => {
         const prior = records.get(id);
-        if (!prior) throw new ToolError('NOT_FOUND', `Cannot resume ${id}: it never started`);
+        if (!prior) throw new ToolError('NOT_FOUND', `Cannot resume ${id}: it did not start. Pass the label of a completed child from this run.`);
         const run = await manager.resume(prior, prompt, signalFor(id), recordId => onResolved?.({recordId}));
         records.set(id, run); return waitForRun(run, onResolved);
       });

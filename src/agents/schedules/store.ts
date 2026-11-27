@@ -31,17 +31,17 @@ export class ScheduleStore extends JsonStore<ScheduleData> {
   constructor(path: string) {
     super(path, { version: 1, jobs: [] }, value => {
       if (!Value.Check(dataSchema, value)) throw new Error('Invalid schedule version or data');
-      if (new Set(value.jobs.map(job => job.id)).size !== value.jobs.length || new Set(value.jobs.map(job => job.name)).size !== value.jobs.length) throw new Error('Duplicate schedule identities');
+      if (new Set(value.jobs.map(job => job.id)).size !== value.jobs.length || new Set(value.jobs.map(job => job.name)).size !== value.jobs.length) throw new Error('Duplicate schedule IDs or names');
       for (const job of value.jobs) {
         const spec = parseSchedule(job.schedule, Date.now(), true);
-        if (spec.scheduleType !== job.scheduleType || spec.intervalMs !== job.intervalMs || job.enabled && !job.nextRun) throw new Error(`Inconsistent schedule: ${job.id}`);
+        if (spec.scheduleType !== job.scheduleType || spec.intervalMs !== job.intervalMs || job.enabled && !job.nextRun) throw new Error(`Schedule ${job.id} has a mismatched rule or no deadline while enabled`);
       }
       return value;
     }, 'SCHEDULE');
   }
   add(job: ScheduledAgent, signal?: AbortSignal): Promise<void> {
     return this.mutate(data => {
-      if (data.jobs.some(item => item.id === job.id || item.name === job.name)) throw new ToolError('INVALID_ARGS', `Schedule name already exists: ${job.name}`);
+      if (data.jobs.some(item => item.id === job.id || item.name === job.name)) throw new ToolError('INVALID_ARGS', `Schedule ID or name already exists: ${job.id} (${job.name}). Retry with a unique name.`);
       data.jobs.push(job);
     }, signal);
   }

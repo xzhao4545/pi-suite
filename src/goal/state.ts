@@ -2,11 +2,13 @@ import type { AutoStopReason } from './activity.ts';
 
 export type GoalLifecycle = 'active' | 'paused' | 'completed';
 export type PauseKind = 'manual' | 'blocked' | 'request_failed' | 'budget' | AutoStopReason | 'shutdown' | 'startup' | 'cancelled' | 'compaction_failed' | 'historical_stop' | 'permission';
+const explicitResumeKinds = new Set<PauseKind>(['manual', 'budget', 'shutdown', 'startup', 'historical_stop', 'permission']);
+export function requiresExplicitResume(kind: PauseKind): boolean { return explicitResumeKinds.has(kind); }
 export type GoalWait = { waiting: 'user' | 'jobs'; resumeAt?: number; waitFor?: string[] };
 export type PauseReason = { kind: PauseKind; previous?: string; automaticStop?: AutoStopReason; wait?: GoalWait };
 export interface Goal {
   id: string; revision: number; text: string; status: GoalLifecycle;
-  automatic: boolean; resumeRequired?: boolean; reason?: PauseReason;
+  automatic: boolean; reason?: PauseReason;
   budget?: number; usedTokens: number; elapsedMs: number; turns: number;
   progress: string; error?: string; completedAt?: number;
   waiting?: 'user' | 'jobs'; resumeAt?: number; waitFor?: string[];

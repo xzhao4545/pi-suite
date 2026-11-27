@@ -2,14 +2,14 @@
 
 ## GitHub 安装
 
-运行环境为 Node.js 24 或更高和官方未修改的 Pi 1.5.0，三个 Pi peer 与开发依赖均精确固定为 `1.5.0`。官方 Node bin 的 regular/fullscreen 与 RPC 实际加载入口已通过；消费者 Git/本地包及 tarball 安装尚未验收，包保持 `private: true`，未实际 npm 发布。下列命令仅说明 Pi 的安装方式，不构成安装验收结论，支持边界见 [公共运行时](./runtime/index.md#宿主加载边界)。使用 Pi 原生包管理命令安装用户级扩展：
+需要 Node.js 24 或更高，以及官方 Pi 1.5.0。Git、本地路径和 tarball 安装的验证范围见[宿主加载边界](./runtime/index.md#宿主加载边界)。使用 Pi 原生包管理命令安装到用户层：
 
 ```sh
 pi install git:github.com/xzhao4545/pi-suite
 pi list
 ```
 
-该来源写入 Pi 用户目录的 settings.json，Pi 克隆 GitHub 默认分支并安装运行依赖，通过 package.json 的 pi.extensions 加载 src/index.ts，通过 pi.skills 加载技能目录。添加 `-l` 可安装到项目级 settings，项目资源加载遵循 Pi 的信任机制。
+Pi 把来源写入用户层 `settings.json`，克隆 GitHub 默认分支并安装运行依赖。`package.json` 的 `pi.extensions` 指向 `src/index.ts`，`pi.skills` 指向 `skills/`。加 `-l` 则写入项目层设置；项目资源按 Pi 的项目信任规则加载。
 
 更新已安装的 GitHub 来源：
 
@@ -17,7 +17,7 @@ pi list
 pi update git:github.com/xzhao4545/pi-suite
 ```
 
-安装或更新后，已有交互会话执行 `/reload`，或重启 Pi。Pi Suite 默认启用 ask、tasks、jobs、goal 和 agents；可选配置见 [公共运行时与配置](./runtime/index.md)，无需为默认功能创建配置文件。
+安装或更新后，在当前会话执行 `/reload`，或重启 Pi。默认功能无需配置文件，模块开关见[公共运行时与配置](./runtime/index.md)。
 
 ## 本地安装
 
@@ -28,9 +28,13 @@ pi install /absolute/path/to/pi-suite
 pi list
 ```
 
-本地来源写入用户级 settings.json，Pi 直接加载项目目录的 `pi.extensions` 和 `pi.skills`。源码修改后在已有会话执行 `/reload`，依赖变更后先运行 `pnpm install`。项目目录需要保持可访问；`-l` 控制配置写入项目级，与安装来源是否为本地路径是两个不同选项。
+Pi 把本地路径写入 `settings.json`，直接从该路径加载扩展和技能，所以目录必须保持可访问。`-l` 仍只决定设置写入哪一层。改动扩展源码后执行 `/reload`；依赖变更后重新运行 `pnpm install`，再重启 Pi。也可从包根目录临时加载源码：`pi -e ./src/index.ts`。
 
-从 GitHub 来源切换时，先安装本地目录，再执行 `pi remove git:github.com/xzhao4545/pi-suite`；用 `pi list` 确认仅保留一份 Pi Suite 来源，然后执行 `/reload` 或重启 Pi。
+从 GitHub 来源切换到本地路径：
+
+1. 安装本地目录。
+2. 执行 `pi remove git:github.com/xzhao4545/pi-suite`。
+3. 用 `pi list` 确认只有一份 Pi Suite 来源，再执行 `/reload` 或重启 Pi。
 
 ## 替换重复扩展
 
@@ -56,6 +60,6 @@ pi remove npm:@narumitw/pi-goal
 pi remove npm:@tintinweb/pi-subagents
 ```
 
-独立扩展的配置与持久数据遵循其各自协议，Pi Suite 不自动迁移。`@narumitw/pi-starship` 是可并存的独立 footer；Pi Suite 发布共享状态并适配其显示，可保留该包。上游来源和整合边界见 [上游登记](../../third-party/UPSTREAM.md)。
+Pi Suite 不自动迁移独立扩展的配置和持久数据。`@narumitw/pi-starship` 是独立 footer，可与 Pi Suite 的共享状态显示并用。上游来源和范围见[上游登记](../../third-party/UPSTREAM.md)。
 
 [返回当前文档](./index.md)

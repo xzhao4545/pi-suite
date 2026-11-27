@@ -67,7 +67,7 @@ function formatBytes(bytes: number): string {
 export function compileSearch(search: string): RegExp {
   const literal = /^\/(.*)\/([a-z]*)$/s.exec(search);
   try { return literal ? new RegExp(literal[1], literal[2].replace('g', '')) : new RegExp(search, 'i'); }
-  catch (error) { throw new ToolError('INVALID_ARGS', `Invalid search pattern: ${error instanceof Error ? error.message : String(error)}`); }
+  catch (error) { throw new ToolError('INVALID_ARGS', `Invalid search pattern: ${error instanceof Error ? error.message : String(error)}. Check the regex and flags.`); }
 }
 
 /** Streams complete lines with their starting byte offsets from [from, to). */
@@ -151,7 +151,7 @@ export async function readBounded(source: ReadSource, request: ReadRequest, rend
   if (pending) collect(pending.before, pending.match);
   const picked = [...first.map(item => item.text), ...(keyLines > first.length + recent.length ? ['  …'] : []), ...recent.map(item => item.text)];
   const omitted = tailStart - headEnd;
-  const marker = `[… ${formatBytes(omitted)} omitted (bytes ${headEnd}–${tailStart}), ${keyLines} matching lines; read with offset or search …]`;
+  const marker = `[… ${formatBytes(omitted)} omitted (bytes ${headEnd}–${tailStart}), ${keyLines} matching lines; use offset or search …]`;
   const text = [render(headBuffer.subarray(0, headEnd).toString('utf8')).replace(/\n$/, ''), marker, ...picked,
     ...(picked.length ? ['[… end of matching lines …]'] : []), render(tailRaw.subarray(tailCut).toString('utf8'))].join('\n');
   return { text, offset: 0, nextOffset: size, totalBytes: size, endOfStream: true,

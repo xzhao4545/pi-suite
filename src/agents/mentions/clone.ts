@@ -18,11 +18,11 @@ export async function runMentionClone(ctx: ExtensionContext, type: string, messa
   let attempted = false, spawned = false;
   let launchError: unknown;
   const cloneTool: ToolDefinition<typeof cloneSchema> = { ...agentTool,
-    // A clone has one job. Other start options belong to explicit user/model launches.
+    description: 'Start the requested agent once. Put the task and relevant context in prompt.',
     parameters: cloneSchema,
     execute: async (_id, params, toolSignal, update) => {
       signal.throwIfAborted();
-      if (attempted) throw new Error('Already attempted to start this mentioned agent');
+      if (attempted) throw new Error('Start already attempted. Do not call agent_start again.');
       attempted = true;
       try {
         const result = await agentTool.execute(undefined as never, { prompt: params.prompt, type, background: true },
@@ -46,6 +46,6 @@ export async function runMentionClone(ctx: ExtensionContext, type: string, messa
     signal.throwIfAborted();
     await session.prompt(`${message}\n\n${agentMentionReminder(type)}`, { source: 'extension' });
     signal.throwIfAborted();
-    if (!spawned) throw launchError ?? new Error('The conversation clone did not start the mentioned agent');
+    if (!spawned) throw launchError ?? new Error('No agent started. Resend the @mention to retry.');
   } finally { signal.removeEventListener('abort', abort); session.dispose(); }
 }

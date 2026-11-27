@@ -334,7 +334,7 @@ export class AskView extends Container {
       choiceLines(this.theme, question, this.form.draft, option, false, listWidth, false, wide).length) ||
       visibleWidth(`${this.requester} ${this.heading ?? ''}`) > width - 30;
   }
-  /** Ask History shares U1's public native offset and explicit keyboard reading budget. */
+  /** History and option details scroll and search through the shared ScrollView; the reader takes 80% of terminal rows. */
   private renderReader(width: number): string[] {
     const answer = this.reading === 'history' ? [truncateToWidth(this.form.question.question, width), this.answerLine(width)] : [];
     this.reader.search.focused = this.focused && this.reader.searching;

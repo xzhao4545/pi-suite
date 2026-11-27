@@ -48,9 +48,8 @@ export function createMentionProvider(current: AutocompleteProvider, roster: () 
       let theirs: AutocompleteSuggestions | null;
       try { theirs = await current.getSuggestions(lines, cursorLine, cursorCol, options); }
       catch (error) {
-        // Pi 1.5.0's editor awaits provider results without a rejection handler. A file
-        // search/inner extension failure must reach the UI, rather than break typing.
-        // Remove this boundary when the host handles provider failures itself.
+        // Pi's editor awaits providers without a rejection handler. Keep agent matches
+        // usable if an inner provider fails, and report the failure once.
         if (options?.signal?.aborted) return null;
         if (!warned) { warned = true; reportFailure(error); }
         return mine;
@@ -69,7 +68,7 @@ export function createMentionProvider(current: AutocompleteProvider, roster: () 
 }
 
 function describeTarget(target: MentionTarget): string {
-  if (target.kind === 'type') return `start agent · ${summarize(target.description)}`;
+  if (target.kind === 'type') return `start · ${summarize(target.description)}`;
   const { state, name, alias } = target.record;
   const action = state === 'stopping' ? 'stopping' : active(state) ? 'send message' : 'resume';
   return `${action} · ${alias ? `${target.typeLabel} · ` : ''}${state} · ${summarize(name)}`;

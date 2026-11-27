@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { initTheme, highlightCode, createBashToolDefinition, ToolExecutionComponent, type ExtensionAPI, type Theme, type ToolRenderers } from '@earendil-works/pi-coding-agent';
 import { Text, visibleWidth } from '@earendil-works/pi-tui';
 import { stripVTControlCharacters } from 'node:util';
-import { toolRenderers, stateLine } from '../../src/ui/tool-render.ts';
+import { toolLine, toolRenderers, stateLine } from '../../src/ui/tool-render.ts';
 import { CodeComponent, commandComponent } from '../../src/ui/rendering/command.ts';
 import { builtinCommandRenderers } from '../../src/ui/rendering/builtin-command.ts';
 import { registerToolRenderers, toolRenderer } from '../../src/runtime/tools.ts';
@@ -27,6 +27,12 @@ function activeTheme(): Theme {
   }, terminal(), process.cwd());
   return selected;
 }
+
+test('a narrow tool line reserves the right edge for its aside', () => {
+  const line = toolLine(activeTheme(), { icon: '', title: 'Wait for multiple objects', aside: { text: '2m05s', tone: 'dim' } }, 9);
+  assert.equal(visibleWidth(line), 9);
+  assert.match(stripVTControlCharacters(line), /^.{3} 2m05s$/);
+});
 
 test('shared tool body merges progress/results inside the native shell without borders or duplicate padding', () => {
   const theme = { fg: (_tone: string, text: string) => `\x1b[31m${text}\x1b[39m` } as Theme;
@@ -57,9 +63,11 @@ test('shared tool body merges progress/results inside the native shell without b
   }
   assert.match(renderer.renderResult!(result, { expanded: true, isPartial: false }, theme, ctx).render(40).join('\n'), /body 19/);
   ctx.isError = true;
-  const error = renderer.renderResult!(result, { expanded: false, isPartial: false }, theme, ctx).render(40).join('\n');
-  assert.match(error, /✘/); assert.match(error, /body 19/);
-  assert.ok(error.split('\n').filter(line => stripVTControlCharacters(line).includes('body')).every(line => line.includes('\x1b[31m')));
+  const error = renderer.renderResult!(result, { expanded: false, isPartial: false }, theme, ctx).render(40);
+  assert.deepEqual(error.map(stripVTControlCharacters), ['✘ Call · body 0']);
+  const diagnostic = renderer.renderResult!(result, { expanded: true, isPartial: false }, theme, ctx).render(40).slice(1);
+  assert.equal(diagnostic.map(line => stripVTControlCharacters(line).trimEnd()).join('\n'), body);
+  assert.ok(diagnostic.every(line => line.includes('\x1b[31m')));
 
   for (const palette of ['dark', 'light']) {
     initTheme(palette); const hostTheme = activeTheme();
@@ -103,10 +111,11 @@ test('shared tool body merges progress/results inside the native shell without b
       host.updateResult({ ...result, isError: true }, true);
       assert.equal(host.render(40)[1], hostTheme.bg('toolPendingBg', ' '.repeat(40)));
       host.updateResult({ ...result, isError: true });
-      const failed = host.render(40);
-      assert.equal(failed[1], hostTheme.bg('toolErrorBg', ' '.repeat(40)));
-      assert.match(failed.map(stripVTControlCharacters).join('\n'), /body 19/);
-      assert.doesNotMatch(failed.map(stripVTControlCharacters).join('\n'), /─/);
+      checkShell(/Call · body 0/, 'toolErrorBg');
+      host.setExpanded(true);
+      const failed = host.render(40).map(stripVTControlCharacters).join('\n');
+      assert.match(failed, /body 19/);
+      assert.doesNotMatch(failed, /─/);
     }
   }
   initTheme('dark');
@@ -158,13 +167,13 @@ test('structured expansions sanitize before styling, keep literal logs, syntax/l
     assert.equal(stateLine(state).tone, stateTone(state), state);
   const args = { id: 'job_00000001', sensitive: true, keys: ['private-key'] };
   const sensitiveCtx = { state: {}, args, isError: false, outputPad: 0 } as typeof ctx;
-  const sensitive = { content: [{ type: 'text' as const, text: 'sent 1 bytes' }], details: { job: { id: args.id } } };
+  const sensitive = { content: [{ type: 'text' as const, text: 'sent 1 bytes' }], details: { job: { id: args.id }, bytesSent: 1, stdinClosed: false } };
   assert.doesNotMatch(writeRenderers.renderResult!(sensitive, { expanded: true, isPartial: false }, theme, sensitiveCtx).render(120).join('\n'), /private-key/);
   assert.match(writeRenderers.renderResult!(sensitive, { expanded: false, isPartial: false }, theme,
     { ...sensitiveCtx, args: { id: args.id, sensitive: true, input: 'sent' } }).render(120).join('\n'), /sent 1 B/);
   sensitiveCtx.isError = true;
   sensitive.content[0].text = 'Unknown key private-key\nrepair the key name';
-  const error = writeRenderers.renderResult!(sensitive, { expanded: false, isPartial: false }, theme, sensitiveCtx).render(120).join('\n');
+  const error = writeRenderers.renderResult!(sensitive, { expanded: true, isPartial: false }, theme, sensitiveCtx).render(120).join('\n');
   assert.doesNotMatch(error, /private-key/); assert.match(stripVTControlCharacters(error), /Unknown key \[sensitive\].*\nrepair the key name/);
   assert.equal(sensitive.content[0].text, 'Unknown key private-key\nrepair the key name', 'display never changes model content');
 });
@@ -217,9 +226,10 @@ test('named agent tools and wait render names without changing model IDs or init
     [agents.startRenderers, { name: record.name, prompt: record.prompt, background: false }, { agent }, /✔ Review · 1\.2s/],
     [agents.listRenderers, { agentId: id, state: 'all' }, { agents: [agent] }, /Agents · 1 all \(session\)/],
     [agents.getRenderers, { id }, { agent }, /✔ Review · completed/],
-    [agents.readRenderers, { id }, { agent, stream: 'result', offset: 0, nextOffset: 100, totalBytes: 100 }, /Review · read · result 0–100 \/ 100 B/],
+    [agents.readRenderers, { id }, { agent, stream: 'result', offset: 0, nextOffset: 100, totalBytes: 100, endOfStream: true,
+      text: 'literal agent output' }, /Review · read · result 0–100 \/ 100 B/],
     [agents.sendRenderers, { id, message: 'Continue' }, { agent, action: 'steered' }, /Review · steered/],
-    [agents.stopRenderers, { id }, { name: record.name, state: 'stopped', cleanup: 'confirmed', affected: [{ id }] }, /⊘ Review · stopped · cleanup confirmed/],
+    [agents.stopRenderers, { id }, { name: record.name, runId: record.runId, requested: true, state: 'stopped', cleanup: 'confirmed', affected: [{ id }] }, /⊘ Review · stopped · cleanup confirmed/],
   ];
   try {
     for (const [renderer, args, details, expected] of rows) {
@@ -230,7 +240,8 @@ test('named agent tools and wait render names without changing model IDs or init
       assert.match(collapsed, expected); assert.doesNotMatch(collapsed, /agent_|run_/);
       const expanded = renderer.renderResult!(result, { expanded: true, isPartial: false }, theme, ctx).render(120).join('\n');
       if (renderer !== agents.listRenderers) assert.match(expanded.split('\n')[0], /Review/);
-      assert.match(expanded, /Review/); assert.match(expanded, /agent_00000001/);
+      assert.match(expanded, /Review/);
+      assert.match(expanded, renderer === agents.readRenderers ? /literal agent output/ : /agent_00000001/);
       assert.equal(JSON.stringify(result), before); assert.ok(result.content[0].text.startsWith(id));
     }
     const args = { ids: [id] }, summary = `${id} running · Review · ${record.runId}\nread: agent_read({"id":"${id}"})`;

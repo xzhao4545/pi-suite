@@ -107,18 +107,17 @@ export function decideWorkflowCollision(input: {
     return {
       kind: "report",
       message:
-        `Another extension (${source}) already registers a "${WORKFLOW_TOOL_NAME}" tool. ` +
-        "Pi keeps the first registration, so this extension's workflow tool is not offered to the " +
-        "model. Disable one of the two.",
+        `Pi kept the first registration of "${WORKFLOW_TOOL_NAME}" (${source}). Disable the competing extension to use pi-suite's tool.`,
     };
   }
 
   return {
     kind: "standDown",
     message:
-      `Another extension (${source}) already provides a "${foreign.name}" tool, so this extension's ` +
-      "workflows are disabled for this session to avoid offering the model two orchestrators. " +
-      'Set `"agents": {"workflows": true}` in .pi/pi-suite.json to keep both.',
+      `pi-suite workflows are off for this session: "${foreign.name}" is registered by ${source}. ` +
+      (tookOurName
+        ? "Disable the competing extension to use pi-suite's tool."
+        : 'Set `"agents": {"workflows": true}` in .pi/pi-suite.json or <agentDir>/pi-suite.json to keep both.'),
     // Case 1: ours never reached the registry, so there is nothing to withdraw.
     withdraw: !tookOurName,
   };

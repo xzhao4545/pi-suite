@@ -27,7 +27,7 @@ export class AgentRpc {
     const offRpc = registerRpcHandlers({ events: pi.events,
       spawn: async (type, prompt, raw) => {
         const captured = binding.current;
-        if (!captured) throw new Error('No active session');
+        if (!captured) throw new Error('No active session. Wait for subagents:ready before spawning.');
         const { request, options } = normalizeSpawn(type, prompt, raw);
         const run = await agents.admit().start(request, agents.scope(captured.ctx), this.config(), undefined, options);
         await manager.awaitStartup(run);
@@ -36,7 +36,7 @@ export class AgentRpc {
       getRecord: find,
       stop: async id => {
         const record = find(id)!;
-        if (!active(record.state)) throw new Error('Agent is not running');
+        if (!active(record.state)) throw new Error('Agent is not running. Pass the ID of an active agent to stop.');
         await manager.stop(id, record.runId);
       },
       consume: id => {
@@ -49,7 +49,7 @@ export class AgentRpc {
       steer: async (id, message) => {
         const record = find(id)!;
         const run = manager.runs.get(record.runId);
-        if (!run || run.settled || !active(record.state)) throw new Error('Agent is not running');
+        if (!run || run.settled || !active(record.state)) throw new Error('Agent is not running. Use spawn to start new work.');
         await manager.send(id, message, agents.scope(binding.current!.ctx), this.config());
       },
     });

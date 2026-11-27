@@ -1,4 +1,3 @@
-// Shared file locks, reload-before-write and atomic snapshots extracted from TaskStore.
 // Adapted from @tintinweb/pi-tasks 0.9.1 src/task-store.ts (MIT).
 import { randomUUID } from 'node:crypto';
 import { watch, type FSWatcher } from 'node:fs';
@@ -37,7 +36,7 @@ async function lock(path: string, prefix: string, signal?: AbortSignal): Promise
       catch (error) { if (code(error) !== 'ENOENT') throw error; }
     } else await sleep(50, undefined, { signal });
   }
-  throw new ToolError(`${prefix}_LOCK_TIMEOUT`, `File is locked: ${path}`);
+  throw new ToolError(`${prefix}_LOCK_TIMEOUT`, `File is locked: ${path}. Wait for the writer to finish, then retry.`);
 }
 async function unlock(path: string, token: string): Promise<void> {
   // A reclaimed lock may belong to a successor; release only our exact pid:uuid token.
@@ -98,7 +97,7 @@ export class JsonStore<Data> {
     try {
       const value: unknown = JSON.parse(text);
       return this.decode(value);
-    } catch (error) { throw new ToolError(`${this.prefix}_STORE_INVALID`, `${this.path}: ${String(error)}; current state is retained and the file is not overwritten`); }
+    } catch (error) { throw new ToolError(`${this.prefix}_STORE_INVALID`, `Invalid data in ${this.path}: ${String(error)}; current state is retained. Repair the file before retrying.`); }
   }
   private serial<T>(run: () => Promise<T>): Promise<T> {
     const work = this.queue.then(run);

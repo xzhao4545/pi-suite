@@ -1,38 +1,79 @@
 # Workflow 编排
 
-编排核心位于 `src/agents/workflow`，由 @tintinweb/pi-subagents 0.23.0 的 runtime、worker-source、meta、journal、task 与 progress 源码导入适配。核心通过 WorkflowHost 接入公共 AgentManager、JobManager、资源发现、记录、通知和等待；agent_workflow 与原生查看使用同一运行 owner。按文件来源见 [上游登记](../../../../third-party/UPSTREAM.md)。
+`agent_workflow` 运行一段 JavaScript 脚本，由脚本启动和组合多个 child agent。代码位于 `src/agents/workflow`，其中 runtime、worker-source、meta、journal、task 与 progress 改编自 @tintinweb/pi-subagents 0.23.0，按文件来源见 [上游登记](../../../../third-party/UPSTREAM.md)。`createWorkflowHost`（`host.ts`，运行核心调用的宿主接口）把脚本接到公共 AgentManager、JobManager、资源发现、记录、通知和等待；工具与 `/subagents` 查看共用进程级 `WorkflowManager`。
 
-- [宿主、资源与记录](host.md) — child/gate 生命周期、保存脚本、快照与会话归属。
-- [工具与原生操作](operations.md) — agent_workflow、共享等待、/subagents workflows 与控制。
+- [宿主、资源与记录](host.md) — child 与 gate、保存脚本、运行文件与通知。
+- [工具与原生操作](operations.md) — agent_workflow、等待、/subagents workflows、开关与冲突。
 
 ## 执行与边界
 
-`runWorkflow` 在独立 Worker 中编译执行 JavaScript。输入不可执行时在启动前拒绝；启动后的结果带 completed、failed 或 killed 状态、进度日志与调用计数。返回前等待 Worker 线程终止。宿主负责 child 的实际结算与清理。
+`runWorkflow` 在独立 Worker 线程中编译并执行脚本。用 Worker 是为了能用 `terminate()` 停止死循环或卡在 await 中的脚本；Worker 内的 vm context 保证协作脚本的确定性，不是安全沙箱。`gate` 作为普通 shell 命令执行。
 
-脚本 metadata 为 `export const meta = {name, description, whenToUse?, phases?}`。片段经过纯字面量语法检查，再在空 VM 中以 100 ms 上限解析；函数调用、运算、变量、spread、模板插值不属于字面量。字符串、注释、数组、对象和尾逗号使用 JavaScript 语法。运行时校验后向宿主提供同一份 metadata，运行中的名称与阶段直接使用该结果。
+1. 校验：脚本超过大小限制、含 tab/CR/LF 以外的控制字符、metadata 无效或 `args` 无法按 JSON 传递时，报错且不启动 Worker。
+2. 执行：脚本通过 `agent`、`parallel`、`pipeline`、`phase`、`log`、`workflow` 与 `budget` 调度 child，进度按批次交给宿主。
+3. 结束：结果状态为 completed、failed 或 killed，附进度日志与调用计数。返回前等待 Worker 线程终止；child 的结算与清理由宿主负责。
 
-args、schema 和脚本返回值使用 JSON 边界：拒绝循环、非有限数、BigInt、函数、稀疏数组、symbol 与非普通对象；顶层未提供的 args 和无返回值使用 undefined。对象在脚本 realm 内解析，保留该 realm 的 Object/Array 原型。脚本限制动态代码生成；Date.now、Math.random 和无参数 Date 构造明确拒绝，时间信息通过 args 传入。
+### Metadata
 
-`parallel` 等待全部条目，`pipeline` 让各条目独立推进阶段；普通条目异常成为 null，运行级上限错误向外传播。`phase` 与显式 agent phase 提供进度分组，`log` 与 console 输出按批次交给宿主。单层嵌套 workflow 使用同一个 Worker、并发额度、调用计数、journal 与 budget，阶段标题按子 workflow 分组。
+脚本以 `export const meta = {name, description, whenToUse?, phases?}` 开头，`phases` 每项为 `{title, detail?, model?}`，`name` 与 `description` 必须是非空字符串。
 
-默认限制：脚本 UTF-8 512 KiB、单次运行 agent 1000、每次 parallel/pipeline 条目 4096、嵌套调用 256；并发为 `max(1, min(16, CPU-2))`。未等待的 agent launch 会使运行失败并停止对应 child。
+`meta` 必须是纯字面量：先由 `assertPureLiteral`（`literal.ts`）检查语法，再在空 VM 中以 100 ms 上限求值。函数调用、运算、变量、spread 与模板插值都会报错；字符串、注释、数组、对象和尾逗号使用 JavaScript 语法。校验后的 metadata 同时交给宿主，运行中的名称与阶段直接使用它。
 
-## Agent、控制与预算
+### 值边界与确定性
 
-agent 调用支持 label、phase、model、agentType、gate、resume、effort 与 schema；未知选项和 isolation 明确拒绝。结构化结果使用公共 JSON Schema 编译器，宿主给 child 注入 StructuredOutput，运行核心再次检查结果。模型与 gate 失败返回 null，错误保留在 agent 进度行中，由脚本决定后续流程。
+- `args`、`schema` 和脚本返回值必须是 JSON 值：循环引用、非有限数、BigInt、函数、稀疏数组、symbol（值或键）与非普通对象都会报错。未传 `args` 或脚本未返回值时，顶层值为 `undefined`。
+- 这些对象在脚本 realm 内解析，保留该 realm 的 Object/Array 原型。
+- 脚本限制动态代码生成。`Date.now()`、`Math.random()` 与无参数 `new Date()` 会抛错，因为它们使 journal 重放结果不一致；时间通过 args 传入。
 
-gate 由宿主在 workflow cwd 执行，核心只调用一次。gate 执行失败或抛错都保留已经产生的 child 用量。resume 使用本次运行已完成 child 的 label，要求宿主继续其原会话与模型、工具契约；不得同时提供 agentType、model、effort、schema 或 gate。原 child 的 CompiledSchema 随续接保留，Worker 根据有效的结构化标记在脚本 realm 内解析返回值。
+### 组合与限制
 
-pause 停止新启动，已有 child 继续结算；resume 释放暂停等待。skip 让未结算调用成为 null；retry 只作用于正在执行的调用，停止该次尝试并重跑，脚本继续等待原来的 Promise。并发等待中的调用重新取得槽位时检查暂停和跳过，避免暂停泄漏启动。
+- `parallel` 等待全部条目；`pipeline` 让各条目独立推进各阶段。普通条目抛错时该条目为 null，pipeline 跳过它的后续阶段；运行级上限错误向外传播。
+- `phase` 与 agent 的 `phase` 选项提供进度分组；`log` 与 console 输出按批次交给宿主。
+- `workflow(nameOrRef, args?)` 只能嵌套一层，在同一 Worker 内运行，共享并发额度、agent 计数、journal 与 budget；子 workflow 的阶段标题带 `▸ <name>` 前缀，单独成组。
 
-`budget.spent()` 累计本次运行全部尝试的输出 token，包含用户重试的尝试；进度行累计各尝试 token 与工具调用。`budget.total` 为 null，`budget.remaining()` 为 Infinity。进度为追加日志，同一 agent index 采用最后写入项；后台 task 的计数按批次从折叠结果计算，避免重复加总。
+| 限制 | 默认值 |
+| --- | --- |
+| 脚本大小 | UTF-8 512 KiB |
+| 单次运行 agent 数 | 1000 |
+| 每次 parallel/pipeline 条目 | 4096 |
+| 嵌套 `workflow()` 调用 | 256 |
+| 并发 | `max(1, min(16, CPU 数 - 2))` |
+
+超过 agent、条目或嵌套上限时运行失败。脚本结束时仍有未 await 的 agent 调用，运行失败并停止这些 child。
+
+## Agent 调用
+
+`agent(prompt, opts?)` 的选项为 label、phase、model、agentType、gate、resume、effort、schema。其他选项报错并列出支持项；`isolation` 报错说明不支持 git worktree 隔离。`effort` 取值为 minimal、low、medium、high、xhigh、max。
+
+- `schema`：使用公共 JSON Schema 编译器。宿主给 child 注入 StructuredOutput 工具，运行核心再次校验结果。
+- 失败：模型或 gate 失败时调用返回 null，错误显示在该 agent 的进度行中，由脚本决定后续流程。
+- `gate`：child 成功且结构化结果校验通过后，宿主在 workflow cwd 执行 shell 命令，每次尝试最多执行一次。gate 失败或抛错时，已产生的 child 用量仍计入，child 也仍可按 label 续接。执行方式见 [Child 与 gate](host.md#child-与-gate)。
+- `resume`：传入本次运行中已完成 child 的 label，宿主在原会话中续接，沿用原模型与工具契约；不能同时传 agentType、model、effort、schema 或 gate。原 child 的 `CompiledSchema`（编译后的结构化结果 schema）随续接保留，Worker 按结构化标记在脚本 realm 内解析返回值。
+
+## 控制与预算
+
+| 控制 | 行为 |
+| --- | --- |
+| pause | 不再启动新 child，已在运行的继续结算 |
+| resume | 解除暂停 |
+| skip | 未结算的调用返回 null |
+| retry | 只作用于运行中的调用：停止当前尝试并重跑，脚本继续等待原 Promise |
+
+等待并发槽位的调用拿到槽位时再检查暂停与跳过，暂停期间不会漏启动。入口见 [/subagents workflows](operations.md#subagents-workflows)。
+
+`budget.spent()` 累计本次运行全部尝试的输出 token，包括用户重试的尝试；进度行累计该调用各次尝试的 token 与工具调用数。`budget.total` 为 null，`budget.remaining()` 为 Infinity。
+
+进度是追加日志，同一 agent index 以最后写入项为准；后台 task 的计数在每批进度后从折叠结果重新计算，不重复累加。
 
 ## Journal 恢复
 
-journal 为 JSONL，agent 调用按到达顺序取得 index，结算时追加。key 覆盖 prompt、label、model、agentType、effort、gate、resume 与 schema，阶段分组不影响调用身份。
+journal 为 JSONL。每个 agent 调用按到达顺序取得 index，结算时追加一行 `{index, key, ok, text?, resumed?}`。key 是 prompt、label、model、agentType、effort、gate、resume 与 schema 的 SHA-256 前 32 位十六进制；阶段分组不影响 key。
 
-恢复只复用位置与 key 一致且成功的前缀；首次缺失、变化、失败或结构化结果复核失败后，后续调用全部执行。复用项写入本次 journal，使该文件独立完整。含 `agent({resume})` 的 journal 整体执行，因为复用文本不产生可继续的 child 会话。
+1. 按 index 顺序复用位置与 key 都一致且成功的前缀。
+2. 第一个缺失、key 变化、失败或结构化结果复核失败的调用，以及其后的全部调用，实际执行。
+3. 复用项写入本次 journal，使该文件自身完整。
+4. journal 含 `agent({resume})` 调用时不复用任何条目：复用项只是文本，没有可续接的 child 会话。
 
-读取按 index 排序；I/O 错误、中间损坏、非法条目和重复 index 明确报错。仅最后一次未完成且无末尾换行的 JSON 追加可以舍弃，并返回 truncated 标记供宿主报告。追加失败使运行失败，禁止无声切换为内存恢复。
+读取按 index 排序。I/O 错误、中间行损坏、非法条目和重复 index 都报错；只有最后一行未写完且文件没有末尾换行时可以舍弃，并返回 truncated 标记，由宿主写入运行日志。追加失败使运行失败，不切换为内存恢复。恢复入口与目标限制见 [恢复运行](operations.md#恢复运行)。
 
 [返回 agents](../index.md)

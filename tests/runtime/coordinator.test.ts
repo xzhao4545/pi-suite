@@ -124,7 +124,7 @@ test('empty editor enters Dock with left and Enter opens the selected agent thro
     run.record.usage = {tokens: {input: 12000, output: 3400, cacheRead: 0, cacheWrite: 0, total: 15400}, cost: 0};
     run.record.toolUses = 4; manager.changed();
     const entries = h.session.sessionManager.getBranch().length;
-    run.startedMonotonic = performance.now() - 12340; t.mock.timers.tick(1000);
+    run.startedMonotonic = performance.now() - 12750; t.mock.timers.tick(1000);
     assert.equal(h.session.sessionManager.getBranch().length, entries, 'Dock ticking never appends session entries');
     assert.deepEqual(input('\x1b[D'), {consume: true});
     for (const width of [40, 120]) {
@@ -132,9 +132,9 @@ test('empty editor enters Dock with left and Enter opens the selected agent thro
       assert.ok(lines.some(line => line.includes('Enter') && line.includes('Esc')));
       assert.ok(lines.some(line => line.includes('Dock con')));
       assert.ok(lines.some(line => line.includes('1 running')));
-      assert.ok(lines.some(line => line.includes('running · 12.3s')));
-      if (width === 120) assert.match(lines.join('\n'), /↑12000 ↓3400 · 4 tools/);
-      else assert.ok(lines.every(line => !line.includes('↑12000')), 'narrow rows omit tokens before tools');
+      assert.match(lines.join('\n'), /running · 12s\b/);
+      if (width === 120) assert.match(lines.join('\n'), /↑12k ↓3\.4k · 4 tools/);
+      else assert.ok(lines.every(line => !line.includes('↑12k')), 'narrow rows omit tokens before tools');
       assert.ok(lines.length <= dock.budget() && lines.every(line => visibleWidth(line) <= width));
     }
     assert.equal(input('\x1b[13;1:3u'), undefined, 'kitty release cannot open the agent');

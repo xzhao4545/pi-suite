@@ -254,9 +254,9 @@ test('saved workflow precedence/trust/packages, malformed journals and persisten
     await configure({agents: {workflows: true}});
     assert.deepEqual(h.pi.getActiveTools(), ['wait', 'agent_workflow']);
     const description = h.session.agent.state.tools.find(tool => tool.name === 'agent_workflow')!.description;
-    assert.match(description, /Enabled agentType values:.*visible-special/);
+    assert.match(description, /Enabled agentType names:.*visible-special/);
     assert.doesNotMatch(description, /VISIBLE_DESCRIPTION|Script body hooks/);
-    assert.match(description, /Before writing or editing a script, read the pi-suite-workflow skill/);
+    assert.match(description, /Read the pi-suite-workflow skill before you write or edit a workflow script/);
     assert.ok(Buffer.byteLength(description) < 1200, 'the model sees routing and parameters, not the full guide');
     h.pi.setActiveTools(['wait']);
     await configure({agents: {workflows: false}}); await configure({agents: {workflows: true}});

@@ -1,5 +1,5 @@
 // Spawn names/normalization adapted from @tintinweb/pi-subagents 0.23.0 src/cross-extension-rpc.ts (MIT).
-// Unlike upstream, unknown/internal options fail at the boundary rather than disappearing.
+// Validate at the RPC boundary so misspelled options cannot silently change a run.
 import { statSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
 import { Type, type Static } from 'typebox';
@@ -20,21 +20,21 @@ const schema = Type.Object({
 }, { additionalProperties: false });
 
 export function normalizeSpawn(type: unknown, prompt: unknown, raw: unknown): { request: StartAgent; options: StartOptions } {
-  if (typeof type !== 'string' || !type.trim()) throw new Error('Agent type must be a non-empty string');
-  if (typeof prompt !== 'string' || !prompt.trim()) throw new Error('Agent prompt must be a non-empty string');
+  if (typeof type !== 'string' || !type.trim()) throw new Error('Invalid agent type. Resend with a non-empty type string.');
+  if (typeof prompt !== 'string' || !prompt.trim()) throw new Error('Invalid agent prompt. Resend with a non-empty prompt string.');
   const value = raw ?? {};
-  if (!Check(schema, value)) throw new Error(`Invalid spawn options: ${[...Errors(schema, value)].map(error => `${error.instancePath}: ${error.message}`).join('; ')}`);
+  if (!Check(schema, value)) throw new Error(`Invalid spawn options: ${[...Errors(schema, value)].map(error => `${error.instancePath}: ${error.message}`).join('; ')}. Correct the listed fields and retry.`);
   const o = value as Static<typeof schema>;
   for (const key of ['onSpawned', 'onQueued', 'onCompaction'] as const) {
-    if (o[key] !== undefined && typeof o[key] !== 'function') throw new Error(`SpawnOptions.${key} must be a function`);
+    if (o[key] !== undefined && typeof o[key] !== 'function') throw new Error(`SpawnOptions.${key} is not a function. Pass a function or omit it.`);
   }
-  if (o.signal !== undefined && !(o.signal instanceof AbortSignal)) throw new Error('SpawnOptions.signal must be an AbortSignal');
+  if (o.signal !== undefined && !(o.signal instanceof AbortSignal)) throw new Error('SpawnOptions.signal is not an AbortSignal. Pass an AbortSignal or omit it.');
   if (o.structuredOutput !== undefined && (!o.structuredOutput || o.structuredOutput.schema?.type !== 'object' || typeof o.structuredOutput.check !== 'function')) {
-    throw new Error('SpawnOptions.structuredOutput must be a compiled object schema');
+    throw new Error('Invalid SpawnOptions.structuredOutput. Pass an object schema with a check(value) function, or omit it.');
   }
   if (o.cwd != null) {
-    if (!isAbsolute(o.cwd)) throw new Error(`SpawnOptions.cwd must be an absolute path: "${o.cwd}"`);
-    if (!statSync(o.cwd).isDirectory()) throw new Error(`SpawnOptions.cwd is not a directory: "${o.cwd}"`);
+    if (!isAbsolute(o.cwd)) throw new Error(`SpawnOptions.cwd is not absolute: "${o.cwd}". Pass an absolute path or omit cwd.`);
+    if (!statSync(o.cwd).isDirectory()) throw new Error(`SpawnOptions.cwd is not a directory: "${o.cwd}". Pass an existing directory or omit cwd.`);
   }
   const model = o.model == null ? undefined : typeof o.model === 'string' ? o.model : `${o.model.provider}/${o.model.id}`;
   return { request: { type, prompt, name: o.name, model, maxTurns: o.maxTurns, isolated: o.isolated,

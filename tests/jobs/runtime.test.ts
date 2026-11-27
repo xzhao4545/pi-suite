@@ -2,7 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { stripVTControlCharacters } from 'node:util';
 import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { acquireRuntime, PROTOCOL_VERSION, quitExistingRuntime } from '../../src/jobs/runtime.ts';
 import type { JobManager } from '../../src/jobs/manager.ts';
@@ -16,6 +18,7 @@ import { Dock } from '../../src/ui/dock.ts';
 import { resolveWorkspace } from '../../src/jobs/workspace.ts';
 import { agentDir, owner, settled, testShell } from '../support/jobs.ts';
 import { host } from '../support/host.ts';
+import { terminal } from '../support/terminal.ts';
 
 const key = Symbol.for('pi-suite.jobs.runtime');
 const globals = globalThis as unknown as Record<symbol, {
@@ -29,6 +32,35 @@ function moduleFor(pi: ExtensionAPI): JobsModule {
   const binding = new SessionBinding();
   return new JobsModule(pi, binding, new Notifications(pi, binding), new StatusPublisher(new Dock()));
 }
+
+test('the Jobs Dock ticks while a quiet job runs and stops polling once it settles', { timeout: 15000 }, async t => {
+  let dock!: Dock;
+  const h = await host({ui: ui => ({...ui, setWidget(key, factory) {
+    if (key === 'pi-suite:dock' && typeof factory === 'function') dock = factory(terminal(), ui.theme) as Dock;
+  }})});
+  try {
+    const runtime = acquireRuntime(h.services.agentDir);
+    assert.equal(runtime.mode, 'active');
+    const jobs = runtime.manager, snapshots = t.mock.method(jobs, 'sessionJobs');
+    let monotonic = performance.now();
+    t.mock.method(performance, 'now', () => monotonic);
+    t.mock.timers.enable({apis: ['setInterval']});
+    const job = await jobs.start({ ...owner, ownerSessionId: h.session.sessionManager.getSessionId(), cwd: h.services.cwd,
+      name: 'Quiet job', command: 'read line; true' }, testShell());
+    const rendered = () => stripVTControlCharacters(dock.render(120).join('\n'));
+    assert.match(rendered(), / · 0s · pipe\b/);
+    monotonic += 1000;
+    assert.match(rendered(), / · 0s · pipe\b/, 'without a tick the row has not been republished');
+    t.mock.timers.tick(1000);
+    assert.match(rendered(), / · 1s · pipe\b/);
+
+    jobs.endInput(job.id);
+    assert.equal((await jobs.wait(job.id)).state, 'completed');
+    const settledSnapshots = snapshots.mock.callCount();
+    t.mock.timers.tick(2000);
+    assert.equal(snapshots.mock.callCount(), settledSnapshots, 'the Dock no longer polls owned metadata');
+  } finally { t.mock.timers.reset(); await h.dispose(); }
+});
 
 test('incompatible reload preserves query, stop and quit through the owner bridge; idle reload replaces it', { timeout: 30000 }, async () => {
   const root = agentDir();

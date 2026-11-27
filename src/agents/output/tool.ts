@@ -1,45 +1,25 @@
 // Imported/adapted from @tintinweb/pi-subagents 0.23.0 src/structured-output.ts (MIT).
-/**
- * structured-output.ts — the synthetic tool behind `agent(prompt, { schema })`.
- *
- * A workflow script that passes a `schema` wants an *object* back, not prose it
- * has to parse. Claude Code does this by giving the child a `StructuredOutput`
- * tool whose input schema is the caller's schema, so the provider fills the
- * fields, and returning the validated payload as the agent's result.
- *
- * We do the same, with one gap named up front: Claude Code *forces* the call,
- * and we cannot. `toolChoice` exists in pi-ai's provider layer but is not
- * plumbed through `AgentSession`, so an extension has no way to require a
- * particular tool. What we have instead is three softer pressures —
- *
- *   1. `constrainedSampling`, so providers that support it hold the payload to
- *      the schema at sampling time;
- *   2. the tool's description, snippet and guideline, which say the answer must
- *      come through this call;
- *   3. validation here, answering a bad payload with `isError` so the model
- *      sees what was wrong and calls again inside the same run.
- *
- * — and, when all three fail, one more prompt from `runAgent`. See
- * {@link structuredRetryPrompt}.
- *
- * The name matches Claude Code's exactly, so a ported prompt that mentions
- * `StructuredOutput` is still telling the truth.
- */
+// The name matches Claude Code so ported prompts can still call StructuredOutput.
+// AgentSession does not expose toolChoice. Constrained sampling and tool guidance
+// help the model make the call; validation and one final prompt cover failures.
 
 import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { stateLine, toolRenderers } from "../../ui/tool-render.ts";
 import type { CompiledSchema } from "./schema.ts";
 
-/**
- * Deliberately NOT added to `SUBAGENT_TOOL_NAMES`: that list becomes
- * `EXCLUDED_TOOL_NAMES`, which is exactly the denial this tool has to avoid.
- * Nor to `BUILTIN_TOOL_NAMES` — it is ours to inject, never a name a user may
- * ask for in an agent's `tools:` frontmatter.
- */
+// The child runner injects this tool. Adding it to the subagent exclusion list
+// would hide it; adding it to the built-in list would let frontmatter select it.
 export const STRUCTURED_OUTPUT_TOOL_NAME = "StructuredOutput";
 
-/** What the child produced, filled in as the tool is called. */
+type OutputDetails = { payload?: string; error?: string };
+export const structuredOutputRenderers = toolRenderers<unknown, OutputDetails>({
+  call: () => ({ icon: "", title: STRUCTURED_OUTPUT_TOOL_NAME }),
+  collapsed: () => ({ ...stateLine("completed"), title: STRUCTURED_OUTPUT_TOOL_NAME, summary: "accepted" }),
+  error: details => ({ summary: "rejected", diagnostic: details?.error }),
+  expanded: details => details?.payload === undefined ? [] : [{ code: details.payload, language: "json" }],
+});
+
 export interface StructuredCapture {
-  /** The last payload that validated, canonicalised. Absent until one does. */
   json?: string;
   /** Why the most recent attempt was rejected, for the retry prompt. */
   lastError?: string;
@@ -51,32 +31,22 @@ export function createStructuredCapture(): StructuredCapture {
   return { called: false };
 }
 
-/**
- * Build the tool for one child.
- *
- * `capture` is the box the caller reads afterwards. It is passed in rather than
- * returned so `runAgent` owns its lifetime and can consult it on every exit
- * path, including the ones where the tool was never reached.
- */
+// The runner owns capture so it can check the result even if the model never calls the tool.
 export function createStructuredOutputTool(
   compiled: CompiledSchema,
   capture: StructuredCapture,
 ): ToolDefinition {
   return defineTool({
+    ...structuredOutputRenderers,
     name: STRUCTURED_OUTPUT_TOOL_NAME,
     label: "Structured Output",
     description:
-      "Report your final answer. Call this exactly once, with the complete result, and put everything the "
-      + "caller needs inside the arguments — text written outside this call is discarded. If a call is "
-      + "rejected for not matching the schema, fix the reported fields and call it again.",
-    promptSnippet: "Report your final answer as structured data",
+      "Submit your complete final answer in one StructuredOutput call. Use the schema fields, not prose. If rejected, fix the reported fields and call again.",
+    promptSnippet: "Submit a structured final answer",
     promptGuidelines: [
-      "Your final answer MUST be reported by calling StructuredOutput. Prose outside that call is discarded.",
+      "Put the complete final answer in StructuredOutput; prose does not count as the result.",
     ],
-    // The caller's schema *is* the tool's input schema, verbatim — that is what
-    // makes the provider fill the fields. pi types this as TypeBox's `TSchema`,
-    // which v1 defines as an open interface, so a plain JSON Schema satisfies
-    // it without a cast at runtime or a conversion at author time.
+    // Pass the caller's JSON Schema directly so the provider sees the same fields the checker validates.
     parameters: compiled.schema as never,
     // "prefer", not "require": a provider that cannot constrain sampling should
     // fall through to validation-and-retry rather than fail the call outright.
@@ -98,16 +68,17 @@ export function createStructuredOutputTool(
         return {
           content: [{
             type: "text",
-            text: `StructuredOutput did not match the required schema:\n${verdict}\nCall it again with a corrected value.`,
+            text: `${verdict}\nFix the reported fields and call StructuredOutput again.`,
           }],
           isError: true,
-          details: {},
+          details: { error: verdict } satisfies OutputDetails,
         };
       }
-      // Last valid call wins: a model that calls twice meant the second one.
+      // Last valid call wins: a model that calls twice meant the second one. The payload
+      // also goes into details so replay needs neither the schema nor the call arguments.
       capture.json = JSON.stringify(params);
       capture.lastError = undefined;
-      return { content: [{ type: "text", text: "Recorded." }], details: {} };
+      return { content: [{ type: "text", text: "Recorded." }], details: { payload: capture.json } satisfies OutputDetails };
     },
   }) as ToolDefinition;
 }
@@ -121,7 +92,7 @@ export function createStructuredOutputTool(
  */
 export function structuredRetryPrompt(capture: StructuredCapture): string {
   const reason = capture.called && capture.lastError !== undefined
-    ? `Your last ${STRUCTURED_OUTPUT_TOOL_NAME} call did not match the required schema: ${capture.lastError}`
-    : `You did not call ${STRUCTURED_OUTPUT_TOOL_NAME}, so your answer was not recorded.`;
-  return `${reason}\n\nCall ${STRUCTURED_OUTPUT_TOOL_NAME} now with your complete final answer. Do not reply with prose.`;
+    ? `StructuredOutput rejected the last call: ${capture.lastError}`
+    : `You did not call ${STRUCTURED_OUTPUT_TOOL_NAME}.`;
+  return `${reason}\n\nCall ${STRUCTURED_OUTPUT_TOOL_NAME} with your complete answer, not prose.`;
 }

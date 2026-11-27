@@ -18,27 +18,23 @@ function readMemoryIndex(dir: string): string | undefined {
 
 export function buildMemoryBlock(agentName: string, scope: MemoryScope, cwd: string): string {
   const memoryDir = resolveMemoryDir(agentName, scope, cwd);
-  // Create the memory directory so the agent can immediately write to it
   mkdirSync(memoryDir, { recursive: true });
 
   const existingMemory = readMemoryIndex(memoryDir);
 
   const header = `# Agent Memory
 
-You have a persistent memory directory at: ${memoryDir}/
-Memory scope: ${scope}
-
-This memory persists across sessions. Use it to build up knowledge over time.`;
+Persistent memory directory (${scope}): ${memoryDir}/`;
 
   const memoryContent = existingMemory
     ? `\n\n## Current MEMORY.md\n${existingMemory}`
-    : `\n\nNo MEMORY.md exists yet. Create one at ${join(memoryDir, "MEMORY.md")} to start building persistent memory.`;
+    : `\n\nCreate ${join(memoryDir, "MEMORY.md")} when you have something to save.`;
 
   const instructions = `
 
 ## Memory Instructions
-- MEMORY.md is an index file — keep it concise (under 200 lines). Lines after 200 are truncated.
-- Store detailed memories in separate files within ${memoryDir}/ and link to them from MEMORY.md.
+- Only the first 200 lines of MEMORY.md are loaded. Keep it as an index.
+- Save details in separate files in this directory and link to them from MEMORY.md.
 - Each memory file should use this frontmatter format:
   \`\`\`markdown
   ---
@@ -48,28 +44,24 @@ This memory persists across sessions. Use it to build up knowledge over time.`;
   ---
   <memory content>
   \`\`\`
-- Update or remove memories that become outdated. Check for existing memories before creating duplicates.
-- You have Read, Write, and Edit tools available for managing memory files.`;
+- Check for duplicates before adding a memory. Update or remove outdated entries.`;
 
   return header + memoryContent + instructions;
 }
 
-/**
- * Build a read-only memory block for agents that lack write/edit tools.
- * Does NOT create the memory directory — agents can only consume existing memory.
- */
+/** Missing memory is normal; only the writable variant creates the directory. */
 export function buildReadOnlyMemoryBlock(agentName: string, scope: MemoryScope, cwd: string): string {
   const memoryDir = resolveMemoryDir(agentName, scope, cwd);
   const existingMemory = readMemoryIndex(memoryDir);
 
   const header = `# Agent Memory (read-only)
 
-Memory scope: ${scope}
-You have read-only access to memory. You can reference existing memories but cannot create or modify them.`;
+Memory directory (${scope}): ${memoryDir}/
+Use existing memories as context. Do not modify them.`;
 
   const memoryContent = existingMemory
     ? `\n\n## Current MEMORY.md\n${existingMemory}`
-    : `\n\nNo memory is available yet. Other agents or sessions with write access can create memories for you to consume.`;
+    : `\n\nNo memory is available.`;
 
   return header + memoryContent;
 }

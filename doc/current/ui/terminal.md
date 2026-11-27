@@ -1,33 +1,52 @@
-# 终端复制
+# 终端交互
 
-Pi 全屏界面拖选和宿主其他复制入口共用 Pi 的 clipboard 能力。Linux 经 SSH 运行时，OSC 52 请求的目标是连接 SSH 的本机终端剪贴板；tmux buffer 与远端 Linux 桌面剪贴板是不同目标。
+## 终端复制
 
-Pi Suite 在 TUI 绑定时检查 tmux 当前客户端的 clipboard 能力；支持时将服务器 `set-clipboard` 设置为 `on`，让 tmux 接收应用 OSC 52 并向外转发。`external` 允许 tmux 自身复制，但会拦截 Pi 等应用的请求。此设置作用于当前 tmux 服务器，关闭服务器后由 tmux 配置决定；希望长期保持时可在 `~/.tmux.conf` 写入 `set -s set-clipboard on`。
+Pi 全屏界面的拖选和其他复制入口共用 Pi 的 clipboard 能力，通过 OSC 52 写入剪贴板。Linux 经 SSH 运行时，OSC 52 的目标是发起 SSH 连接的本机终端的剪贴板；tmux buffer 和远端 Linux 桌面剪贴板是另外的目标。
 
-客户端没有 clipboard 能力时，界面提示检查本机 SSH 终端的 OSC 52 支持/权限与 tmux terminal-features；检查失败或设置失败报告错误。该路径使用 Pi 原有复制能力，不接管 stdout、鼠标选择或单个查看器，也不要求 DCS 透传。
+在 tmux 中（存在 `TMUX` 环境变量）以 TUI 模式绑定会话时，Pi Suite（`src/runtime/clipboard.ts`）：
 
-OSC 52 写请求没有可靠的接收确认。Pi 的 `Copied!` 提示表示其 clipboard 调用完成，不能证明本机终端接受了请求；最终检查是在本机其他窗口粘贴中文与多行文本。终端名称指本机建立 SSH 连接的应用；远端 `$TERM` 描述终端能力，不能可靠识别应用名称。嵌套 tmux/SSH 需要按实际链路另行核查。
+1. 执行 `tmux display-message -p '#{set-clipboard}|#{client_termfeatures}'` 读取当前设置和客户端能力；失败时报错 `Cannot inspect tmux clipboard`。
+2. 客户端能力中没有 `clipboard` 时，发出警告：检查 SSH 终端的 OSC 52 支持与权限，以及 tmux 的 terminal-features。不修改设置。
+3. `set-clipboard` 已经是 `on` 时不做改动；否则执行 `tmux set-option -s set-clipboard on`，失败时报错 `Cannot enable tmux application clipboard`。
+
+`on` 让 tmux 接收应用发出的 OSC 52 并转发到外层终端；tmux 默认的 `external` 只允许 tmux 自己复制，会拦下 Pi 的请求。该设置作用于当前 tmux 服务器，服务器重启后由 tmux 配置决定；需要长期生效时在 `~/.tmux.conf` 写入 `set -s set-clipboard on`。这条路径只使用 Pi 已有的复制能力，不接管 stdout、鼠标选择或某个查看器，也不需要 DCS 透传。
+
+OSC 52 写请求没有接收确认。Pi 的 `Copied!` 只表示 clipboard 调用已完成，不能证明本机终端接受了请求；确认方法是在本机其他窗口粘贴中文与多行文本。远端 `$TERM` 只描述终端能力，不能可靠识别本机终端应用。嵌套 tmux/SSH 需要按实际链路逐层检查。
 
 ## 查看器与输入
 
-Dock、`/jobs` 和 Subagents 所属 Jobs 的 Enter 直接打开同一个命令/输出查看器。浏览默认只读，方向键滚动，不向 PTY 发送输入；`i` 才明确接管输入。接管后 Ctrl+G 交还模型、Ctrl+T 发送当前屏幕并离开、Ctrl+] 离开但保留进程；默认离开键避开 tmux 的 Ctrl+B 前缀，实际提示使用 `jobs.returnKey`、`transferKey`、`detachKey` 配置。`job_start attach:true` 是明确的用户输入入口，直接进入接管态。浏览态 Esc 返回上一层，300ms 内双左关闭整个 Jobs/Subagents 浏览链路；搜索、过滤、消息 Editor 和 PTY 接管态保留自己的左右键。
-
-直接接管与命令/输出查看器通过同一个共享阅读 overlay 打开：普通模式居中 90% 宽、终端 70% 高度上限，fullscreen 使用完整列/行，缩放时窗口上限与 `readingRows` 一致。终端底部操作提示最多两行，按实际配置优先显示离开键；接管态显示交还输入、发送屏幕和 Shift+↑↓ 历史，浏览态显示 Esc 返回及可用的 i 接管，结束/只读对象不显示输入操作。错误和二次确认独立占行，不替换退出提示；按键沿用统一强调色，说明沿用次要文字色。命令区获得焦点时收起 i 接管提示，Tab 或 Esc 返回输出后可接管，配置离开键仍可直接退出查看器。
-
-PTY 使用同一个有界 xterm 屏幕与回滚缓冲区，标题、命令、信息、反馈和提示栏先扣除可用高度，不占进程屏幕尺寸。仅尺寸变化时向活动 PTY 传递真实输出区列/行。结算时保存 xterm 序列化快照（最多 1000 行回滚、4 MiB）；跨进程恢复只读最终屏幕，不重启进程或恢复输入。无快照的历史明确为 log only，原始日志读取不冒充二维终端还原。普通 pipe 的 stdout/stderr 独立显示，不猜测合并顺序。
-
-Subagents 的 `m` 在原列表或会话底部打开 Pi 原生多行 Editor；默认 Enter 发送、Shift+Enter/Ctrl+J 换行，提示读取宿主配置。中文、粘贴、撤销和光标由原生 Editor 管理；失败保留草稿，Esc 只取消编辑，不停止运行。查看器底部信息属于当前视图，不替换主会话原生或第三方 footer。
+- 命令/输出查看器、终端视图的浏览态与接管态、离开/交还/发送键：见 [执行任务](../jobs/index.md#命令输出查看器) 与 [终端视图](../jobs/index.md#终端视图)。
+- 阅读 overlay 的尺寸（普通居中 90% 宽、70% 高，fullscreen 全屏）：见 [阅读 overlay](index.md#阅读-overlay)。
+- Subagents 的 `m` 消息输入：见 [子代理操作](../agents/operations.md)；输入组件规则见 [输入与选择](index.md#输入与选择)。
+- 搜索、过滤、消息 Editor 和 PTY 接管态自己处理左右键，不触发 ←← 关闭。
 
 ## 原生阅读与鼠标
 
-Subagent、普通详情、workflow 与文本日志使用公开组件和显式阅读窗口：原生 ScrollView 持有唯一 scrollTop 与跟随状态，Suite 按共享预算切片/补齐输出，scrollbar:hidden 不创建滚动条计时器。按行/页、Home/End、搜索以及工具/thinking 的键盘展开用于复杂正文阅读；该阅读 overlay 不保证嵌套工具单项鼠标命中、区域鼠标切焦点或可拖动 scrollbar，不新增模拟鼠标。主会话工具的单项鼠标展开与默认 Ctrl+O 由 Pi 原版管理；Ask 表单保留页签点击、选项点击/滚轮与 Review 选择等既有本地交互，History/全文与说明预览不承诺相同鼠标能力。Job 的 TerminalView 保留终端正文滚轮，不把事件转发到嵌套文本、命令区或工具组件。关闭 overlay 恢复原焦点与主会话视口，按自有生命周期释放订阅和回调，不替换原生/第三方 footer，也不停止执行。工具组件保留原生实例，不扫描文本标题、不另建复制或链接处理层。
+阅读视图以键盘操作为准：
 
-Subagent 消息阅读链无论主会话采用普通还是 fullscreen 模式，均以终端完整列/行覆盖主 footer；模型/thinking 选择、Details、所属 Jobs 继承内部全屏尺寸。Subagents 根页签与列表仍使用普通百分比预算，Types 打开的模型/thinking 选择器沿用根页的尺寸策略。根页与选择器通过 `withReadingSession` 连续交接：保留已完成页的最后一帧并冻结输入，直到新页在同一阅读会话挂载并取得焦点；延迟加载与 resize 保持该帧，不以空白背景替代。readingWindow 填足实际预算；正常或异常最终退出释放自有帧和作用域，恢复原焦点、原 footer 实例和最新主状态，不改变执行 owner。其他独立普通阅读保留百分比预算与恢复焦点；鼠标与复制仍取决于宿主和终端实际能力，不承诺未提供的交互。OSC 8 链接、文本拖选与 clipboard 通道沿用 Pi，不接管 stdout；PTY 输入接管不使用文本 ScrollView 替代。
+- Subagent、普通详情、workflow 与文本日志使用公开组件和显式阅读窗口，原生 ScrollView 持有唯一的 `scrollTop` 与跟随状态，滚动条隐藏。
+- 按行/页、Home/End、搜索，以及工具与 thinking 的键盘展开，用于阅读复杂正文。
 
-信息栏按实际一/两行预算，多余一行归还正文，保留分隔线与整体覆盖高度。官方 CLI 验收逐个解析同步绘制帧，覆盖页签、列表进入历史与返回，组件聚合覆盖延迟加载、resize、早结束及构造失败后的输入/焦点恢复；仅最终页面存在不是连续交接的证据。
+鼠标能力：
+
+| 位置 | 鼠标 |
+| --- | --- |
+| 主会话工具结果 | 单项点击展开与默认 Ctrl+O 全部展开，由 Pi 管理 |
+| Ask 表单 | 页签点击、选项点击与滚轮、Review 选择；History、全文与说明预览不提供这些操作，见 [询问操作](../ask/index.md#操作) |
+| TerminalView | 正文区域的滚轮滚动终端历史，每格 3 行；不转发到命令区或工具组件 |
+| 阅读 overlay 中的嵌套内容 | 不保证嵌套工具的单项点击、按区域切换焦点或拖动滚动条；Suite 不模拟鼠标事件 |
+
+其他边界：
+
+- 工具组件保留原生实例，Suite 不扫描文本标题，也不另建复制或链接处理层。OSC 8 链接、文本拖选与 clipboard 由 Pi 处理，不接管 stdout。
+- PTY 输入接管使用 TerminalView，不使用文本 ScrollView。
+- 关闭 overlay 恢复原焦点与主会话视口，按各自生命周期释放订阅与回调，不替换原生或第三方 footer，也不停止执行。
+- Subagent 消息阅读链无论主会话是普通还是 fullscreen 模式，都覆盖终端全部行列（包括主 footer）；交接规则见 [阅读 overlay](index.md#阅读-overlay)。
+- 鼠标与复制最终取决于宿主和终端的实际能力。
 
 ## 宿主加载与重启
 
-运行本仓库时使用 `pnpm exec pi -e ./src/index.ts`，官方 Pi 1.5.0 Node CLI/RPC 使用发布包的 `dist/bundle/cli.js`、`dist/bundle/rpc-entry.js`，模块解析由原版 loader 负责。依赖升级后须退出当前 Pi 进程并重新启动；`/reload` 只重载扩展，不能替换宿主已载入的 TUI/adapter 类与函数。保留当前会话和目标时加 `--resume` 并选择原会话，不通过新建目标或 fork 迁移运行归属。加载及安装范围见 [公共运行时](../runtime/index.md#宿主加载边界)。
+在本仓库开发时使用 `pnpm exec pi -e ./src/index.ts`。依赖升级后须退出当前 Pi 进程再启动：`/reload` 只重载扩展，不替换宿主已载入的 TUI 和 adapter。需要保留当前会话和目标时，启动加 `--resume` 并选择原会话；不要用新建目标或 fork 代替。加载入口与安装范围见 [宿主加载边界](../runtime/index.md#宿主加载边界)。
 
 [返回统一界面](index.md)

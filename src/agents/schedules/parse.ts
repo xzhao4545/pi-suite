@@ -5,7 +5,7 @@ import { ToolError } from '../../runtime/errors.ts';
 export type ScheduleSpec = { schedule: string; scheduleType: 'cron' | 'once' | 'interval'; intervalMs?: number };
 const units = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 };
 export function nextCron(schedule: string, after: number): string | undefined {
-  // Parsing must not arm an otherwise invisible Cron callback, as the upstream check did.
+  // Croner computes deadlines only; a separate callback could race the persisted timer.
   const cron = new Cron(schedule, { paused: true, unref: true });
   try { return cron.nextRun(new Date(after))?.toISOString(); } finally { cron.stop(); }
 }
@@ -14,7 +14,7 @@ export function parseSchedule(input: string, now = Date.now(), allowPast = false
   if (match) {
     const intervalMs = Number(match[2]) * units[match[3] as keyof typeof units];
     if (!Number.isSafeInteger(intervalMs) || intervalMs <= 0 || !Number.isFinite(new Date(now + intervalMs).getTime())) {
-      throw new ToolError('INVALID_ARGS', 'Schedule duration must be a positive, representable number of seconds/minutes/hours/days');
+      throw new ToolError('INVALID_ARGS', 'Schedule duration is zero or out of range. Use a positive integer with s, m, h, or d (e.g. 5m).');
     }
     return match[1] ? { scheduleType: 'once', schedule: new Date(now + intervalMs).toISOString() }
       : { scheduleType: 'interval', schedule, intervalMs };
@@ -22,14 +22,14 @@ export function parseSchedule(input: string, now = Date.now(), allowPast = false
   if (/^\d{4}-\d{2}-\d{2}T/.test(schedule)) {
     const time = new Date(schedule).getTime();
     if (Number.isFinite(time)) {
-      if (!allowPast && time <= now) throw new ToolError('INVALID_ARGS', `Scheduled time ${schedule} is in the past`);
+      if (!allowPast && time <= now) throw new ToolError('INVALID_ARGS', `Scheduled time ${schedule} has passed. Use a future time.`);
       return { scheduleType: 'once', schedule: new Date(time).toISOString() };
     }
   }
   if (schedule.split(/\s+/).length === 6) {
     try {
       if (nextCron(schedule, now)) return { scheduleType: 'cron', schedule };
-    } catch (error) { throw new ToolError('INVALID_ARGS', `Invalid cron schedule: ${String(error)}`); }
+    } catch (error) { throw new ToolError('INVALID_ARGS', `Invalid cron schedule: ${String(error)}. Correct the six cron fields and retry.`); }
   }
   throw new ToolError('INVALID_ARGS', `Invalid schedule "${input}"; use six-field cron, an interval (5m/1h), or a one-shot (+10m/ISO timestamp)`);
 }

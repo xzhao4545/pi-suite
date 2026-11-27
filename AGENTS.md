@@ -20,9 +20,10 @@
 2. **需求记录** — 新功能需求与未完成事项统一添加到 [doc/todo](./doc/todo/index.md) 下的对应文件；完成后移动到 [doc/finished](./doc/finished/index.md) 并沉淀到 `doc/current`
 3. **当前文档优先** — 当前实现、架构、框架、协议、数据模型、验证与维护规则统一维护在 [doc/current](./doc/current/index.md)，`doc/current`下维护的文档内容应是项目当前状态，不需要记录旧状态等，不需要记录功能模块如何修改，文档内不要有类似"旧的...继续..."，"...已不再..."等相关字样，旧的文档内容应直接删除，直接写入最新的内容，描述项目当前状态。
 4. **文档设计** —  [doc/current](./doc/current/index.md)下的文档设计应遵从小文件、多索引的要求，目录下设计应按模块、框架划分，对于大文件，应主动切为目录，并在目录下再添加index.md索引文件。
-5. **操作说明同步** — 修改玩家操作、默认键位、调试快捷键、菜单入口或运行时操作方式时，必须同步更新 [doc/current/client-server/operations.md](./doc/current/client-server/operations.md) 或对应模块的操作说明文档。
+5. **操作说明同步** — 修改用户操作、默认键位、命令、菜单入口或运行时操作方式时，必须同步更新对应模块的操作说明文档（如 [doc/current/tasks/operations.md](./doc/current/tasks/operations.md)、[doc/current/jobs/index.md](./doc/current/jobs/index.md)），以及 `docs/` 中的用户文档。
 6. **文档内容边界** — `doc/current` 仅记录当前稳定事实，禁止写修改记录；`doc/finished` 保存已完成专项，加入改目录既视为归档，禁止再进行修改；`doc/todo` 维护计划和未完成事项；禁止追加临时测试流水账、会话调度记录、本机测试产物路径或产物归档清单。测试产物不长期保留，必要验收只记录结论、适用范围及未通过项。
 7. **文档写作** — 按主题组织目标、设计与验收，不记录对话、授权过程或“用户修订”；将有效要求融入对应章节，不按讨论顺序复述。同一规则只在一处定义，其他位置引用；任务清单仅跟踪进度，不重复正文；修改清单只列实际改动，不列无需修改的内容。
+8. **用户文档** — `docs/` 是用户文档（[English](./docs/en/index.md)、[中文](./docs/zh/index.md)），`docs/en` 与 `docs/zh` 结构一致、内容同步；功能变化和用户可见的修复都需要同步更新。
 
 ## 编码要求
 

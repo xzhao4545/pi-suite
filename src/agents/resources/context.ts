@@ -2,7 +2,6 @@
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-/** Extract text from a message content block array. */
 export function extractText(content: readonly { type: string; text?: string }[]): string {
   return content
     .filter(c => c.type === "text")
@@ -10,11 +9,7 @@ export function extractText(content: readonly { type: string; text?: string }[])
     .join("\n");
 }
 
-/**
- * Build a text representation of the parent conversation context.
- * Used when inherit_context is true to give the subagent visibility
- * into what has been discussed/done so far.
- */
+/** Snapshot the parent's current branch for inherit_context, without tool results or thinking. */
 export function buildParentContext(ctx: Pick<ExtensionContext, 'sessionManager'>): string {
   const entries = ctx.sessionManager.getBranch();
   if (entries.length === 0) return "";
@@ -33,9 +28,7 @@ export function buildParentContext(ctx: Pick<ExtensionContext, 'sessionManager'>
         const text = extractText(msg.content);
         if (text.trim()) parts.push(`[Assistant]: ${text.trim()}`);
       }
-      // Skip toolResult messages — too verbose for context
     } else if (entry.type === "compaction") {
-      // Include compaction summaries — they're already condensed
       if (entry.summary) {
         parts.push(`[Summary]: ${entry.summary}`);
       }
@@ -45,8 +38,7 @@ export function buildParentContext(ctx: Pick<ExtensionContext, 'sessionManager'>
   if (parts.length === 0) return "";
 
   return `# Parent Conversation Context
-The following is the conversation history from the parent session that spawned you.
-Use this context to understand what has been discussed and decided so far.
+Use this parent conversation as context for the task below.
 
 ${parts.join("\n\n")}
 

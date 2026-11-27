@@ -82,14 +82,14 @@ test('interactive type mentions clone the selected parent conversation and reuse
     const runtime = h.session.modelRuntime, stream = runtime.streamSimple.bind(runtime);
     let cloneUsedParentRuntime = false, cloneRouted = false;
     runtime.streamSimple = (model, context, options) => {
-      if (JSON.stringify(context.messages).includes('The user has expressed a desire')) cloneUsedParentRuntime = true;
+      if (JSON.stringify(context.messages).includes('Call agent_start once for')) cloneUsedParentRuntime = true;
       return stream(model, context, options);
     };
     runtime.registerNativeProvider({ ...h.faux.provider, auth: { apiKey: { name: 'Parent runtime auth',
       resolve: async ({ credential }) => credential?.key ? { auth: { apiKey: credential.key } } : undefined } } });
     await runtime.setRuntimeApiKey(h.faux.provider.id, 'mention-parent-runtime-key');
     runtime.registerVirtualModel({ provider: 'mention-runtime-route', id: 'auto', name: 'Parent-only mention route', route(request) {
-      if (JSON.stringify(request.messages).includes('The user has expressed a desire')) cloneRouted = true;
+      if (JSON.stringify(request.messages).includes('Call agent_start once for')) cloneRouted = true;
       return { model: h.faux.getModel(), thinkingLevel: 'off' };
     } });
     await h.session.setModel(runtime.getModel('mention-runtime-route', 'auto')!);
@@ -105,12 +105,12 @@ test('interactive type mentions clone the selected parent conversation and reuse
         assert.ok(child); assert.strictEqual(child.session!.modelRuntime, runtime);
         return fauxAssistantMessage('review result');
       }
-      if (text.includes('The user has expressed a desire')) {
+      if (text.includes('Call agent_start once for')) {
         assert.match(text, /PARENT_CONTEXT/); assert.match(text, /PARENT_DECISION/);
         assert.deepEqual(getCurrentTools(context.messages).map(tool => tool.name), ['agent_start']);
         if (!cloneCalled) { cloneCalled = true; return fauxAssistantMessage(fauxToolCall('agent_start', { prompt: 'CONTEXTUAL_REVIEW from PARENT_DECISION' })); }
         // A second attempted call must not create another agent.
-        if (!text.includes('Already attempted')) return fauxAssistantMessage(fauxToolCall('agent_start', { prompt: 'duplicate' }));
+        if (!text.includes('Start already attempted')) return fauxAssistantMessage(fauxToolCall('agent_start', { prompt: 'duplicate' }));
         cloneFinished = true; return fauxAssistantMessage('launched');
       }
       return fauxAssistantMessage('main received result');
@@ -180,7 +180,7 @@ test('non-user and headless inputs pass through; clone cancellation and failures
     assert.equal(h.manager.runs.size, 0);
     h.faux.setResponses([fauxAssistantMessage('no launch')]);
     await h.session.extensionRunner.emitInput('@review explain', undefined, 'interactive');
-    await until(() => h.notices.some(notice => notice.type === 'error' && notice.text.includes('did not start')));
+    await until(() => h.notices.some(notice => notice.type === 'error' && notice.text.includes('No agent started. Resend the @mention to retry.')));
     assert.equal(h.manager.runs.size, 0);
     writeFileSync(join(h.root, 'pi-suite.json'), JSON.stringify({ agents: { mentions: false } }));
     await h.session.reload();

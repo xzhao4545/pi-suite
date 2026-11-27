@@ -15,12 +15,12 @@ export const askSchema = Type.Object({
   questions: Type.Optional(Type.Array(Type.Object({
     question: Type.String({ minLength: 1 }),
     title: Type.Optional(Type.String({ minLength: 1, maxLength: 60,
-      description: "Concise tab title, e.g. 'Scope' or 'Database'. Omit to derive a short title from question; the full question stays in the body." })),
+      description: "Short tab title, e.g. 'Scope'. Omit to derive one from question; the full question is still shown." })),
     ...fields,
   }, { additionalProperties: false }), { minItems: 2, maxItems: 4 })),
   allowComment: Type.Optional(Type.Boolean()),
   timeoutMs: Type.Optional(Type.Integer({ minimum: 0, maximum: 2147483647,
-    description: "Milliseconds of user inactivity before expiry. Omit for configured default (600000); 0 disables expiry. On expiry each question submits the user's current draft, else recommended options, else the first option." })),
+    description: "Milliseconds of user inactivity before expiry; restarted by user input. Omit for the configured default (600000); 0 disables it. On expiry each question submits its draft, else recommended options, else its first option; a question without options or draft stays unanswered." })),
 }, { additionalProperties: false });
 export type AskParams = Static<typeof askSchema>;
 export type QuestionInput = NonNullable<AskParams["questions"]>[number];
@@ -41,24 +41,24 @@ export type AskResult =
   | { status: "cancelled"; responses: [] };
 
 export function normalize(params: AskParams): Question[] {
-  if (!params.questions && !params.question?.trim()) throw new Error("question or questions is required");
+  if (!params.questions && !params.question?.trim()) throw new Error("No question supplied. Provide nonblank question text or 2–4 questions.");
   if (params.questions && [params.options, params.allowMultiple,
     params.defaultAnswer, params.defaultOptionId, params.defaultOptionIds].some(value => value !== undefined)) {
-    throw new Error("Batch question settings must be inside each questions entry");
+    throw new Error("With questions, put options, allowMultiple and default* settings inside each questions entry, not at the top level.");
   }
   return (params.questions ?? [{ ...params, question: params.question! }]).map(input => {
     const options = (input.options ?? []).map((value, index) => typeof value === "string"
       ? { id: `option-${index + 1}`, title: value } : { ...value, id: value.id ?? `option-${index + 1}` });
     const ids = new Set(options.map(o => o.id));
-    if (ids.size !== options.length) throw new Error("Option IDs must be unique");
+    if (ids.size !== options.length) throw new Error("Duplicate option IDs. Give each option in the question a unique ID.");
     const allowMultiple = input.allowMultiple ?? false;
     const hasText = input.defaultAnswer !== undefined;
     const hasSingle = input.defaultOptionId !== undefined;
     const hasMulti = input.defaultOptionIds !== undefined;
-    if (Number(hasText) + Number(hasSingle) + Number(hasMulti) > 1) throw new Error("Default answer parameters conflict");
-    if ((hasSingle && allowMultiple) || (hasMulti && !allowMultiple)) throw new Error("Default selection must match allowMultiple");
+    if (Number(hasText) + Number(hasSingle) + Number(hasMulti) > 1) throw new Error("Use only one of defaultAnswer, defaultOptionId and defaultOptionIds per question");
+    if ((hasSingle && allowMultiple) || (hasMulti && !allowMultiple)) throw new Error("defaultOptionId requires single choice; defaultOptionIds requires allowMultiple: true");
     const defaults = input.defaultOptionIds ?? (hasSingle ? [input.defaultOptionId!] : []);
-    if (defaults.some(id => !ids.has(id))) throw new Error("Default references an unknown option ID");
+    if (defaults.some(id => !ids.has(id))) throw new Error("Default references an unknown option ID. Use an ID from this question's options.");
     // Project current question fields instead of spreading input: historical/foreign
     // fields must not leak into live forms or newly persisted details.
     const { question, title, defaultAnswer, defaultOptionId, defaultOptionIds } = input as QuestionInput;

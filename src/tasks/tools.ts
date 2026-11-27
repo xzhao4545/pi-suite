@@ -16,14 +16,14 @@ const listSchema = Type.Object({ generation: Type.Optional(generationSchema), gr
   state: Type.Optional(Type.Union([Type.Literal('unfinished'), Type.Literal('doing'), Type.Literal('blocked'), Type.Literal('done'), Type.Literal('all')])),
   cursor: Type.Optional(Type.String({ maxLength: 200 })), limit: Type.Optional(Type.Integer({ minimum: 1, maximum: LIST_LIMITS.maxLimit })) }, { additionalProperties: false });
 const getSchema = Type.Object({ generation: generationSchema, id: taskId, scope: Type.Optional(taskScope) }, { additionalProperties: false });
-const queryHint = 'Discover generation with task_list({}); supply that source generation to task_get/task_edit and task_list with groupId or cursor.';
+const queryHint = 'Get the local generation with task_list({}). Pass the source generation with groupId, cursor, or id.';
 
 export function registerTaskTools(pi: ExtensionAPI, tasks: TasksModule): void {
   const scopeHint = tasks.scopeHint;
   // Assignment is fixed at admission. Omit drops object options; retain strict validation.
   const getParameters = scopeHint ? getSchema : Type.Omit(getSchema, ['scope'], { additionalProperties: false });
   const editParameters = scopeHint ? editSchema : Type.Omit(editSchema, ['scope'], { additionalProperties: false });
-  registerBoundTool(pi, { name: 'task_list', label: 'Tasks', description: 'List unfinished tasks (default), optionally filter groupId/state and page with cursor/limit. task_list({}) discovers generation; groupId/cursor and task_get/task_edit must quote their source generation. Group counts include all children. One task detail uses task_get({id,generation}).' + scopeHint,
+  registerBoundTool(pi, { name: 'task_list', label: 'Tasks', description: 'List tasks by group and state (default: unfinished); page with cursor and limit. Call task_list({}) for the local generation. Pass the source generation with groupId or cursor. Group counts include all children. For one task, use task_get.' + scopeHint,
     parameters: listSchema, prepareArguments: checkedArguments(listSchema, queryHint),
     async execute(_id, params, _signal, _update, ctx) {
       if (params.groupId || params.cursor) requireGeneration(params.generation);
@@ -46,7 +46,7 @@ export function registerTaskTools(pi: ExtensionAPI, tasks: TasksModule): void {
     },
     ...listRenderers,
   }, 'initial');
-  registerBoundTool(pi, { name: 'task_get', label: 'Task', description: 'Get one group or child by id, with description, blockers and execution references. A group does not expand its children; use task_list({groupId}) for them.' + scopeHint,
+  registerBoundTool(pi, { name: 'task_get', label: 'Task', description: 'Read one group or child, including description, blockers and execution links. A group read does not list its children; call task_list with groupId and generation.' + scopeHint,
     parameters: getParameters, prepareArguments: checkedArguments(getParameters, queryHint),
     async execute(_id, params, _signal, _update, ctx) {
       const scope = (params as { scope?: TaskScope }).scope;
@@ -56,7 +56,7 @@ export function registerTaskTools(pi: ExtensionAPI, tasks: TasksModule): void {
     ...getRenderers,
   }, 'initial');
   registerBoundTool(pi, { name: 'task_edit', label: 'Tasks',
-    description: 'All edits require the source generation from task_list({}); task IDs may be reused after clear. Top-level {op:"clear",generation} deletes your entire owner list/dependencies/execution links and resets numbering, without stopping executions; not allowed in assigned scope or batch. Nonempty all-complete lists clear automatically. Update progress with {op:"start"|"done"|"block"|"unblock",id}; block accepts reason. add creates a group with children titles, or a child with parentId. Child IDs use group.ordinal, e.g. 1.2. update changes fields; moving requires delete then add; delete needs cascade:true for a nonempty group. Batch: {op:"batch",changes:[operations]}; all or none commit. Multiple tasks may run. Dependencies still block after unblock. Changes never stop jobs/agents or complete goal.' + scopeHint,
+    description: 'Use the source generation from task_list({}) for local edits. Add a group with optional children titles (no status), or a child with parentId (no children). Use start/done/block/unblock with a child ID such as 1.2; block accepts reason. Multiple children may be doing. Unblock does not remove dependencies. Update fields; to move, delete then add. Deleting a group with children requires cascade:true. Batch changes commit all or none. Use top-level clear, not in a batch or assigned scope, to delete the whole local list with its dependencies and execution links and restart numbering at 1; a nonempty list also clears when all tasks are done. IDs may be reused after a clear, under a new generation. Edits do not stop executions or complete the goal.' + scopeHint,
     parameters: editParameters, prepareArguments: editArguments,
     async execute(_id, params, signal, _update, ctx) {
       const scope = (params as { scope?: TaskScope }).scope;

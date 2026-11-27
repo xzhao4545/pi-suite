@@ -42,7 +42,7 @@ jobs 导入 pi-background-jobs 0.1.3 与 pi-interactive-shell 0.18.0 的部分�
 | src/jobs/launch/config.ts | pi-interactive-shell config.ts 的默认预设 | schema 与加载并入共享配置，逐键和字段合并；job_start 检查参数后直接执行 |
 | src/jobs/launch/presets.ts | pi-interactive-shell spawn.ts 的 CLI 参数拼装与 Bash 转义 | 结构化 job_start.agent；删除 worktree 与 /spawn；prompt 前结束选项解析；Pi fork 复用宿主会话文件；公共 parseArgs 判断真实选项边界并保留 node 包装，前导 @ 显式加载规范 suite 入口与原文 flag，完整命令直接进入 JobManager；Pi RPC 初始 prompt 明确拒绝 |
 | src/runtime/cli-prompt.ts；src/index.ts 的最先注册；src/jobs/tools.ts 的 Pi pipe EOF | 本项目实现，使用 Pi 原生 registerFlag、session_start/input transform 与现有 JobManager | 等号值单 argv 承载前导 @ 原文，startup 待消费正文替换初始 input 的触发后缀，保留附件/图片，reload/new/UI fork 不重放；Pi pipe 复用 closeInput，PTY 保持后续输入；不计作上游源码导入 |
-| skills/pi-suite-jobs/SKILL.md、package.json 的 pi.skills | pi-interactive-shell skills/interactive-shell/SKILL.md 及 foreground/agents/monitors references | 自含技能按本包 job 工具、共享 wait、pipe/PTY 与真实监督字段适配；保留参数/输入/接管/阅读/清理边界，缺工具时先询问或说明限制；删除 Jev、worktree、output-selection、独立 references 与不存在工具/参数 |
+| skills/pi-suite-jobs/SKILL.md、package.json 的 pi.skills | pi-interactive-shell skills/interactive-shell/SKILL.md 及 foreground/agents/monitors references（结构参考） | 按本包 job 工具、共享 wait、pipe/PTY 与监督字段独立重写，只保留模型调用所需的启动、输入、读取/等待/monitor 与停止规则；来源说明记录于此，不写入技能正文 |
 
 tasks 导入改造 @tintinweb/pi-tasks 0.9.1 的存储、依赖、会话与提醒机制，保留 [完整 MIT 许可证](./licenses/pi-tasks.txt)：
 
@@ -76,7 +76,8 @@ agents 以 @tintinweb/pi-subagents 0.23.0 的源码与契约为来源，分别�
 | src/agents/workflow/progress/types.ts、model.ts、format.ts、index.ts | src/workflow/progress.ts | 按类型、数据派生与格式拆分，保留追加日志、按 index 折叠、阶段组与显示状态；删除 worktree 字段 |
 | src/agents/workflow/meta.ts | src/workflow/meta.ts | 直接导入后增加纯字面量语法验证，保留 metadata 扫描、JavaScript 字符串/注释、100 ms VM 解析与调用名称缓存 |
 | src/agents/workflow/journal.ts | src/workflow/journal.ts | 直接导入后删除 worktree key，schema 使用固定槽位；文件读写失败、中间损坏和重复 index 报错，仅未完成末行返回显式 truncated 标记 |
-| src/agents/workflow/task.ts、entry.ts、tool-description.ts；skills/pi-suite-workflow/SKILL.md | src/workflow/task.ts、entry.ts、tool-description.ts | 直接导入后删除独立通知，暂停记录拒绝 journal 恢复；entry 类型改为 pi-suite:workflow-record，扩展归属、版本、消费与 SDK child 引用快照；短描述保留明确使用前提、参数与后台通知语义，完整编排指引在 workflow skill 按需读取并保留措辞对齐说明；工具名、cwd gate、并发下界按本包范围局部调整 |
+| src/agents/workflow/task.ts、entry.ts、tool-description.ts | src/workflow/task.ts、entry.ts、tool-description.ts | 直接导入后删除独立通知，暂停记录拒绝 journal 恢复；entry 类型改为 pi-suite:workflow-record，扩展归属、版本、消费与 SDK child 引用快照；短描述保留明确使用前提、参数与后台通知语义，完整编排指引在 workflow skill 按需读取；工具名、cwd gate、并发下界按本包范围局部调整 |
+| skills/pi-suite-workflow/SKILL.md | src/workflow/tool-description.ts 的脚本 API 契约 | 按本包 runtime 实现的 hook、选项、限制与 journal 恢复独立撰写，不沿用上游指南文字 |
 | src/agents/workflow/host.ts | src/workflow/host.ts | 按职责适配到共享 AgentManager 与 JobManager；保留实际 model/thinking 与早期 record ID、固定 child resume 契约，gate 在 cwd 使用 pipe、关闭 stdin、默认 10 分钟；停止与 quit 等待真实 child/job 清理 |
 | src/agents/workflow/saved.ts、collisions.ts | src/workflow/saved.ts、collisions.ts | 适配保存脚本、命名与冲突规则；项目信任和包 roots 复用 packageResources，script/scriptPath/name 三选一，读取错误可见；工具名与嵌套配置示例按本包规范调整 |
 | src/agents/workflow/manager.ts | src/index.ts 的后台 workflow 生命周期 | 按机制适配为无 ExtensionAPI 的进程级 owner；准入前持久化脚本/journal/快照，终态等待实际清理与保存，父级记录恢复按 owner/branch 和 SDK 引用；通知与绑定由公共框架处理 |

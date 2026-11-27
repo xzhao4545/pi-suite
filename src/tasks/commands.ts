@@ -10,13 +10,13 @@ import { taskDetails } from './query.ts';
 export function registerTasksCommand(pi: ExtensionAPI, tasks: TasksModule, dock: Dock, notifications: Notifications,
   binding: SessionBinding): void {
   pi.registerCommand('tasks', {
-    description: 'Browse tasks: [group ID]; filter group/state, search and read live details',
+    description: 'Browse tasks: /tasks [group ID]',
     handler: async (args, ctx) => {
       const current = binding.current;
       if (!current) return;
       const active = () => binding.isCurrent(current) && !ctx.signal?.aborted;
       const words = args.trim().split(/\s+/).filter(Boolean);
-      if (words.length > 1 || words.some(word => !/^[1-9][0-9]*$/.test(word))) throw new Error('Use /tasks [group ID]');
+      if (words.length > 1 || words.some(word => !/^[1-9][0-9]*$/.test(word))) throw new Error('Expected zero arguments or one numeric group ID. Use /tasks [group ID].');
       const groupId = words[0], state = 'all';
       const generation = (await tasks.scope(ctx).snapshot()).generation;
       if (!active()) return;

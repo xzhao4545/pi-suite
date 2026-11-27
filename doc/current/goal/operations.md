@@ -1,36 +1,73 @@
 # 接口与操作
 
+## 命令
+
 | 命令 | 行为 |
 | --- | --- |
-| /goal <目标> | 建立目标并请求执行；替换未完成目标时由界面确认 |
-| /goal --tokens 100k <目标> | 建立有显式 token 上限的目标，支持 k/m 数量单位 |
-| /goal 或 /goal status | 查看完整文本、统一用户状态、原因、ID、用量、响应次数、耗时、进度和错误 |
-| /goal edit <文本> | 修改目标文本与修订号；中止归属原修订的在途运行，按自动许可调度 |
-| /goal edit --tokens 200k | 修改预算；达到上限立即限制；提高预算后使用 resume 恢复 |
-| /goal pause | 显式暂停目标、撤销自动许可，取消续跑与等待资源并中止归属运行；保留目标、证据、错误、用量和耗时 |
-| /goal resume | 恢复未完成目标；已耗尽预算需要先提高。默认 `Goal resumed`；已运行时 `Goal already running`；宿主忙时 `Goal resumed · waiting`，不并行启动第二个主模型 |
-| /goal clear | 清除目标正文、状态和期限，保留极小空状态阻止历史导入；中止归属该目标的运行 |
+| `/goal <目标>` | 建立目标并开始执行；已有未完成目标时先确认替换 |
+| `/goal --tokens 100k <目标>` | 建立带 token 上限的目标，数量支持 `k`、`m` 单位 |
+| `/goal` 或 `/goal status` | 查看完整正文、用户状态、暂停原因、ID、用量、响应次数、耗时、进度与错误 |
+| `/goal edit <文本>` | 修改正文并递增 `revision`；中止属于旧修订的在途运行，目标 active 时重新安排继续 |
+| `/goal edit --tokens 200k` | 修改预算；已达上限时立即暂停，调高后用 resume 恢复 |
+| `/goal pause` | 暂停（`manual`）：停止自动续跑，取消待交付的继续与等待，中止本目标的在途运行；保留目标、证据、错误、用量与耗时 |
+| `/goal resume` | 恢复未完成的目标，预算已耗尽时拒绝。结果为 `Goal resumed`；已在运行时为 `Goal already running`；宿主正忙时为 `Goal resumed · waiting`，不会并行启动第二个主模型请求 |
+| `/goal clear` | 删除目标并中止其在途运行；保留一个空状态，防止再次从旧会话条目导入 |
 
-目标文本最长 4000 字符；较长要求可引用文件。预算为正整数，省略时无限制。新用户输入可恢复宿主输入框 Esc、询问系统取消或失败的手动 compact 留下的暂停；显式暂停、外部阻塞、最终请求失败、预算耗尽、自动保护与退出/冷启动撤权需要显式 `/goal resume`。取消结果本身不提供同意，新输入恢复执行与危险操作授权分别判断。同会话树选择共用当前 Goal，不恢复旧目标、用量或许可；reload 读取当前 Store，new/fork 默认无 Goal。详情始终展示当前状态，路径和迁移见 [存储与作用域](storage.md)。暂停入口仅有 pause；`stop` 被拒绝为未知控制命令，不作为目标正文创建目标。询问面板的顶层 Esc 返回 skipped，模型继续本轮且保持目标自动许可；空闲到期 timed_out 提交自动答案并继续，这两种结果都不提供需要用户同意的操作授权。
+- 目标正文最长 4000 字符，更长的要求可以写在文件里再引用。预算为正整数，省略时不限。
+- `/goal stop` 作为未知子命令被拒绝，不会被当成目标正文。
+- 哪些暂停会被用户的新消息恢复，见 [暂停原因与恢复](lifecycle.md#暂停原因与恢复)。恢复自动续跑与授权危险操作是两回事：`ask_user` 的取消、跳过或超时都不代表同意。
+- 树切换共用当前目标，不恢复旧目标、用量或权限；`/reload` 读取当前状态；`/new`、`/fork` 的新会话没有目标。
 
-常驻摘要保留 `goal` 标签，用四种图标区分用户状态：`🎯 goal 03:27` 进行中（执行或已安排继续），`⏳ goal` 等待用户、外部工作或宿主恢复，`⏸ goal` 已暂停，`✅ goal` 已完成。完成反馈显示 5 秒，其余状态持续显示；clear 后立即隐藏。所有可见状态附累计有效时长，格式为 mm:ss，超过一小时使用 h:mm:ss；暂停与等待冻结，恢复接续，不按 24 小时归零。具体等待对象、期限、预算、暂停原因及真实错误通过 `/goal` 查看。
+## 状态显示
 
-恢复结果是一条不进入模型上下文的自定义会话条目，默认仅一行，data.summary/data.text 只保存简短恢复结果，不复制恢复前目标状态。当前完整目标、原因、预算、进度与等待信息使用 `/goal status` 查看。宿主原生展开键只影响条目的短结果显示，不发请求或改变执行许可；已有历史条目的原文继续只读展示。错误通过命令边界报告，必要状态提交失败不写成功结果。
+状态行（或 Dock）保留 `goal` 标签，用图标区分用户状态：
 
-连续 5 个自动续跑轮无工具活动，或调用与结果摘要完全相同，会暂停并显示 `⏸ goal` 与原因。普通用户输入可以审计，不能恢复该停跑阶段的执行；使用 `/goal resume` 清除原因并重置检测。后台通知、reload 与 compact 不绕过这一要求。用户主动轮和同轮自然工具响应不计作独立自动轮，真实等待走 goal_wait；纯文本推理不等于无进展，但超过自动阈值仍需检查后恢复。详细边界见 [请求与续跑](./context.md)。
+| 显示 | 用户状态 |
+| --- | --- |
+| `🎯 goal 03:27` | 进行中 |
+| `⏳ goal 03:27` | 等待用户、外部工作或宿主 |
+| `⏸ goal 03:27` | 已暂停 |
+| `✅ goal 03:27` | 已完成，显示 5 秒后隐藏 |
 
-目标工具使用当前目标说明中的精确 goalId，并由当前 Store 与运行归属校验：
+时间为累计有效运行时间，`mm:ss`，超过一小时为 `h:mm:ss`，不在 24 小时归零；暂停与等待期间不走。clear 后立即隐藏。等待对象、期限、预算、暂停原因与错误在 `/goal` 详情中查看。
 
-- goal_complete(goalId, summary)：summary 提供逐项完成和验证证据；成功后 completed，并结束宿主循环。新的用户驱动审计轮可关闭 paused 目标，不须先 resume，不授予自动执行权；completed 幂等保留原证据、时间与反馈，不另加 complete 命令。
-- goal_blocked(goalId, reason, evidence, repeatedTurns)：同一外部障碍至少连续三轮，必须提供具体原因与证据；成功后 paused、reason.kind=blocked，结束宿主循环。
-- goal_wait(goalId, reason, waitFor?, resumeAfterMs?)：仅等待已安排的外部事件；可选 1–2147483647 毫秒单次期限；成功后 waiting_jobs，结束宿主循环。waitFor 为 1–50 个 job_/agent_/wf_ ID：目标只在它们全部结算、期限到达、其中 job 的 monitor 事件（`job:<id>:monitor`）或 hands-free 更新（`job:<id>:update`）、直接 child 提问（`agent:<id>:<runId>:ask`）或用户输入时恢复，其他结算通知排队并在恢复时合并送达。调用时已结算的 ID 列在结果中，全部已结算时不进入等待；不存在的 ID 报错；Pi 重启后只剩历史的 ID 不再阻挡恢复。
+详情在共用阅读视图中以 Markdown 显示：↑/↓、PageUp/PageDown、Home/End 滚动，`/` 搜索，`n`/`N` 跳到下一个/上一个匹配，Esc 关闭并恢复 Dock。详情组件在第一次打开时才加载，加载后重新核对会话绑定和取消信号；会话已切换时不显示。打开期间通知暂缓，关闭后送达。
 
-goal_complete、goal_blocked、goal_wait 使用公共一行 renderer，结果到达后隐藏调用；分别显示 summary、reason 或等待结论。展开保留完整 summary、阻塞 evidence/repeatedTurns 或 waitFor/resumeAfterMs/已结算对象；默认 Ctrl+O 与鼠标单项展开由宿主管理。
+`/goal resume` 的结果条目只有一行；宿主的展开键只影响这一行的显示。
 
-三个模型工具共用 ToolError：空白参数为 INVALID_ARGS，缺失或错误 goalId 为 NOT_FOUND；wait/block 的目标非 active 或仅结案轮为 NOT_RUNNING（错误码，不是目标状态）；旧修订、旧请求/取消代次、已撤销绑定或非所属会话为 STALE_BINDING。complete 仍严格校验 ID、revision、Binding、所属会话与本轮请求，不因非 active 放宽归属。错误正文给出下一步，objectId 为调用中的 goalId。Store 的过期控制提交为 GOAL_STALE、坏文件为 GOAL_STORE_INVALID；读取、锁和保存失败明确报告，撤销自动交付，不回退历史状态。该边界作用于模型工具，命令交互与持久记录解析保留各自错误说明。
+## 模型工具
 
-完成判定仍需模型依据原目标逐项审计；运行归属与参数校验不能代替事实验收。普通未完成工作不能用 blocked 或 wait 替代推进。
+三个工具都要求传入最新目标说明中的 `goalId`，并按 [本轮权限](lifecycle.md#本轮权限) 校验。
 
-详情组件仅在实际查看路径按需加载；加载后重新校验 SessionBinding 与取消信号，已撤销的页面不挂载。通知使用 hold/finally 在读取后释放，加载异常由命令边界报告。详情通过 Markdown 与独立阅读位置在共用阅读 overlay 中呈现。↑/↓、PageUp/PageDown、Home/End 阅读，/ 搜索，n/N 查找下一/上一匹配，Esc 关闭。关闭详情恢复 dock，不改变目标。
+| 工具 | 参数 | 何时可用 | 结果 |
+| --- | --- | --- | --- |
+| `goal_complete` | `goalId`、`summary`（逐项列出要求及其验证证据，最长 4000 字符） | `execute` 或 `complete` | 目标完成，结束本轮。对已完成的目标重复调用会保留第一次的证据、时间与反馈 |
+| `goal_blocked` | `goalId`、`reason`、`evidence`、`repeatedTurns`（至少 3） | `execute` | 暂停为 `blocked`，结束本轮 |
+| `goal_wait` | `goalId`、`reason`、`waitFor?`、`resumeAfterMs?`（1–2147483647 毫秒） | `execute` | 进入 `waiting_jobs`，结束本轮 |
+
+`goal_wait` 只用于等待已经安排好的外部工作。目标在以下任一情况恢复：
+
+- 用户发来消息，或任一直接子代理提问（`agent:<id>:<runId>:ask`），或 `resumeAfterMs` 到期。
+- 给了 `waitFor`（1–50 个 `job_`、`agent_`、`wf_` ID）时：所列对象全部结算，或其中某个 job 产生 monitor 事件（`job:<id>:monitor`）或 hands-free 更新（`job:<id>:update`）。其他通知排队，恢复时一起送达。
+- 没给 `waitFor` 时：任何通知都会恢复。
+
+调用时已结算的 ID 列在结果里；全部已结算时直接返回，不进入等待。不存在的 ID 报错；Pi 重启后只剩历史记录的 ID 不再阻挡恢复。
+
+普通的未完成工作不能用 `goal_blocked` 或 `goal_wait` 代替推进。`goal_complete` 的事实验收由模型逐项完成，工具只校验参数和权限。
+
+三个工具使用公共单行渲染：结果到达后隐藏调用，分别显示 summary、reason 或等待结论；展开后显示完整 summary、`evidence`/`repeatedTurns`，或 `waitFor`/`resumeAfterMs`/已结算对象。
+
+### 错误
+
+| 错误码 | 原因 |
+| --- | --- |
+| `INVALID_ARGS` | 必填文本参数为空白 |
+| `NOT_FOUND` | `goalId` 缺失或不是当前目标 |
+| `NOT_RUNNING` | 目标不在自动续跑，或本轮只有 `complete` 权限时调用了 `goal_wait`/`goal_blocked`；这是错误码，不是目标状态 |
+| `STALE_BINDING` | 调用属于旧修订、旧请求、已被新控制取代的运行、已撤销的绑定或其他会话 |
+| `GOAL_STALE` | 状态文件中的目标已被并发修改 |
+| `GOAL_STORE_INVALID` | 状态文件损坏 |
+
+`goal_complete` 同样严格校验 ID、`revision`、绑定、会话与本轮请求。错误正文说明下一步，`objectId` 为调用中的 `goalId`。读取、锁与保存失败直接报告，并撤销自动续跑，不回退到历史状态。命令和存储解析使用各自的错误文本。
 
 [返回目标管理](./index.md)

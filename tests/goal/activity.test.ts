@@ -6,7 +6,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { host, complete, goalView } from "../support/host.ts";
 
-test("five empty or identical automatic rounds stop with a persisted reason; only explicit resume grants execution", { timeout: 15000 }, async () => {
+test("five empty or identical automatic rounds pause until a user turn resets the guard", { timeout: 15000 }, async () => {
   for (const repeated of [false, true]) {
     let ctx!: ExtensionContext;
     const h = await host({ persisted: true, compact: true, keepRecentTokens: 0, tools: ["evidence", "job_start"], extend: pi => {
@@ -21,24 +21,26 @@ test("five empty or identical automatic rounds stop with a persisted reason; onl
       assert.equal(h.faux.state.callCount, 5); assert.equal(h.goal()?.status, 'paused'); assert.equal(h.goal()?.automatic, false);
       assert.equal(h.goal()?.reason?.kind, repeated ? 'repeated_tools' : 'no_tools'); assert.equal(h.goal()?.error, undefined);
       assert.ok(h.notices.some(notice => notice.type === 'warning'));
-      let elapsed = h.goal()!.elapsedMs;
+      const elapsed = h.goal()!.elapsedMs;
       const earlier = h.session.sessionManager.getBranch().filter(entry => entry.type === 'message' && entry.message.role === 'assistant')[2];
       await h.session.reload(); assert.equal(h.faux.state.callCount, 5); assert.equal(h.goal()?.automatic, false);
       await h.session.compact(); await h.idle(); assert.equal(h.faux.state.callCount, 5); assert.equal(h.goal()?.elapsedMs, elapsed);
       await h.session.navigateTree(earlier.id); await sleep(50); await h.idle();
       assert.equal(h.faux.state.callCount, 5, "an older active branch cannot bypass automatic-stop permission");
       assert.equal(h.goal()?.automatic, false); assert.equal(h.goal()?.reason?.kind, repeated ? 'repeated_tools' : 'no_tools');
-      elapsed = h.goal()!.elapsedMs;
       const job = await h.session.getToolDefinition("job_start")!.execute("external", { command: "printf done" }, undefined, undefined, ctx as never);
       assert.ok(!job.isError); await sleep(100); await h.idle();
       assert.equal(h.faux.state.callCount, 5, "background results cannot grant automatic permission");
-      h.faux.setResponses([context => { assert.equal(goalView(context).access, "complete"); return fauxAssistantMessage("Audit incomplete; keep the goal"); }]);
+      h.faux.setResponses([
+        context => {
+          assert.equal(goalView(context).access, "execute"); assert.equal(h.goal()?.reason, undefined);
+          return fauxAssistantMessage("Reviewed unfinished work; continue automatically");
+        },
+        repeated ? fauxAssistantMessage(fauxToolCall("evidence", { path: "same-file" })) : fauxAssistantMessage("Fresh automatic round"),
+        complete,
+      ]);
       await h.session.prompt("Review the unfinished work"); await h.idle();
-      assert.equal(h.goal()?.automatic, false); assert.equal(h.goal()?.status, 'paused');
-      assert.equal(h.goal()?.elapsedMs, elapsed);
-      h.faux.setResponses([context => { assert.equal(goalView(context).access, "execute"); assert.equal(h.goal()?.reason, undefined); return complete(context); }]);
-      await h.session.prompt("/goal resume"); await h.idle();
-      assert.equal(h.faux.state.callCount, 7); assert.equal(h.goal()?.status, "completed");
+      assert.equal(h.faux.state.callCount, 8); assert.equal(h.goal()?.status, "completed");
     } finally { await h.dispose(); }
   }
 });

@@ -35,7 +35,7 @@ export function registerAgentMentions(pi: ExtensionAPI, agents: AgentsModule, bi
     if (providerRegistered) return;
     providerRegistered = true;
     ctx.ui.addAutocompleteProvider(current => createMentionProvider(current, roster, enabled, error => {
-      binding.current?.ctx.ui.notify(`File completion failed: ${String(error)}`, 'error');
+      binding.current?.ctx.ui.notify(`Completion failed: ${String(error)}`, 'error');
       console.error('[pi-suite] autocomplete provider failed', error);
     }));
   };
@@ -64,7 +64,7 @@ export function registerAgentMentions(pi: ExtensionAPI, agents: AgentsModule, bi
     try { agents.admit(); }
     catch (error) { ctx.ui.notify(String(error), 'error'); return { action: 'handled' }; }
     const current = binding.current!, controller = new AbortController();
-    clones.add(controller); ctx.ui.notify(`Prompting @${target.handle}…`, 'info');
+    clones.add(controller); ctx.ui.notify(`Preparing @${target.handle}…`, 'info');
     // Return control to the editor while the off-screen model writes the task. Cancellation
     // is owned by this activation and fences /new, /tree and reload before any later spawn.
     void runMentionClone(ctx, target.type, mention.message, startTool, controller.signal)

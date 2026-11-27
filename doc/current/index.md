@@ -4,26 +4,33 @@
 
 ## 项目状态
 
-- 项目是单个 pnpm 包，包名为 pi-suite，当前版本为 0.1.2，对应 Git tag 为 v0.1.2；package.json 设置 private: true。
-- Node.js 要求为 24 或更高，包管理器固定为 pnpm 12.6.0。
-- 源码使用 TypeScript 和 ESM；Pi 通过 package.json 的 pi.extensions 加载 src/index.ts。
-- src/index.ts 是唯一扩展入口，在首次真实 session_start 按 ctx.cwd 准入本次激活的模块，注册 ask_user、goal_complete/goal_blocked/goal_wait、task_list/task_get/task_edit、job_start/job_list/job_get/job_read/job_write/job_stop、agent_start/agent_list/agent_get/agent_read/agent_send/agent_stop/agent_workflow、共享 wait、/goal、/tasks、/jobs、/subagents、/suite、默认启用的 /exit 及会话生命周期事件。
-- 源码目录按 ui、runtime、ask、tasks、jobs/backends、goal、agents 划分；上游来源登记位于 third-party/UPSTREAM.md。
-- Pi 开发依赖固定为 1.5.0；jobs 运行依赖固定为 zigpty 0.1.6、@xterm/headless 5.5.0、@xterm/addon-serialize 0.13.0。@narumitw/pi-starship 0.65.2 仅为完整 footer 开发验收依赖。依赖解析记录在 pnpm-lock.yaml。
+| 项目 | 当前值 |
+| --- | --- |
+| 包 | 单个 pnpm 包 `pi-suite`，版本 `0.1.2`，Git tag `v0.1.2`，`private: true` |
+| 工具链 | Node.js ≥24、pnpm `12.6.0`，TypeScript 和 ESM |
+| 扩展入口 | Pi 通过 `package.json` 的 `pi.extensions` 加载 `src/index.ts`；工具、命令和事件见[入口与注册](./runtime/index.md#入口与注册) |
+| 源码 | `src/ui`、`src/runtime`、`src/ask`、`src/tasks`、`src/jobs`（含 `backends`）、`src/goal`、`src/agents`；上游来源见 `third-party/UPSTREAM.md` |
+| 依赖 | Pi 版本见[宿主加载边界](./runtime/index.md#宿主加载边界)。jobs 依赖 `zigpty` 0.1.6、`@xterm/headless` 5.5.0、`@xterm/addon-serialize` 0.13.0；`@narumitw/pi-starship` 0.65.2 仅用于开发时验证完整 footer。解析版本见 `pnpm-lock.yaml` |
 
 ## 模块文档
 
-- [安装与扩展替换](./installation.md) — GitHub 安装、更新、重复扩展移除与会话重新加载。
-- [公共运行时与配置](./runtime/index.md) — 会话绑定、统一通知、模块开关及配置优先级。
-- [统一界面](./ui/index.md) — Dock 父子高度预算、必要执行详情、状态发布、外部 footer 边界与原生历史组件。
-- [主题](./ui/themes.md) — Oh My Pi Titanium 参考配色、包资源加载、主题选择与终端/第三方状态栏边界。
-- [命令结构高亮](./ui/command-highlighting.md) — 显式命令／代码模式、Bash／PowerShell 词法边界、主题角色、缓存与原生工具组合。
-- [ask 接口与操作](./ask/index.md) — 默认值、批量、多选、超时、搜索及焦点。
-- [目标管理](./goal/index.md) — 持久目标、运行调度、宿主恢复、预算和操作。
-- [两级任务管理](./tasks/index.md) — 原子批量编辑、派生进度、会话存储、Dock 折叠、详情与稳定提醒。
-- [执行任务](./jobs/index.md) — pipe/PTY job、记录与日志、停止证据、工具、通知、同进程保活、[PTY 监督与委派](./jobs/hands-free.md) 及 [CLI 预设与直接启动](./jobs/launch.md)。
-- [Pi 子代理](./agents/index.md) — 同进程会话、两池队列、运行记录、父级提问、任务共享与 job 级联停止，以及 [Workflow 编排](./agents/workflow/index.md) 的资源、宿主、等待和原生控制。
-- [基线与验证](./validation.md) — 依赖来源、目标平台和必要检查范围。
+- [安装与扩展替换](./installation.md) — 安装、更新、移除重复扩展和加载源码。
+- [公共运行时与配置](./runtime/index.md) — 模块加载、配置优先级、JSON 存储、会话绑定与通知。
+- [模型工具契约](./runtime/tools.md) — 公共参数、分页、等待、显示与错误码。
+- [设置与退出操作](./runtime/settings.md) — 用 `/suite` 编辑设置，用 `/exit` 退出 Pi。
+- [Responses 历史 ID 恢复](./runtime/responses-recovery.md) — 可独立重放请求的恢复条件、隔离记录和重试。
+- [统一界面](./ui/index.md) — Dock 布局与高度、状态栏、查看器和原生历史组件。
+- [主题](./ui/themes.md) — 参考配色、主题资源、选择方式及终端和 footer 的边界。
+- [命令结构高亮](./ui/command-highlighting.md) — Bash／PowerShell 高亮、主题、缓存和内置工具显示。
+- [ask 接口与操作](./ask/index.md) — 询问字段、批量顺序、多选、超时、搜索和焦点。
+- [目标管理](./goal/index.md) — 会话目标、自动续跑、等待、暂停、恢复和存储。
+- [两级任务管理](./tasks/index.md) — 任务组与子任务、批量编辑、进度、存储、Dock 和提醒。
+- [执行任务](./jobs/index.md) — pipe/PTY job、记录、日志、停止、工具和通知。
+  - [PTY 监督与委派](./jobs/hands-free.md) — 监测输出、监督更新与终端接管。
+  - [CLI 预设与直接启动](./jobs/launch.md) — 普通命令、预设和 monitor 的启动参数。
+- [Pi 子代理](./agents/index.md) — 同进程子会话、并发队列、运行记录、父级提问、任务共享与级联停止。
+  - [Workflow 编排](./agents/workflow/index.md) — 脚本资源、运行记录、等待与控制。
+- [基线与验证](./validation.md) — 宿主版本、平台与验证范围。
 
 ## 版本控制
 

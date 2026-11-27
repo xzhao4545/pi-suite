@@ -17,6 +17,7 @@ import { active, type Execution } from '../../src/agents/types.ts';
 import { resolveWorkspace } from '../../src/jobs/workspace.ts';
 import { resolveSettings } from '../../src/agents/models.ts';
 import { resolveType } from '../../src/agents/catalog.ts';
+import type { WaitResult } from '../../src/runtime/wait.ts';
 
 async function setup(persisted = false) {
   const root = agentDir();
@@ -62,6 +63,29 @@ test('SDK child persists a bounded run leaf, resumes with a fresh run ID and ret
     assert.ok(recordsIn(h.session.sessionManager.getBranch()).some(record => record.runId === second.runId));
     await h.session.reload();
     assert.equal(agentRuntime().owner.get(first.record.id).record.runId, second.runId);
+  } finally { await h.cleanup(); }
+});
+
+test('wait stays pending for an automatic resume and returns the final exhausted failure', { timeout: 15000 }, async () => {
+  const h = await setup();
+  try {
+    writeFileSync(join(h.root, 'settings.json'), JSON.stringify({ retry: { enabled: true, maxRetries: 1, baseDelayMs: 100, maxAgentDelayMs: 100 } }));
+    const error = 'The upstream response was interrupted before completion';
+    h.faux.setResponses(Array.from({length: 2}, () => fauxAssistantMessage('', { stopReason: 'error', errorMessage: error })));
+    const first = await h.manager.start({ prompt: 'work' }, { ctx: h.ctx }, h.config);
+    const waiting = h.session.getToolDefinition('wait')!.execute('retry-wait', { ids: [first.record.id], timeoutMs: 5000 },
+      new AbortController().signal, undefined, h.ctx as never);
+    await first.done.promise;
+    const queued = h.manager.get(first.record.id).record;
+    assert.notEqual(queued.runId, first.record.runId);
+    assert.equal(queued.state, 'queued');
+    const { results, reason, others } = (await waiting).details as WaitResult;
+    assert.equal(reason, 'condition');
+    assert.deepEqual(others, []);
+    assert.equal(results[0].runId, queued.runId);
+    assert.equal(results[0].state, 'failed');
+    assert.match(results[0].summary, / · gave up after 1 automatic resumes$/m);
+    assert.equal(h.manager.get(first.record.id).record.error, `${error} · gave up after 1 automatic resumes`);
   } finally { await h.cleanup(); }
 });
 
@@ -224,7 +248,7 @@ test('model/thinking sources merge per field and explicit provider identity neve
     const settings = resolveSettings(h.ctx, type, { prompt: 'look' }, config);
     assert.equal(settings.modelSource, 'type'); assert.equal(settings.thinking, 'high');
     assert.equal(resolveSettings(h.ctx, type, { prompt: 'look', thinking: 'off' }, config).thinkingSource, 'parameter');
-    assert.throws(() => resolveSettings(h.ctx, type, { prompt: 'look', model: 'missing-provider/offline' }, config), /agent_start.model.*unavailable/);
+    assert.throws(() => resolveSettings(h.ctx, type, { prompt: 'look', model: 'missing-provider/offline' }, config), /agent_start\.model.*Use an exact provider\/modelId/);
     assert.equal(h.faux.state.callCount, 0);
   } finally { await h.cleanup(); }
 });

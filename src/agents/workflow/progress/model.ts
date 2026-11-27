@@ -161,8 +161,8 @@ export function buildPhaseGroups(
     return [summarize({ title: "Agents", agents })];
   }
   // A run that declared phases but produced un-phased agents would otherwise
-  // render placeholders and drop those agents from the tree entirely. Claude
-  // Code has the same hole; showing the work is worth the small divergence.
+  // render placeholders and drop those agents from the tree entirely, so they
+  // get their own Agents group.
   if (agents.length > 0 && !merged.some(group => group.totalCount > 0)) {
     return [...merged, summarize({ title: "Agents", agents })];
   }
@@ -209,8 +209,8 @@ export function stats(progress: readonly WorkflowEntry[], agentCount = 0): Workf
     started,
     // `!anyLive` is implied by the count test — `total >= seen`, and `seen` also
     // counts live entries, so `done + failed >= total` can only hold when none
-    // are live. Kept for parity with Claude Code and as a guard should `total`
-    // ever stop deriving from `seen`; no test can reach it as written.
+    // are live. Kept as a guard should `total` ever stop deriving from `seen`;
+    // no test can reach it as written.
     complete: !anyLive && seen > 0 && done + failed >= total,
   };
 }

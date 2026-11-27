@@ -29,7 +29,7 @@ export class PtyTerminalSession extends TerminalScreen {
     const { cols = 80, rows = 24, scrollback = 5000 } = options;
     super(cols, rows, scrollback);
     if (options.shellConfig.commandTransport !== 'argv') {
-      throw new Error(`Pi selected "${options.shellConfig.shell}", which requires stdin command transport; PTY jobs need a Git Bash shellPath.`);
+      throw new Error(`PTY jobs cannot use "${options.shellConfig.shell}" because it reads commands from stdin; set shellPath to Git Bash in Pi settings.json`);
     }
     this.xterm.buffer.onBufferChange(buffer => { if (buffer.type === 'alternate') this.alternateScreen = true; });
     const env: Record<string, string> = {};

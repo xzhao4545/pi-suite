@@ -1,19 +1,40 @@
 # Pi 子代理
 
-agents 使用同进程 Pi child 会话。执行层、两池队列、类型发现与记录引用由 @tintinweb/pi-subagents 0.23.0 导入改造，来源见 [上游登记](../../../third-party/UPSTREAM.md)。工具、任务、等待、通知和查看器接入公共框架。
+agents 模块在同一 Pi 进程内用 SDK 的 `createAgentSession` 运行 child 会话。执行层、两池队列、类型发现和记录引用改造自 @tintinweb/pi-subagents 0.23.0，来源见 [上游登记](../../../third-party/UPSTREAM.md)。工具、任务关联、wait、通知和查看器使用本包公共框架。
 
-- [执行与记录](runtime.md) — 并发、运行标识、取消、持久会话、历史位置与 Execution 回收。
-- [进度与结果通知](progress.md) — 当前工具参数、用量、所属活动 jobs 与按 run 消费的结果摘要。
-- [持久历史发现与只读查询](history.md) — 默认/配置目录和持久引用、文件缓存、完整分支、合并与操作归属。
-- [工具与操作](operations.md) — agent_*、/subagents、@handle 提及与补全、父级提问和模型来源。
-- [类型、模型与 thinking 配置](models.md) — 启用开关、逐字段写回、单独修改、下一请求与恢复。
-- [类型与资源](resources.md) — 包声明、信任、扩展工具范围、技能、上下文和 memory。
-- [定时调度](schedules.md) — cron、单次与周期、按会话存储、普通 child 和查看取消。
-- [跨扩展 RPC](rpc.md) — 五通道、版本 2、会话与归属、同步消费、cwd 与结构化结果。
-- [Workflow 编排](workflow/index.md) — Worker、宿主、保存资源、共享等待、原生控制和 journal 边界。
+- 开关：`modules.agents`；`agents.*` 配置项与默认值见 [公共运行时配置](../runtime/index.md#配置)。
+- 源码：`src/agents/`；child 内的本包工具由 `child.ts` 注册。
 
-内置 general-purpose、Explore 和 Plan；后二者使用上游的完整只读提示词及 read/bash/grep/find/ls 白名单。默认后台执行，后台并发上限 10，前台上限 0 表示不限。嵌套 child 不占两池槽位，最大会话层数默认 3（顶级与两层嵌套）。
+| 页面 | 内容 |
+| --- | --- |
+| [执行与记录](runtime.md) | ID 与记录字段、队列与并发、前台/后台、停止与 job 清理、会话文件、内存回收 |
+| [进度与结果通知](progress.md) | agent_get 的进度字段、所属活动 job、结果通知 |
+| [持久历史](history.md) | workspace 范围的历史发现、缓存、合并与只读记录 |
+| [工具与操作](operations.md) | agent_* 工具、Dock、/subagents、@handle 提及、父级回答 |
+| [类型、模型与 thinking](models.md) | 解析顺序、类型配置写入、启用开关、单个 run 的覆盖、模型运行时桥接 |
+| [类型与资源](resources.md) | 类型文件与 frontmatter、扩展与工具范围、技能、提示组成、memory、包声明 |
+| [定时调度](schedules.md) | cron、单次与周期调度 |
+| [跨扩展 RPC](rpc.md) | 其他扩展启动、停止、引导和消费 child |
+| [Workflow 编排](workflow/index.md) | 脚本编排多个 child |
 
-child 的工具由本包按归属注入，外部扩展和技能通过 Pi 公共包管理器与 DefaultResourceLoader 选择并加载，项目资源继承父级信任。自定义类型支持扩展选择、技能预加载、memory 与父级上下文等 frontmatter，未知字段报错。TUI 的 @handle 使用普通发送/恢复路径；类型首次启动通过父会话内存克隆生成任务。定时调度按主会话保存并生成普通后台 child。外部扩展通过 RPC 启动、停止、引导与消费顶级结果；workflow 使用共享执行、资源、记录和通知，通过 /subagents workflows 查看与控制。
+## 内置类型
+
+| 类型 | 工具 | 提示 |
+| --- | --- | --- |
+| general-purpose | 缺省工具集，见 [工具范围](resources.md#扩展与工具范围) | 追加在父级稳定提示之后（prompt_mode=append） |
+| Explore | read、bash、grep、find、ls | 上游只读搜索提示（replace） |
+| Plan | read、bash、grep、find、ls | 上游只读规划提示（replace） |
+
+Explore 和 Plan 的只读来自提示词，且没有 write/edit 工具。它们不是沙箱：bash 仍可以修改文件。两者也没有 task、job 和 wait 工具。
+
+## 默认值
+
+| 项 | 默认 |
+| --- | --- |
+| 执行方式 | 后台（agent_start 的 background 默认 true） |
+| 后台并发 `agents.maxConcurrent` | 10 |
+| 前台并发 `agents.maxConcurrentForeground` | 0，不限 |
+| 层数 `agents.maxDepth` | 3：顶级 child 加两层嵌套；嵌套 child 不占并发槽位 |
+| 会话保存 `agents.persistSessions` | true，顶级 child 保存到磁盘；嵌套 child 默认在内存中 |
 
 [返回当前文档](../index.md)

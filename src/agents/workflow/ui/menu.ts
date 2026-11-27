@@ -15,7 +15,8 @@ import { workflowSummary, type WorkflowsModule } from '../index.ts';
 import { workflowActive } from '../manager.ts';
 import { collapse, displayState } from '../progress/index.ts';
 import { listSavedWorkflows, readSavedWorkflow } from '../saved.ts';
-import { WorkflowProgress } from './progress.ts';
+import { WorkflowProgress, workflowDetails } from './progress.ts';
+import { part } from '../../../ui/structured-details.ts';
 import { ViewerNavigation } from '../../../ui/viewer/navigation.ts';
 import { browse, browseState, type BrowsePage, type BrowseState } from '../../../ui/browser.ts';
 
@@ -28,7 +29,7 @@ const workflowControls = (task: OwnedWorkflowTask) => [
 ];
 async function controlWorkflow(action: string, ctx: ExtensionContext, deps: Deps, task: OwnedWorkflowTask, navigation: ViewerNavigation): Promise<void> {
   const manager = deps.workflows.manager;
-  if (action === 'Pause') { if (await manager.pause(task.id)) ctx.ui.notify('Paused: running agents finish; new agents wait.'); }
+  if (action === 'Pause') { if (await manager.pause(task.id)) ctx.ui.notify('Workflow paused.'); }
   else if (action === 'Resume') await manager.resume(task.id);
   else if (action === 'Stop') await manager.stop(task.id);
   else if (action === 'Replay journal') {
@@ -38,7 +39,7 @@ async function controlWorkflow(action: string, ctx: ExtensionContext, deps: Deps
 }
 export async function showWorkflow(ctx: ExtensionContext, deps: Deps, task: OwnedWorkflowTask, navigation = new ViewerNavigation()): Promise<void> {
   let reader: ScrollView | undefined, selectedAgent: string | undefined;
-  const content = new WorkflowProgress(task);
+  let content: WorkflowProgress | undefined;
   for (; !navigation.closed;) {
     let action = '';
     deps.dock.setDetail(true);
@@ -50,10 +51,11 @@ export async function showWorkflow(ctx: ExtensionContext, deps: Deps, task: Owne
           {key: 'enter' as const, label: 'Open children / gates'},
           ...workflowControls(task),
         ];
-        const view = new DetailsView(tui, () => `Subagents ▸ Workflow · ${workflowSummary(task)}`, content, done,
+        const progress = content ??= new WorkflowProgress(task, true, theme);
+        const view = new DetailsView(tui, () => `Subagents ▸ Workflow · ${workflowSummary(task)}`, progress, done,
           actions.map(item => ({...item, run: () => { action = item.label; done(); }})), reader, theme, {navigation, keys});
-        view.reader.setContent(content); reader = view.reader;
-        const off = deps.workflows.manager.subscribe(() => { content.invalidate(); tui.requestRender(); });
+        view.reader.setContent(progress); reader = view.reader;
+        const off = deps.workflows.manager.subscribe(() => { progress.invalidate(); tui.requestRender(); });
         const timer = setInterval(() => { if (workflowActive(task)) tui.requestRender(); }, 1000); timer.unref();
         const dispose = view.dispose.bind(view);
         return Object.assign(view, {dispose() { dispose(); off(); clearInterval(timer); }});
@@ -74,7 +76,7 @@ export async function showWorkflow(ctx: ExtensionContext, deps: Deps, task: Owne
       const controls = [...row.recordId ? ['Transcript'] : [], ...row.gateJobId ? ['Gate stdout', 'Gate stderr'] : [],
         ...task.control && ['queued', 'running'].includes(state) ? ['Skip'] : [],
         ...task.control && state === 'running' ? ['Retry'] : []];
-      if (!controls.length) { ctx.ui.notify('No child session or active control for this row.'); continue; }
+      if (!controls.length) { ctx.ui.notify('No transcript, gate log or control for this row.'); continue; }
       const control = await selectValue(ctx, `#${row.index} ${row.label}`, controls.map(label => ({value: label, label})), undefined, {navigation});
       if (control === 'Transcript') {
         const record = deps.agents.manager.get(row.recordId!).record;
@@ -84,7 +86,7 @@ export async function showWorkflow(ctx: ExtensionContext, deps: Deps, task: Owne
         await showJobLog(ctx, deps.dock, jobs, job, control === 'Gate stdout' ? 'stdout' : 'stderr', live, navigation);
       } else if (control === 'Skip' || control === 'Retry') {
         const accepted = control === 'Skip' ? task.control?.skip(row.index) : task.control?.retry(row.index);
-        if (!accepted) ctx.ui.notify('That child has already left the control window.');
+        if (!accepted) ctx.ui.notify(`${control} is unavailable for this child.`);
       }
     }
   }
@@ -96,11 +98,9 @@ export async function showWorkflows(ctx: ExtensionContext, deps: Deps, page: Wor
   const states = [page.state, page.savedState ??= browseState()];
   states[Number(saved)].focus = page.state.focus;
   for (; !navigation.closed;) {
-    const runs = deps.workflows.list().sort((a, b) => b.startTime - a.startTime);
     const resources = {trusted: ctx.isProjectTrusted(), packageGate: deps.config().agents.packageWorkflows, agentDir: getAgentDir()};
     const names = saved ? listSavedWorkflows(ctx.cwd, resources) : [];
     const sources = new Map(names.map(name => [name, readSavedWorkflow(name, ctx.cwd, resources)]));
-    const progress = new Map(runs.map(task => [task.id, new WorkflowProgress(task)]));
     let action = saved ? 'View script' : 'Open workflow', changed = false;
     const selected = await browse(ctx, deps.dock, { title: 'Subagents', state: states[Number(saved)], pages: page.pages, navigation,
       selection: item => saved ? {name: item.value} : {name: deps.workflows.manager.get(item.value).meta?.name ?? 'Workflow', id: item.value},
@@ -110,12 +110,10 @@ export async function showWorkflows(ctx: ExtensionContext, deps: Deps, page: Wor
           states[Number(saved)].focus = previous.focus; changed = true; done(); } }],
       subscribe: refresh => deps.workflows.subscribe(refresh), ticking: () => !saved && deps.workflows.list().some(workflowActive),
       items: () => saved ? names.map(name => ({value: name, label: name, details: () => {
-        const source = sources.get(name)!; if (!source.ok) return source.message;
-        return source.script;
-      }})) : deps.workflows.list().sort((a, b) => b.startTime - a.startTime).map(task => ({value: task.id, status: task.status, label: workflowSummary(task), details: () => {
-        if (!progress.has(task.id)) progress.set(task.id, new WorkflowProgress(task));
-        return progress.get(task.id)!;
-      }})),
+        const source = sources.get(name)!;
+        return {rows: [source.ok ? source.script : [part(source.message, 'error')]]};
+      }})) : deps.workflows.list().sort((a, b) => b.startTime - a.startTime).map(task => ({value: task.id, status: task.status, label: workflowSummary(task),
+        details: () => workflowDetails(task)})),
       actions: (item, done) => {
         const run = (label: string) => () => { action = label; done(item.value); };
         if (saved) return [{key: 'n', label: 'Start', run: run('Start')}];
@@ -133,7 +131,7 @@ export async function showWorkflows(ctx: ExtensionContext, deps: Deps, page: Wor
     }
     const source = readSavedWorkflow(selected, ctx.cwd, resources);
     if (!source.ok) throw new Error(source.message);
-    if (action === 'View script') await showDetails(ctx, deps.dock, selected, `\`\`\`javascript\n${source.script}\n\`\`\``, 'markdown', navigation);
+    if (action === 'View script') await showDetails(ctx, deps.dock, selected, {rows: [source.script]}, 'text', navigation);
     else if (action === 'Start') {
       const manager = deps.workflows.admit();
       const input = await ctx.ui.input('Workflow args (JSON; empty uses no args)');

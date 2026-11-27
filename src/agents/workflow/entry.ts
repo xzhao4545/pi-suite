@@ -72,7 +72,7 @@ export function decodeWorkflowEntry(value: unknown): WorkflowEntryData {
     || !Array.isArray(data.children)
     || !['running', 'paused', 'completed', 'failed', 'killed'].includes(data.status) || !Array.isArray(data.progress)
     || typeof data.name !== 'string' || !Number.isFinite(data.startTime) || !Number.isInteger(data.agentCount)) {
-    throw new ToolError('WORKFLOW_HISTORY', 'Invalid workflow record version or data');
+    throw new ToolError('WORKFLOW_HISTORY', 'Unsupported workflow record version or invalid data. Use a session with a valid workflow record.');
   }
   return { ...data, children: data.children.map(child => decodeAgentRecord(child, data.recordPath)) };
 }

@@ -9,7 +9,7 @@ export const answerText = (response?: Response) => response ? [
   ...response.kind === 'selection' ? response.selections : [], ...response.text ? [`✎ ${response.text}`] : [],
 ].join(', ') : undefined;
 
-/** Shared markers keep the full list and the one-line phone layout consistent. */
+/** Shared markers keep the full list and the compact one-line layout consistent. */
 export function optionRow(theme: Theme, question: Question, draft: Pick<Draft, 'selected' | 'text' | 'customSelected'>, option: Option | undefined, focused: boolean): string {
   const selected = option ? draft.selected.has(option.id) : draft.customSelected && Boolean(draft.text.trim());
   const choice = question.allowMultiple ? selected ? "☑" : "☐" : selected ? "◉" : "○";

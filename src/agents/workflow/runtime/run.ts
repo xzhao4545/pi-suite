@@ -559,11 +559,9 @@ export async function runWorkflow(options: RunWorkflowOptions): Promise<Workflow
     /**
      * Resolve one `workflow(ref)` and hand the child's source back compiled.
      *
-     * Resolution failures are non-fatal — Claude Code documents `workflow()` as
-     * throwing on an unknown name so a script can catch it and carry on. A host
-     * with no `loadWorkflow` at all is fatal, matching how a missing `runGate`
-     * or `resumeAgent` is treated: a capability the script asked for and this
-     * host cannot provide is a wiring error, not a runtime condition.
+     * A script can catch a failed lookup and continue. A missing `loadWorkflow`
+     * hook is fatal, like a missing `runGate` or `resumeAgent`: the host cannot
+     * provide the capability the script requested.
      */
     async function handleLoadWorkflow(callId: number, ref: WorkflowScriptRef): Promise<void> {
       const loadWorkflow = host.loadWorkflow?.bind(host);

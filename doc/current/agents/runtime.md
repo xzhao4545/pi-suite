@@ -1,61 +1,180 @@
 # 执行与记录
 
-每个可恢复会话使用稳定 `agent_` ID，每次执行使用独立 `run_` ID。运行句柄、取消信号、父级引用、用量与槽位归属于 run；同一 agent 只能有一个未结算执行，已有停止/清理操作未返回时也不准入新的 run。恢复通过 agent_send 发起新执行，读取或打开历史不启动模型。
+`AgentManager`（`manager.ts`）持有本进程的全部 child 执行，每个 agentDir 一个，见 [进程注册与 reload](#进程注册与-reload)。
 
-上下文统计保存为 `contextUsage {tokens, contextWindow, percent}`，沿用 SDK getContextUsage 的当前上下文估算；tokens/percent 为 null 表示未知，累计 usage tokens 与上下文占用分别展示。runner 在工具开始、回合结束和压缩/usage 边界更新，模型切换及 child 关闭保存最后快照；恢复的新 run 重新统计，历史缺少快照时标记不可用。toolUses 按本 run 的工具执行开始计数，包含失败调用；elapsedMs 由 Manager 的单调时钟派生，排队等待单独展示。
+## ID 与记录
 
-## 并发与生命周期
+- agent ID（`agent_` 加 8 位十六进制）标识一个可恢复的 child 会话，恢复时不变。
+- run ID（`run_` 加 8 位十六进制）标识一次执行。运行句柄、取消信号、父级引用、用量和并发槽位都属于 run（`Execution` 对象）。
+- 同一 agent 同时只能有一个未结算的 run。该 agent 的停止操作尚未返回时，新的 run 返回 ALREADY_RUNNING。
+- 通过 agent_send、@handle 或查看器发送消息可以恢复已结束的 child。workflow 也可续接自己的 child。恢复生成新的 run；读取记录或打开 Transcript 不启动模型。
 
-顶级 child 进入一个共享队列，分别按后台与前台池空位取最早可运行项，保持各池 FIFO。后台默认 10，前台默认不限。启动时保存 chargedPool，动态调整上限时既有槽位的收费归属保持稳定；结算释放槽位，停止排队项释放其等待者。嵌套与 workflow child 不占池，避免父级等待其 child 时互相占位；workflow 的并发由自身控制。
+每个 run 的记录是 `AgentRecord`，以 custom entry `pi-suite:agent-record` 保存：
 
-状态包括 queued、starting、running、waiting、stopping、completed、failed、stopped 和 limited。排队项在 queued 列表单独查看；启动、运行、等待与清理中的 child 计入活动数量。等待父级回答仍计入活动数量；maxTurns 限制的执行为 limited。用量按 Pi SessionStats 计算本次执行的差值；耗时从实际开始到结束，包含工具与父级回答等待。
+| 字段 | 内容 |
+| --- | --- |
+| id、runId、type、name | 名称为 agent_start 的 name，缺省为类型的 display_name 或类型名 |
+| prompt、result、error | 本次输入、最后一条含非空文本的 assistant 消息（结构化输出时为验证后的 JSON）、错误 |
+| state | 见 [状态](#状态) |
+| cwd、configCwd | 实际工具目录；类型、资源与 workspace 归属使用的配置目录。RPC 可指定与 configCwd 不同的 cwd |
+| ownerSessionId、anchorEntryId | 启动该 run 的主会话及当时的叶子 entry，决定顶级 child 在 session 范围的可见性；嵌套 child 按 parentRunId 匹配直接父级 |
+| parentAgentId、parentRunId、ancestors | 嵌套 child 的直接父级与全部祖先 run ID |
+| background | 是否后台执行 |
+| createdAt、startedAt、endedAt、elapsedMs | elapsedMs 从实际开始计到清理结束、关闭会话之前，使用单调时钟，包含工具执行和等待父级回答，不含排队时间 |
+| model、modelSource、thinking、thinkingSource、individual | 实际模型与来源；individual 是单个 agent 的覆盖，见 [模型配置](models.md) |
+| usage、contextUsage | usage 是本次 run 的用量差值，规则见 [进度](progress.md#agent_get-与执行历史)；contextUsage 见下 |
+| turns、toolUses、activity、lastUpdateAt | toolUses 统计本次 run 开始执行的工具调用，包含失败的调用 |
+| sessionFile、endLeafId、persisted | 会话文件、结算时的叶子 entry、是否持久 |
+| handle、alias | @handle 名称，见 [@handle 提及](operations.md#handle-提及) |
+| taskId、taskGeneration | 分配的父级子任务及其代次 |
+| scheduleId、workflowId、structuredJson | 调度来源、所属 workflow、结构化结果 |
 
-后台启动立即返回 ID。前台启动等待最终结果，当前父级的任一直接 child 提问都会使其提前返回；提前返回后的最终结果进入统一通知。父级 Esc 取消尚未返回的前台调用与其 child，后台 child 继续运行。会话切换和树导航更换监听绑定；`/reload` 按[执行 owner 规则](../runtime/index.md#会话和通知)重绑。活动、排队或正在结算和清理的 run、待投递的父级问题或普通结果、以及尚未结算的 workflow 都使 agents owner 保持忙碌。
+`contextUsage` 为 `{tokens, contextWindow, percent}`，来自 SDK 的 `getContextUsage`。tokens 和 percent 为 null 表示未知（例如压缩后尚无新的用量）。runner 在工具开始、回合结束、用量与压缩 entry 写入时更新它；切换模型和关闭会话时保存最后一次快照。恢复产生的新 run 重新统计；历史记录没有快照时显示为不可用。
 
-agents/registry.ts 是执行与显示共享的轻量进程注册边界，保留 `Symbol.for('pi-suite.agents.runtime.v1')` 与按 agentDir 隔离的 owner map；对 AgentManager 只使用类型依赖。runtime.ts 负责创建/复用 owner、顺序加载 runner/child 与 quit，renderer 的名称查询不经过创建路径；查询按 id、可选 runId 匹配且排除 workflow child，没有当前进程记录时返回原 ID，不维护另一份名称缓存或读取历史文件。
+父会话只在记录的 state、background、sessionFile、endedAt、model、thinking 或 individual 变化时追加 entry；token 和计时变化不写入。child 会话关闭时在自己的会话文件中追加最终记录。
 
-绑定提示 owner 来自先前加载时，`agent_start`（含登记调度）、已结束会话的 `agent_send`、定时触发、RPC spawn 和新建或恢复型 `@` 提及返回 `RUNTIME_UNAVAILABLE`。查看器提交消息也检查该限制。查询、停止、引导活动 run、回答父级问题和接收结果仍可使用。定时触发的错误记入该次调度结果。
+## 状态
 
-正在等待真实 agent_start 前台调用的顶级普通 child 可从查看器单向转为后台；queued、stopping、已结算、嵌套、workflow、RPC 与普通恢复运行不具备该调用契约。Manager 将 chargedPool 从 foreground 转为 background，释放前台槽位并唤醒队列；后台池已满也允许既有执行转入，实际占用计数仍参与后续排队。前台工具返回 backgrounded:true，撤销其等待和 abort 绑定，父级后续取消不停止该 child；background 写入既有 run 记录，最终结果由统一通知消费。
+| 状态 | 含义 | 计入活动 |
+| --- | --- | --- |
+| queued | 等待并发槽位 | 是（单独计数，不计入状态栏活动数量） |
+| starting | 已离开队列，正在加载资源和建立会话 | 是 |
+| running | 正在执行 | 是 |
+| waiting | child 的 ask_user 正在等待父级回答（显示为 `waiting(parent)`） | 是 |
+| stopping | 已请求停止，等待结算 | 是 |
+| completed | 正常结束 | 否 |
+| failed | 出错，或结算清理失败 | 否 |
+| stopped | 被停止，或父级回答超时/取消 | 否 |
+| limited | 回合数超过 maxTurns（0 或省略表示不限） | 否 |
 
-准入时捕获父级 cwd、模型目录、thinking、信任、系统提示、owner 和 anchor，排队与 workflow 的后续调用不读取被 reload 撤销的 ExtensionContext。workflow child 的会话 resume 沿用原类型、模型、thinking、schema、工具与配置，普通 agent_send 恢复仍按模型配置规则解析。
+## 队列与并发
 
-普通 child 的模块与操作配置在实际开始执行时从 configCwd 读取并写入 run.config；资源与注入工具使用同一配置快照。类型、模型和 thinking 在准入时解析，排队期间不重新解析。workflow child 保留其原配置快照，续接继续沿用。
+顶级 child 进入一个共享队列。每次调度取队列中最早一个所在池有空位的 run，所以前台池满时不阻塞后台 run，各池内部保持先进先出。
 
-父执行的既有工具与资源范围保持当前契约；通过 agent_start 或结束会话的 agent_send 创建新嵌套执行时，从 configCwd 读取当前类型、模型与启用配置。workflow 的每次新 child 同样读取当前配置，固定 child resume 使用原配置。
+| 池 | 上限 | 成员 |
+| --- | --- | --- |
+| background | `agents.maxConcurrent`，默认 10 | background 为 true 的顶级 run |
+| foreground | `agents.maxConcurrentForeground`，默认 0（不限） | background 为 false 的顶级 run |
+| 不占池 | — | 嵌套 child、workflow child、非后台的 RPC 分离运行 |
 
-[RPC 分离启动](rpc.md) 使用同一队列与 run 生命周期：非后台的分离运行不占前台槽位，后台与绕过队列的运行保持实际收费归属。SDK 就绪与最终结算使用独立通知点；完成事件的同步消费在公共通知准入之前执行。
+- 嵌套 child 不占池，避免父级等待 child 时互相占用槽位。workflow 自己控制并发。
+- 调度触发的 run（`bypassQueue`）不等待空位，但仍计入其所在池的占用数。
+- run 开始时记下所计入的池（`chargedPool`）。修改上限不改变已有 run 的计数；结算时释放该池的一个槽位。
+- 停止排队中的 run 时，它直接移出队列并以 stopped 结算。
 
-## 取消与 job 归属
+## 前台、后台与转后台
 
-停止先关闭对应运行子树的准入，再取消真实 child 会话与工具信号、等待结算，并调用 JobManager.stopCreatedBy 清理所属活动 job。child 的 job_start 自动携带 agentId、runId 和 ancestors；模型不维护归属名单。JobManager 在异步授权与启动期间仍识别已关闭的 creator，防止停止期间启动遗漏的进程。
+- 后台启动立即返回 ID，最终结果经统一通知送达，见 [结果通知](progress.md#结果通知)。
+- 前台启动等待结果。以下情况提前返回：当前父级的任一直接 child 提问、用户插话（steer）、等待超过 1 小时。提前返回后，最终结果改由通知送达。
+- 前台调用返回之前，父级按 Esc 会停止该 child 及其子树；提前返回之后 Esc 不再影响它。后台 child 不受 Esc 影响。
+- 类型 frontmatter 的 run_in_background 优先于调用参数；调度触发的 run 总是后台。
 
-agent_stop 不指定 runId 时覆盖该 agent 各次运行及其后代创建的活动 job；指定时限定该次运行子树。已结束 child 留下的 job 也参与清理。同一范围的停止操作先登记共享 promise，再统一转换全部目标状态：排队目标移出队列并完成 stopped 结算，活动目标进入 stopping，之后才触发 abort、事件和订阅回调。同范围同步重入加入原操作；回调中的 configure/drain 不能启动排队后代，不影响同级或主会话创建的 job。job 清理失败时仍等待 child 完成结算后再报告错误，后续 stop 可以重新清理。JobManager 的本次清理结果只匹配传入 run ID 及 ancestors，累计关闭的 creator 仅用于后续准入。进度和原生 Jobs 入口通过共用同一归属选择的 createdBy 查询，活动筛选与范围见 [进度与结果通知](progress.md#所属活动-jobs)。
+转后台：在查看器按 `b`，把正在等待真实 agent_start 前台调用的顶级 run 转为后台：
 
-父执行结算前等待全部尚未 settled 的直接嵌套 child。仍在活动的 child 通过真实 stop 取消；已经产生终态但仍在会话关闭、记录落盘等最终结算的 child 等待其原 done，保留自然终态，不重复改为 stopped。任一 child 或父级所属 job 清理失败时，仍等待其他最终结算后报告错误，父级记录为 failed。父级 done、通知和活动数量以这条最终结算边界为准。
+1. 该 run 的池计数从 foreground 移到 background。后台池已满也允许转入；之后的排队按实际占用计算。
+2. 前台调用立即返回，正文为 `Continuing in background; the result will be notified.`，details 带 `backgrounded: true`。
+3. 父级之后的取消不再停止该 child，最终结果经统一通知送达。
 
-## 会话与历史
+queued、stopping、已结算、嵌套、workflow、RPC 和通过 agent_send 恢复的 run 没有等待中的前台调用，不能转后台。
 
-默认顶级 child 使用 SessionManager 保存完整 Pi 会话，嵌套默认内存会话，可由类型 persist_session 覆盖。新建持久 child 统一使用直接父会话文件所在目录的 `subagents/`；父文件已位于 `subagents/` 时复用该目录，嵌套不继续增加目录层级。父为内存会话时使用 Pi 按 child cwd 计算的默认会话目录下的 `subagents/`。类型显式 `session_dir` 保持其配置位置；环境变量和 Pi settings 的 sessionDir 可决定父会话位置，child 未显式配置时仍遵循上述父目录规则。普通、workflow、mention 启动与 schedule 触发均通过 Manager/runner 的同一个持久会话创建函数，mention 的临时 conversation clone 为内存会话。恢复沿用记录的 sessionFile，不迁移已有文件。Pi 1.5 的 SessionManager.list 只读取指定目录直接子级 `.jsonl`，listAll 默认只读取 sessions 下一层目录的直接 `.jsonl`，自定义目录同样不递归，因此默认目录下新建 child 不进入 `/resume` 列表。
+## 启动时捕获的内容
 
-父级和 child 保存 `pi-suite:agent-record` custom entry；记录包含输入、结果、错误、状态、时间、用量、模型来源、单独模型覆盖 individual 和 child sessionFile。父级离开后，历史读取仍可从 startup 引用解析 child 的最终记录；workspace 查询通过默认/配置会话目录和持久引用发现完整分支历史，读取不修复或重写原会话文件，范围与合并规则见 [持久历史](history.md)。
+agent_start 在分配 run 之前捕获父级的 cwd、模型、模型目录、thinking、项目信任、系统提示和所属会话（ownerSessionId、anchorEntryId）。排队中的 run 和 workflow 的后续调用使用这些副本，不读取 /reload 已撤销的 ExtensionContext。
 
-每次结算保存 endLeafId。该次 transcript 验证并从对应叶子读取，后续恢复新增消息属于新 run；缺失叶子明确报错。非持久会话在其 Execution 回收或 owner 替换前可于同一 Pi 进程读取和恢复；进程退出后仅持久引用可用。保存的活动状态没有本进程执行 owner 时规范为 failed，持久 transcript 仍可读取，不计入活动数量或触发通知。
+| 内容 | 何时读取 |
+| --- | --- |
+| 类型、模型、thinking | agent_start 时解析，排队期间不再解析 |
+| 普通 child 的模块与工具配置（`run.config`） | 实际开始执行时从 configCwd 重新读取；资源加载和本包工具注册使用同一份 |
+| workflow child | 沿用启动时的配置快照；续接（resume）沿用原类型、模型、thinking、schema 和工具 |
+| 嵌套 child | 父 child 调用 agent_start 时从 configCwd 读取当前类型、模型和启用配置；父 child 自身已加载的工具与资源不变 |
 
-Pi 1.5.0 的 ExtensionContext 提供 ModelRegistry，而 createAgentSession 只接受 ModelRuntime。执行层沿用上游在该边界读取 registry.runtime，保持父级认证、Provider 和虚拟模型路由；此访问集中在 runner，公共 context.modelRuntime 可用时替换。
+普通 agent_send 恢复按 [模型配置](models.md#解析与来源) 重新解析模型。
 
-child 的 task_list/task_get/task_edit 默认使用按 child 会话目标定位的私有 TaskStore；job_start(taskId) 和嵌套 agent_start(taskId) 引用直接执行者的私有清单。agent_start 的 taskId/taskGeneration 为 child 捕获直接父级清单中的单个子任务及来源代次，child 仅能通过 task_get/task_edit 的 scope:assigned 读取该任务或执行 start/done/block/unblock；其他 ID 或 add/update/delete/clear 返回 TASK_SCOPE。省略 scope 的 ID 始终指向私有清单，编号重名不改变路由。工具描述和私有清单提醒明确给出分配任务 ID 与入口，私有任务不进入主会话 Dock。
+## 进程注册与 reload
 
-嵌套准入使用直接父 child 绑定的私有 store，不从其分配任务引用获取父级权限；直接父级 tasks 未启用时，携带 taskId 的新准入明确返回 TASK_SCOPE。agent 恢复复用原 child 会话目标与任务关联，并校验 taskGeneration 和 taskId；过期为 TASK_STALE、缺少代次明确拒绝、不存在对应子任务时返回 NOT_FOUND。删除或清空任务不停止存活执行，child 结算不自动修改任务完成状态。
+`runtime.ts` 通过 `owner.ts` 在进程全局槽位 `Symbol.for('pi-suite.agents.runtime.v1')` 中创建或复用 manager，按 agentDir 区分。槽位名称定义在 `registry.ts`。首次启动 child 时按顺序加载 `runner.ts` 和 `child.ts`。工具 renderer 查名称只读取已注册的 manager，按 id 和可选 runId 匹配，跳过 workflow child；找不到时显示原 ID，不创建 manager，也不读取历史文件。
 
-指定目标 cwd 的运行记录保存实际工具目录与 configCwd；工作区列表与手动停止按配置目录归属，类型与资源使用父级配置目录，嵌套沿用同一配置根。结构化运行将验证后的 JSON 保存为 structuredJson 与 result，模型后续文本不覆盖该结果；会话读取与恢复仍通过普通 run 记录。
+会话切换和树导航只更换订阅。/reload 后如何替换或保留旧 manager 见 [会话和通知](../runtime/index.md#会话和通知)。以下任一情况使旧 manager 在 /reload 时保留：
+
+- 有未结算的 run，或停止操作尚未返回；
+- 有父级尚未看到的问题；
+- 有尚未消费、需要通知的结果；
+- 同一 agentDir 的 workflow manager 仍有工作。
+
+旧 manager 忙碌时，新加载的代码在绑定时提示一次，并对以下操作返回 RUNTIME_UNAVAILABLE：agent_start（含 schedule 登记）、对已结束 agent 的 agent_send、调度触发、RPC spawn、新建或恢复执行的 @handle、查看器中会导致恢复的消息。调度触发的错误记入该次调度结果。查询、停止、引导运行中的 child、回答父级问题和接收结果仍可用。
+
+## 停止与 job 清理
+
+child 的 job_start 自动带上 creator（agentId、runId 和祖先 run ID；属于 workflow 时也带 workflow ID），模型不需要维护这份名单。停止时用这些 ID 调用 `JobManager.stopCreatedBy`，规则见 [agent 创建的 job](../jobs/index.md#agent-创建的-job)。传入的 run ID 会记入停止集合，停止期间才开始启动的 job 也会被拒绝。
+
+agent_stop 的范围：
+
+- 不指定 runId：该 agent 的全部 run 及其后代，以及它们创建的全部活动 job，包括已结束 run 留下的 job。
+- 指定 runId：只含该 run 的子树。
+- 不影响同级 agent 或主会话创建的 job。
+
+停止流程（`AgentManager.stop`）：
+
+1. 先登记本次停止的共享 Promise，同一范围的重复调用（包括回调中的同步重入）加入它。
+2. 关闭这些 run 启动新 child 的能力，再统一改变全部目标的状态：排队目标移出队列并以 stopped 结算（elapsedMs 为 0），运行中目标改为 stopping。
+3. 之后才触发 abort、事件和订阅回调，所以回调中的 configure/drain 不能启动已排队的后代。
+4. 同时等待 job 清理和全部目标结算。job 清理失败时，仍等全部目标结算后再报告错误；之后再次 stop 可以重新清理。
+
+返回值 `StopOutcome`：requested（有目标被取消或有 job 被停止）、state（该 run 的状态）、cleanup（任一 job 的清理为 pending/unconfirmed 时为 unconfirmed，否则 confirmed）、affected（各 run 与 job 的状态）。
+
+run 自身结算时（`launch` 的 finally）：
+
+1. 等待全部尚未结算的直接嵌套 child。仍在活动的 child 通过 stop 取消；已有终态、正在关闭会话或保存记录的 child 只等待其结算完成，保留原终态。
+2. run 收到取消信号（包括停止或超过回合上限），或因父级回答未完成而终止时，清理它创建的 job。正常结束的 run 留下的 job 继续运行，可以用 agent_stop 或 Runs 页的 Cleanup jobs 清理。
+3. 上述任一清理失败时，记录 `Execution cleanup failed: …`，状态为 failed。会话关闭失败记录 `Session finalization failed: …`，状态同样为 failed。
+4. 最后释放槽位、发出结算事件，再通知订阅者。完成事件在订阅通知之前同步触发，RPC 的同步消费因此先于结果通知排队。
+
+活动数量、父级 done 和结果通知都以这一步完成为准。
+
+## 会话文件
+
+| 情况 | 会话 |
+| --- | --- |
+| 顶级 child | 持久，`agents.persistSessions` 默认 true |
+| 嵌套 child | 内存 |
+| 类型设置 persist_session | 按类型设置 |
+| @类型 的任务整理克隆 | 内存，不产生 child 记录 |
+
+新建的持久 child 会话放在：
+
+1. 类型设置了 session_dir 时，放在该目录（支持 `~`；相对路径按 child 的 cwd 解析）。
+2. 否则放在直接父会话文件所在目录下的 `subagents/`；父文件已在 `subagents/` 中时直接使用该目录，嵌套不再加层。
+3. 父会话在内存中时，放在 Pi 按 child cwd 计算的默认会话目录（`<agentDir>/sessions/<编码后的 cwd>/`）下的 `subagents/`。
+
+PI_CODING_AGENT_SESSION_DIR 和 Pi settings 的 sessionDir 只影响主会话文件的位置，child 跟随主会话目录。普通启动、workflow、mention 和调度触发在新建持久 child 会话时使用 `session.ts` 的 `createChildSession`。恢复时复用保留的会话树，或打开记录中的 sessionFile。
+
+Pi 1.5.0 的 `SessionManager.list` 只读取指定目录直接包含的 `.jsonl`，`listAll` 只读取 sessions 下一层目录，所以 `subagents/` 中的 child 不出现在 `/resume` 列表中。
+
+结算时保存 endLeafId。读取磁盘上的 run transcript 时，若记录指定了叶子 ID，先验证叶子存在，再读取到该叶子为止的分支；叶子不存在时报 AGENT_HISTORY。读取历史不会把恢复后新增的消息归入原 run。
+
+非持久会话在 [执行引用回收](#执行引用回收) 之前可以在同一 Pi 进程中读取和恢复；进程退出后只能使用持久会话。保存记录的状态仍是活动状态、但本进程没有对应 run 时，按 [持久历史](history.md#中断的运行) 处理。
+
+## 任务关联
+
+agent_start 的 taskId 指向直接父级任务清单中的一个子任务（如 `1.2`），必须同时传 taskGeneration：
+
+1. 缺少 taskGeneration 时返回 TASK_GENERATION_REQUIRED。
+2. 父级没有任务清单（tasks 模块关闭）时返回 TASK_SCOPE。
+3. 该 ID 不是当前代次中的子任务时返回 NOT_FOUND。
+4. run 创建后把 agent ID 写入该子任务的执行引用；写入失败返回 TASK_LINK_FAILED，此时 run 已启动。
+
+嵌套 child 使用其直接父 child 自己的私有清单，而不是父 child 被分配的那个任务。恢复沿用记录中的 taskId 和 taskGeneration，代次过期返回 TASK_STALE，子任务不存在返回 NOT_FOUND。删除任务或清空清单不停止运行中的 child；child 结算也不修改任务状态。child 中的私有清单与 `scope:"assigned"` 规则见 [child 任务范围](../tasks/operations.md#child-任务范围)。
 
 ## 执行引用回收
 
-AgentManager 每 60 秒检查已结算的 Execution，endedAt 超过 10 分钟且没有保留引用时移入已有 histories。完整 record、result、endLeafId、ancestors、handle/alias 和 job 归属继续保留。SDK 会话在执行结算时完成 shutdown/dispose；定期回收释放会话树、父级上下文、控制器及内存 transcript 的执行引用，不建立第二套历史存储。
+AgentManager 每 60 秒检查一次已结算的 run。结束超过 10 分钟且没有被保留的 run，从内存执行表移入历史表：记录、结果、endLeafId、ancestors、handle/alias 和 job 的 creator 关系都保留；会话树、父级上下文、控制器和内存 transcript 被释放。SDK 会话本身在结算时已经关闭。
 
-尚未消费且需要通知的结果、正在阅读的 reader retain 引用和活动 workflow host 引用阻止回收。普通顶级结果在主会话离开期间继续保留；嵌套结果在父执行尚未结算、能够接收通知时保留，workflow 嵌套同样遵守该规则，顶层 workflow child 的结果由 host 消费。公共查看器在阅读期间保留对应 run，workflow 在运行期间保留自己的 child，用于查看、续接和清理；退出相应作用域时释放引用。
+以下情况阻止回收：
 
-持久 child transcript 在回收后仍按 sessionFile/endLeafId 读取并可恢复；非持久 transcript 回收后返回 HISTORY_UNAVAILABLE，不能恢复该会话。记录与结果仍可查询，所属遗留 job 仍按 run/ancestor 清理。重复 stop 仅加入正在进行的操作，操作结束后的 stop 重新查询该范围的遗留 job。
+- 结果尚未消费且需要通知：顶级 run 的结果一直保留到送达，主会话离开期间也一样；嵌套 run 只在其父 run 尚未结算时保留；顶层 workflow child 的结果由 workflow 宿主消费，不阻止回收。
+- 查看器正在阅读该 run（`retain`），包括其中的消息输入、模型选择和 Jobs 往返。
+- 运行中的 workflow 保留自己的 child，用于查看、续接和清理。
+
+回收后，持久 transcript 仍按 sessionFile 和 endLeafId 读取并可恢复；非持久 transcript 返回 HISTORY_UNAVAILABLE，不能恢复。记录与结果仍可查询，遗留 job 仍按 run 和祖先 ID 清理。
 
 [返回 agents](index.md)

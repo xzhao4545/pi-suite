@@ -38,7 +38,7 @@ test('read-only Suite lookup supplies the same native body to Ask History and co
   const call = { ...fauxToolCall('goal_complete', {}), id: 'lookup-call' };
   manager.appendMessage(fauxAssistantMessage(call));
   manager.appendMessage({ role: 'toolResult', toolName: call.name, toolCallId: call.id, timestamp: Date.now(), isError: false,
-    content: [{ type: 'text', text: 'Full result\nRESULT_END' }], details: { summary: 'finished' } });
+    content: [{ type: 'text', text: 'Goal complete: Full summary\nRESULT_END' }], details: { summary: 'Full summary\nRESULT_END' } });
   const entries = manager.getBranch(), final = entries.at(-1)!;
   assert.ok(final.type === 'message' && final.message.role === 'toolResult');
   const partial: SessionEntry = { ...final, id: 'stream:lookup-call', message: { ...final.message,
@@ -146,8 +146,9 @@ test('actual loader resolves historical renderers before binding, during reload 
       session.sessionManager.appendMessage(fauxAssistantMessage(call));
       session.sessionManager.appendMessage({ role: 'toolResult', toolName: name, toolCallId: call.id, timestamp: Date.now(), isError: false,
         content: [{ type: 'text', text: 'agent_00000001 completed · History reviewer · run_00000001' }],
-        details: name === 'agent_get' ? { agent: { id: 'agent_00000001', name: 'History reviewer', state: 'completed' } }
-          : { name: 'History reviewer', state: 'completed', cleanup: 'confirmed', affected: [] } });
+        details: name === 'agent_get' ? { agent: { id: 'agent_00000001', runId: 'run_00000001', name: 'History reviewer', state: 'completed' } }
+          : { name: 'History reviewer', runId: 'run_00000001', requested: true, state: 'completed', cleanup: 'confirmed',
+            affected: [{ id: 'agent_00000001', state: 'completed', cleanup: 'confirmed' }] } });
     }
     for (const [name, command] of [['bash', 'echo "$HOME" | grep value\necho done # comment'], ['powershell', '$name = "world"\nWrite-Host $name']]) {
       const call = { ...fauxToolCall(name!, { command }), id: `history-${name}` };

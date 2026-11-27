@@ -20,9 +20,9 @@ import { BrowserView } from '../../src/ui/browser.ts';
 import { chooseBrowserAction } from '../support/browser.ts';
 
 type View = Component & {handleInput?: (data: string) => void; dispose?: () => void};
-function choose(view: View, value: string) {
+function choose(view: View, value: string, key = '\r') {
   for (let index = 0; index < 15; index++) {
-    if ((view as View & {getSelectedItem?: () => {value: string} | null}).getSelectedItem?.()?.value === value || view.render(120).some(line => stripVTControlCharacters(line).trim().startsWith(`→ ${value}`))) { view.handleInput?.('\r'); return; }
+    if ((view as View & {getSelectedItem?: () => {value: string} | null}).getSelectedItem?.()?.value === value || view.render(120).some(line => stripVTControlCharacters(line).trim().startsWith(`→ ${value}`))) { view.handleInput?.(key); return; }
     view.handleInput?.('\x1b[B');
   }
   assert.fail(`No selected row for ${value}: ${view.render(120).map(stripVTControlCharacters).join('\n')}`);
@@ -85,7 +85,10 @@ test('agent Transcript reuses owned job UI across child cwd and collected runs, 
     const unrelatedJob = await owned(unrelated, root, 'OTHER_JOB');
     agents.sweep(Date.now() + 10 * 60_000 + 1); assert.equal(agents.get(parent.record.id, parent.record.runId).run, undefined);
     let reader!: DetailsView['reader'], offset = 0, expanded = '';
-    const steps = [(view: View) => choose(view, parent.record.runId), (view: View) => {
+    const steps = [(view: View) => choose(view, parent.record.id, 'j'), (view: View) => {
+      const list = view.render(120).join('\n'); assert.match(list, /NEXT_JOB/); assert.doesNotMatch(list, /PARENT_JOB|CHILD_JOB|OTHER_JOB/);
+      view.handleInput?.('\x1b');
+    }, (view: View) => choose(view, parent.record.id, 'r'), (view: View) => choose(view, parent.record.runId), (view: View) => {
       assert.ok(view instanceof DetailsView); view.handleInput('o'); view.render(120);
       reader = view.reader; expanded = reader.render(120).join('\n'); assert.match(expanded, /TOOL_FOLD_CONTENT/);
       // First-open readers now start at the end; deliberate upward navigation pauses
@@ -105,7 +108,7 @@ test('agent Transcript reuses owned job UI across child cwd and collected runs, 
     (view: View) => view.handleInput?.('\x1b'), (view: View) => {
       assert.ok(view instanceof DetailsView); assert.strictEqual(view.reader, reader); assert.equal(reader.offset, offset); assert.equal(reader.query, 'READER_MARKER');
       assert.equal(reader.render(120).join('\n'), expanded); view.handleInput('\x1b');
-    }, (view: View) => view.handleInput?.('\x1b')];
+    }, (view: View) => view.handleInput?.('\x1b'), (view: View) => view.handleInput?.('\x1b')];
     const ui = scriptUI(ctx, steps, title => assert.fail(`Unexpected candidate menu: ${title}`));
     const before = h.faux.state.callCount;
     await h.session.extensionRunner.getCommand('subagents')!.handler('finished', ui);
@@ -144,7 +147,7 @@ test('new-session workspace history opens owned PTY readonly without input or st
     assert.equal(agents.get(run.record.id).record.ownerSessionId, owner);
     current.faux.setResponses([fauxAssistantMessage('notification received after the reader closes')]);
     const steps = [(view: View) => {
-      assert.ok(view instanceof BrowserView); assert.equal(view.getSelectedItem()?.value, run.record.runId);
+      assert.ok(view instanceof BrowserView); assert.equal(view.getSelectedItem()?.value, run.record.id);
       const menu = view.render(400).join('\n'); assert.ok(!menu.includes('stop subtree') && !menu.includes('model / thinking'));
       chooseBrowserAction(view, 'Jobs');
     }, (view: View) => choose(view, job.id), async (view: View) => {

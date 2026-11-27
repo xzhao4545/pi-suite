@@ -12,7 +12,7 @@ export const editSchema = Type.Object({ generation: generationSchema, scope: Typ
   reason: Type.Optional(reason), cascade: Type.Optional(Type.Boolean()), children: Type.Optional(Type.Array(title, { maxItems: 100 })),
   changes: Type.Optional(Type.Array(changeSchema, { minItems: 1, maxItems: 100 })) }, { additionalProperties: false });
 type EditArgs = Static<typeof editSchema>;
-const hint = 'Read task_list({}) for generation. One task: task_edit({"generation":"<source>","op":"done","id":"1.2"}); clear owner list: {"generation":"<source>","op":"clear"}; batch: {"generation":"<source>","op":"batch","changes":[{"op":"start","id":"1.3"}]}. No changes committed.';
+const hint = 'Use the source generation and only the fields for this op. For example: {"generation":"<source>","op":"done","id":"1.2"}. For batch use changes; for clear supply only op and generation. No changes committed.';
 export const editArguments = (args: unknown): EditArgs => {
   const params = checkedArguments(editSchema, hint)(args);
   const { scope: _scope, generation: _generation, ...change } = params;

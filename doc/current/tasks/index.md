@@ -1,44 +1,57 @@
 # 两级任务管理
 
-tasks 模块用父级分组与直接子任务组织工作，工具为 task_list、task_get、task_edit，用户入口为 /tasks。任务进度与 goal、agent、job 的结算分别管理，完成计数只表示当前子任务状态。
+一个任务清单包含任务组和直属子任务，最多两层。`task_list`、`task_get` 和 `task_edit` 供模型调用；用户通过 [`/tasks`](operations.md#tasks) 浏览。任务状态不等于 goal、agent 或 job 的执行结果。
 
 ## 结构与状态
 
-- 组使用递增十进制 ID，子任务使用 `组ID.序号`（如 `1.2`）；nextId 只计组，各组 nextChild 分配子序号，同一 generation 内 delete 后不复用。整清单自动/主动清空重置编号并轮换 generation，引用须携带源代次。parentId 指向组，最多两层。
-- 子任务状态为 todo、doing、blocked、done，可记录手动 blockedReason。有效状态优先 done，其次未完成依赖造成 blocked，最后使用存储状态。父级状态由直接子任务派生：全部完成且数量大于 0 为 done，自身依赖未完成为 blocked，存在有效 doing 为 doing，未完成子任务全部 blocked 为 blocked，其余为 todo；空组为 0/0 todo。
-- 父级进度始终统计全部现存子任务，筛选、折叠与搜索不改变计数。新增、删除和重新打开子任务都会重算相应父级。
-- blockedBy 保存依赖 ID，反向 blocks 从同一数据派生。自引用、不存在目标、二元环和带未完成阻塞项的 doing/done 更新返回明确警告；删除时清理指向被删除对象的依赖。
+组 ID 是递增的十进制编号。子任务 ID 形如 `1.2`，表示组 `1` 的第 `2` 个子任务；`parentId` 保存组 ID。编号、清空与 `generation`（清单代次）见[存储与会话](storage.md)。
+
+| 对象 | 有效状态，按优先顺序 |
+| --- | --- |
+| 子任务 | 存储状态为 `done` 时显示 `done`；否则有未完成依赖时显示 `blocked`；其余使用存储状态（`todo`、`doing` 或手动 `blocked`）。 |
+| 组 | 有子任务且全部完成时为 `done`；否则组本身有未完成依赖时为 `blocked`；有有效 `doing` 的子任务时为 `doing`；未完成子任务全为 `blocked` 时为 `blocked`；其余为 `todo`。无依赖的空组为 `0/0 todo`。 |
+
+组进度统计全部现存子任务；增删或重新打开子任务会改变计数，筛选、折叠和搜索不会。`blockedBy` 保存直接依赖 ID，`blocks` 为反向关系，由同一字段计算。自引用、不存在的依赖、互相依赖，以及把带未完成依赖的任务设为 `doing` 或 `done` 都会警告，编辑仍可提交。删除任务时会清理指向它的依赖。
 
 ## 工具
 
 | 工具 | 参数与返回 |
 | --- | --- |
-| task_list | generation?、groupId?、state?（unfinished 默认、doing、blocked、done、all）、cursor?、limit?；不引用 ID 的 task_list({}) 发现当前 generation，按组/游标续页须引用源代次。默认按组返回未完成清单，组进度包含全部子任务。默认 10 项、约 4 KiB，按组/子 ID 稳定分页，中间页保留组标题；正文提供 nextCursor 的可执行续页入口 |
-| task_get | generation、id、scope?（local 默认；assigned 读取直接父级分配任务）；返回一个组或子任务的完整标题、状态、说明、有效阻塞项、反向依赖和执行引用，不自动展开组内子任务 |
-| task_edit | generation 必填；单项直接指定 op；批量使用 op=batch、changes（1–100 项），scope? 作用于整批（local 默认；assigned 仅更新分配任务进度）。支持 add/update/delete/start/done/block/unblock 和 owner 顶层 clear；按顺序原子提交，任一无效则整批不生效。回执含当前 generation、真实 ID/标题/父级、实际变化、有效状态、依赖派生变化、组进度与警告；重复相同设置显示 unchanged；非空全部完成自动清空并报告 cleared 原因 |
+| `task_list` | `task_list({})` 返回当前 `generation` 和未完成清单。可传 `groupId`、`state`（默认 `unfinished`，也可用 `doing`、`blocked`、`done`、`all`）、`cursor`、`limit`。传 `groupId` 或 `cursor` 时必须带取得该值时的代次。分页先按组的创建时间，再按组 ID 和子序号排序；默认 10 项，最多 100 项，正文预算约 4 KiB。分页从组中间开始时补上组标题；有下一页时返回 `nextCursor`，正文的 `more:` 给出续页调用。 |
+| `task_get` | 必填 `generation` 和 `id`。返回一个组或子任务的完整标题、状态、说明、手动阻塞原因、未完成依赖、反向依赖和执行引用。组详情不展开子任务；用 `task_list` 按组查询。 |
+| `task_edit` | 必填 `generation`。传 `op` 编辑一项，或用 `op: "batch"` 按顺序执行 `changes` 内的 1–100 项；任一项无效时整批不提交。回执给出当前代次、实际 ID、标题、父组、字段变化、有效状态、依赖引起的状态变化、组进度和警告。字段无变化时显示 `unchanged`。 |
 
-add 不传 parentId 创建父级，可用 children 提供最多 100 个直接子任务标题；传 parentId 创建子任务，默认 todo。update 使用 id，只提交 title、description、status、blockedBy、blockedReason 中发生变化的字段；description 空字符串清空说明，blockedBy 数组替换依赖。只有子任务可修改 status；移动需删除后在目标组新增。父级状态不能直接修改。删除带子任务的父级必须明确 cascade:true。start/done/block/unblock 使用 `1.2` 形式的子任务 ID，start/done 使用 generation/op/id；block 可带 reason（最多 500 字符），unblock 将手动 blocked 返回 todo，尚未完成的依赖继续派生阻塞。完成项不会因 block 重开；多个 doing 可以并发。blockedReason 仅适用于手动 blocked 子任务，离开该状态时清除。
+有分配任务的 child 可在 `task_get` 和 `task_edit` 中指定 `scope`，见 [child 任务范围](operations.md#child-任务范围)。
 
-标题为 1–200 字符且包含非空白文本，说明最多 8000 字符。children 是标题数组，不接受嵌套对象；新增父级的子任务直接用 children 创建，后续操作使用已返回的真实 ID。
+| `op` | 参数与效果 |
+| --- | --- |
+| `add` | 不传 `parentId` 创建组；可用 `children` 一次创建最多 100 个直属子任务，只接受标题数组；组不能指定 `status`。传 `parentId` 创建子任务，默认 `todo`，不可传 `children`。后续操作使用回执中的实际 ID。 |
+| `update` | 传 `id` 和要改的 `title`、`description`、`status`、`blockedBy` 或 `blockedReason`。空字符串清空说明；`blockedBy` 替换整组依赖（最多 100 个不同 ID）。只有子任务可改 `status`；移动任务须删除后在目标组新增。 |
+| `delete` | 传 `id`；删有子任务的组须明确传 `cascade: true`。 |
+| `start` / `done` | 传子任务 `id`，设为 `doing` / `done`。可同时有多个 `doing`。 |
+| `block` / `unblock` | 传子任务 `id`。`block` 可带 `reason`，不会重新打开完成项；`unblock` 将手动 `blocked` 设回 `todo`，未完成依赖仍可使有效状态为 `blocked`。 |
+| `clear` | 只能单独调用，不能放进批次或用于 `assigned` 范围。清空本清单及其中的依赖和执行引用；编号重置。自动清空条件和回执见[存储与会话](storage.md)。 |
+
+标题为 1–200 字符，去掉首尾空白后必须非空；说明最多 8000 字符。`reason` 和 `blockedReason` 最多 500 字符。`blockedReason` 只用于存储状态为 `blocked` 的子任务，离开该状态时清除；空字符串可清除原因。
 
 ## 执行引用
 
-job_start(taskId, taskGeneration) 在 tasks 启用时要求 ID 对应当前会话的子任务且源代次有效，记录 job 的 taskId/taskGeneration 并把 job ID 写回该任务。执行归属仍由 JobManager 的会话与创建者字段确定；job 停止或完成不自动修改任务状态。任务删除或 clear 不停止 job，job 历史保留启动时的引用，详情说明源代次。
+1. 启动 job 或 agent 时，可一起传 `taskId` 和 `taskGeneration`。`taskId` 必须指向调用方本地清单中的子任务，`taskGeneration` 必须是取得该 ID 时的代次。agent 启动时记录该清单及代次，主会话 reload 或 fork 不改变它。job 的关联要求启用 tasks；嵌套调用的清单见 [child 任务范围](operations.md#child-任务范围)。
+2. `TaskStore.link` 是写入执行引用的入口。在存储锁内校验代次，把 agent ID 写入 `owner`，或把 job ID 加入 `jobIds`；不会设置任务状态。job 和 agent 记录也保存 `taskId` 与 `taskGeneration`。job 的归属与通知仍按[会话和创建者](../jobs/index.md)确定。
+3. agent 恢复时沿用 agent ID、child 会话和启动时的任务引用，见 [任务关联](../agents/runtime.md#任务关联)。缺代次报 `TASK_GENERATION_REQUIRED`，代次不符报 `TASK_STALE`，不会绑定重新分配的 ID。
 
-TaskStore.link 为统一执行引用入口，保存 agent owner 与 jobIds；它在锁内检查 generation，不设置任务状态。agent_start(taskId, taskGeneration) 要求 ID 对应直接父级清单中的子任务，并捕获该清单及代次。每个 child 的 task_list/task_get/task_edit 默认操作自己的私有清单，私有变更不进入主会话 Dock；child 的 job_start 和新嵌套 agent_start 同样只引用该私有清单。agent 恢复沿用稳定 agent ID、child 会话目标与 taskId/taskGeneration，关联过期返回 TASK_STALE，缺少代次明确拒绝，不绑定重用 ID；完成或停止执行不自动把任务改为 done。会话切换和 fork 的清单边界见 [存储与会话](storage.md)。
-
-带 taskId 的 child 用 `task_get({"generation":"<assigned source>","scope":"assigned","id":"1.2"})` 读取分配任务，用 `task_edit({"generation":"<assigned source>","scope":"assigned","op":"done","id":"1.2"})` 更新其 start/done/block/unblock 进度。省略 scope 或指定 local 时，ID 永远指向私有清单，即使两个清单都存在 `1.2`；不根据 ID 自动路由。assigned 不支持 add/update/delete/clear、其他父级 ID 或跨清单批次，越权返回 TASK_SCOPE，说明只能读取或更新分配任务；整批权限检查失败不提交任何变化。assigned 回执仅保留该任务的变化与警告，不返回父级其他任务的派生回执或组进度；父级订阅仍正常观察实际派生状态。主会话或没有分配任务的 child 的 task_get/task_edit schema 不包含 scope 字段，也不附加 scope 说明；scope 参数与说明仅在有分配任务的 child 中提供。
+执行完成或停止不会把任务设为 `done`。删除任务或清空清单不会停止执行；job 历史和详情仍显示启动时的任务引用及其源代次。
 
 ## 模块文件
 
-- types.ts：参数与存储 schema。
-- model.ts、query.ts：批量编辑、进度、依赖与查询。
-- store.ts：统一串行入口、存储锁与原子提交。
-- index.ts：会话绑定、Dock 摘要、完成反馈与提醒。
-- schema.ts、tools.ts、render.ts：公共参数校验、短回执与公共工具显示框架接入。
-- commands.ts：轻量命令注册、非 TUI 文本查询与按需交互加载。
-- presentation.ts、viewer.ts：统一任务文字/符号与共享 BrowserView 接入。
+- `types.ts`：工具参数与存储格式。
+- `model.ts`、`query.ts`：批量编辑、状态计算、依赖与查询。
+- `store.ts`：串行读写、文件锁和提交。
+- `index.ts`：会话绑定、Dock 摘要、完成反馈和提醒。
+- `schema.ts`、`tools.ts`、`render.ts`：参数校验、工具回执及其显示。
+- `commands.ts`：注册命令，处理非 TUI 查询，按需加载查看器。
+- `presentation.ts`、`viewer.ts`：任务文字和符号，接入共享 `BrowserView`（列表查看器）。
 
-存储见 [存储与会话](storage.md)，操作见 [用户操作](operations.md)，验证范围见 [基线与验证](../validation.md)。
+[存储与会话](storage.md) · [用户操作](operations.md) · [基线与验证](../validation.md)
 
 [返回当前文档](../index.md)

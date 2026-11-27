@@ -62,9 +62,8 @@ async function pipeline(items, ...stages) {
  * budget without any of them being passed anywhere: there is only ever one of
  * each. What it does not share is ambient phase state, which lives on the scope.
  *
- * One level only, as in Claude Code. The child's \`workflow\` is present and
- * throws rather than absent, so the error names the limit instead of reading
- * \`workflow is not defined\`.
+ * One level only. Keep the hook available in the child so the error names the
+ * nesting limit instead of reading \`workflow is not defined\`.
  */
 async function workflowIn(scope, nameOrRef, args) {
   if (scope.depth > 0) {
@@ -96,7 +95,7 @@ async function workflowIn(scope, nameOrRef, args) {
     // Fatal, like the agent cap: a limit that silently drops work would be
     // worse than no limit.
     const error = new Error(
-      "Workflow exceeded its cap of " + workerData.nestedCap + " nested workflow() calls."
+      "Workflow exceeded its cap of " + workerData.nestedCap + " nested workflow() calls. Split the work across runs."
     );
     error.workflowFatal = true;
     throw error;
@@ -107,9 +106,8 @@ async function workflowIn(scope, nameOrRef, args) {
   try {
     loaded = await callHost("workflow", ref);
   } catch (error) {
-    // Resolution failures are the script's to handle — Claude Code documents
-    // workflow() as throwing on an unknown name so a script can catch it.
-    // Attributed, so a caught error says which reference failed.
+    // Keep lookup failures catchable by the script and identify the reference
+    // that failed. Run-level failures still propagate.
     if (isFatal(error)) throw error;
     throw new Error('workflow("' + label + '"): ' + describe(error));
   }
@@ -143,16 +141,9 @@ async function workflowIn(scope, nameOrRef, args) {
 /**
  * The \`budget\` global.
  *
- * \`total\` is permanently null, and that is the honest answer rather than a
- * stub: Claude Code fills it from the user's "+500k" directive and pi has no
- * such directive, so "no target set" is the state this runtime is always in.
- * Every pattern Claude Code documents guards on exactly that — \`while
- * (budget.total && ...)\`, \`budget.total ? ... : 5\` — so those scripts run here
- * unchanged and take the branch they were written for. Leaving \`budget\`
- * undefined instead would turn a graceful guard into a ReferenceError.
- *
- * \`spent()\` is real. It differs from Claude Code's in scope: theirs pools the
- * main loop and every workflow in the turn, ours counts this run's agents.
+ * Pi has no token-target directive. Keep \`budget.total\` null so scripts can
+ * test for an unset target without needing a separate check for the hook.
+ * \`spent()\` counts output tokens for this workflow, not the main session.
  */
 function makeBudget() {
   return {

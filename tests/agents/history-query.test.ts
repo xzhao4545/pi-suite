@@ -102,7 +102,7 @@ test('unknown saved IDs retain send ownership and workspace cleanup while foreig
     assert.equal((stopped.details as { cleanup: string }).cleanup, 'confirmed');
     await assert.rejects(h.invoke('agent_send', { id: h.foreign.id, message: 'foreign resume' }), /not a direct child/);
     let frames = 0;
-    const ctx = nativePicker(h.ctx, [h.previous.runId, undefined], view => {
+    const ctx = nativePicker(h.ctx, [h.foreign.id, undefined], view => {
       frames++;
       if (frames === 1) {
         const rows = view.render(400).map(stripVTControlCharacters).slice(1).join('\n');
@@ -110,7 +110,7 @@ test('unknown saved IDs retain send ownership and workspace cleanup while foreig
       }
       if (view instanceof DetailsView) {
         assert.deepEqual(view.actions.filter(action => action.available?.() !== false).map(action => action.label), ['Tools', 'Thinking', 'Jobs']);
-        assert.match(view.render(400).map(stripVTControlCharacters).join('\n'), /first saved/);
+        assert.match(view.render(400).map(stripVTControlCharacters).join('\n'), /second saved/);
       }
     });
     await h.session.extensionRunner.getCommand('subagents')!.handler('workspace finished', ctx as ExtensionCommandContext);
@@ -139,7 +139,7 @@ test('workspace branch history stays readonly while visible saved records retain
     assert.equal(h.manager.visible(hidden, { ctx: h.ctx }), false);
     const checkMenu = async (record: typeof hidden, editable: boolean) => {
       let frames = 0;
-      const ctx = nativePicker(h.ctx, [record.runId, undefined], view => {
+      const ctx = nativePicker(h.ctx, [record.id, undefined], view => {
         if (++frames !== 1) return;
         const rows = view.render(400).map(stripVTControlCharacters).slice(1).join('\n');
         assert.equal(rows.includes('model / thinking'), editable); assert.ok(!rows.includes('stop subtree'), 'settled runs without jobs have no stop action');

@@ -26,7 +26,7 @@ export function agentRuntime(): OwnerHandle<AgentManager> {
       return executeAgent(run, pi => childSuite(pi, run, manager), manager.changed,
         (kind, details) => manager.event(kind, run, details));
     }, async ids => {
-      if (runtime.mode !== 'active') throw new Error('Cannot cascade agent stop: jobs execution runtime is unavailable');
+      if (runtime.mode !== 'active') throw new Error(`Cannot stop agent jobs: ${runtime.reason}`);
       return (await runtime.manager.stopCreatedBy(ids)).map(({ job }) => ({ id: job.id, state: job.state, cleanup: job.cleanup.state }));
     });
     return manager;

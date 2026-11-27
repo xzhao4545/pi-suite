@@ -14,9 +14,11 @@ test('one current atomic state merges late accounting without reviving paused/cl
     let imports = 0; await a.initialize(() => { imports++; return goal; });
     await b.initialize(() => { imports++; return undefined; }); assert.equal(imports, 1);
     const old = await a.snapshot();
-    await b.change(b.current, data => { data.control++; Object.assign(data.goal!, { status: 'paused', automatic: false, resumeRequired: true, reason: { kind: 'manual' } }); });
+    const savedPause = { ...goal, status: 'paused', automatic: false, resumeRequired: true, reason: { kind: 'blocked' } };
+    await writeFile(path, JSON.stringify({ ...old, control: old.control + 1, goal: savedPause }));
     await a.account(goal.id, 10, () => true); const paused = await a.snapshot();
-    assert.equal(paused.goal?.status, 'paused'); assert.equal(paused.goal?.usedTokens, 10);
+    assert.equal(paused.goal?.status, 'paused'); assert.equal(paused.goal?.reason?.kind, 'blocked'); assert.equal(paused.goal?.usedTokens, 10);
+    assert.ok(!('resumeRequired' in JSON.parse(await readFile(path, 'utf8')).goal));
     await assert.rejects(a.change(old, data => { data.goal = goal; }), { code: 'GOAL_STALE' });
     await a.change(paused, data => { data.control++; data.goal = null; });
     await b.account(goal.id, 100, () => true);

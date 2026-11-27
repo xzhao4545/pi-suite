@@ -1,37 +1,93 @@
-# 状态与宿主生命周期
+# 状态与生命周期
 
-目标字段包含稳定 ID、目标修订号、文本、生命周期、自动工作许可、可选手动恢复要求 resumeRequired、暂停原因 reason、等待类型、可选期限和 token 预算、累计用量、运行耗时、响应次数、进度、错误。reason 保存原因 kind、必要的先前原因 previous、自动保护诊断 automaticStop 和撤销的等待详情 wait。权威当前文件、清除与一次性导入规则见 [单一当前状态存储](storage.md)；非法记录与矛盾许可组合报告错误。
+## 目标字段
 
-持久生命周期仅为 active、paused、completed。内部调度为 running、waiting_user、waiting_jobs、waiting_host、detached、idle，不单独持久化，也不与生命周期并列展示。统一用户状态为进行中、等待中、已暂停、已完成；active 的用户、外部或宿主等待投影为等待中，其余 active 为进行中；paused 与 completed 分别对应已暂停与已完成。detached 仅表示未绑定。
-
-历史 version 1 在一次性导入解析边界迁移：failed、blocked、budget_limited、stopped 和 paused 映射为 paused，保留错误、阻塞证据及停止/自动保护诊断；active 的自动许可、等待、手动恢复标记决定继续等待或暂停。Esc、询问系统取消与失败的手动 compact 可由新用户输入恢复；显式暂停、自动保护及冷启动撤权需要显式 resume。迁移提交当前 Store，不重写原 JSONL。
-
-| 事件 | 状态与调度 |
+| 字段 | 含义 |
 | --- | --- |
-| 目标未完成，正常结算 | active，统一边界安排一次继续 |
-| agent_end 与宿主重试 | active，waiting_host；等最终结算，不叠加重试 |
-| 重试耗尽，最终请求错误 | agent_settled 确认 paused，reason.kind=request_failed，保存最终真实错误；agent_before_settle 只冻结为 waiting_host，不提前撤权 |
-| 手动 compact | 压缩成功后按恢复许可恢复自动工作，等待宿主 idle；已有用户/job 等待继续保留，显式恢复要求不能被压缩绕过 |
-| 自动阈值/溢出 compact | 保留 active；willRetry 时由宿主恢复响应，否则由统一协调器调度 |
-| compact 取消或失败 | paused，reason.kind=compaction_failed；等待诊断与可用错误保留，新用户输入可恢复 |
-| 宿主输入框 Esc | paused、idle，reason.kind=cancelled，resumeRequired=false；新用户输入或 /goal resume 可恢复 |
-| 连续 5 个自动轮无工具或工具活动摘要完全相同 | paused、idle，保存 reason.kind=no_tools/repeated_tools；显式 resume 才恢复，新用户输入仅审计 |
-| ask_user skipped | active，保持自动许可并继续本轮；保留已有答案，不作为整批确认或同意 |
-| ask_user timed_out | active、running，自动答案作为推荐方案继续，不作为授权 |
-| ask_user cancelled | paused，reason.kind=cancelled，reason.wait.waiting=user；新用户输入或 /goal resume 恢复执行，结果本身不提供同意 |
-| goal_wait | active、waiting_jobs；外部唤醒或单次期限恢复工作 |
-| 显式暂停/完成/预算耗尽 | paused/completed；取消继续请求与等待期限，暂停保留等待诊断；clear 才删除 |
-| quit | 所有未完成目标保存 paused、reason.kind=shutdown 与 resumeRequired=true；撤销自动许可和期限，保留错误、进度、用量和耗时；completed 保持完成 |
-| 冷启动 | 所有未完成目标撤销遗留许可并要求手动 resume，包括 Esc 可恢复状态；不发请求或安装期限唤醒 |
-| reload/resume/tree | 撤销旧绑定并读取同会话当前 Store；目标与许可不随历史叶子回滚 |
-| new/fork | 独立新会话默认没有 Goal，不导入复制历史 |
+| `id`、`revision` | 稳定 ID；目标文本每次修改 `revision` 加 1 |
+| `text` | 目标正文，最长 4000 字符 |
+| `status` | `active`、`paused` 或 `completed` |
+| `automatic` | 是否自动续跑；`active` 时为 true，其余为 false |
+| `reason` | 仅 `paused` 有：`kind` 为暂停原因；`previous` 为退出或启动前的原因；`automaticStop` 为自动停跑诊断；`wait` 为暂停时撤销的等待 |
+| `waiting`、`resumeAt`、`waitFor` | `goal_wait` 的等待类型（`user` 或 `jobs`）、期限与等待的 ID |
+| `budget`、`usedTokens`、`turns` | 可选 token 上限、累计用量、响应次数 |
+| `elapsedMs` | 累计有效运行时间 |
+| `progress`、`error`、`completedAt` | 完成或阻塞证据、最近一次真实错误、完成时间 |
 
-运行归属记录目标 ID、修订号、所属会话 Binding、本轮请求 AbortSignal 与控制取消代次；显式 resume 的控制代次保护较新恢复意图，不让旧响应 aborted 结算覆盖它；过期工具不能完成、阻塞或等待被修改或替换的目标。执行权限要求 active 与本轮执行归属；非 active 目标的新用户审计轮可取得仅结案权限，不恢复 automatic，不调度工作、登记 running 耗时或触发执行预算门。completed 的重复完成保持原证据、时间和反馈，不追加状态。当前目标说明与必要许可控制通过公开消息/边界入口持久追加，不每请求生成临时合同；通知只携带短唤醒信号，提示与交付细节见 [请求上下文](./context.md)。无用户输入的无关扩展运行或 child 不取得结案权。Esc 后的其他扩展自定义运行不能恢复目标。预算只在显式配置时生效；message_end 累加宿主提供的 totalTokens，包括输入、输出与缓存用量，结案审计也计入用量。文本修改后同一目标的在途响应仍计入累计用量，但不能覆盖显式暂停等终态。
+状态矛盾的记录在读取时报错：`active` 必须自动且没有 `reason`，`paused` 必须有 `reason` 且不自动，`completed` 不自动。存储与导入见 [存储](storage.md)。
 
-运行耗时使用 performance.now 单调时钟累计有效 running 片段；实时摘要加上当前片段，离开 running 时冻结。用户等待、后台等待、宿主恢复、暂停及应用离线时间不计入，恢复后接续累计。可见 TUI 运行时每秒通过同一 StatusPublisher 刷新，tick 不写会话、不发模型请求；离开 running 或撤销绑定时取消 interval。对已归属当前目标的进行中运行，resume 幂等保留 running，不排队新响应。宿主忙于其他响应、取消结算、压缩或重试时保存恢复意图，并在可用边界安排一次继续。自动继续使用 goal:<ID> 稳定请求 ID；与其他通知合并，已有宿主继续和待处理消息优先。界面详情不发起模型请求。
+## 生命周期与界面状态
 
-期限与完成反馈定时器在撤销绑定时取消，回调检查绑定代次和目标 ID。修改目标文本取消原目标的 job 等待；询问系统取消保留用户等待详情与新输入恢复许可。完成反馈 5 秒后清除摘要，持久目标及完成证据继续保留。
+持久生命周期只有 `active`、`paused`、`completed`。`GoalManager` 另有不持久化的调度状态：`running`、`waiting_user`、`waiting_jobs`、`waiting_host`、`idle`、`detached`（未绑定会话）。
 
-暂停原因及手动恢复要求只保存在当前 GoalStore。true 阻止用户审计轮自动执行；显式 resume 写 false 并授予当前目标修订的执行许可。旧模型文字、会话快照、摘要与树叶子不能提供许可。控制更新及迟到计量基于锁内最新状态，跨宿主变化通过同一 Store 订阅撤销过期归属；具体事务与迁移边界见 [存储](storage.md)。
+界面只显示四种用户状态：
+
+| 用户状态 | 来源 |
+| --- | --- |
+| 进行中 | `active`，正在运行或已安排下一轮 |
+| 等待中 | `active`，等待用户、外部工作（`goal_wait`）或宿主（重试、压缩） |
+| 已暂停 | `paused` |
+| 已完成 | `completed` |
+
+## 暂停原因与恢复
+
+暂停只停止自动续跑。用户发来的消息总是正常处理，见 [本轮权限](#本轮权限)。暂停原因决定用户的新消息是否同时恢复自动续跑：
+
+| 原因（`reason.kind`） | 何时产生 | 用户新消息后 |
+| --- | --- | --- |
+| `manual` | `/goal pause` | 保持暂停，需要 `/goal resume` |
+| `budget` | `usedTokens` 达到 `budget` | 保持暂停；先调高预算再 `/goal resume` |
+| `shutdown` | 退出 Pi 时目标未完成 | 保持暂停，需要 `/goal resume` |
+| `startup` | Pi 冷启动时目标未完成 | 保持暂停，需要 `/goal resume` |
+| `historical_stop`、`permission` | 从旧版本记录导入 | 保持暂停，需要 `/goal resume` |
+| `blocked` | `goal_blocked` | 恢复自动续跑 |
+| `request_failed` | 宿主重试耗尽后最终请求失败 | 恢复自动续跑 |
+| `no_tools`、`repeated_tools` | [自动停跑](context.md#自动停跑) | 恢复自动续跑，停跑计数清零 |
+| `cancelled` | 输入框 Esc，或 `ask_user` 被系统取消 | 恢复自动续跑 |
+| `compaction_failed` | 压缩被取消或失败 | 恢复自动续跑 |
+
+需要显式恢复的原因集合定义在 `src/goal/state.ts` 的 `requiresExplicitResume`。`/goal resume` 对任何原因都有效（预算耗尽除外），并清除原因、错误和等待，重置停跑计数。后台通知、`/reload`、树切换和压缩都不会恢复暂停的目标。
+
+## 本轮权限
+
+每次宿主开始运行（`before_agent_start`）时，`GoalManager` 记录本轮的目标 ID、`revision`、会话绑定和请求的 AbortSignal，并决定本轮的 `access`：
+
+| `access` | 条件 | 可用的目标工具 |
+| --- | --- | --- |
+| `execute` | 目标 `active` | `goal_complete`、`goal_blocked`、`goal_wait` |
+| `complete` | 目标 `paused` 或 `completed`，且本轮由用户消息发起 | `goal_complete` |
+| `none` | 没有目标；或目标不是 `active`，且本轮不是用户发起（通知唤醒、其他扩展发起的运行） | 无 |
+
+`access` 只约束目标工具，不限制普通工具。子代理会话不继承父会话的目标。`complete` 轮里模型照常处理用户消息，结束后不自动续跑。
+
+目标工具调用时重新核对：目标 ID 与 `revision` 未变、会话绑定未撤销、请求未取消、目标控制没有被更新的 pause/resume/edit/clear 取代。任一不符返回 `STALE_BINDING`。`/goal resume` 递增内部控制计数，旧运行迟到的 aborted 结算因此不能把刚恢复的目标再次暂停。
+
+## 宿主事件
+
+| 事件 | 处理 |
+| --- | --- |
+| 一轮正常结束，目标未完成 | 安排下一轮继续 |
+| `agent_end` 后宿主重试 | 进入 `waiting_host`，等最终结算，不另外安排继续 |
+| 重试耗尽，最终请求失败 | 在 `agent_settled` 时暂停为 `request_failed`，保存最终错误；`agent_before_settle` 只进入 `waiting_host` |
+| 手动或自动压缩成功 | `active` 目标继续：原本在等待的保持等待，否则安排下一轮（`willRetry` 时由宿主重试）；暂停的目标保持暂停 |
+| 压缩取消或失败 | 暂停为 `compaction_failed`，保留错误 |
+| 输入框 Esc | 暂停为 `cancelled` |
+| `ask_user` 返回 `skipped` | 目标保持 `active`，本轮继续；已有答案不代表同意 |
+| `ask_user` 返回 `timed_out` | 目标保持 `active`，自动答案作为推荐方案继续，不代表授权 |
+| `ask_user` 返回 `cancelled` | 暂停为 `cancelled`，`reason.wait` 记录等待用户 |
+| `goal_wait` | `waiting_jobs`，外部事件或期限到达后继续 |
+| `/goal pause`、`goal_complete`、预算耗尽 | 暂停或完成；取消待交付的继续请求与等待期限 |
+| 退出 Pi（quit） | 未完成目标暂停为 `shutdown`，`previous` 保留原暂停原因；保留错误、进度、用量与耗时 |
+| Pi 冷启动 | 未完成目标暂停为 `startup`，不发请求、不安装期限 |
+| `/reload`、`/resume`、树切换 | 撤销旧绑定，重新读取同一会话的当前状态；目标不随所选历史回滚 |
+| `/new`、`/fork` | 新会话没有目标 |
+
+## 用量、耗时与定时器
+
+- 预算只在设置后生效。`message_end` 把宿主报告的 `totalTokens`（含输入、输出与缓存）计入 `usedTokens`，完成审计轮也计入。修改目标文本后，原修订仍在途的响应继续计入，但不能覆盖暂停等已提交的状态。
+- `elapsedMs` 用 `performance.now` 累计处于 `running` 的时间。等待、暂停与 Pi 未运行的时间不计入。TUI 中每秒刷新一次显示，刷新不写文件、不发请求。
+- 对已在运行的目标执行 resume 不会排队新请求。宿主正忙（其他响应、取消结算、压缩、重试）时，resume 记下意图，在宿主空闲后安排一次继续。
+- 自动继续请求使用固定请求 ID `goal:<ID>`，与其他通知合并；宿主已有的继续和待处理消息优先。
+- 期限与完成反馈定时器在撤销绑定时取消；回调核对绑定和目标 ID。修改目标文本会取消原目标的 job 等待。完成反馈 5 秒后从状态行清除，目标与证据仍保留。
 
 [返回目标管理](./index.md)

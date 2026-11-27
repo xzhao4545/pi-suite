@@ -1,7 +1,10 @@
 import { truncateToWidth } from '@earendil-works/pi-tui';
 import { toolRenderers, stateLine, type ToolExpandedRow } from '../ui/tool-render.ts';
+import { readPageFields } from '../ui/rendering/read-page.ts';
 import { agentDisplayName } from './registry.ts';
+import type { ReadPage } from '../runtime/read.ts';
 import type { StopOutcome } from '../runtime/tools.ts';
+import type { JobSummary } from '../jobs/types.ts';
 import type { ScheduledAgent } from './schedules/store.ts';
 import type { agentSummary } from './index.ts';
 
@@ -9,12 +12,18 @@ type Summary = ReturnType<typeof agentSummary>;
 type Details = { agent: Summary; backgrounded?: boolean; question?: unknown };
 type Args = { id: string; runId?: string };
 type StartArgs = { type?: string; name?: string; prompt: string; schedule?: string; background?: boolean };
-function agentFields(agent: Summary, text: string): ToolExpandedRow[] {
+function agentFields(agent: Summary): ToolExpandedRow[] {
   return [
+    { label: 'id', value: agent.id }, { label: 'runId', value: agent.runId },
     { label: 'state', value: agent.state, tone: stateLine(agent.state).tone },
     ...agent.model ? [{ label: 'model', value: agent.model }, { label: 'thinking', value: agent.thinking }] : [],
+    ...agent.turns !== undefined ? [{ label: 'turns', value: String(agent.turns) }] : [],
+    ...agent.toolUses !== undefined ? [{ label: 'toolUses', value: String(agent.toolUses) }] : [],
+    ...agent.taskId ? [{ label: 'taskId', value: agent.taskId }] : [],
+    ...agent.taskGeneration ? [{ label: 'taskGeneration', value: agent.taskGeneration }] : [],
+    ...agent.activity ? [{ label: 'activity', value: agent.activity }] : [],
     ...agent.usage ? [{ code: JSON.stringify(agent.usage, null, 2), language: 'json' as const, label: 'usage' }] : [],
-    ...agent.error ? [{ label: 'error', value: agent.error, tone: 'error' as const }] : [], text,
+    ...agent.error ? [{ label: 'error', value: agent.error, tone: 'error' as const }] : [],
   ];
 }
 export const startRenderers = toolRenderers<StartArgs, Details | { schedule: ScheduledAgent }>({
@@ -27,8 +36,10 @@ export const startRenderers = toolRenderers<StartArgs, Details | { schedule: Sch
     : { ...stateLine(data.agent.state), title: data.agent.name,
       meta: [...args.background === false && data.agent.elapsedMs !== undefined ? [`${(data.agent.elapsedMs / 1000).toFixed(1)}s`]
         : [{ text: data.agent.state, tone: stateLine(data.agent.state).tone! }], ...data.backgrounded ? ['continuing in background'] : []] },
-  expanded: (data, args, text) => [{ label: 'prompt', value: args.prompt ?? '' }, ...'agent' in data ? agentFields(data.agent, text)
-    : [{ code: JSON.stringify(data.schedule, null, 2), language: 'json', label: 'schedule' }, text]],
+  expanded: data => 'agent' in data ? [...agentFields(data.agent),
+    { label: 'promptSummary', value: data.agent.promptSummary },
+    ...data.agent.resultSummary !== undefined ? [{ label: 'resultSummary', value: data.agent.resultSummary }] : []]
+    : [{ code: JSON.stringify(data.schedule, null, 2), language: 'json', label: 'schedule' }],
 });
 export const listRenderers = toolRenderers<{ agentId?: string; state?: string; scope?: string }, { agents: Summary[]; nextCursor?: string }>({
   call: args => ({ icon: '⟳', tone: 'accent', title: 'Agents', summary: args.agentId ? agentDisplayName(args.agentId) : undefined }),
@@ -38,30 +49,37 @@ export const listRenderers = toolRenderers<{ agentId?: string; state?: string; s
     ...agent.error ? [{ label: 'error', value: agent.error, tone: 'error' as const }] : [],
   ]), ...data.nextCursor ? [{ label: 'more', value: 'next page available', tone: 'warning' as const }] : []],
 });
-export const getRenderers = toolRenderers<Args, Details>({
+export const getRenderers = toolRenderers<Args & { detail?: boolean }, Details & { jobs?: JobSummary[]; jobsUnavailable?: string }>({
   call: args => ({ icon: '⟳', tone: 'accent', title: 'Agent', summary: agentDisplayName(args.id, args.runId) }),
   collapsed: data => ({ ...stateLine(data.question ? 'waiting(parent)' : data.agent.state), title: data.agent.name,
     meta: [{ text: data.question ? 'question pending' : data.agent.state, tone: stateLine(data.question ? 'waiting(parent)' : data.agent.state).tone! }] }),
-  expanded: (data, _args, text) => [...agentFields(data.agent, text),
-    ...data.question ? [{ code: JSON.stringify(data.question, null, 2), language: 'json' as const, label: 'question' }] : []],
+  expanded: ({ agent, question, jobs, jobsUnavailable }, args) => [...agentFields(agent),
+    ...question ? [{ code: JSON.stringify(question, null, 2), language: 'json' as const, label: 'question' }] : [],
+    ...args.detail ? [
+      { label: 'modelSource', value: agent.modelSource }, { label: 'thinkingSource', value: agent.thinkingSource },
+      ...agent.contextUsage ? [{ code: JSON.stringify(agent.contextUsage, null, 2), language: 'json' as const, label: 'contextUsage' }] : [],
+      ...agent.lastUpdateAt ? [{ label: 'lastUpdateAt', value: agent.lastUpdateAt }] : [],
+    ] : [],
+    ...jobsUnavailable ? [{ label: 'jobsUnavailable', value: jobsUnavailable, tone: 'warning' as const }] : [],
+    ...jobs?.length ? [{ label: 'jobs', value: jobs.map(job => [job.id, job.state, job.cleanup.state, job.cleanup.error].filter(Boolean).join(' · ')).join('\n') }] : []],
 });
-export const readRenderers = toolRenderers<Args & { stream?: string }, Details & { stream: string; offset: number; nextOffset: number; totalBytes: number }>({
+export const readRenderers = toolRenderers<Args & { stream?: string }, Details & ReadPage & { stream: string }>({
   call: args => ({ icon: '⟳', tone: 'accent', title: 'Agent read', summary: agentDisplayName(args.id, args.runId), meta: args.stream ? [args.stream] : [] }),
   collapsed: data => ({ icon: '', title: data.agent.name, summary: `read · ${data.stream} ${data.offset}–${data.nextOffset} / ${data.totalBytes} B` }),
-  expanded: (_data, _args, text) => [text], // Arbitrary transcript/log output is literal, not Markdown or inferred code.
+  expanded: data => [...readPageFields(data), data.text], // Transcript and log text are literal, never Markdown or inferred code.
 });
-export const sendRenderers = toolRenderers<Args & { message: string }, Details & { action: string }>({
+export const sendRenderers = toolRenderers<Args, Details & { action: string }>({
   call: args => ({ icon: '⟳', tone: 'accent', title: 'Agent send', summary: agentDisplayName(args.id) }),
   collapsed: data => ({ icon: '', title: data.agent.name, summary: data.action }),
-  expanded: (_data, args, text) => [{ label: 'message', value: args.message ?? '' }, text],
+  expanded: data => [{ label: 'action', value: data.action }, ...agentFields(data.agent)],
 });
-export const stopRenderers = toolRenderers<Args, StopOutcome & { name?: string }>({
+export const stopRenderers = toolRenderers<Args, StopOutcome & { runId: string; name?: string }>({
   call: args => ({ icon: '⟳', tone: 'accent', title: 'Agent stop', summary: agentDisplayName(args.id, args.runId) }),
   collapsed: (data, args) => ({ ...stateLine(data.state), title: data.name ?? agentDisplayName(args.id, args.runId),
     meta: [{ text: data.state, tone: stateLine(data.state).tone! }, { text: `cleanup ${data.cleanup}`,
       tone: ['pending', 'unconfirmed'].includes(data.cleanup) ? 'warning' : 'dim' },
       ...data.affected.length > 1 ? [`+${data.affected.length - 1} affected`] : []] }),
-  expanded: (data, _args, text) => [{ label: 'cleanup', value: data.cleanup,
-    tone: ['pending', 'unconfirmed'].includes(data.cleanup) ? 'warning' : 'dim' },
-  { code: JSON.stringify(data.affected, null, 2), language: 'json', label: 'affected' }, text],
+  expanded: data => [{ label: 'runId', value: data.runId }, { label: 'requested', value: String(data.requested) },
+    { label: 'cleanup', value: data.cleanup, tone: ['pending', 'unconfirmed'].includes(data.cleanup) ? 'warning' : 'dim' },
+    { code: JSON.stringify(data.affected, null, 2), language: 'json', label: 'affected' }],
 });

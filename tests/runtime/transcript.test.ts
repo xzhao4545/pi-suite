@@ -1,10 +1,30 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { SessionEntry, ToolRenderers } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, MessageRenderer, SessionEntry, Theme, ToolRenderers } from "@earendil-works/pi-coding-agent";
 import { Text, visibleWidth } from "@earendil-works/pi-tui";
+import { captureCustomRenderers, customRendererLookup } from "../../src/runtime/tools.ts";
 import { Transcript } from "../../src/ui/transcript.ts";
 import { ScrollView } from "../../src/ui/scroll.ts";
 import { terminal } from "../support/terminal.ts";
+
+test("transcript uses the registered custom message renderer and passes expansion", () => {
+  const hostRenderers = new Map<string, MessageRenderer>();
+  const host: Pick<ExtensionAPI, 'registerMessageRenderer'> = { registerMessageRenderer(type, renderer) {
+    hostRenderers.set(type, renderer as MessageRenderer);
+  } };
+  const pi = captureCustomRenderers(host as ExtensionAPI);
+  const renderer: MessageRenderer = (_message, { expanded }) => new Text(expanded ? "rendered body" : "rendered caption", 0, 0);
+  pi.registerMessageRenderer("test:notice", renderer);
+  assert.equal(hostRenderers.get("test:notice"), renderer);
+
+  const transcript = new Transcript(terminal(), process.cwd(), undefined, { ...customRendererLookup(pi), theme: {} as Theme });
+  transcript.setEntries([{ type: "custom_message", customType: "test:notice", id: "notice", parentId: null,
+    timestamp: new Date().toISOString(), content: "model-facing receipt", display: true }]);
+  assert.ok(transcript.render(40).some(line => line.includes("rendered caption")));
+  assert.ok(!transcript.render(40).some(line => line.includes("model-facing receipt")));
+  transcript.toggleTools();
+  assert.ok(transcript.render(40).some(line => line.includes("rendered body")));
+});
 
 test("native transcript pairs streamed child tools, caches canonical components and retains native reading positions", () => {
   const transcript = new Transcript(terminal(), process.cwd());

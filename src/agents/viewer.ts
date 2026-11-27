@@ -19,7 +19,7 @@ import { agentDetails } from './viewer-info.ts';
 import { showDetails } from '../ui/details.ts';
 import { displayName as jobName, jobCompactStatus, jobLabel, jobStatus } from '../jobs/index.ts';
 import { browse, browseState, compareActivity } from '../ui/browser.ts';
-import { jobDetail } from '../jobs/query.ts';
+import { jobDetailView } from '../jobs/query.ts';
 import type { JobSummary } from '../jobs/types.ts';
 
 export type AgentJobViewer = { pi: ExtensionAPI; viewer: ViewerDeps };
@@ -30,7 +30,7 @@ export async function showAgentJobs(ctx: ExtensionContext, deps: AgentJobViewer,
     // Creator ancestry selects the entire execution subtree, including jobs left by
     // collected children. Task references and another run of this agent do not confer ownership.
     const current = () => deps.viewer.jobs.createdBy([runId]).filter(jobActive);
-    if (!current().length) { ctx.ui.notify('No active jobs owned by this run'); return; }
+    if (!current().length) { ctx.ui.notify('No active jobs for this run'); return; }
     let displayed = new Map<string, JobSummary>();
     const selected = await browse(ctx, deps.viewer.dock, { title: 'Subagents', page: 'Jobs', scope: 'Run subtree', state: viewState, navigation,
       selection: item => ({name: jobName(displayed.get(item.value)!)}),
@@ -44,7 +44,7 @@ export async function showAgentJobs(ctx: ExtensionContext, deps: AgentJobViewer,
         const items = current().sort((a, b) => compareActivity(a, b, jobActive));
         displayed = new Map(items.map(job => [job.id, job]));
         return items.map(job => ({ value: job.id, status: job.state, label: jobName(job), display: jobLabel(job),
-          search: `${job.id} ${jobName(job)} ${job.state} ${job.command} ${job.cwd}`, details: () => jobDetail(job, true).join('\n') }));
+          search: `${job.id} ${jobName(job)} ${job.state} ${job.command} ${job.cwd}`, details: () => jobDetailView(job, true) }));
       },
     });
     if (selected === undefined) return;
@@ -59,8 +59,11 @@ export function agentControls(ctx: ExtensionContext, agents: Pick<AgentsModule, 
   const canStop = () => { const run = get().run; return Boolean(!readonly && run && !run.settled && active(run.record.state) && run.record.state !== 'stopping'); };
   const canMessage = () => {
     const { record, run } = get(), scope = agents.scope(ctx);
-    if (!canStop() || record.state === 'queued' || agents.manager.get(id).record.runId !== runId) return false;
-    return run?.question ? agents.manager.questionVisible(record, scope) : agents.manager.visible(record, scope);
+    if (readonly || agents.manager.get(id).record.runId !== runId) return false;
+    if (!run || run.settled) return !active(record.state) && !agents.manager.isStopping(id) && agents.manager.visible(record, scope);
+    // The public state can still say running while the SDK session is closing.
+    if (!active(run.record.state) || run.record.state === 'queued' || run.record.state === 'stopping') return false;
+    return run.question ? agents.manager.questionVisible(record, scope) : agents.manager.visible(record, scope);
   };
   return { get, canStop, canMessage };
 }
@@ -68,13 +71,14 @@ export function agentControls(ctx: ExtensionContext, agents: Pick<AgentsModule, 
 export function agentMessage(ctx: ExtensionContext, agents: Pick<AgentsModule, 'manager' | 'scope' | 'admitSend'>, id: string, runId: string,
   readonly: boolean, config: () => SuiteConfig, sent?: () => void): InlineRequest {
   const {get, canMessage} = agentControls(ctx, agents, id, runId, readonly);
-  return {multiline: true, prompt: get().run?.question ? 'Answer parent question: ' : `Message ${get().record.name}: `, submit: async message => {
-    const manager = agents.admitSend(id);
+  const {record, run} = get();
+  const prompt = run?.question ? 'Answer parent question: ' : active(record.state) ? `Message ${record.name}: ` : `Resume ${record.name}: `;
+  return {multiline: true, prompt, submit: async message => {
     // The composer can outlive a run; never send an old reader's input to its successor.
     if (!canMessage()) throw new Error('This run no longer accepts messages');
-    const result = await manager.send(id, message, agents.scope(ctx), config());
+    const result = await agents.admitSend(id).send(id, message, agents.scope(ctx), config());
     sent?.();
-    return `${get().record.name}: ${result.action}`;
+    return `${record.name}: ${result.action}`;
   }};
 }
 
@@ -92,16 +96,23 @@ export async function performAgentAction(action: string, ctx: ExtensionContext, 
 export const showAgent = (...args: Parameters<typeof readAgent>): Promise<void> =>
   withReadingScreen(args[0], () => readAgent(...args));
 
-async function readAgent(ctx: ExtensionContext, agents: Pick<AgentsModule, 'manager' | 'scope' | 'renderer' | 'admitSend'>, dock: Dock, id: string, runId: string, config: () => SuiteConfig, readonly = false, jobs?: AgentJobViewer, navigation = new ViewerNavigation()): Promise<void> {
+async function readAgent(ctx: ExtensionContext, agents: Pick<AgentsModule, 'manager' | 'scope' | 'renderer' | 'customRendererLookup' | 'admitSend'>, dock: Dock, id: string, runId: string, config: () => SuiteConfig, readonly = false, jobs?: AgentJobViewer, navigation = new ViewerNavigation()): Promise<void> {
   const release = agents.manager.retain(runId);
   let content: Transcript | undefined, reader: ScrollView | undefined;
   const { get, canStop, canMessage } = agentControls(ctx, agents, id, runId, readonly);
   try { for (; !navigation.closed;) {
+    const { run } = get();
+    const suiteLookup = agents.customRendererLookup();
+    // A reader can open while the child is still binding its extensions.
+    const lookup = {
+      getMessageRenderer: (type: string) => (run?.customRenderers ?? suiteLookup).getMessageRenderer(type),
+      getEntryRenderer: (type: string) => (run?.customRenderers ?? suiteLookup).getEntryRenderer(type),
+    };
     dock.setDetail(true);
     let action: 'model' | 'stop' | 'jobs' | 'details' | undefined;
     try {
       await openReading<void>(ctx, (tui, theme, keys, done) => {
-        content ??= new Transcript(tui, get().record.cwd, name => get().run?.renderers?.get(name) ?? agents.renderer(name));
+        content ??= new Transcript(tui, get().record.cwd, name => run?.renderers?.get(name) ?? agents.renderer(name), { theme, ...lookup });
         content.setEntries(transcript(get().record, get().run));
         const view = new DetailsView(tui, () => '', content, done, [
           { key: 'm', label: 'Message', available: canMessage, input: () => agentMessage(ctx, agents, id, runId, readonly, config) },
@@ -139,8 +150,8 @@ async function readAgent(ctx: ExtensionContext, agents: Pick<AgentsModule, 'mana
       });
     } finally { dock.setDetail(false); }
     if (!action || navigation.closed) return;
-    // Close custom UI before opening an editor or awaiting lifecycle control. The same
-    // reader survives these trips, while its run stays retained throughout.
+    // Close the custom UI before opening an editor or awaiting lifecycle control.
+    // The reader survives the trip and its run stays retained.
     try {
       if (action === 'details') await showDetails(ctx, dock, 'Subagents ▸ Details', agentDetails(get().record, {readonly, canMessage: canMessage(), canStop: canStop()}), 'text', navigation);
       else if (action !== 'stop' || canStop()) await performAgentAction(action, ctx, agents, id, runId, readonly, config, jobs, navigation);

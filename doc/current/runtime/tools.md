@@ -1,26 +1,28 @@
 # 模型工具契约
 
-模型工具由唯一扩展入口按模块准入注册，同一操作使用一个工具名。参数采用 camelCase，时间以 Ms、字节以 Bytes 标注；配置键、命令和界面快捷键按对应模块文档维护。
+扩展按[模块开关](index.md#配置)注册工具。每项操作对应一个工具名。参数用 camelCase，毫秒字段以 `Ms` 结尾，字节数以 `Bytes` 结尾。
 
 ## 共享参数与返回
 
-runtime/tools.ts 提供 objectId、listFields、paginate、readFields、WAIT_ID_PATTERN、StopOutcome 和 textResult；jobs/agents 的列表、读取、停止及共享 wait 复用这些定义。领域状态与业务字段保留在对应模块，不另建通用对象注册表。
+`runtime/tools.ts` 提供共享的 ID 校验、列表字段与分页、读取字段、停止结果类型和文本结果构造函数。各模块定义自己的业务字段和状态。
 
 | 契约 | 当前规则 |
 | --- | --- |
 | 对象 ID | job_/agent_/run_ 后接 8 位小写十六进制，wf_ 后接 12 位；task 组为递增数字字符串、子任务为 `组.序号`（如 `1.2`），执行工具只接受子任务 ID，goal 使用当前目标契约的精确 goalId |
 | 单项与列表 | task/job/agent 使用 list 与 get 独立入口；列表没有单项 id，agent_list.agentId 可与历史筛选组合。tasks 默认 unfinished，jobs/agents 默认 active/session，agent 另有 queued |
 | 分页 | limit 默认 10、最大 100；同时限制约 4 KiB 页面正文，按记录边界返回 nextCursor。jobs/agents 按创建时间与 ID 倒序；tasks 按组创建时间、组/子 ID 正序，中间页补充组上下文 |
-| 字节读取 | limitBytes 默认 4096、最大 65536；offset 为原始字节位置，处理 UTF-8 边界；返回 text/stream/offset/nextOffset/totalBytes/endOfStream 及截断或搜索信息 |
-| 搜索 | 正则与 /re/flags 共用读取语法；context 默认 2、最大 20，不能脱离 search 单独使用 |
-| 等待 | wait.ids 为 1–50 个 job/agent/workflow ID，mode 默认 all；timeoutMs 默认 300000、最大 3600000，只结束此次调用，不停止对象 |
+| 字节读取 | `limitBytes` 默认 4096，范围 64–65536。`offset` 按原始字节计数，连续分页避开 UTF-8 字符中间。返回 `text`、`stream`、`offset`、`nextOffset`、`totalBytes`、`endOfStream` 及截断或搜索信息 |
+| 搜索 | `search` 接受 1–500 字符的正则。裸表达式忽略大小写，`/re/flags` 可显式指定标志（`g` 被移除）。每页最多 50 个匹配；`context` 为 0–20 行，默认 2，仅与 `search` 一起使用 |
+| 等待 | `ids` 为 1–50 个 job、agent 或 workflow ID，`mode` 可选 `all`（默认）或 `any`。`timeoutMs` 默认 300000，范围 1–3600000。提前返回、取消和结果消费见[共享等待](index.md#共享等待) |
 | 停止 | requested/state/cleanup/affected，affected 列出真实受影响对象；清理尚未确认时不报告全部停止 |
 
-单对象操作首行显示对象摘要，列表与 wait 显示集合摘要，goal 显示目标动作；其后提供实际变化、失败、问题与必要读取入口，固定操作说明位于工具描述。普通回执目标 1–3 行、约 512 B；批量新 ID、父级待答问题/选项、真实答案与评论、错误与清理结果优先于预算。details 保存同一结果的结构化字段，用于本地显示和控制，Provider 的模型正文使用 content。ask_user 主会话与 child 共用文本结果格式：状态、逐题编号、≤24 Unicode 码点短题干和真实答案，同名选项按原列表 #N 消歧；所选答案、评论、自定义输入不截断，完整 questions/options 和响应结构保存在 details。题目不提供 context，选项保留 description；历史记录只读展示，不回写。timed_out/skipped 明确 not consent，自动选择逐题标记 auto-selected；skipped 保留部分作答，未答项为 unanswered；cancelled 保留取消状态，不提供授权；child 追加 source: parent。完整输出与日志通过 read 按需读取，规则见 [jobs 读取与操作](../jobs/index.md)。
+单项结果首行是对象摘要，列表与 wait 首行是集合摘要，goal 首行是目标动作。后续行给出实际变化、失败、问题与需要的后续调用。普通回执以 1–3 行、约 512 B 为目标；新 ID、父级待答问题及选项、答案与评论、错误和清理结果优先完整返回。`content` 是模型正文，`details` 保存供显示和控制使用的结构化结果。
 
-runtime/read.ts 的 readContinuation 共用 offset/search/context/limitBytes 续读字段，job_read 与 agent_read 的 more 提示保留当前读取方式。默认截断的 keys 数组记录所选匹配行及上下文原始范围；正文明确标注遗漏，full 提示使用 offset:0 进入连续读取；搜索正文、上下文和标注共同计入字节预算，超长返回行显式截断，boundedText 也供结算预览复用。
+主会话和 child 的 `ask_user` 使用同一格式：状态、逐题编号、最多 24 个 Unicode 码点的短题干，以及完整的答案、评论和自定义输入。同名选项按原列表中的 `#N` 区分。`details` 保存完整题目、选项和回复。题目没有 `context`，选项可有 `description`；历史只读。`timed_out` 和 `skipped` 明示 `not consent`，自动选择逐题标为 `auto-selected`。`skipped` 保留部分作答，未答项标为 `unanswered`。`cancelled` 表示取消，不提供授权。child 结果附 `source: parent`。
 
-逻辑行按块累积，仅在 LF 或 EOF 合并一次；匹配前保留整行，匹配后按返回预算保存上下文。组装与原始字节扫描为线性成本，单行缓冲及解码内存随最长逻辑行增长。boundedText 只编码可能进入返回值的前缀，避免为小预览分配整行的 UTF-8 副本。
+`job_read` 和 `agent_read` 复用 `runtime/read.ts`。默认截断时，`truncated.keys` 记录选中行及上下文的原始字节区间，正文标明省略范围。`full:` 从 `offset: 0` 开始连续读取；`more:` 用 `nextOffset` 接着读。两种提示都通过 `readContinuation`（生成续读参数）保留本次的搜索、上下文和字节上限。搜索正文、上下文和标注一起计入字节上限。超长行显式截断；结算预览也用 `boundedText`（按 UTF-8 字节数截断）。
+
+读取器逐块扫描原始字节，到 LF 或 EOF 时才合并一行。整行参与匹配，返回时才按预算截断。扫描和拼接成本随输入线性增长，单行缓冲和解码占用随最长行增长。`boundedText` 只编码可能返回的前缀。
 
 agent 工具使用稳定 ID，runId 按需选择历史执行；handle/alias 的发送与补全属于 TUI 提及入口，见 [agents 操作](../agents/operations.md)。jobs 与 agents 共用生命周期语义，领域终态分别包含 timed_out 与 limited；活动判断还核对真实清理边界。
 
@@ -38,15 +40,13 @@ ToolView.expanded 可返回结构化 ToolLine、ToolField、ToolCode、ToolComma
 
 状态图标为 ⟳ 进行中、⧗ 排队、? 等待、✔ 完成、✘ 失败、⊘ 停止/跳过/取消、⏱ 超时/受限；tasks 使用自己的 ☐/⟳/⚠/☑ 语义。主会话中的单项鼠标展开与 app.tools.expand（默认 Ctrl+O）由 Pi 宿主管理，折叠行不追加操作提示。复杂阅读 overlay 的鼠标能力另见 [终端交互边界](../ui/terminal.md#原生阅读与鼠标)，不根据 renderer 或原生工具实例的存在推定事件能够命中。
 
-扩展工厂通过 runtime/renderers.ts 与 Pi registerToolRenderer 在加载阶段登记所有 Suite 工具的纯展示定义；childSuite 在绑定执行工具前调用同一登记入口，并传入 run.config.ui.highlightBuiltinCommands 的准入快照。child 的显示配置归属 run.configCwd，不根据可独立指定的执行目录 record.cwd 重读设置。registerSuiteRenderers 的可选参数接受固定布尔值或归属方提供的布尔 provider；主会话使用当前配置目录的 reload 快照。历史组件在 session_start 之前重建时即可使用，reload、resume 与重启沿用相同的摘要、展开和错误显示。展示注册不启用模型工具、不创建执行模块；模块关闭或当前工具选择未包含某工具时，其历史记录仍可阅读。已注册工具或其他扩展提供的 renderer 优先于历史展示定义。
+展示定义的注册时机见 [renderer 提前注册](index.md#renderer-提前注册)。模块关闭或工具未激活时，历史仍可阅读：渲染只读持久化的 `content` 和 `details`，不修改记录、不执行工具、不请求模型。
 
-runtime/tools.ts 的 registerToolRenderers 支持按工具名组合已有 renderer；live resolver 调用 next() 保留后续扩展与原生定义，纯展示 lookup 使用同一组合。ui.highlightBuiltinCommands 默认 true，仅增强内置模型 bash/powershell 的命令调用区；增强仍调用原生 renderCall 维护计时，保留 renderShell、renderResult、超时、部分参数、流式输出、截断、图片与展开能力。false 使用完整原生调用显示；已有第三方 self-shell 保留自身组合。用户 !/!! 的 BashExecutionComponent、原生 read/write 代码与 edit diff 不受该选项影响。
+`registerToolRenderers` 按工具名组合 renderer。Pi 已注册的 renderer 优先于历史默认值；实时显示通过 `next()` 取得后续扩展或原生定义，只读查询使用同样的组合。内置命令调用的选项、保留的原生行为以及 Jobs 和 Suite 的命令高亮见 [命令结构高亮](../ui/command-highlighting.md)。
 
-src/ui/rendering/command.ts 导出 commandComponent(command, shell, theme): Component，shell 为 bash 或 powershell，供 Jobs 顶部和 Suite ToolCommand 展开复用。返回组件显式采用 command 模式，根据执行位置区分程序、选项、变量、字符串与结构符号，不执行命令或查询程序／路径。普通 CodeComponent 保留原生 code 模式；ToolBody.setSource 将用途模式纳入同一行的更新判断。调用方保留组件实例并在主题/布局失效时 invalidate；主题改变重新着色，宽度改变只更新布局。Jobs 和 Suite 命令字段始终高亮，不受内置工具专用选项影响。词法、缓存及支持范围见 [命令结构高亮](../ui/command-highlighting.md)。
+Ask Transcript 使用共享 renderer 查询，child 查看器使用该次执行的 `run.renderers`。wait 折叠显示结算比例、失败数和提前返回原因，展开显示逐项摘要、`others` 和 `pending`。agent 摘要和 `pending` 里的 ID 可在显示时替换成内存记录中的名称，找不到则显示 ID；job、workflow、模型正文、通知和展开的 read/send 参数保持原 ID。
 
-runtime/tools.ts 的 registerBoundTool 同时登记运行时 renderer；首次加载只注册工具，运行时刷新保留活动工具选择，显式启用时加入该工具。renderer lookup 按 ExtensionAPI 隔离，主会话与 child 的 ask_user 可使用不同标题。Ask Transcript 使用同一查找，child 查看器使用实际 run.renderers；历史结果使用持久化 content/details 重新绘制，不改写记录、不重新执行工具或请求模型。wait 折叠只显示结算比例、失败计数与提前返回原因，展开保留逐项摘要、others 与 pending；普通 agent 的逐项主标识与 pending 按现有内存记录显示名称，无记录时保留 ID，job/workflow 显示不变。替换仅在渲染层进行，content、summaryLine、通知文本及展开正文中的 read/send 参数保持原始 ID 契约。
-
-pi-suite:notification 使用 Pi 默认消息显示，标题为 `[pi-suite:notification]`，正文保留通知中的 agent_/run_ ID；Suite 不注册专用消息 renderer。
+`pi-suite:notification` 有专用 renderer。它按 `details.segments` 隐藏 Goal 自动续跑片段。缺少匹配的元数据或真实事件含非文本内容时，交给 Pi 原生显示。格式见[通知消息格式](index.md#通知消息格式)。
 
 ## 错误边界
 

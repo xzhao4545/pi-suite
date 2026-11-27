@@ -33,7 +33,7 @@ export class WorkflowManager {
   changed = (): void => { for (const listener of [...this.listeners]) listener(); };
   get(id: string): OwnedWorkflowTask {
     const task = this.tasks.get(id);
-    if (!task) throw new ToolError('NOT_FOUND', `No workflow ${id}`, id);
+    if (!task) throw new ToolError('NOT_FOUND', `No workflow ${id}. Use a wf_ ID from this branch.`, id);
     return task;
   }
   jobManager(): JobManager { return this.jobs(); }
@@ -46,26 +46,26 @@ export class WorkflowManager {
       if (this.tasks.has(entry.id)) continue;
       const data = readWorkflowSnapshot(entry.recordPath);
       if (data.id !== entry.id || data.ownerSessionId !== entry.ownerSessionId || data.cwd !== entry.cwd || data.anchorEntryId !== entry.anchorEntryId) {
-        throw new ToolError('WORKFLOW_HISTORY', `Workflow snapshot identity mismatch: ${entry.id}`);
+        throw new ToolError('WORKFLOW_HISTORY', `Workflow snapshot identity mismatch: ${entry.id}. Use another run; this record and its snapshot refer to different owners or runs.`);
       }
       const latest = (entry.endTime ?? 0) >= (data.endTime ?? 0) && !workflowActive(entry) ? entry : data;
       const task = taskFromEntry({...latest, notified: data.notified || entry.notified});
       // A saved running snapshot has no thread in this process; preserve its journal for explicit replay.
-      if (workflowActive(task)) { failWorkflowTask(task, 'Workflow no longer has an execution owner; resume its journal from /subagents workflows'); }
+      if (workflowActive(task)) { failWorkflowTask(task, 'No live process owns this workflow. Replay its journal from /subagents Workflows or pass resumeFromRunId.'); }
       this.agents.restore(task.children);
       this.tasks.set(task.id, task);
     }
   }
   async start(params: WorkflowParams, scope: ParentScope, config: SuiteConfig, toolCallId?: string): Promise<OwnedWorkflowTask> {
-    if (this.closed || this.agents.closed) throw new ToolError('CLOSING', 'Pi is quitting; no new workflows');
-    if (scope.run) throw new ToolError('INVALID_ARGS', 'agent_workflow is available only to the main session');
-    if (!config.agents.workflows) throw new ToolError('INVALID_ARGS', 'agents.workflows is disabled');
+    if (this.closed || this.agents.closed) throw new ToolError('CLOSING', 'Pi is quitting. Start the workflow after reopening Pi.');
+    if (scope.run) throw new ToolError('INVALID_ARGS', 'agent_workflow only runs in the main session. Ask the main session to launch it.');
+    if (!config.agents.workflows) throw new ToolError('INVALID_ARGS', 'agents.workflows is disabled; use agent_start instead');
     scope = captureParent(scope); this.jobs();
     const source = resolveWorkflowScript(params, scope.ctx.cwd, {trusted: scope.ctx.isProjectTrusted(), packageGate: config.agents.packageWorkflows});
     if (!source.ok) throw new ToolError('INVALID_ARGS', source.message);
     const target = resolveResumeTarget(params.resumeFromRunId, this.tasks);
     if (target && !target.ok) throw new ToolError('INVALID_ARGS', target.message);
-    if (target && !this.visible(this.get(target.runId), scope)) throw new ToolError('NOT_OWNER', 'Resume target is outside this session branch');
+    if (target && !this.visible(this.get(target.runId), scope)) throw new ToolError('NOT_OWNER', 'Resume target is outside this session branch; pass a finished wf_ run from the current branch');
     const replay = target ? readJournal(target.journalPath) : undefined;
     const id = workflowRunId(), files = createWorkflowFiles(scope.owner!.ownerSessionId, id, source.script);
     const task = Object.assign(createWorkflowTask({id, script: source.script, ...files, args: params.args,
@@ -77,7 +77,7 @@ export class WorkflowManager {
     try { await store.save(workflowEntryData(task)); }
     finally { this.starting--; }
     // Quit can race the initial disk write, before a Worker has been admitted.
-    if (this.closed || this.agents.closed) throw new ToolError('CLOSING', 'Pi quit before workflow launch');
+    if (this.closed || this.agents.closed) throw new ToolError('CLOSING', 'Pi quit before the workflow could launch. Start it after reopening Pi.');
     this.tasks.set(id, task);
     const host = createWorkflowHost({scope, manager: this.agents, jobs: this.jobs, workflowId: id,
       signal: task.abortController.signal, config: () => loadConfig(task.cwd)});
@@ -149,7 +149,7 @@ export function workflowRuntime(agents = agentRuntime()): OwnerHandle<WorkflowMa
   const handle = acquireOwner(WORKFLOW_OWNER, 'workflow', agentDir, () => {
     const runtime = acquireRuntime(agentDir);
     return new WorkflowManager(agents.owner, () => {
-      if (runtime.mode !== 'active') throw new ToolError('RUNTIME_UNAVAILABLE', 'Workflow gate/cleanup requires the active jobs execution runtime');
+      if (runtime.mode !== 'active') throw new ToolError('RUNTIME_UNAVAILABLE', runtime.reason);
       return runtime.manager;
     });
   }, { matches: owner => owner.agents === agents.owner });

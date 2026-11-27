@@ -36,7 +36,7 @@ export async function readJobLog(manager: Pick<JobReader, 'logPath'>, job: JobSu
   const raw = await fileSource(manager.logPath(job, stream)), source = pty ? passwordSafeSource(raw) : raw;
   try {
     const page = await readBounded(source, request, render);
-    const note = pty && job.fullScreen ? '[Full-screen terminal output; use /jobs to view the live or last screen when available.]\n' : '';
+    const note = pty && job.fullScreen ? '[Full-screen terminal output; this text log may not match the screen. The user can view the screen in /jobs.]\n' : '';
     const budget = request.limitBytes ?? READ_LIMITS.defaultBytes;
     return {...page, text: note + (pty ? boundedText(page.text, budget) : page.text), stream};
   } finally { await source.close(); }

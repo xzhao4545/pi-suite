@@ -6,15 +6,15 @@ import type { GoalManager } from "./manager.ts";
 
 import { completeRenderers, blockedRenderers, waitRenderers } from './render.ts';
 
-const goalId = Type.String({ minLength: 1, description: "The exact goalId in the current owned goal contract" });
+const goalId = Type.String({ minLength: 1, description: "The exact goalId from the latest Goal instruction" });
 export function registerGoalTools(pi: ExtensionAPI, manager: GoalManager): void {
   registerBoundTool(pi, {
     name: "goal_complete",
     ...completeRenderers, label: "Goal Complete", executionMode: "sequential",
-    description: "Complete the current owned goal after auditing every original requirement with verification evidence. A new user-driven audit may close paused goals without resume or automatic execution. Completed is idempotent: original evidence, completion time and feedback are preserved. Partial or unverified work must not be completed.",
-    parameters: Type.Object({ goalId, summary: Type.String({ minLength: 1, maxLength: 4000 }) }),
+    description: "Mark the current goal complete after checking every original requirement. Do not complete partial or unverified work. Works while the goal runs, and in a user turn while it is paused. On an already completed goal it keeps the first summary.",
+    parameters: Type.Object({ goalId, summary: Type.String({ minLength: 1, maxLength: 4000, description: "Each requirement with the evidence that verifies it" }) }),
     async execute(_id, params, signal, _update, ctx) {
-      if (!params.summary.trim()) throw new ToolError("INVALID_ARGS", "Completion summary must include verification evidence", params.goalId);
+      if (!params.summary.trim()) throw new ToolError("INVALID_ARGS", "summary must list each requirement with its verification evidence", params.goalId);
       const changed = await manager.complete(params.goalId, params.summary, ctx, signal);
       const summary = manager.goal!.progress;
       return { content: [{ type: "text", text: `${changed ? "Goal complete" : "Goal already completed"}: ${summary}` }],
@@ -24,11 +24,11 @@ export function registerGoalTools(pi: ExtensionAPI, manager: GoalManager): void 
   registerBoundTool(pi, {
     name: "goal_blocked",
     ...blockedRenderers, label: "Goal Blocked", executionMode: "sequential",
-    description: "For an active owned execution turn only: pause for the same evidenced external blocker repeated for at least three consecutive goal turns. Incomplete work and ordinary clarification are not blockers.",
+    description: "Pause the running goal because of an external blocker you cannot resolve that has repeated for at least 3 consecutive goal turns. Unfinished work and questions for the user are not blockers; ask questions with ask_user.",
     parameters: Type.Object({ goalId, reason: Type.String({ minLength: 1, maxLength: 1000 }),
       evidence: Type.String({ minLength: 1, maxLength: 4000 }), repeatedTurns: Type.Integer({ minimum: 3 }) }),
     async execute(_id, params, signal, _update, ctx) {
-      if (!params.reason.trim() || !params.evidence.trim()) throw new ToolError("INVALID_ARGS", "Blocking requires a reason and concrete evidence", params.goalId);
+      if (!params.reason.trim() || !params.evidence.trim()) throw new ToolError("INVALID_ARGS", "reason and evidence must both be non-empty", params.goalId);
       await manager.block(params.goalId, params.reason, params.evidence, ctx, signal);
       return { content: [{ type: "text", text: `Goal paused: ${params.reason}` }], details: params, terminate: true };
     },
@@ -36,13 +36,16 @@ export function registerGoalTools(pi: ExtensionAPI, manager: GoalManager): void 
   registerBoundTool(pi, {
     name: "goal_wait",
     ...waitRenderers, label: "Goal Wait", executionMode: "sequential",
-    description: "For an active owned execution turn only: wait for an arranged external job/agent/event, with an optional single wake deadline. waitFor lists job_/agent_ IDs: the goal resumes only when all of them settle (or one asks a question) or the deadline passes; other notices do not end the wait. " +
-      "Without waitFor any external wake resumes it. Call alone; ordinary unfinished work should continue instead.",
-    parameters: Type.Object({ goalId, reason: Type.String({ minLength: 1, maxLength: 1000 }),
-      waitFor: Type.Optional(Type.Array(Type.String({ pattern: WAIT_ID_PATTERN }), { minItems: 1, maxItems: 50 })),
-      resumeAfterMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 2147483647 })) }, { additionalProperties: false }),
+    description: "Pause the running goal until external work you started (jobs, subagents, workflows) needs attention. Call it alone, and not for work you can do now. " +
+      "The goal resumes when the user sends a message, a direct subagent asks a question, or resumeAfterMs passes. " +
+      "With waitFor it also resumes when all listed IDs settle or a listed job emits a monitor event or hands-free update; without waitFor, any notification resumes it.",
+    parameters: Type.Object({ goalId, reason: Type.String({ minLength: 1, maxLength: 1000, description: "What the goal is waiting for" }),
+      waitFor: Type.Optional(Type.Array(Type.String({ pattern: WAIT_ID_PATTERN }), { minItems: 1, maxItems: 50,
+        description: "job_, agent_ or wf_ IDs. If all have already settled, the call returns without waiting." })),
+      resumeAfterMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 2147483647,
+        description: "Resume after this many milliseconds even if nothing else happens" })) }, { additionalProperties: false }),
     async execute(_id, params, signal, _update, ctx) {
-      if (!params.reason.trim()) throw new ToolError("INVALID_ARGS", "Waiting requires an external wake reason", params.goalId);
+      if (!params.reason.trim()) throw new ToolError("INVALID_ARGS", "reason must say what the goal is waiting for", params.goalId);
       const { waiting, settled } = await manager.wait(params.goalId, params.reason, params.resumeAfterMs, ctx, params.waitFor, signal);
       const note = settled.length ? `already settled: ${settled.join(", ")}` : undefined;
       if (!waiting) {

@@ -22,7 +22,7 @@ export class ScrollView extends NativeScrollView {
 
   constructor(content: Component, following = false) {
     const document = new ReadingContent(content, lines => this.measured(lines));
-    // U1 uses keyboard navigation; a hidden native scrollbar creates no activity timers.
+    // Reading is keyboard-driven; a hidden native scrollbar creates no activity timers.
     super(document, {follow: 'end', scrollbar: 'hidden', overscroll: 'contain'});
     this.document = document; this.content = content;
     this.scrollTo(0, {disableFollow: !following});

@@ -16,7 +16,7 @@ const usableName = (name: string) => name.length <= 128 && /^[a-zA-Z0-9][a-zA-Z0
 
 function readScript(path: string): string {
   const stat = statSync(path);
-  if (!stat.isFile() || stat.size > MAX_SCRIPT_LENGTH) throw new Error(`Workflow script must be a regular file within ${MAX_SCRIPT_LENGTH} bytes: ${path}`);
+  if (!stat.isFile() || stat.size > MAX_SCRIPT_LENGTH) throw new Error(`Cannot use ${path} as a workflow script. Choose a regular file of at most ${MAX_SCRIPT_LENGTH} bytes.`);
   return readFileSync(path, 'utf8');
 }
 function packageScripts(cwd: string, options: WorkflowResources) {

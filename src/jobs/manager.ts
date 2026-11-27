@@ -116,7 +116,7 @@ export class JobManager {
     this.admit(signal);
     const workspace = await resolveWorkspace(request.cwd);
     if (await this.store.workspaceBytes(workspace) >= LIMITS.workspaceBytes) {
-      throw new ToolError('WORKSPACE_CAPACITY', 'Workspace job history reached 1 GiB; clear finished jobs first');
+      throw new ToolError('WORKSPACE_CAPACITY', 'Workspace job history reached 1 GiB; ask the user to delete finished jobs in /jobs');
     }
     this.admit(signal);
     const id = this.store.allocate(workspace);

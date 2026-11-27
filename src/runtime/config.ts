@@ -21,11 +21,11 @@ export const configSchema = Type.Object({
     agents: Type.Optional(Type.Boolean()),
   }, { additionalProperties: false })),
   runtime: Type.Optional(Type.Object({
-    openAIResponsesAutoRecovery: Type.Optional(Type.Boolean({ description: "Automatic recovery for OpenAI Responses cross-resource errors." })),
+    openAIResponsesAutoRecovery: Type.Optional(Type.Boolean({ description: "Responses history ID recovery." })),
   }, { additionalProperties: false })),
   ui: Type.Optional(Type.Object({ maxRows: Type.Optional(Type.Integer({ minimum: 1, maximum: 30,
     description: "Idle Dock rows: 1–30 (default 12)." })),
-    highlightBuiltinCommands: Type.Optional(Type.Boolean({ description: "Built-in model Bash / PowerShell command highlighting (default true)." })) }, { additionalProperties: false })),
+    highlightBuiltinCommands: Type.Optional(Type.Boolean({ description: "Built-in Bash and PowerShell highlighting." })) }, { additionalProperties: false })),
   ask: Type.Optional(Type.Object({
     timeout: Type.Optional(Type.Integer({ minimum: 0, maximum: 2147483647 })),
     historyKey: Type.Optional(Type.String({ pattern: keyPattern })),

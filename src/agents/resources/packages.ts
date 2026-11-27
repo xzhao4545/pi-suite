@@ -13,14 +13,14 @@ const extensions = { agents: '.md', workflows: '.js' };
 function readManifest(root: string): Record<string, unknown> | undefined {
   try {
     const value: unknown = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ToolError('AGENT_CONFIG', `Invalid package manifest: ${root}`);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ToolError('AGENT_CONFIG', `Invalid package manifest: ${join(root, 'package.json')} must contain a JSON object.`);
     return value as Record<string, unknown>;
   } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error; }
 }
 function declaration(value: unknown): Partial<Record<PackageResourceKind, string[]>> | undefined {
   if (value === undefined) return;
   const object = Array.isArray(value) ? { agents: value } : value;
-  if (!object || typeof object !== 'object') throw new ToolError('AGENT_CONFIG', 'pi.subagents must be an array or an agents/workflows object');
+  if (!object || typeof object !== 'object') throw new ToolError('AGENT_CONFIG', 'pi.subagents in package.json must be an array or an object with agents/workflows arrays.');
   const result: Partial<Record<PackageResourceKind, string[]>> = {};
   for (const kind of ['agents', 'workflows'] as const) {
     const entries = (object as Record<string, unknown>)[kind];
@@ -72,21 +72,21 @@ export function packageResources(cwd: string, kind: PackageResourceKind, trusted
     const entries = readSubagentManifest(manifest)?.[kind];
     if (!entries) continue;
     const excluded = entries.filter(entry => entry.startsWith('!')).map(entry => resolve(root, entry.slice(1)));
-    for (const path of excluded) if (!inside(root, path)) throw new ToolError('AGENT_CONFIG', `Package exclusion is outside install root: ${path}`);
+    for (const path of excluded) if (!inside(root, path)) throw new ToolError('AGENT_CONFIG', `Package exclusion is outside install root: ${path}. Use a path inside the package.`);
     const exclusions = new Set(excluded.map(realOrSelf)), files = new Set<string>();
     for (const entry of entries) {
       if (entry.startsWith('!')) continue;
       const path = resolve(root, entry);
-      if (!inside(root, path)) throw new ToolError('AGENT_CONFIG', `Package resource is outside install root: ${path}`);
+      if (!inside(root, path)) throw new ToolError('AGENT_CONFIG', `Package resource is outside install root: ${path}. Declare a path inside the package.`);
       if (exclusions.has(realOrSelf(path))) continue;
       const stat = statSync(path);
       // Like the upstream agent loader, a declared directory contributes its direct files.
       const candidates = stat.isDirectory() ? readdirSync(path).sort().map(file => join(path, file)) : [path];
       for (const file of candidates) {
         if (!file.endsWith(extensions[kind]) || exclusions.has(realOrSelf(file))) continue;
-        if (!inside(root, file)) throw new ToolError('AGENT_CONFIG', `Package resource escapes install root: ${file}`);
+        if (!inside(root, file)) throw new ToolError('AGENT_CONFIG', `Package resource escapes install root: ${file}. Point it to a file inside the package.`);
         const info = statSync(file);
-        if (!info.isFile() || info.size > 1_048_576) throw new ToolError('AGENT_CONFIG', `Package resource must be a regular file within 1 MiB: ${file}`);
+        if (!info.isFile() || info.size > 1_048_576) throw new ToolError('AGENT_CONFIG', `Package resource must be a regular file of at most 1 MiB: ${file}. Change or remove the declaration.`);
         files.add(file);
       }
     }

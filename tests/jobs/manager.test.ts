@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -11,6 +11,18 @@ import { shellArgument } from "../../src/jobs/launch/presets.ts";
 const shell = testShell();
 const cwd = () => mkdtempSync(join(tmpdir(), "pi-suite-job-cwd-"));
 const rejectsCode = (promise: Promise<unknown>, code: string) => assert.rejects(promise, (error: { code?: string }) => error.code === code);
+
+test("workspace falls back to the canonical cwd without git", async t => {
+  const work = cwd(), path = process.env.PATH;
+  t.after(() => rmSync(work, { recursive: true, force: true }));
+  try {
+    process.env.PATH = work;
+    assert.equal((await resolveWorkspace(work)).root, realpathSync(work));
+  } finally {
+    if (path === undefined) delete process.env.PATH;
+    else process.env.PATH = path;
+  }
+});
 
 test("pipe job records stdout/stderr, exit code and monotonic elapsed time", { timeout: 20000 }, async () => {
   const jobs = manager();

@@ -32,7 +32,7 @@ test("real host rejects invalid goal evidence, continues unfinished work once, t
   } finally { await h.dispose(); }
 });
 
-test('real host user audits close paused goals without resume or budget execution, with idempotent completion', { timeout: 15000 }, async () => {
+test('real host grants completion access on manual or budget pauses and execution access on recoverable pauses', { timeout: 15000 }, async () => {
   const h = await host();
   try {
     for (const state of ['request_failed', 'manual', 'blocked', 'budget'] as const) {
@@ -45,14 +45,15 @@ test('real host user audits close paused goals without resume or budget executio
       if (state === 'manual') await h.session.prompt('/goal pause');
       assert.equal(h.goal()?.status, 'paused'); assert.equal(h.goal()?.reason?.kind, state); assert.equal(h.goal()?.automatic, false);
       const before = h.goal()!, calls = h.faux.state.callCount;
+      const resumes = state === 'request_failed' || state === 'blocked';
       h.faux.setResponses([context => {
-        assert.equal(h.goal()?.status, 'paused'); assert.equal(h.goal()?.automatic, false);
-        assert.equal(goalView(context).access, "complete");
+        assert.equal(h.goal()?.status, resumes ? 'active' : 'paused'); assert.equal(h.goal()?.automatic, resumes);
+        assert.equal(goalView(context).access, resumes ? 'execute' : 'complete');
         return complete(context);
       }]);
       await h.session.prompt('Audit existing work and close this goal only if every requirement is verified.'); await h.idle();
       assert.equal(h.faux.state.callCount, calls + 1); assert.equal(h.goal()?.status, 'completed');
-      assert.equal(h.goal()?.id, before.id); assert.equal(h.goal()?.elapsedMs, before.elapsedMs);
+      assert.equal(h.goal()?.id, before.id); if (!resumes) assert.equal(h.goal()?.elapsedMs, before.elapsedMs);
       assert.equal(h.goal()?.error, before.error); assert.equal(h.goal()?.turns, before.turns + 1);
       const at = h.goal()!.completedAt, progress = h.goal()!.progress;
       h.faux.setResponses([context => fauxAssistantMessage(fauxToolCall('goal_complete', { goalId: goalId(context), summary: 'Do not replace evidence' }))]);
@@ -191,22 +192,23 @@ test("reload/tree share the current Goal and never roll back to selected branch 
   } finally { await h.dispose(); }
 });
 
-test("manual compact aborts an active response and resumes once after host becomes idle", { timeout: 15000 }, async () => {
+test("manual compact aborts an active response without restarting the paused goal", { timeout: 15000 }, async () => {
   const h = await host({ compact: true, keepRecentTokens: 0, extend: pi => {
     pi.on("session_before_compact", event => ({ compaction: { summary: "Compacted safely",
       firstKeptEntryId: event.preparation.firstKeptEntryId, tokensBefore: event.preparation.tokensBefore } }));
   } });
-  const started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>(), resumed = Promise.withResolvers<void>();
+  const started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
   try {
     h.faux.setResponses([fauxAssistantMessage("Initial context")]);
     await h.session.prompt("Conversation before goal. ".repeat(100));
     h.faux.setResponses([
       async () => { started.resolve(); await release.promise; return fauxAssistantMessage("Cancelled while compacting"); },
-      context => { resumed.resolve(); return complete(context); },
+      complete,
     ]);
     await h.session.prompt("/goal Compact during work"); await started.promise;
-    const compacting = h.session.compact(); release.resolve(); await compacting;
-    await resumed.promise; await h.idle();
+    const compacting = h.session.compact(); release.resolve(); await compacting; await h.idle();
+    assert.equal(h.faux.state.callCount, 2); assert.equal(h.goal()?.reason?.kind, 'cancelled');
+    await h.session.prompt("Continue after compaction"); await h.idle();
     assert.equal(h.faux.state.callCount, 3); assert.equal(h.goal()?.status, "completed");
     assert.ok(h.writes.some(text => text?.startsWith("⏳ goal ")));
   } finally { release.resolve(); await h.dispose(); }

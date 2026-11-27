@@ -4,38 +4,62 @@
 
 ## 数据与提交
 
-存储版本为 4，封装包含 version、generation、可选 resetReason、nextId、tasks；generation 为清单代次，nextId 仅分配组号。任务记录包含 id、组的 nextChild、title、可选 description、可选 parentId、子任务 status、可选 blockedReason、blockedBy、可选 owner、jobIds、createdAt、updatedAt。父级进度与反向依赖属于查询派生数据。变更回执还报告未直接编辑但有效状态变化的依赖任务，以及跨组受影响进度；不为派生状态新增存储副本。读取 version:2 时保留组 ID 与 nextId，每组子任务按 createdAt、原数字 ID 排序分配 `组.序号`，同步映射全部 blockedBy，并把 nextChild 设为子任务数加一；version:2/3 通过严格历史 schema 校验后补充代次，下一次提交写入 version:4。持久未初始化目标的初始代次按文件路径确定，多个进程读取时一致；清空时生成全新代次。job、agent 和 schedule 的历史 taskId 保留原文本，缺少 taskGeneration 的关联明确失效，不能自动绑定新清单。
+存储写入 `version: 4`。`generation` 标识清单代次；持久文件尚无代次时，取 `initial:` 加文件路径的 SHA-256，使各进程第一次读取时得到同一值。
 
-同一 Pi 进程通过目标键取得同一个 TaskStore，每个目标的读写串行执行。持久化修改取得 `<file>.lock`，在锁内重读最新文件、复制数据并处理整个批次，再写唯一临时文件和原子重命名；校验失败或提交前取消不修改原文件和缓存。
+| 位置 | 字段 |
+| --- | --- |
+| 文件 | `version`、`generation`、可选 `resetReason`、`nextId`（下一个组号）、`tasks` |
+| 各任务 | `id`、`title`、可选 `description`、`blockedBy`、可选 `owner`（agent ID）、`jobIds`、`createdAt`、`updatedAt` |
+| 组 | `nextChild`（下一个子序号）；无 `status` |
+| 子任务 | `parentId`、`status`、可选 `blockedReason`；无 `nextChild` |
 
-锁、串行入口、快照与原子提交由公共 runtime/json-store.ts 提供，与 agents ScheduleStore 共用；TaskStore 定义任务 schema、层级校验、整批修改与执行关联。快照加载发生实际变化时广播订阅；TasksModule 与浏览器通过带错误回调的订阅启用目录 fs.watch，原子替换后合并短时间内的事件并串行读取。目录尚未创建时观察现有祖先，首次创建后转为目标目录；没有外部订阅者时释放 watcher 与刷新计时器。文件事件不调用模型，也不持续轮询；解析或监听错误明确显示，保留有效缓存。
+组进度和反向依赖在[查询时计算](index.md#结构与状态)，不单独存盘。编辑回执也列出未直接编辑但依赖状态发生变化的子任务和受影响的组进度。
 
-Windows 读取已有快照时也取得同一文件锁，使读取句柄在写入方原子替换前关闭；缺失快照直接返回当前状态，不创建任务目录。其他平台的快照继续读取原子发布的完整文件。删除中的 Windows 锁文件暂时不可打开时，竞争方在既有约 5 秒的锁等待范围内重试；取消与锁超时仍明确失败。
+读取时校验 JSON、版本、字段和两级结构：ID 须唯一；组号小于 `nextId`；子任务的 ID 前缀须等于 `parentId`，父级须为组，子序号须小于组的 `nextChild`。文件无效时报 `TASK_STORE_INVALID`，保留有效缓存且不覆盖该文件；文件缺失时使用当前内存值。
 
-锁令牌为 pid:uuid，以排他创建取得。等待使用 50 ms 的异步重试，最多约 5 秒；死进程的锁可回收，空令牌先容忍短暂写入窗口。释放前校验完整令牌，避免删除后继持有者的锁。进程身份按本机 PID 表判定。
+读取支持版本 2 和 3，均先按对应 schema 校验。版本 2 保留组 ID 和 `nextId`，按创建时间、原数字 ID 给每组子任务分配 `组.序号`，重写 `blockedBy`，设 `nextChild` 为子任务数加一。两种格式均在读取时补上代次，提交时写版本 4。job、agent 和 schedule 历史中的任务 ID 按记录展示；缺 `taskGeneration` 的引用无效。
 
-读取时校验 schema、ID 唯一、组号小于 nextId、组有 nextChild 且无 status、子任务前缀等于 parentId、子序号小于父组 nextChild、子任务有 status 且无 nextChild，以及两级父子关系；无效 JSON、版本或结构返回 TASK_STORE_INVALID，保留已有有效缓存并禁止覆盖错误文件。文件锁超时返回 TASK_LOCK_TIMEOUT。缺失文件表示当前目标尚无持久数据。
+同一进程中，相同目标键复用 `TaskStore`（任务存储实例），每个实例的读写串行。跨进程锁、Windows 读锁、临时文件、原子替换及取消检查见[公共 JSON 存储](../runtime/index.md#json-存储)。任务锁超时报 `TASK_LOCK_TIMEOUT`（约 5 秒）；编辑在锁内重读并校验代次，整批通过才提交，校验失败或提交前取消时文件和缓存都不变。
+
+`TasksModule` 和查看器注册带错误回调的订阅后才启用目录监听。有效快照变化时刷新订阅；无订阅者时停止监听和刷新计时器。文件事件不持续轮询或调用模型；解析和监听错误通过通知报告。
 
 ## 会话边界
 
-- new 使用独立会话清单。
-- resume/reload 按当前 cwd 和会话 ID 取得原清单；绑定时非空且全部完成的清单原子清空，不重放完成反馈，未完成清单保留 ID 与代次。
-- 持久来源的 fork 只读 previousSessionFile 的首个非空 JSONL 会话头，校验有效的 session 类型、cwd 和 id 后，按源头实际 cwd/id 定位父清单；不调用可能初始化或修复源文件的 SessionManager.open。UTF-8 流按 LF 分行，保留跨块字符及 JSON 字符串中的 U+2028/U+2029，接受 EOF 不带 LF 的会话头。读取或解析错误通过 notify 报错，不修复源文件、不播种目标，也不报告继承成功。
-- 父清单通过 snapshot 只读取得包含 nextId 与各组 nextChild 的完整快照，播种独立目标；目标使用自己的 generation，即使数值 ID 相同，源任务引用也不能操作目标。seed 使用目标 Store 的串行入口，并在持久目标锁内重读、检查首次使用条件和原子提交。目标绑定时可清空已全部完成的副本，不修改源清单；子清单修改不影响父清单，已经使用或清空过的目标不会重新播种。单纯 delete 清空的源保留计数器，完整快照仍继承该计数器。
-- 内存来源的 fork 没有 previousSessionFile，使用独立清单并明确 warning：源任务未复制，当前 fork 使用独立任务列表；不自动继承，也不为继承偷偷落盘。普通内存会话与 reload 仍按实际 cwd/会话 ID 复用清单。
-- cwd 改变时重新定位存储，不把另一工作区的清单写入当前文件。
-- 会话撤销时解除订阅并清除显示计时器；已经捕获的执行关联仍指向原清单，不能随会话切换转移到另一任务。
+| 操作 | 清单 |
+| --- | --- |
+| new | 新会话使用独立清单。 |
+| resume / reload | 按当前 `cwd` 和会话 ID 复用清单，保留未完成清单的 ID 和代次。 |
+| fork，源会话有文件 | 从源会话复制完整快照到独立清单，流程见下文。 |
+| fork，源会话仅在内存 | 使用独立清单并通知源任务未复制。不为继承写盘。 |
+| 切换 `cwd` | 按新目录定位清单，不向另一工作区的文件写入。 |
 
-agents 的 child 与嵌套 child 按各自实际 cwd、child 会话 ID 与持久化设置取得私有 TaskStore。持久 child 使用同一 `tasks-<childSessionId>.json` 文件协议；非持久 child 使用 `memory:<绝对cwd>:<childSessionId>` 目标键。持久化设置由执行准入确定，不因 SDK 首次会话文件发布时机改变存储目标。TaskStore 注册表仅在目标键相同时复用存储与串行入口，空私有清单不创建文件；私有清单的订阅与提醒归属 child，不进入主会话 Dock。
+持久 fork：
 
-带 taskId 的 child 另行捕获直接父级的私有清单及 taskGeneration（顶级 child 则为主会话清单），仅通过 scope:assigned 读取或更新被分配任务的进度；默认 scope:local 不触及父级。主会话 reload 或 fork 时，存活 child 的分配任务引用仍指向原父级清单与代次，fork 清单独立。回到原 owner 后，稳定 agent ID 的恢复复用原 child 会话 ID、私有清单、taskId 与 taskGeneration，并校验分配任务仍存在且代次有效；过期关联明确拒绝恢复，不隐式重新分配。清单没有执行重新关联系统或额外存储副本。
+1. 只读打开 `previousSessionFile`（源会话 JSONL），读取第一个非空头，要求 `type: "session"`、`cwd` 和 `id`。按 LF 分行，允许头在 EOF 结束；UTF-8 流保留跨块字符和字符串中的 U+2028/U+2029。不调用可能初始化或修复源文件的 `SessionManager.open`。读取或校验出错时通过通知报告，不向目标写入副本。
+2. 按头中的 `cwd` 和 `id` 取得源清单快照，包含 `nextId` 和各组 `nextChild`。即使源任务已逐项删除，计数器仍会复制。
+3. 在目标的串行入口和文件锁内重读目标。仅当目标为空、`nextId` 为 1 且仍是初始代次时，`seed`（复制快照的操作）才写入，所以已使用或清空过的目标不会重新播种。目标保留自己的代次；相同数字 ID 也不能混用。后续任务编辑和绑定恢复都不会改写源清单。
+
+读取或校验出错时不报告继承成功。
+
+解除会话绑定时，取消订阅并清除显示计时器；执行引用仍指向启动时捕获的清单。child 和嵌套 child 各自按实际 `cwd`、child 会话 ID 和启动时确定的持久化设置选择私有存储，不依赖 SDK 何时创建会话文件。持久 child 使用 `tasks-<childSessionId>.json`；内存 child 使用 `memory:<绝对cwd>:<childSessionId>` 键。只有目标键相同才复用存储实例；空的私有清单不创建文件。私有清单的订阅和提醒只归该 child。
+
+带 `taskId` 启动的 child 另外捕获直接父级的清单及 `taskGeneration`；顶级 child 的父级清单就是主会话清单。
+
+主会话 reload 或 fork 不改变仍在运行的 child 所引用的父清单和代次。回到原父会话恢复 agent 时，复用其 child 会话 ID、私有清单和原任务引用，并校验任务存在且代次匹配；引用过期时拒绝恢复，不隐式重新分配。没有单独的重新关联机制或额外的存储副本。接口权限和操作见 [child 任务范围](operations.md#child-任务范围)。
 
 ## 清空与引用有效性
 
-非空清单的全部有效任务完成时，TaskStore 在同一编辑事务内自动清空 tasks、依赖和执行关联，重置 nextId=1 并轮换 generation；空组不算完成，空清单不触发自动清空。owner 的 task_edit clear 使用同一锁内替换，空清单也轮换代次；不保存任务历史或归档。delete 仅删除指定项并移除相应依赖，保留递增计数器。
+非空清单的有效状态全部为 `done` 时，同一编辑事务会清空 `tasks`（包括依赖和执行引用），将 `nextId` 重置为 1，并生成新代次。空组不算完成，空清单不会自动清空。本地范围的 `clear` 在同一把锁内替换整份清单，对空清单也会换代次。两种清空分别记录 `resetReason: "completed"` 或 `"clear"`；回执首行是新的 `generation`，`cleared` 给出原因。存储只保留 `resetReason`，不保存任务历史或归档。逐项 `delete` 只删除指定任务并移除指向它的依赖，保留递增计数器，同代次中不复用编号。
 
-引用任务的 get/edit、按组或 cursor 翻页、执行准入/link 都须携带源 generation；清空等待锁期间再次校验，过期返回 TASK_STALE，缺少代次返回 TASK_GENERATION_REQUIRED（工具 schema 缺参也会在参数边界拒绝）。task_list({}) 是发现当前代次的入口。clear 不停止 child/job，也不完成 Goal；已捕获执行继续运行，但过期任务写入不能命中重新使用的 1.1。reload 遇到进程内无代次 Store 时先撤销其写入口并等待已接纳事务，再发布当前 Store，避免迟到写入覆盖重用编号。
+以下操作都须携带取得引用时的源代次：按 ID 的 `task_get`/`task_edit`、按组或 `cursor` 翻页、执行启动与关联。
 
-持久数据只保留 resetReason，不保存已删除任务。真实完成后的 5 秒 UI 反馈只使用当前绑定内的短期显示行，代次包含在 Dock/浏览器选择键中；过期选择不能打开新同名任务。绑定恢复只清理当前目标的已完成数据，不扫描其他会话或工作区，不更改 fork 源。
+| 错误 | 处理 |
+| --- | --- |
+| `TASK_GENERATION_REQUIRED` | 引用缺少源代次。先用 `task_list({})` 读取本地清单；分配任务使用分配时的代次。缺少必填参数时，工具参数校验会先拒绝。 |
+| `TASK_STALE` | 清单代次不符。重新读取清单并确认是哪个任务，不能把旧执行绑定到重用的 ID。 |
+
+等待锁后才校验写入的代次，所以排队期间发生的清空也会被识别。reload 若遇到进程中没有代次的存储实例，先阻止它接受新读写并等待已接纳事务，再交给当前实例，避免迟到写入命中重用 ID。
+
+绑定恢复时只清空当前清单中已全部完成的数据，不扫描其他会话或工作区，也不改 fork 源。恢复不触发 [Dock 完成反馈](operations.md#常驻摘要)。清空与执行的关系见[执行引用](index.md#执行引用)。
 
 [返回任务索引](index.md)

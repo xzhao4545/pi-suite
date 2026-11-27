@@ -66,10 +66,10 @@ export function validateHierarchy(data: TaskData): void {
 export function applyChanges(data: TaskData, changes: TaskChange[]): EditResult {
   const receipts: EditReceipt[] = [], warnings: string[] = [], affected = new Set<string>();
   const previous = new Map(taskViews(data).map(task => [task.id, task.status]));
-  const find = (id: string) => { const task = data.tasks.find(task => task.id === id); if (!task) throw new Error(`No task ${id}`); return task; };
-  const group = (id: string) => { const task = find(id); if (task.parentId) throw new Error(`${id} is a child, not a group`); return task; };
+  const find = (id: string) => { const task = data.tasks.find(task => task.id === id); if (!task) throw new Error(`No task ${id}. Find IDs with task_list({"state":"all"}).`); return task; };
+  const group = (id: string) => { const task = find(id); if (task.parentId) throw new Error(`${id} is a child. Set parentId to a group ID.`); return task; };
   const create = (title: string, description?: string, parentId?: string): Task => {
-    if (!title.trim()) throw new Error('title must contain text');
+    if (!title.trim()) throw new Error('Title is blank. Enter a nonblank title.');
     const parent = parentId ? group(parentId) : undefined;
     const id = parent ? `${parent.id}.${parent.nextChild!++}` : String(data.nextId++);
     const task: Task = { id, title: title.trim(), ...(description ? { description } : {}),
@@ -83,7 +83,7 @@ export function applyChanges(data: TaskData, changes: TaskChange[]): EditResult 
       if (input.op === 'add' || input.op === 'update' || input.op === 'delete') change = input;
       else {
         const task = find(input.id);
-        if (!task.parentId) throw new Error('Execution operations need a child ID; group progress is derived');
+        if (!task.parentId) throw new Error('This operation needs a child ID, not a group ID. Supply a child ID such as 1.2.');
         const status = input.op === 'start' ? 'doing' : input.op === 'done' ? 'done' : input.op === 'block'
           ? task.status === 'done' ? 'done' : 'blocked' : task.status === 'blocked' ? 'todo' : task.status;
         change = { op: 'update', id: task.id, status,
@@ -102,15 +102,15 @@ export function applyChanges(data: TaskData, changes: TaskChange[]): EditResult 
       let task: Task;
       if (change.op === 'add') {
         if (change.parentId) group(change.parentId);
-        if (!change.parentId && change.status !== undefined) throw new Error('Group status is derived from its children');
-        if (change.parentId && change.children !== undefined) throw new Error('Children cannot contain children');
+        if (!change.parentId && change.status !== undefined) throw new Error('Group status comes from its children. Omit status.');
+        if (change.parentId && change.children !== undefined) throw new Error('Child tasks cannot have children. Omit children.');
         task = create(change.title, change.description, change.parentId);
         for (const title of change.children ?? []) create(title, undefined, task.id);
       } else {
         task = find(change.id); affected.add(task.parentId ?? task.id);
-        if (change.status !== undefined && !task.parentId) throw new Error('Group status is derived from its children');
-        if (change.blockedReason !== undefined && (change.status ?? task.status) !== 'blocked') throw new Error('blockedReason requires a blocked child');
-        if (change.title !== undefined && !change.title.trim()) throw new Error('title must contain text');
+        if (change.status !== undefined && !task.parentId) throw new Error('Group status comes from its children. Change a child task\'s status instead.');
+        if (change.blockedReason !== undefined && (change.status ?? task.status) !== 'blocked') throw new Error('blockedReason requires a manually blocked child. Set status to blocked or omit blockedReason.');
+        if (change.title !== undefined && !change.title.trim()) throw new Error('Title is blank. Enter a nonblank title.');
       }
       const fields: Record<string, unknown> = {};
       for (const key of ['title', 'description', 'status', 'blockedBy', 'blockedReason'] as const) {

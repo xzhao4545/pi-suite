@@ -1,5 +1,5 @@
 import type { KeybindingsManager, Theme } from '@earendil-works/pi-coding-agent';
-import { Container, Key, Text, VStack, HStack, matchesKey, truncateToWidth, type TUI, type TuiMouseEvent } from '@earendil-works/pi-tui';
+import { Container, Key, VStack, HStack, matchesKey, truncateToWidth, type TUI, type TuiMouseEvent } from '@earendil-works/pi-tui';
 import { DetailsView } from '../../ui/details.ts';
 import { ScrollView } from '../../ui/scroll.ts';
 import { separator, focusLabel } from '../../ui/browser-chrome.ts';
@@ -8,11 +8,11 @@ import { commandComponent } from '../../ui/rendering/command.ts';
 import { DoubleLeft, type ViewerNavigation } from '../../ui/viewer/navigation.ts';
 import { TerminalView, type TerminalExit, type TerminalSource, type TerminalKeys } from '../../ui/terminal.ts';
 import type { DetailAction } from '../../ui/actions.ts';
-import { sanitizeText } from '../../runtime/text.ts';
+import { detailsContent, part } from '../../ui/structured-details.ts';
 import type { JobControl } from '../control.ts';
 import type { JobManager } from '../manager.ts';
 import { JobLogView } from '../log-viewer.ts';
-import { jobDetail, streamsOf } from '../query.ts';
+import { jobViewerDetails, streamsOf } from '../query.ts';
 import { isActive } from '../state.ts';
 import type { JobSummary, Stream } from '../types.ts';
 import { jobRow } from './metadata.ts';
@@ -91,7 +91,7 @@ export class JobView extends Container {
     {key: 'd', label: 'Details', run: () => this.showDetails()},
     {key: 'c', label: 'Command', run: () => { this.expanded = !this.expanded; this.commandFocus = false; if (!this.expanded) this.command.offset = 0; }},
     {key: 's', label: 'Switch stream', available: () => !this.busy, run: () => this.perform(() => this.switchStream())},
-    {key: 'x', label: 'Stop process and children (keep history)', confirm: true,
+    {key: 'x', label: 'Stop job and children', confirm: true,
       available: () => !this.options.readonly && this.options.live && isActive(this.job) && !this.busy,
       run: () => this.perform(async () => {
         const result = await this.options.control.stop(this.job.id, 'user'); this.job = result.job;
@@ -99,7 +99,7 @@ export class JobView extends Container {
           ? `Stop ${result.job.state}; cleanup ${result.job.cleanup.state}${result.job.cleanup.error ? `: ${result.job.cleanup.error}` : ''}`
           : `Stop result: ${result.job.state} · cleanup ${result.job.cleanup.state}`;
       })},
-    {key: 'delete', label: 'Delete history, all logs and terminal snapshot', confirm: true,
+    {key: 'delete', label: 'Delete job and logs', confirm: true,
       available: () => !this.options.readonly && !!this.options.control.clear && !isActive(this.job) && !['pending', 'unconfirmed'].includes(this.job.cleanup.state) && !this.busy,
       run: () => this.perform(async () => {
         // Deletion emits a manager change after removing the identity. Release this
@@ -136,11 +136,12 @@ export class JobView extends Container {
   }
   private showDetails(): void {
     this.doubleLeft.reset();
-    const text = [`ID: ${this.job.id}`, ...jobDetail(this.job, true),
-      ...!this.options.live ? ['history only: not controlled by this Pi process'] : [],
-      ...this.job.mode === 'pty' && !this.options.source ? ['Terminal screen unavailable: no live terminal or readable final snapshot. Saved logs remain readable.'] : [],
-      'All saved fields:', JSON.stringify(this.job, null, 2)].join('\n');
-    this.details = new DetailsView(this.tui, () => 'Job details', new Text(sanitizeText(text), 0, 0), () => {
+    const details = jobViewerDetails(this.job, this.options.live);
+    const content = detailsContent({rows: [...details.rows,
+      this.job.mode === 'pty' && !this.options.source ? [part('Terminal screen unavailable; logs only.', 'meta')] : undefined,
+      null, [part('All saved fields:', 'label')], JSON.stringify(this.job, null, 2),
+    ]}, this.theme);
+    this.details = new DetailsView(this.tui, () => 'Job details', content, () => {
       this.details?.dispose(); this.details = undefined;
       if (this.options.navigation.closed) this.finish(); this.tui.requestRender();
     }, [], undefined, this.theme, {navigation: this.options.navigation, keys: this.bindings});
@@ -192,8 +193,8 @@ export class JobView extends Container {
     this.output.handleInput(data);
   }
   override handleMouse(event: TuiMouseEvent): ReturnType<Container['handleMouse']> {
-    // Keep the terminal's own existing wheel/history behavior; U1 does not route
-    // mouse events into nested text readers, command panes or tool components.
+    // Only the terminal screen handles the wheel; nested text readers and the command pane
+    // have no mouse routing, so their events stay unhandled.
     if (this.details || this.selected !== 'terminal') return undefined;
     const result = this.terminal?.handleMouse({...event, y: event.y - this.commandRows - 2});
     return result && {handled: true, target: {component: this, originX: event.screenX - event.x,

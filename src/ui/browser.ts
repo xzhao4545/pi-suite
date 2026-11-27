@@ -11,8 +11,9 @@ import { openReading, readingRows, readingText, readingWindow } from './reading.
 import { DoubleLeft, type ViewerNavigation } from './viewer/navigation.ts';
 import { controlRows, cycle, divider, displayText, emptyRow, focusLabel, keyHint, paneHeading, readerHeading, recordStyle, selectedRow, separator, statusLabels, statusRow, titleRow, type BrowseChoice, type BrowseControl, type BrowseSelection, type DisplayText } from './browser-chrome.ts';
 export type { BrowseChoice, BrowseControl, BrowseSelection } from './browser-chrome.ts';
+import { detailsContent, type StructuredDetails } from './structured-details.ts';
 
-export interface BrowseItem extends SelectItem { search?: string; status?: string; display?: DisplayText; details?: () => string | Component }
+export interface BrowseItem extends SelectItem { search?: string; status?: string; display?: DisplayText; details?: () => string | StructuredDetails | Component }
 export type BrowseLayout = Omit<SelectListLayoutOptions, 'truncatePrimary'> & {
   truncatePrimary?: (context: Parameters<NonNullable<SelectListLayoutOptions['truncatePrimary']>>[0] & {theme?: Theme}) => string;
 };
@@ -144,7 +145,8 @@ export class BrowserView extends Container {
     if (!item?.details) { this.reader = undefined; return; }
     // Each identity retains its own search and scroll when another row or action is opened.
     const details = item.details();
-    const content = typeof details === 'string' ? new Text(sanitizeText(details), 0, 0) : details;
+    const content = typeof details === 'string' ? new Text(sanitizeText(details), 0, 0)
+      : 'rows' in details ? detailsContent(details, this.theme) : details;
     this.reader = this.options.state.readers.get(item.value);
     if (this.reader) this.reader.setContent(content);
     else { this.reader = new ScrollView(content); this.options.state.readers.set(item.value, this.reader); }

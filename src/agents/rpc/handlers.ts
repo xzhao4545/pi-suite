@@ -22,7 +22,7 @@ function handleRpc<P extends { requestId: string }>(events: EventBus, channel: s
   return events.on(channel, async raw => {
     const params = raw as P;
     try {
-      if (typeof params?.requestId !== 'string' || !params.requestId.trim()) throw new Error('requestId must be a non-empty string');
+      if (typeof params?.requestId !== 'string' || !params.requestId.trim()) throw new Error('Invalid requestId. Resend with a non-empty string.');
       const data = await fn(params);
       const reply: RpcReply<unknown> = { success: true };
       if (data !== undefined) reply.data = data;
@@ -37,8 +37,8 @@ export function registerRpcHandlers(deps: RpcDeps): () => void {
   const { events } = deps;
   const assertOwned = (id: string): AgentRecord => {
     const record = deps.getRecord(id);
-    if (!record) throw new Error('Agent not found');
-    if (!isTopLevelAgent(record)) throw new Error('Agent is owned by another agent or workflow');
+    if (!record) throw new Error('Agent not found. Use an agent ID from this session and branch.');
+    if (!isTopLevelAgent(record)) throw new Error('Agent is owned by another agent or workflow. Use a top-level agent ID.');
     return record;
   };
   const unsubscribers = [
@@ -49,12 +49,12 @@ export function registerRpcHandlers(deps: RpcDeps): () => void {
       assertOwned(agentId); return deps.stop(agentId);
     }),
     handleRpc<{ requestId: string; agentId: string }>(events, 'subagents:rpc:consume', ({ agentId }) => {
-      // Keep this prefix synchronous: completion listeners may consume before notification admission.
+      // Keep consumption synchronous so completion listeners can prevent the notice from being queued.
       assertOwned(agentId);
-      if (!deps.consume(agentId)) throw new Error('Agent not found or still running');
+      if (!deps.consume(agentId)) throw new Error('Agent has not settled. Consume after subagents:completed or subagents:failed.');
     }),
     handleRpc<{ requestId: string; agentId: string; message: unknown }>(events, 'subagents:rpc:steer', ({ agentId, message }) => {
-      if (typeof message !== 'string' || !message.trim()) throw new Error('Steer message must be a non-empty string');
+      if (typeof message !== 'string' || !message.trim()) throw new Error('Invalid steer message. Resend with a non-empty string.');
       assertOwned(agentId); return deps.steer(agentId, message);
     }),
   ];

@@ -1,4 +1,4 @@
-import type { AgentSession, ContextUsage, ExtensionContext, SessionEntry, SessionManager, SessionStats, ToolRenderers } from '@earendil-works/pi-coding-agent';
+import type { AgentSession, ContextUsage, ExtensionContext, ExtensionRunner, SessionEntry, SessionManager, SessionStats, ToolRenderers } from '@earendil-works/pi-coding-agent';
 import type { Model } from '@earendil-works/pi-ai';
 import type { AskParams, AskResult, Question } from '../ask/schema.ts';
 import type { TaskStore } from '../tasks/store.ts';
@@ -31,7 +31,7 @@ export interface AgentRecord {
   model: string; modelSource: ModelSource; thinking: Thinking; thinkingSource: ModelSource;
   sessionFile?: string; endLeafId?: string | null; persisted: boolean;
   result?: string; error?: string; usage?: Pick<SessionStats, 'tokens' | 'cost'>;
-  /** Last SDK context estimate for this run; null tokens mean compaction has no new usage yet. */
+  /** Last SDK context estimate for this run; null tokens mean usage is unknown. */
   contextUsage?: ContextUsage;
   taskId?: string; taskGeneration?: string; handle?: string; alias?: string; scheduleId?: string; workflowId?: string; description?: string;
   structuredJson?: string; structuredRetried?: boolean; compactionCount?: number;
@@ -70,14 +70,18 @@ export type PendingQuestion = {
 /** Runtime handles belong to one run, never to the stable agent ID. */
 export interface Execution {
   record: AgentRecord; type: AgentType; model: Model<any>; parent: ParentScope;
-  /** Bound child-session store retained for descendant admission; absent when its task module is disabled. */
+  /** The child's private task list, used when it starts a nested agent. */
   taskStore?: TaskStore;
   controller: AbortController; done: PromiseWithResolvers<AgentRecord>; chargedPool?: Pool;
   startedMonotonic?: number; session?: AgentSession; sessionManager?: SessionManager; entries?: SessionEntry[]; question?: PendingQuestion;
   settled?: boolean; terminated?: boolean; streamingEntry?: SessionEntry;
   liveResults?: Map<string, SessionEntry>; renderers?: Map<string, ToolRenderers>;
+  customRenderers?: Pick<ExtensionRunner, 'getMessageRenderer' | 'getEntryRenderer'>;
   pendingMessages: string[]; consumed: boolean; notifyResult?: boolean; maxTurns?: number;
   request: StartAgent; config: SuiteConfig; isolated?: boolean; inheritedContext?: string; bypassQueue?: boolean;
   configCwd: string; configTrusted: boolean; options: StartOptions; startup?: PromiseWithResolvers<string | undefined>; detachAbort?: () => void;
   foreground?: PromiseWithResolvers<undefined>;
+  autoResumes?: number;
+  retry?: { attempt: number; max: number; timer?: NodeJS.Timeout };
+  replacement?: Execution;
 }

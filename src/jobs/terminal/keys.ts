@@ -1,5 +1,6 @@
 // Imported from pi-interactive-shell 0.18.0 key-encoding.ts (MIT, third-party/licenses/pi-interactive-shell.txt).
-// pi-suite change: the Jev semantic-action encoder is removed with semantic supervision.
+// pi-suite changes: the Jev semantic-action encoder is removed with semantic supervision; the
+// unknown-key error names the job_write keys field.
 /**
  * Terminal key encoding utilities for translating named keys and modifiers
  * into terminal escape sequences.
@@ -232,7 +233,7 @@ function encodeKeyToken(token: string): string {
 		.slice(0, 3)
 		.map(({ name }) => name);
 	throw new Error(
-		`Unknown key "${token}" in inputKeys.${close.length ? ` Did you mean ${close.join(", ")}?` : ""} ` +
+		`Unknown key "${token}" in keys.${close.length ? ` Did you mean ${close.join(", ")}?` : ""} ` +
 		"Use a named key (up, enter, escape, tab, space, backspace, delete, home, end, pageup, pagedown, f1-f12, kp0-kp9) " +
 		"or a single character, optionally prefixed with ctrl+/alt+/shift+ (or c-/m-/s-). Send text with input.",
 	);

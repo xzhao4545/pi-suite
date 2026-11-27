@@ -1,17 +1,25 @@
 # 设置与退出操作
 
-`/suite` 使用 Pi 原生 SettingsList，输入文字搜索字段，方向键选择，Enter 编辑，Esc 返回。入口按配置 schema 提供 commands、modules、runtime、ui、ask、goal、tasks、agents 和 jobs 的全部字段；每项展示有效值、默认值、用户值、项目值及来源。模块和命令显示当前激活值，用于区分已保存设置与运行状态。
+## `/suite`
 
-选择字段后可编辑用户层、项目层，或恢复指定层的继承。默认选择已有项目覆盖，否则选择用户层；上层覆盖存在时修改用户值仍展示实际有效值。布尔和枚举使用选择器，整数、文本和快捷键使用输入框，包白名单、CLI 预设与 Types 覆盖可按字段编辑 JSON；`agents.types` 另提供原生类型模型/思考强度入口。
+TUI 使用 Pi 原生 `SettingsList`。输入文字搜索，用方向键选择，Enter 打开编辑，Esc 返回。字段来自[配置 schema](index.md#配置)。每项显示保存后的有效值、来源、默认值、用户值和项目值。模块和命令还显示本次加载时实际采用的值。非 TUI 只输出有效配置的 JSON。
 
-保存复用 config-fields、严格 schema 和 JsonStore 的锁内重读/原子写入，只编辑目标字段，保留其他设置；错误配置与 I/O 失败明确报错，不覆盖损坏文件。恢复继承删除指定层字段并清理空对象。类型菜单的 Use definition 同时清除两层启用覆盖。
+1. 选择字段和要编辑的层。字段已有项目值时默认选项目层，否则选用户层。项目值存在时，修改用户值不会改变有效值。
+2. 选择编辑方式：
 
-通用字段保存后 `/reload` 应用；保存不重新绑定会话或停止现有执行。Types 菜单保存后按其现有规则立即刷新新调用的类型设置、补全和 workflow 描述，已准入 run 保持自身契约。非 TUI 的 `/suite` 显示有效配置。字段的简短说明由配置 schema 提供；`ui.maxRows` 说明只列 Dock 的范围和默认值，Ask 的独立高度预算见 [统一界面](../ui/index.md#高度与状态)。
+   | 字段 | 编辑器 |
+   | --- | --- |
+   | 布尔、枚举 | 选项列表 |
+   | 整数、文本、快捷键 | 输入框 |
+   | 包白名单、CLI 预设、类型覆盖 | JSON 编辑器；`agents.types` 另可打开类型菜单 |
 
-`runtime.openAIResponsesAutoRecovery` 为严格布尔字段，默认 false，按默认值 → 用户层 → 项目层继承；用户可在 `/suite` 编辑或恢复指定层的继承。该项显示与其他字段相同的来源、默认值、用户值、项目值、有效值和 reload 提示，保存使用同一字段原子写入流程。保存后 `/reload` 应用，不热替换正在执行的恢复阶段。
+3. 保存时只修改选定层的字段。清除该层的值会删除字段和由此产生的空对象，使该层继承下层。配置必须通过校验；文件损坏或 I/O 失败会报错。写入见 [JSON 存储](index.md#json-存储)。
+4. 用 `/reload` 应用通用设置。保存本身不重绑会话，也不停止执行。类型菜单的即时更新和 `Use definition` 清除两层启用覆盖的规则见[类型配置](../agents/models.md)。
 
-`ui.highlightBuiltinCommands` 为严格布尔字段，默认 true，按默认值 → 用户层 → 项目层逐字段继承。`/suite` 展示该项的来源、默认值、用户值、项目值、有效值与保存后的 reload 提示。它只控制内置模型 `bash` / `powershell` 调用区的语法高亮：false 完整保留原生调用显示，不改变执行、结果、外壳、计时或超时；Jobs 顶部与 Suite 展开的 command 字段始终高亮，用户 `!` / `!!` 不受影响。保存不会修改当前 renderer 的选项快照，`/reload` 应用新值；childSuite 传入 `run.config.ui.highlightBuiltinCommands`，使用准入时配置目录的快照，不读取 child 执行目录的覆盖。历史与 child 的显示定义通过统一 renderer 登记/lookup 复用。
+`ui.highlightBuiltinCommands` 的范围见[命令结构高亮](../ui/command-highlighting.md)。主会话按配置目录保存显示选项的快照，`/reload` 重新读取。child 从 `run.config`（启动时的配置快照）取得此值，不按 child 执行目录重读。历史与 child 使用同一 renderer 登记和查询入口。
 
-`commands.exit` 默认 true，独立于业务模块开关。`/exit` 在忙碌时通过公开 abort 与 waitForIdle 等待当前操作取消，再请求宿主 shutdown；随后由原生 quit 流程恢复终端、触发 session_shutdown 并等待 jobs/agents/workflow owner 清理。设置 false 后 `/reload` 撤销本扩展的 `/exit` 注册；原生 `/quit` 始终可用。
+## `/exit`
+
+`commands.exit` 控制是否注册 `/exit`，与业务模块开关独立。忙碌时，命令调用 Pi 的 `abort()` 取消操作，等 `waitForIdle()` 返回后再调用 `shutdown()`；空闲时直接请求关闭。Pi 原生退出流程恢复终端并触发 [`session_shutdown`](index.md#会话绑定)，等待后台执行清理。原生 `/quit` 始终可用。
 
 [返回公共运行时](index.md)

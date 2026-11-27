@@ -3,11 +3,13 @@ import { registerToolRenderers } from './tools.ts';
 import * as tasks from '../tasks/render.ts';
 import * as jobs from '../jobs/render.ts';
 import * as agents from '../agents/render.ts';
+import { STRUCTURED_OUTPUT_TOOL_NAME, structuredOutputRenderers } from '../agents/output/tool.ts';
 import * as goal from '../goal/render.ts';
 import { askRenderers } from '../ask/tool-render.ts';
 import { workflowRenderers } from '../agents/workflow/render.ts';
 import { waitRenderers } from './wait-render.ts';
 import { loadConfig } from './config.ts';
+import { notificationRenderer } from './notification-render.ts';
 import { builtinCommandRenderers } from '../ui/rendering/builtin-command.ts';
 
 /** Display definitions load with the extension; they neither admit nor execute tools.
@@ -15,7 +17,7 @@ import { builtinCommandRenderers } from '../ui/rendering/builtin-command.ts';
  */
 export function registerSuiteRenderers(pi: ExtensionAPI, commandHighlight?: boolean | (() => boolean)): void {
   goal.registerGoalMessageRenderers(pi);
-  pi.registerMessageRenderer('pi-suite:notification', goal.goalNotificationRenderer);
+  pi.registerMessageRenderer('pi-suite:notification', notificationRenderer);
   // Factory scope has no session cwd. Freeze each context's saved option on first display;
   // /reload creates a fresh registry, including when history is rebuilt before session_start.
   const options = new Map<string, boolean>();
@@ -38,6 +40,7 @@ export function registerSuiteRenderers(pi: ExtensionAPI, commandHighlight?: bool
     job_read: jobs.readRenderers, job_write: jobs.writeRenderers, job_stop: jobs.stopRenderers,
     agent_start: agents.startRenderers, agent_list: agents.listRenderers, agent_get: agents.getRenderers,
     agent_read: agents.readRenderers, agent_send: agents.sendRenderers, agent_stop: agents.stopRenderers,
+    [STRUCTURED_OUTPUT_TOOL_NAME]: structuredOutputRenderers,
     agent_workflow: workflowRenderers(), ask_user: askRenderers(), wait: waitRenderers,
     goal_complete: goal.completeRenderers, goal_blocked: goal.blockedRenderers, goal_wait: goal.waitRenderers,
   }, { bash: base => builtinCommandRenderers(base, 'bash', enabled),

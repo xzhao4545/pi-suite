@@ -65,8 +65,8 @@ test('RPC binds after all factories, detaches/rebinds without duplicate replies 
     assert.equal(h.manager.get(id).run!.consumed, true);
     assert.equal(h.faux.state.callCount, 1, 'synchronous consume schedules no parent request');
     assert.deepEqual(await request(h.events, 'consume', { agentId: id }), { success: true });
-    assert.deepEqual(await request(h.events, 'stop', { agentId: id }), { success: false, error: 'Agent is not running' });
-    assert.deepEqual(await request(h.events, 'steer', { agentId: id, message: 'late' }), { success: false, error: 'Agent is not running' });
+    assert.deepEqual(await request(h.events, 'stop', { agentId: id }), { success: false, error: 'Agent is not running. Pass the ID of an active agent to stop.' });
+    assert.deepEqual(await request(h.events, 'steer', { agentId: id, message: 'late' }), { success: false, error: 'Agent is not running. Use spawn to start new work.' });
     assert.equal(h.manager.runs.size, 1, 'RPC steer does not resume a settled child');
     await h.session.reload();
     assert.equal(h.ready(), 2);
@@ -136,7 +136,7 @@ test('queued RPC spawns return immediately, steer and abort share the manager, a
     assert.equal(queued, 1); assert.equal(manager.get(second).record.state, 'queued');
     assert.deepEqual(await request(bus, 'steer', { agentId: second, message: 'more facts' }), { success: true });
     assert.deepEqual(manager.get(second).run!.pendingMessages, ['more facts']);
-    assert.deepEqual(await request(bus, 'consume', { agentId: second }), { success: false, error: 'Agent not found or still running' });
+    assert.deepEqual(await request(bus, 'consume', { agentId: second }), { success: false, error: 'Agent has not settled. Consume after subagents:completed or subagents:failed.' });
     controller.abort();
     await manager.get(second).run!.done.promise;
     assert.equal(manager.get(second).record.state, 'stopped');

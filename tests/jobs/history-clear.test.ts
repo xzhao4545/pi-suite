@@ -83,7 +83,7 @@ test('history clear joins saved logs, rejects occupied records and keeps late co
         Promise.resolve(factory(terminal(40, 120), ctx.ui.theme, {} as never, resolve)).then(component => {
           assert.ok(component instanceof JobView); component.render(120);
           component.handleInput('\x1b[3~'); assert.ok(existsSync(store.directory(historical)));
-          assert.match(component.render(120).join('\n'), /history, all logs and terminal snapshot/);
+          assert.match(component.render(120).join('\n'), /delete job and logs/);
           component.handleInput('c'); // Any other key cancels the armed destructive action.
           component.handleInput('\x1b[3~'); assert.ok(existsSync(store.directory(historical)));
           component.handleInput('\x1b[3~');
@@ -96,7 +96,7 @@ test('history clear joins saved logs, rejects occupied records and keeps late co
       Promise.resolve(factory(terminal(40, 120), ctx.ui.theme, {} as never, resolve)).then(component => {
         assert.ok(component instanceof JobView);
         const screen = component.render(120).join('\n');
-        assert.ok(!screen.includes('stop process') && !screen.includes('delete history'));
+        assert.ok(!screen.includes('stop job') && !screen.includes('delete job'));
         component.handleInput('\x1b');
       });
     })}} as ExtensionContext;
