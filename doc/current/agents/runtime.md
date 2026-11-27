@@ -7,7 +7,7 @@
 - agent ID（`agent_` 加 8 位十六进制）标识一个可恢复的 child 会话，恢复时不变。
 - run ID（`run_` 加 8 位十六进制）标识一次执行。运行句柄、取消信号、父级引用、用量和并发槽位都属于 run（`Execution` 对象）。
 - 同一 agent 同时只能有一个未结算的 run。该 agent 的停止操作尚未返回时，新的 run 返回 ALREADY_RUNNING。
-- 通过 agent_send、@handle 或查看器发送消息可以恢复已结束的 child。workflow 也可续接自己的 child。恢复生成新的 run；读取记录或打开 Transcript 不启动模型。
+- 通过 agent_send、@handle 或查看器发送消息可以恢复已结束的 child。workflow 也可续接自己的 child。网络或上游错误会触发 [自动恢复](#网络与上游错误自动恢复)。恢复生成新的 run；读取记录或打开 Transcript 不启动模型。
 
 每个 run 的记录是 `AgentRecord`，以 custom entry `pi-suite:agent-record` 保存：
 
@@ -76,6 +76,23 @@
 3. 父级之后的取消不再停止该 child，最终结果经统一通知送达。
 
 queued、stopping、已结算、嵌套、workflow、RPC 和通过 agent_send 恢复的 run 没有等待中的前台调用，不能转后台。
+
+## 网络与上游错误自动恢复
+
+runner 在模型请求以错误结束（最后一条 assistant 消息的 stopReason 为 error）时抛出 `ModelRequestError`（`retry.ts`），带 provider 错误文本和 Pi 的 retry 设置（`getRetrySettings()`）。满足以下全部条件时，结算后为同一 agent 排入新的 run，而不是新开 agent：
+
+- Pi retry 已启用；错误文本匹配网络、连接、超时、upstream、overloaded、429 或 5xx 等特征，且不含 quota、billing、balance、usage limit、insufficient、unauthorized、401、403；
+- run 以 failed 结算，且结算清理和关闭会话都未失败；
+- 不是 workflow child；未被停止或终止，manager 未关闭，该 agent 没有进行中的停止；嵌套 child 的直接父 run 仍活动且未关闭；
+- 本次是第 attempt 次自动恢复，attempt 不超过 `retry.maxRetries`。
+
+新 run 的规则：
+
+1. 沿用原 run 已准入的父级范围、配置、类型、模型、thinking 及其来源和任务关联，结算与新 run 成为最新 run 之间不做 I/O。提示改为说明上次请求的错误，并要求从中断处继续、不重复已完成步骤。
+2. 继承 background、结果通知标记、等待中的前台调用和尚未提交的消息。前台 agent_start 跟随最新的替代 run，Esc 停止的也是它。
+3. 原 run 标为已消费，不发结算事件和结果通知；最终结果由最后一个 run 送达。
+4. 新 run 以 queued 进入队列，延迟 `min(baseDelayMs × 2^(attempt−1), maxAgentDelayMs)` 后才可被调度；等待期间显示 `retry <attempt>/<maxRetries>`。停止排队中的重试会取消计时并以 stopped 结算。
+5. 次数用尽时，最后一次失败的 error 末尾追加 ` · gave up after <n> automatic resumes`。agent_send（含引导、暂存和回答问题）与停止会清零该 run 的计数。
 
 ## 启动时捕获的内容
 

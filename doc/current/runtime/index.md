@@ -201,12 +201,19 @@ agents 和 workflow 的 owner（持有运行中 child 和 workflow 的对象）�
 
 一次投递是一条 customType 为 `pi-suite:notification` 的 custom_message：
 
-- content 是文本块列表；`details` 为 `{ notificationVersion: 1, segments }`，segments 与文本块一一对应，每项只记录 requestId 和 source，不重复保存正文。
+- content 是文本块列表；`details` 为 `{ notificationVersion: 1, segments }`，segments 与文本块一一对应，每项记录 requestId、source 和可选的显示视图 `view`（`{title, state?, meta?, body?}`），不重复保存给模型的正文。job 的 quiet 投递保留字符串 content 与 nextTurn 投递方式，只附加同样的 details。
+- 提供 view 的来源：agent 结果（`Agent result`）与提问（`Agent question`）、job 结果（`Job result`）、job 更新（`Job update`）、监控事件（`Job events`）、workflow 结果（`Workflow result`）和 schedule 失败（`Schedule failed`）。
 - source 取值：`event`（真实结果、提问、更新）、`goal-continuation`（Goal 自动续跑）、`reminder`（不唤醒模型的提醒）。
 - 一批中既有真实事件又有 Goal 续跑时，只发送真实事件的正文；Goal 的交付回调仍执行一次。只有 Goal 续跑时消息不显示。
 - 已交付的正文保留在会话中，不通过 context 事件删除旧的 Goal 控制文本；没有 segments 的历史消息不做文本清洗。
 - 显式 `/goal resume` 的显示条目只保存短结果，完整状态看当前 Goal。Goal 的说明文本、续跑规则和五轮自动停跑见 [请求与续跑](../goal/context.md)。
 - Tasks 提醒在自然的 turn_end 以同一格式追加，source 为 reminder，不请求模型继续。
+
+`notification-render.ts` 渲染这类消息：
+
+- segments 缺失、版本不符或数量与文本块不一致时交给 Pi 默认渲染；含非文本块（如图片）时同样交给 Pi，不丢弃图片。
+- Goal 续跑段不显示；全部为续跑时显示空容器。
+- 有 view 的段折叠时占一行：标题、按状态着色的 state 和 meta；展开后在该行下显示 body 字面量。没有 view 的段按清理后的原文显示。
 
 ### 共享等待
 

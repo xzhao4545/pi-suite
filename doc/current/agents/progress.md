@@ -49,6 +49,6 @@ Runs 和 Transcript 的 Jobs 入口按所选 runId 查询，界面见 [工具与
 3. 结果预览，最多 2048 字节，超出时按 UTF-8 截断并以 `... [truncated]` 结尾。
 4. 超出时附全文入口 `agent_read({"id":…,"runId":…,"stream":"result","offset":0})`。
 
-前台 wait 返回同样的摘要。通知请求 ID 为 `agent:<agentId>:<runId>:result`；agent_read 或 wait 消费结果只撤销该 run 未投递的通知，恢复产生的新 run 单独通知。提问规则见 [父级回答](operations.md#父级回答)。
+前台 wait 返回同样的摘要。通知请求 ID 为 `agent:<agentId>:<runId>:result`；agent_read 或 wait 消费结果只撤销该 run 未投递的通知，恢复产生的新 run 单独通知。[自动恢复](runtime.md#网络与上游错误自动恢复) 替代的 run 标为已消费、不发通知，结果由最后一个替代 run 送达。提问规则见 [父级回答](operations.md#父级回答)。
 
 [返回 agents](index.md)

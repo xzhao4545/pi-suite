@@ -387,6 +387,8 @@ Delete 的条件：控制桥提供 clear，job 已结算且 cleanup 不是 pendi
 | Esc（浏览态） | 返回来源；attach 打开时离开视图 |
 | ←←（查看器内，浏览态，300 ms 内） | 关闭整个 Jobs/Subagents 浏览链 |
 
+发送的屏幕在查看器中是 `pi-suite:job-screen` 消息，在 job_start attach 中是带 `screenLines` 的工具结果，两者共用同一屏幕渲染：折叠为 `Job screen <id> <状态>` 一行，展开后逐行显示屏幕文字，保留缩进和空行，不按 Markdown 重排。没有 screenLines 的历史消息交给 Pi 默认显示。
+
 离开、交还和发送键在 `jobs.detachKey`、`jobs.returnKey`、`jobs.transferKey` 中配置，见 [公共运行时](../runtime/index.md#配置)。搜索、过滤和编辑器中的左右键只移动光标。
 
 ## Shell

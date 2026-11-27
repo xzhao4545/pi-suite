@@ -30,7 +30,7 @@ ask_user.timeoutMs 只控制询问期限；wait.timeoutMs 只控制等待调用�
 
 ## 公共工具显示
 
-ui/tool-render.ts 的 ToolView 提供 call、collapsed 与可选 expanded；统一构造 renderCall/renderResult，并使用 Pi 默认工具外壳。原生 Box 负责 pending/success/error 背景与 outputPad，Suite 正文以零 padding 的 Text/Container 处理 ANSI、中文、emoji 和多行布局，不绘制工具上下横线。有 partial 或最终结果后通过 ctx.state.finished 隐藏调用正文，由结果接管同一执行块；折叠正文固定一行，展开保留完整对象与状态概览。错误始终显示 error 图标和完整 error 正文。工具展开、鼠标区域、图片与调用/结果流式配对仍由 Pi ToolExecutionComponent 管理，不新增工具交互容器。
+ui/tool-render.ts 的 ToolView 提供 call、collapsed 与可选 expanded；统一构造 renderCall/renderResult，并使用 Pi 默认工具外壳。原生 Box 负责 pending/success/error 背景与 outputPad，Suite 正文以零 padding 的 Text/Container 处理 ANSI、中文、emoji 和多行布局，不绘制工具上下横线。有 partial 或最终结果后通过 ctx.state.finished 隐藏调用正文，由结果接管同一执行块；折叠正文固定一行，展开保留完整对象与状态概览。错误时摘要行显示 error 图标和调用标题：折叠时附诊断首行，展开时在下方以 error 色显示完整诊断，摘要行只保留工具提供的标签。ToolView.error 可为拒绝提供标签和独立于模型正文的诊断（StructuredOutput 用 `rejected`）。toolRenderers 的 `timing` 选项在摘要行右侧以 dim 显示时长：执行中按实时计时刷新，结束后显示宿主记录的执行时长；wait 使用 `elapsedText`。工具展开、鼠标区域、图片与调用/结果流式配对仍由 Pi ToolExecutionComponent 管理，不新增工具交互容器。
 
 ToolLine 清理字面字段并压平换行，折叠行按可见宽度截断；图标按 tone 着色，主要标题使用 toolTitle，titleTone 可显式保留任务状态色，summary 使用 toolOutput，meta 默认 dim 或指定语义色，任务完成标题支持删除线。stateLine 复用 Browser/Dock 的 stateTone：starting/running 为 success，queued/waiting/waiting(parent)/stopping 与清理未确认为 warning，failed/limited/timed_out 为 error，completed/stopped 为 dim。
 
@@ -44,9 +44,17 @@ ToolView.expanded 可返回结构化 ToolLine、ToolField、ToolCode、ToolComma
 
 `registerToolRenderers` 按工具名组合 renderer。Pi 已注册的 renderer 优先于历史默认值；实时显示通过 `next()` 取得后续扩展或原生定义，只读查询使用同样的组合。内置命令调用的选项、保留的原生行为以及 Jobs 和 Suite 的命令高亮见 [命令结构高亮](../ui/command-highlighting.md)。
 
-Ask Transcript 使用共享 renderer 查询，child 查看器使用该次执行的 `run.renderers`。wait 折叠显示结算比例、失败数和提前返回原因，展开显示逐项摘要、`others` 和 `pending`。agent 摘要和 `pending` 里的 ID 可在显示时替换成内存记录中的名称，找不到则显示 ID；job、workflow、模型正文、通知和展开的 read/send 参数保持原 ID。
+Ask Transcript 使用共享 renderer 查询，child 查看器使用该次执行的 `run.renderers`。wait 折叠显示结算比例、失败数、提前返回原因和已等待时长，展开显示逐项摘要、`others` 和 `pending`。
 
-`pi-suite:notification` 有专用 renderer。它按 `details.segments` 隐藏 Goal 自动续跑片段。缺少匹配的元数据或真实事件含非文本内容时，交给 Pi 原生显示。格式见[通知消息格式](index.md#通知消息格式)。
+其余工具的展开内容来自 details 字段，不附模型回执文本（job_start 附上全文、wait 除外）：
+
+- agent_start/get/send 展开为 id、runId、state、model、thinking、turns、toolUses、任务关联、activity、usage 与 error 等字段；start 另有 promptSummary 和 resultSummary，send 先列 action，get 的 `detail:true` 另有模型/thinking 来源、contextUsage、lastUpdateAt，以及 question 与所属 jobs。agent_stop 与 job_stop 展开为 runId 或 job 字段、requested、cleanup 和 affected。
+- job_get 展开为 command、cwd、timeout、任务关联、state、cleanup、error、live 和完整 details JSON。
+- agent_read 与 job_read 折叠为 `<stream> <offset>–<nextOffset> / <totalBytes> B`（job_read 有搜索时附匹配数），展开为分页字段加字面输出，不按 Markdown 或代码解析；job_read 的 stderr 字节数单独列为 stderrBytes。
+- job_write 折叠为 `sent N B`，关闭输入时附 `stdin closed`；展开为输入（敏感时为 `[sensitive]`）、bytesSent 与 stdinClosed。
+- goal_complete 展开为完成摘要；StructuredOutput 折叠为 `accepted`，展开为提交的 JSON。agent 摘要和 `pending` 里的 ID 可在显示时替换成内存记录中的名称，找不到则显示 ID；job、workflow、模型正文、通知和展开的 read/send 参数保持原 ID。
+
+`pi-suite:notification` 有专用 renderer。它按 `details.segments` 隐藏 Goal 自动续跑片段，带显示视图的事件折叠时各占一行、展开后显示正文。缺少匹配的元数据或真实事件含非文本内容时，交给 Pi 原生显示。格式见[通知消息格式](index.md#通知消息格式)。
 
 ## 错误边界
 

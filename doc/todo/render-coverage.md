@@ -96,10 +96,10 @@
 
 ## 任务
 
-- [ ] 1 通知结构化渲染
-- [ ] 2 屏幕渲染共用
-- [ ] 3 Transcript 使用注册的渲染器
-- [ ] 4 StructuredOutput 渲染
+- [x] 1 通知结构化渲染
+- [x] 2 屏幕渲染共用
+- [x] 3 Transcript 使用注册的渲染器
+- [x] 4 StructuredOutput 渲染
 - [ ] 5 错误折叠与去除回执依赖
-- [ ] 6 Details 面板着色
+- [x] 6 Details 面板着色
 - [ ] 同步 doc/current 与 docs

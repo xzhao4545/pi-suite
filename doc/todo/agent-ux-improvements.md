@@ -72,8 +72,8 @@
 
 ## 任务
 
-- [ ] 1 Runs 页恢复
-- [ ] 2 一个 agent 一行（Runs 页与 Dock）
-- [ ] 3 网络或上游错误自动恢复
-- [ ] 4 wait 显示时长
+- [x] 1 Runs 页恢复
+- [x] 2 一个 agent 一行（Runs 页与 Dock）
+- [x] 3 网络或上游错误自动恢复
+- [x] 4 wait 显示时长
 - [ ] 同步 doc/current 与 docs

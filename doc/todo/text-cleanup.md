@@ -56,8 +56,8 @@
 - [x] runtime 与顶层页面（`doc/current/runtime/`、`index.md`、`installation.md`、`src/runtime/`、`src/config/`）
 - [x] agents 核心（`doc/current/agents/` 的 index、operations、runtime、models、resources、history）
 - [x] agents 扩展（progress、rpc、schedules、workflow/）
-- [ ] ask 与 tasks
+- [x] ask 与 tasks
 - [x] goal（等待 goal-pause 完成）
-- [ ] validation.md
+- [x] validation.md
 - [ ] doc/todo 未完成文档与索引
 - [ ] 同步 docs/ 与 README，链接检查与全量测试

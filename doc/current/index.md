@@ -30,7 +30,7 @@
   - [CLI 预设与直接启动](./jobs/launch.md) — 普通命令、预设和 monitor 的启动参数。
 - [Pi 子代理](./agents/index.md) — 同进程子会话、并发队列、运行记录、父级提问、任务共享与级联停止。
   - [Workflow 编排](./agents/workflow/index.md) — 脚本资源、运行记录、等待与控制。
-- [基线与验证](./validation.md) — 宿主版本、平台与验证范围。
+- [基线与验证](./validation.md) — 宿主版本、支持与平台范围、模块验证结论和当前测试集。
 
 ## 版本控制
 

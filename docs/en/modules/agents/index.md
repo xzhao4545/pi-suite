@@ -24,6 +24,7 @@ Each subagent has a stable `agent_` ID. Each execution, including every resume, 
 - **Nesting**: a type can start its own subagents only if `allowed_subagents` permits it, up to `agents.maxDepth` (3 session levels).
 - **States**: `queued`, `starting`, `running`, `waiting`, `stopping`, `completed`, `failed`, `stopped`, and `limited` when `maxTurns` was reached.
 - **Stopping** a run also stops its nested children and every job they created, and reports the real cleanup result.
+- **Automatic recovery**: when a run fails with a network or upstream error (timeouts, connection errors, overload, 429, 5xx), and Pi's retry setting is on, the same agent resumes in a new run and continues from where it stopped. Quota, billing and authorization errors do not trigger this. Workflow children are not recovered this way. While waiting, the run is `queued` and shows `retry N/M`; the delay doubles each attempt up to Pi's limits, and attempts stop at Pi's `retry.maxRetries`, after which the error ends with `gave up after N automatic resumes`. Only the final run reports a result. Stopping the queued retry cancels it.
 
 Top-level sessions are saved to disk by default (`agents.persistSessions`). The in-memory transcript of a run that ended more than 10 minutes ago may be released after you close its viewer. The record, result and saved session stay available.
 
@@ -78,11 +79,14 @@ Set `agents.mentions` to `false` to turn this off.
 | `s` | Runs: cycle state (All / Queued / Finished). |
 | `/`, Tab, Esc | Filter, details, back. |
 | Enter | Open the run's transcript (task details for a queued run). |
-| `m` | Message the run, or answer its question. |
+| `m` | Message the run, or answer its question. On a finished agent, resume it. |
+| `r` | Agents with several runs: list every run of that agent, newest first. |
 | `j` | Jobs created by this run. |
 | `c` | Change model and thinking for this run's next request. |
 | `b` | Move a running foreground run to the background. |
 | `x` twice | Stop the run subtree, or cancel a queued run. On a finished run with leftover jobs, clean up those jobs. |
+
+Runs shows one row per agent, using its latest run; `N runs` marks an agent that ran more than once. The message prompt reads `Message <name>`, `Resume <name>` or `Answer parent question`. Only the agent's latest run accepts messages.
 
 Records from other sessions or branches in Workspace scope are marked **Read only**. You can read them, but cannot message, stop or reconfigure them.
 

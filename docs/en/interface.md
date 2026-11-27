@@ -7,7 +7,7 @@
 The Dock is the suite's only persistent widget. It sits above the editor and shows up to five sections in a fixed order: Goal, Tasks, Agents, Jobs and Workflows. Empty sections are hidden.
 
 - **Tasks** shows task groups in ID order with their done/total count: ☐ todo, ⟳ doing, ⚠ blocked, ☑ done. Only the focus group is expanded: the group you selected in the Dock, otherwise the one with work in progress, then a blocked one, then the most recently updated. It shows the most recently completed child and up to 5 unfinished children; the rest are counted as `… N more items`. Up to 4 other unfinished groups show their title only, the rest as `… N more groups`. Finished groups are counted in the last line.
-- **Agents** shows one row per subagent: its name with the model in parentheses, state, run time, input and output tokens, and tool count. Times are shown as `45s`, `12m05s`, `3h07m` or `2d04h`; token counts as `999`, `1.2k`, `3.4M` or `1B`, rounded down. A subagent waiting for an answer shows `waiting(parent)`.
+- **Agents** shows one row per subagent: its name with the model in parentheses, state, run time, input and output tokens, and tool count. Times are shown as `45s`, `12m05s`, `3h07m` or `2d04h`; token counts as `999`, `1.2k`, `3.4M` or `1B`, rounded down. A subagent waiting for an answer shows `waiting(parent)`; one waiting to recover automatically from a network error shows `queued · retry N/M`. Several runs of the same subagent share its row, which follows the latest run.
 - **Jobs** shows active jobs by name and state.
 - **Workflows** shows active workflow runs.
 
@@ -58,11 +58,15 @@ Detail and log views use the same reading keys:
 | `/`, Enter, `n` / `N` | Search, then jump to the next or previous match. |
 | Esc | Leave search, or close the view. Closing a view never stops the job or agent. |
 
+Detail panes color their content: object names as headings, labels muted, IDs in the accent color, states in their state colors, sources, paths and times dimmed, and errors in the error color.
+
 These overlays are keyboard-driven. Clicking or scrolling with the mouse inside nested tool blocks, and dragging a scrollbar, are not supported in them. In the main conversation, Pi's own mouse expansion and `Ctrl+O` (expand all tools) keep working.
 
 ## Tool display
 
-Every suite tool renders as one collapsed line in the conversation, for example `job_3fa1c2d0 completed · exit 0 · 12.4s · pipe`. Expanding the tool (mouse click or Pi's `Ctrl+O`) shows that tool's details and a preview of its output; read the complete output with `job_read` or `agent_read`. Input sent with `sensitive` stays hidden when expanded. Errors are always shown in full. Subagents are labeled by name; their IDs appear only in expanded or dimmed text.
+Every suite tool renders as one collapsed line in the conversation, for example `job_3fa1c2d0 completed · exit 0 · 12.4s · pipe`. Expanding the tool (mouse click or Pi's `Ctrl+O`) shows that tool's details as labeled fields; `agent_read` and `job_read` also show the page of output they read, as literal text. Input sent with `sensitive` stays hidden when expanded. A failed tool shows the first line of its error when collapsed and the full error when expanded. `wait` shows how long it has been waiting at the right of its line.
+
+Suite notifications (agent results and questions, job results, updates and monitor events, workflow results, schedule failures) show one line per event when collapsed and the event's text when expanded. Screens sent from a job terminal show as a `Job screen` line that expands to the screen's rows. Subagents are labeled by name; their IDs appear only in expanded or dimmed text.
 
 State icons: ⟳ running, ⧗ queued, ? waiting, ✔ completed, ✘ failed, ⊘ stopped, ⏱ timed out or limited.
 

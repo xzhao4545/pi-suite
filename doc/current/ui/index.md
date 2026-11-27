@@ -57,7 +57,7 @@
 | --- | --- | --- |
 | Goal | 目标摘要，格式见 [目标操作](../goal/operations.md#状态显示) | 仅 `goal.display=dock`，优先级 90 |
 | Tasks | 任务组与子任务，只展开焦点组，见 [任务操作](../tasks/operations.md#常驻摘要) | 自带溢出行（`gapHints:false`） |
-| Agents | `名称 (modelId)`，modelId 为 `provider/` 之后的部分；右侧 `状态 · 运行时间 · ↑输入 ↓输出 · N tools`，窄时依次退为 `状态 · 运行时间 · N tools`、`状态 · 运行时间`、`状态`。待父级回答时状态为 `waiting(parent)`；排队与未启动的运行时间为 0 | 活动记录（queued、starting、running、waiting、stopping）和未消费的 failed/limited。优先级：待答问题 100，失败 80，stopping 75，其他 25，queued 15 |
+| Agents | 每个 agent 一行，取其最新 run（含父级可见的待答问题）；被新 run 取代的旧失败 run 不占行。`名称 (modelId)`，modelId 为 `provider/` 之后的部分；右侧 `状态 · 运行时间 · ↑输入 ↓输出 · N tools`，窄时依次退为 `状态 · 运行时间 · N tools`、`状态 · 运行时间`、`状态`。待父级回答时状态为 `waiting(parent)`；等待自动恢复的排队 run 在状态后附 dim 的 `retry N/M`；排队与未启动的运行时间为 0 | 最新 run 为活动记录（queued、starting、running、waiting、stopping）或未消费的 failed/limited。优先级：待答问题 100，失败 80，stopping 75，其他 25，queued 15 |
 | Jobs | job 显示名；右侧 `状态 · exit N（或 signal） · 运行时间 · 模式`，按需追加 `cleanup pending/unconfirmed`、`events N`；窄时退为状态加 cleanup，再只留 cleanup 或状态 | 活动 job、cleanup pending/unconfirmed、未通知的 failed/timed_out。优先级：cleanup 100，失败 80，stopping 75，其他 20 |
 
 Agents 标题右侧按本分区对象统计状态数量，顺序为 starting、running、waiting、waiting(parent)、stopping、queued、failed、limited，例如 `2 running · 1 queued`；当前父级可见的 workflow 问题也计入。机器 ID 只出现在查看器详情和模型工具正文中。名称、状态和指标是分开的 `DisplayField`（`browser-chrome.ts` 中带 `state` 或 `tone` 的文本片段），状态色只作用于状态字段，名称中出现相同单词不会被染色。
@@ -201,7 +201,7 @@ DetailsView（`details.ts`）：
 - 标题行显示标题、阅读位置 `行/总行` 和新输出提示。`title:false` 时省略标题行。
 - 按键说明：`←← close`（有 `navigation` 时）`· Esc back ·` 可用动作 `· ↑↓ PgUp PgDn Home/End scroll · / search · n/N next`。宽度不小于 80 列时按宽度换行，更窄时截断为一行。
 - 正文每次渲染只测量一次；`updateLayout` 结算跟随与边界后重新读取底部信息，行数变化时最多再校正一次。
-- `showDetails(ctx, dock, title, text, format)`：`markdown`（默认）用 Pi Markdown 显示，`text` 用 Pi Text 显示清理后的字面量。非 TUI 模式改为通知。打开期间 Dock 让位。
+- `showDetails(ctx, dock, title, content, format)`：content 为字符串时，`markdown`（默认）用 Pi Markdown 显示，`text` 用 Pi Text 显示清理后的字面量；为 [结构化详情](#结构化详情) 时按角色着色。非 TUI 模式改为通知，结构化详情转为无色文本。打开期间 Dock 让位。BrowserView 预览的 `details` 回调同样可返回结构化详情。
 
 ActionBar（`actions.ts`）由 DetailsView、BrowserView 与 TerminalView 共用：
 
@@ -290,7 +290,8 @@ ActionBar（`actions.ts`）由 DetailsView、BrowserView 与 TerminalView 共用
 - 工具 renderer 依次取调用方提供的 lookup（child 的实际定义或 Suite 登记的 renderer）、Pi 内置工具（read、write、edit、bash、powershell、grep、find、ls）；都没有时使用 Pi 通用工具显示。
 - 调用与结果按 toolCallId 配对，不执行工具。结果所在分支的调用已被压缩时，单独为结果建立工具组件。
 - 未变化的 entry 复用组件及其宽度缓存；ID 以 `stream:` 开头的流式 entry 更新已有的消息与工具组件，保留各自的展开状态。
-- `toggleTools` 切换全部工具与摘要的展开，`toggleThinking` 切换 thinking 显示。工具输出不显示终端图片，outputPad 为 0。
+- custom message 使用宿主登记的消息 renderer（如 `pi-suite:notification`、`pi-suite:job-screen`）；custom entry 有登记的条目 renderer 时由它渲染，没有时不显示。两者都随展开状态切换。renderer 来源由调用方以 `TranscriptRenderers`（宿主的 getMessageRenderer/getEntryRenderer 加 Theme）传入。
+- `toggleTools` 切换全部工具、摘要与 custom 内容的展开，`toggleThinking` 切换 thinking 显示。工具输出不显示终端图片，outputPad 为 0。
 
 ## 查看器底部与退出
 
@@ -315,7 +316,8 @@ DetailsView 的 `bottom` 回调提供 1–2 行底部信息，DetailsView 按实
 - 背景、外壳与 outputPad 由 Pi 默认 Box 负责，正文不画横线。主会话中的单项鼠标展开与默认 Ctrl+O 全部展开由 Pi 管理。
 - 展开内容由 `view.expanded` 返回，可以是字符串（字面量）、`ToolLine`、`ToolField`（`标签: 值`）、`ToolCode`、`ToolCommand` 或组件；未提供时显示结果全文。
 - `ToolCode` 用给定 language 或从 path 推断的语言调用 Pi 原生高亮，推断不出语言时按字面量显示；`ToolCommand` 使用 [命令结构高亮](command-highlighting.md)。
-- 错误时摘要为 `✘ <调用标题>`，全文以 error 色始终显示。`view.redact` 在展开和错误显示前替换敏感字段。
+- 错误时摘要为 `✘ <调用标题>`：折叠时附诊断首行，展开时在下方以 error 色显示完整诊断，摘要只保留 `view.error` 提供的标签。`view.error` 可给出独立于模型正文的诊断。`view.redact` 在展开和错误显示前替换敏感字段。
+- `toolRenderers(view, {timing})` 在摘要行右侧以 dim 显示时长：执行开始后每秒刷新实时计时，结束后显示宿主记录的执行时长。wait 使用 `elapsedText`。
 - 所有字段先经 `sanitizeText` 清理再配色；状态图标见 [模型工具契约](../runtime/tools.md)。
 
 内置 bash/powershell 调用区的高亮装饰原生 renderer，受 `ui.highlightBuiltinCommands` 控制，见 [命令结构高亮](command-highlighting.md#入口与范围)。
@@ -349,6 +351,23 @@ DetailsView 的 `bottom` 回调提供 1–2 行底部信息，DetailsView 按实
 | 内部分隔线 | 非活动标题线、列表与底部、左右分栏 | borderMuted |
 
 记录状态只在字段边界上着色（行首、` · ` 之间，或紧跟 job/workflow ID 之后），名称里出现相同单词不着色。
+
+### 结构化详情
+
+`structured-details.ts` 的 `StructuredDetails` 是 Details 面板与预览共用的数据形式：页面只给出行与片段的角色，配色由组件决定。`rows` 的每项为字符串、片段数组、`null`（分组空行）或 `undefined`（省略的可选行）；`field(label, value, ...suffix)` 生成 `标签 值` 行。
+
+| 片段角色 | 用途 | Pi 主题样式 |
+| --- | --- | --- |
+| heading | 对象名标题 | accent + bold |
+| label | 字段标签 | muted |
+| id | agent ID、run ID 等 | accent |
+| meta | 来源标记、时间戳、路径 | dim |
+| number | 数字、token 与费用 | toolOutput |
+| error | 错误 | error |
+| state（`statePart`） | 状态值 | 与记录状态同一 `stateTone`，另有 success/error |
+
+- 片段先清理再按单词着色，空白处复位样式，避免 Pi 换行在长单词之间多出空行。
+- 使用方：agent 详情、Types、Schedules、Workflows 进度、Jobs 与 Tasks 的详情。
 
 ## 复制与鼠标
 
