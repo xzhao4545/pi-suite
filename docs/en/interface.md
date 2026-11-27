@@ -64,7 +64,7 @@ These overlays are keyboard-driven. Clicking or scrolling with the mouse inside 
 
 ## Tool display
 
-Every suite tool renders as one collapsed line in the conversation, for example `job_3fa1c2d0 completed · exit 0 · 12.4s · pipe`. Expanding the tool (mouse click or Pi's `Ctrl+O`) shows that tool's details as labeled fields; `agent_read` and `job_read` also show the page of output they read, as literal text. Input sent with `sensitive` stays hidden when expanded. A failed tool shows the first line of its error when collapsed and the full error when expanded. `wait` shows how long it has been waiting at the right of its line.
+Every suite tool renders as one collapsed line in the conversation, for example `job_3fa1c2d0 completed · exit 0 · 12.4s · pipe`. Expanding the tool (mouse click or Pi's `Ctrl+O`) shows that tool's details as labeled fields; `agent_read` and `job_read` also show the page of output they read, as literal text. Input sent with `sensitive` stays hidden when expanded. A failed tool shows the first line of its error when collapsed and the full error when expanded. `wait` shows how long it has been waiting at the end of its line.
 
 Suite notifications (agent results and questions, job results, updates and monitor events, workflow results, schedule failures) show one line per event when collapsed and the event's text when expanded. Screens sent from a job terminal show as a `Job screen` line that expands to the screen's rows. Subagents are labeled by name; their IDs appear only in expanded or dimmed text.
 

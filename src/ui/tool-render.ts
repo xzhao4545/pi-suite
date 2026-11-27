@@ -1,6 +1,6 @@
 import { performance } from 'node:perf_hooks';
 import { getLanguageFromPath, type Theme, type ThemeColor, type ToolRenderers } from '@earendil-works/pi-coding-agent';
-import { Container, Text, truncateToWidth, visibleWidth, type Component } from '@earendil-works/pi-tui';
+import { Container, Text, truncateToWidth, type Component } from '@earendil-works/pi-tui';
 import { sanitizeText } from '../runtime/text.ts';
 import { stateTone } from './browser-chrome.ts';
 import { CodeComponent, commandComponent, type CodeSource, type CommandShell } from './rendering/command.ts';
@@ -8,7 +8,7 @@ import { CodeComponent, commandComponent, type CodeSource, type CommandShell } f
 export type Tone = ThemeColor;
 export interface ToolLine {
   icon: string; tone?: Tone; title: string; titleTone?: Tone; summary?: string;
-  meta?: (string | { text: string; tone: Tone })[]; aside?: { text: string; tone: Tone }; strike?: boolean; indent?: number;
+  meta?: (string | { text: string; tone: Tone })[]; strike?: boolean; indent?: number;
 }
 /** Labels are chrome; values remain literal, multiline text unless explicitly typed as code. */
 export interface ToolField { label: string; value: string; tone?: Tone }
@@ -40,16 +40,9 @@ function lineText(theme: Theme, line: ToolLine): string {
   ].filter(Boolean).join(' · ');
 }
 export function toolLine(theme: Theme, line: ToolLine, width: number): string {
-  const text = lineText(theme, line);
-  if (!line.aside) return truncateToWidth(text, width);
-  const aside = truncateToWidth(theme.fg(line.aside.tone, literal(line.aside.text)), width);
-  const room = width - visibleWidth(aside);
-  const left = room > 1 ? truncateToWidth(text, room - 1) : '';
-  return left + ' '.repeat(room - visibleWidth(left)) + aside;
+  return truncateToWidth(lineText(theme, line), width);
 }
-const bodyLine = (theme: Theme, line: ToolLine): Component => line.aside
-  ? { render: width => [toolLine(theme, line, width)], invalidate() {} }
-  : new Text(lineText(theme, line), 0, 0);
+const bodyLine = (theme: Theme, line: ToolLine): Component => new Text(lineText(theme, line), 0, 0);
 export function stateLine(state: string): Pick<ToolLine, 'icon' | 'tone'> {
   const icon = ['completed', 'answered'].includes(state) ? '✔' : state === 'failed' ? '✘'
     : ['stopped', 'skipped', 'cancelled'].includes(state) ? '⊘' : ['timed_out', 'limited'].includes(state) ? '⏱'
@@ -117,8 +110,9 @@ function redrawTimer(invalidate: WeakRef<() => void>): NodeJS.Timeout {
 
 /** Shared state hides the call body once any result arrives, leaving one summary in the native Box. */
 export function toolRenderers<A, D>(view: ToolView<A, D>, { timing }: { timing?: (ms: number) => string } = {}): ToolRenderers {
+  // Duration is the last meta item so it stays next to the summary instead of drifting to the far edge.
   const timed = (caption: ToolLine, ms?: number): ToolLine => timing && ms !== undefined
-    ? { ...caption, aside: { text: timing(ms), tone: 'dim' } } : caption;
+    ? { ...caption, meta: [...caption.meta ?? [], { text: timing(ms), tone: 'dim' }] } : caption;
   const live = (state: { startedAt?: number }) => state.startedAt === undefined ? undefined : performance.now() - state.startedAt;
   return {
     renderCall(args, theme, ctx) {

@@ -30,11 +30,24 @@ function withGaps(rows: DockRow[], ids: Set<string>, rootUnit: string): DockRow[
 
 export interface DockWindow { rows: DockRow[]; compactHint?: string }
 /** Priority selects idle membership; active navigation retains neighbours around the stable selected ID. */
-export function dockWindow(rows: DockRow[], capacity: number, selectedId?: string, rootUnit = 'items', gapHints = true): DockWindow {
+export function dockWindow(input: DockRow[], capacity: number, selectedId?: string, rootUnit = 'items', gapHints = true): DockWindow {
+  // The root tail row joins selection at its own priority and, once reached, holds its row
+  // while lower rows compete for the rest. Its count is derived from the final membership, so
+  // roots trimmed after the reservation are counted instead of vanishing with a trimmed hint.
+  const tail = input.find(row => row.omitted !== undefined);
+  const rows = tail ? input.filter(row => row !== tail) : input;
+  const roots = rows.filter(row => !row.parentId).length;
   const byId = new Map(rows.map(row => [row.id, row]));
   const focusIndex = rows.findIndex(row => row.id === selectedId), focus = rows[focusIndex];
   const ids = new Set<string>();
-  const visible = () => gapHints ? withGaps(rows, ids, rootUnit) : rows.filter(row => ids.has(row.id));
+  let reserved = false;
+  // While selecting, a reserved tail occupies its row even at zero; the final window drops it then.
+  const visible = (final = false): DockRow[] => {
+    const shown = gapHints ? withGaps(rows, ids, rootUnit) : rows.filter(row => ids.has(row.id));
+    if (!reserved) return shown;
+    const omitted = tail!.omitted! + roots - [...ids].filter(id => !byId.get(id)!.parentId).length;
+    return omitted || !final ? [...shown, {...tail!, text: `… ${omitted} more ${rootUnit}`}] : shown;
+  };
   const add = (row: DockRow): string[] => {
     const parent = row.parentId ? byId.get(row.parentId) : undefined;
     if (row.parentId && !parent) return [];
@@ -50,14 +63,16 @@ export function dockWindow(rows: DockRow[], capacity: number, selectedId?: strin
       return {rows: [focus], compactHint: hint};
     }
   }
-  const ranked = rows.map((row, index) => ({row, index})).sort((a, b) => focus
-    ? Math.abs(a.index - focusIndex) - Math.abs(b.index - focusIndex) || a.index - b.index
+  const order = focus ? input.indexOf(focus) : -1;
+  const ranked = input.map((row, index) => ({row, index})).sort((a, b) => focus
+    ? Math.abs(a.index - order) - Math.abs(b.index - order) || a.index - b.index
     : b.row.priority - a.row.priority);
   for (const {row} of ranked) {
-    const added = add(row);
+    const added = row === tail ? [] : add(row);
+    if (row === tail) reserved = true;
     const count = visible().length;
-    if (count > capacity) added.forEach(id => ids.delete(id));
+    if (count > capacity) { if (row === tail) reserved = false; added.forEach(id => ids.delete(id)); }
     else if (count === capacity) break;
   }
-  return {rows: visible()};
+  return {rows: visible(true)};
 }

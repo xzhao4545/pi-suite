@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { initTheme, highlightCode, createBashToolDefinition, ToolExecutionComponent, type ExtensionAPI, type Theme, type ToolRenderers } from '@earendil-works/pi-coding-agent';
 import { Text, visibleWidth } from '@earendil-works/pi-tui';
 import { stripVTControlCharacters } from 'node:util';
-import { toolLine, toolRenderers, stateLine } from '../../src/ui/tool-render.ts';
+import { toolRenderers, stateLine } from '../../src/ui/tool-render.ts';
 import { CodeComponent, commandComponent } from '../../src/ui/rendering/command.ts';
 import { builtinCommandRenderers } from '../../src/ui/rendering/builtin-command.ts';
 import { registerToolRenderers, toolRenderer } from '../../src/runtime/tools.ts';
@@ -27,12 +27,6 @@ function activeTheme(): Theme {
   }, terminal(), process.cwd());
   return selected;
 }
-
-test('a narrow tool line reserves the right edge for its aside', () => {
-  const line = toolLine(activeTheme(), { icon: '', title: 'Wait for multiple objects', aside: { text: '2m05s', tone: 'dim' } }, 9);
-  assert.equal(visibleWidth(line), 9);
-  assert.match(stripVTControlCharacters(line), /^.{3} 2m05s$/);
-});
 
 test('shared tool body merges progress/results inside the native shell without borders or duplicate padding', () => {
   const theme = { fg: (_tone: string, text: string) => `\x1b[31m${text}\x1b[39m` } as Theme;

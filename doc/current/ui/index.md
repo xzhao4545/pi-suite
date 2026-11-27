@@ -73,6 +73,7 @@ Agents 标题右侧按本分区对象统计状态数量，顺序为 starting、r
    - 其他：标题行、窗口内的行，L≥4 时末尾加尾线 `└─────` 及 footer。标题与尾线计入 L。
 4. 窗口选行（`dock/rows.ts` 的 `dockWindow`）：未选择时按 priority 从高到低加入；选择时按与选中行的距离由近到远加入。加入子行时连带父行，加入后超出容量就撤回。
 5. 折叠提示：`gapHints` 未关闭时，在被省略的同级片段原位插入 `↑ … N more items`（片段在开头）、`↓ … N more items`（在结尾）或 `↕ … N more items`（在中间），提示不可选、显示为 muted。片段只有一行时直接显示该行，因为提示也占一行。选中行连同父行和提示放不下时只显示选中行，标题右侧显示 `↑N ↓N`，即其前后隐藏的行数。
+6. 根级尾部计数：来源可在行列表中放一行带 `omitted` 的不可选行，`omitted` 是来源自己已省略的根行数。该行按自己的 priority 参与选行，被选中后就占住一行，优先级更低的行只能用剩下的行数。最终显示 `… N more <单位>`，N 为 `omitted` 加上窗口裁掉的根行数，N 为 0 时不显示。它只用于关闭 `gapHints` 的来源，否则被裁掉的根行会被计数两次（Tasks 使用，单位 `groups`）。
 
 宽度不小于 40 列时绘制树形线：根行前缀 `├─ `，子行前缀 `│    `，尾线 `└─────`；小于 40 列不画。来源提供 `progress` 时，按阅读顺序前 `round((显示行数 + 1) × progress)` 段树形线为 accent，其余为 borderMuted。
 
@@ -317,7 +318,7 @@ DetailsView 的 `bottom` 回调提供 1–2 行底部信息，DetailsView 按实
 - 展开内容由 `view.expanded` 返回，可以是字符串（字面量）、`ToolLine`、`ToolField`（`标签: 值`）、`ToolCode`、`ToolCommand` 或组件；未提供时显示结果全文。
 - `ToolCode` 用给定 language 或从 path 推断的语言调用 Pi 原生高亮，推断不出语言时按字面量显示；`ToolCommand` 使用 [命令结构高亮](command-highlighting.md)。
 - 错误时摘要为 `✘ <调用标题>`：折叠时附诊断首行，展开时在下方以 error 色显示完整诊断，摘要只保留 `view.error` 提供的标签。`view.error` 可给出独立于模型正文的诊断。`view.redact` 在展开和错误显示前替换敏感字段。
-- `toolRenderers(view, {timing})` 在摘要行右侧以 dim 显示时长：执行开始后每秒刷新实时计时，结束后显示宿主记录的执行时长。wait 使用 `elapsedText`。
+- `toolRenderers(view, {timing})` 把时长作为摘要行最后一项 meta、以 dim 显示，紧跟在其他信息之后：执行开始后每秒刷新实时计时，结束后显示宿主记录的执行时长。wait 使用 `elapsedText`。
 - 所有字段先经 `sanitizeText` 清理再配色；状态图标见 [模型工具契约](../runtime/tools.md)。
 
 内置 bash/powershell 调用区的高亮装饰原生 renderer，受 `ui.highlightBuiltinCommands` 控制，见 [命令结构高亮](command-highlighting.md#入口与范围)。

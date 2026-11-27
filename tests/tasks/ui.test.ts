@@ -23,7 +23,7 @@ test('task dock and live browser share committed status; important children keep
   } as unknown as ExtensionContext;
   const tasks = new TasksModule(binding, dock); binding.bind(ctx); dock.bind(ctx, 6); await tasks.bind(ctx, { reason: 'startup' });
   // Dock row keys carry the source generation; compare logical IDs.
-  const rows = () => tasks.rows().map(row => ({...row, id: row.id.replace(/^task:[^:]+:/, 'task:'),
+  const rows = () => tasks.rows().filter(row => row.omitted === undefined).map(row => ({...row, id: row.id.replace(/^task:[^:]+:/, 'task:'),
     ...row.parentId ? {parentId: row.parentId.replace(/^task:[^:]+:/, 'task:')} : {}}));
   t.mock.timers.enable({ apis: ['Date', 'setTimeout'] });
   const view = new TaskBrowserView(tui, () => tasks.current(ctx), () => {}, undefined, 'all', refresh => tasks.subscribe(ctx, refresh));
@@ -163,7 +163,8 @@ const persistedTasks = (path: string, generation: string, nextId: number, tasks:
 };
 const savedTask = (id: string, title: string, extra: Record<string, unknown> = {}) =>
   ({id, title, blockedBy: [], jobIds: [], createdAt: 1, updatedAt: 1, ...extra});
-const logicalIds = (rows: {id: string}[]) => rows.map(row => row.id.replace(/^task:[^:]+:/, 'task:'));
+const logicalIds = (rows: {id: string; omitted?: number}[]) =>
+  rows.filter(row => row.omitted === undefined).map(row => row.id.replace(/^task:[^:]+:/, 'task:'));
 
 test('task dock retains the focused group and current child when the height budget shrinks', async t => {
   const root = mkdtempSync(join(tmpdir(), 'pi-suite-task-retention-')), binding = new SessionBinding(), dock = new Dock();
@@ -213,9 +214,10 @@ test('task dock caps the expanded group, summarizes overflow, and expands the se
     const screen = () => dock.render(80).map(stripVTControlCharacters).join('\n');
     assert.deepEqual(logicalIds(rows.filter(row => row.selectable !== false)),
       ['task:1', 'task:2', 'task:2.1', 'task:2.2', 'task:2.3', 'task:2.6', 'task:2.8', 'task:2.9', 'task:3', 'task:4', 'task:5']);
-    assert.deepEqual(rows.filter(row => row.selectable === false).map(row => [row.parentId !== undefined, row.text]),
-      [[true, '… 2 more items'], [false, '… 2 more groups']]);
-    assert.equal(rows.at(-1)?.text, '… 2 more groups');
+    assert.deepEqual(rows.filter(row => row.selectable === false).map(row => row.omitted ?? row.text), ['… 2 more items', 2]);
+    // Two groups exceed the cap and three more do not fit the height; one reserved row counts all five.
+    assert.match(screen(), /│    … 2 more items\n├─ … 5 more groups\n└─────$/);
+    assert.equal(dock.render(80).length, 12);
     assert.match(screen(), /2\.9 focused work\n│    … 2 more items/);
     assert.doesNotMatch(screen(), /[↑↕] …/);
 

@@ -249,8 +249,10 @@ export class TasksModule {
     const band = 0.25 / (ranked.length + 1);
     const visible = ranked.map(({group, rank}, index) => ({group, priority: rank + (ranked.length - index) * band}))
       .sort((a, b) => Number(a.group.id) - Number(b.group.id));
-    let otherGroups = 0;
+    let otherGroups = 0, tailPriority = 0;
     for (const {group, priority} of visible) {
+      // Below every focused child (lowest tier is band * 6/7) and above the next group title (band lower).
+      if (group === focus) tailPriority = priority - band * 13 / 14;
       if (group !== focus && group.status !== 'done' && ++otherGroups > OTHER_GROUP_CAP) continue;
       const parentId = rowKey(group.id);
       rows.push({ id: parentId, text: taskRow(group, theme), suffix: `${group.progress!.done}/${group.progress!.total}`, priority });
@@ -270,8 +272,9 @@ export class TasksModule {
       }
       if (hidden) rows.push({id: `overflow:${parentId}`, parentId, priority: priority - band * 6 / 7, selectable: false, text: `… ${hidden} more items`});
     }
-    if (otherGroups > OTHER_GROUP_CAP) rows.push({id: 'overflow:task-groups', priority: 0, selectable: false,
-      text: `… ${otherGroups - OTHER_GROUP_CAP} more groups`});
+    // Groups past the cap and groups trimmed by the Dock height share one count in the Dock window.
+    if (otherGroups) rows.push({id: 'overflow:task-groups', priority: tailPriority, selectable: false, text: '',
+      omitted: Math.max(0, otherGroups - OTHER_GROUP_CAP)});
     return rows;
   }
   selectGroup(id?: string): void { this.selectedGroup = id; this.dock.invalidate(); }

@@ -11,6 +11,13 @@ export interface DockRow {
   id: string; text: string; priority: number; suffix?: DisplayText; parentId?: string; selectable?: boolean;
   /** Less detailed suffixes, in domain-defined omission order; never change the object's identity. */
   compactSuffixes?: DisplayText[];
+  /**
+   * Marks the source's root tail row: the number of root objects the source already left out.
+   * The Dock window adds the roots it trims, renders `… N more <unit>` and drops the row at zero.
+   * Its priority sets which rows outrank the reservation; rows below it share the remaining height.
+   * Only for sources without generated gap hints, which would count trimmed roots twice.
+   */
+  omitted?: number;
 }
 export interface DockSource {
   title: string;

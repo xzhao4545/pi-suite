@@ -144,6 +144,24 @@ Tasks  8/13
 - Dock 选择到其他组标题时该组展开；退出选择恢复默认焦点；单行摘要、完成反馈与尾线行为不变。
 - typecheck 与 tasks/ui 相关测试通过；`doc/current/tasks/operations.md` 的常驻摘要一节与 `third-party/UPSTREAM.md` 的参考来源同步。
 
+## Tasks 分区组折叠计数纳入高度预算
+
+### 现有根因
+
+`src/tasks/index.ts` 的 `rows()` 只按 `OTHER_GROUP_CAP = 4` 生成 `… N more groups`，该行 priority 为 0；Tasks 注册时 `gapHints: false`。Dock 正文不足时，`src/ui/dock/rows.ts` 的 `dockWindow()` 按 priority 裁掉低优先级的组标题，计数行最先被裁，被裁的组不留任何痕迹。实测正文 9 行、组 2（blocked）、4（doing，8 项）、5–9（各 2 项待办）时，只显示组 2、组 4 展开与组 5，组 6–9 与计数行都不出现。
+
+### 设计
+
+- `dockWindow()` 提供根级尾部计数行：分区给出带 `omitted` 的尾部行，该行按自己的 priority 参与选行，排到后占住一行，优先级更低的行分剩余行数；文本按实际未显示的根行数生成。计数在 Dock 一处完成，不由分区与 Dock 各裁一次；其他分区行为不变。
+- Tasks 分区删去自拼的 `overflow:task-groups` 行，改用该能力。N 包含超出 `OTHER_GROUP_CAP` 的组与因行数不足被裁掉的组；已完成组仍只计入尾线 `☑ N completed groups`。
+- 其余裁剪规则不变：焦点组标题与当前子任务优先保留，组内 `… N more items`、读序、Dock 选择时的邻域窗口与极小容量的单行摘要不变。
+
+### 验收
+
+- 只要有未完成的非焦点组未显示，末尾就显示 `… N more groups`，且总行数不超过正文容量；容量很小时焦点组标题与当前子任务仍先于该行保留。
+- 上述实测场景（正文 10 行）显示组 2、组 4 展开与 `… 5 more groups`。
+- typecheck 与 dock/tasks 相关测试通过；`doc/current/tasks/operations.md` 的常驻摘要说明同步。
+
 ## 相关 current 文档
 
 - [Pi 子代理执行与记录](../current/agents/runtime.md)
@@ -167,3 +185,5 @@ Tasks  8/13
 - [x] Agents token 数量按 k/M/B 紧凑显示
 - [x] Tasks 分区按 OMP 方式折叠
 - [x] Agents 行名称后括号显示模型 ID（去掉 provider 前缀）
+- [x] Tasks 分区组折叠计数纳入高度预算
+- [x] 实际 Dock 验证（组折叠计数）
