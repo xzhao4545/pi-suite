@@ -4,8 +4,6 @@
 
 Pi Suite is an extension package for [Pi](https://github.com/earendil-works/pi), the terminal coding agent. It adds interactive questions, task lists, background jobs, persistent goals and subagents as one extension that shares a single UI, storage layer and notification queue.
 
-It runs on official, unmodified Pi 1.5.0 and needs no changes to Pi itself. The current version is 0.1.2 (Git tag `v0.1.2`).
-
 ## Features
 
 | Module | What it gives you |
@@ -27,8 +25,6 @@ Shared pieces:
 ## Requirements
 
 - Node.js 24 or later.
-- Pi 1.5.0 (official build). Other Pi versions are not supported.
-- Linux or Windows.
 
 ## Install
 
@@ -37,28 +33,40 @@ pi install git:github.com/xzhao4545/pi-suite
 pi list
 ```
 
-Then run `/reload` in an open session, or restart Pi. All modules are enabled by default.
+Then run `/reload` in an open session, or restart Pi. All modules are enabled by default. See [Installation](docs/en/installation.md) for updates and local installs.
 
-The package has been loaded and tested from this repository. Installing it as a Git, local or tarball package from another project has not been verified yet.
+## Commands
 
-If you use any of `pi-ask-user`, `@tintinweb/pi-tasks`, `pi-interactive-shell`, `pi-background-jobs`, `@narumitw/pi-goal` or `@tintinweb/pi-subagents`, remove them to avoid duplicate tools. See [Installation](docs/en/installation.md) for local installs, updates and replacing these extensions.
-
-## Quick start
-
-| Try | What happens |
+| Command | What it does |
 | --- | --- |
-| `/goal Make the test suite pass` | Starts a goal; the model keeps working across turns while the goal stays active. |
-| Ask the model to "run the dev server in the background and tell me when it's ready" | It starts a job with a monitor and is woken when the output matches. |
-| `@explore where is the config loaded?` | Sends the question to an Explore subagent. |
-| `/subagents` | Browse subagent runs, transcripts, types, schedules and workflows. |
-| `/jobs` | Browse jobs, read logs, or take over a PTY with `i`. |
-| `/tasks` | Browse the task list. |
-| `/suite` | Edit settings. |
-| `/exit` | Quit Pi. The suite stops jobs and subagents and waits for cleanup, up to 10 seconds for jobs. |
+| `/goal [--tokens 100k] <objective>` | Starts a goal; the model keeps working across turns until it is done. `/goal status`, `edit`, `pause`, `resume` and `clear` show, change, pause, resume or clear it. |
+| `/tasks [group ID]` | Browse the task list, optionally opening one group. |
+| `/jobs [finished\|all] [workspace]` | Browse jobs, read logs, or take over a PTY with `i`. Lists active jobs of this session by default. |
+| `/subagents [queued\|finished\|all\|types\|schedules\|workflows]` | Browse subagent runs, transcripts, types, schedules and workflows; `/subagents workspace [...]` covers the whole workspace. |
+| `/suite` | View and edit settings one by one. |
+| `/exit` | Quit Pi after stopping jobs and subagents and waiting for cleanup, up to 10 seconds for jobs. |
 
-## Configuration
+Type `@<type>` in the editor (for example `@explore where is the config loaded?`) to hand the message to a subagent of that type.
 
-No configuration is required. Optional settings live in `~/.pi/agent/pi-suite.json` (user) and `.pi/pi-suite.json` (project); the project file overrides the user file field by field.
+## Settings
+
+No configuration is required. Optional settings live in `~/.pi/agent/pi-suite.json` (user) and `.pi/pi-suite.json` (project); the project file overrides the user file field by field. Common settings:
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `modules.<ask\|tasks\|jobs\|goal\|agents>` | `true` | Enable or disable one module. |
+| `commands.exit` | `true` | Register `/exit`. |
+| `ui.maxRows` | `12` | Maximum rows the Dock uses. |
+| `ui.highlightBuiltinCommands` | `true` | Highlight commands in Pi's built-in `bash`/`powershell` calls. |
+| `ask.timeout` | `600000` | Default `ask_user` idle timeout in ms; `0` waits forever. |
+| `goal.display`, `agents.display`, `jobs.display` | `status` | Show the summary in the footer status, the Dock, or nowhere. |
+| `tasks.reminders` | `true` | Remind the model when it has not updated tasks for several turns. |
+| `agents.maxConcurrent` | `10` | Background subagent concurrency limit. |
+| `agents.maxDepth` | `3` | Maximum session depth, including the main session. |
+| `agents.defaultModel`, `agents.types` | unset | Default subagent model; per-type model, thinking and enabled overrides. |
+| `agents.mentions`, `agents.scheduling`, `agents.workflows` | `true` | `@handle` mentions, schedules and workflows. |
+| `jobs.detachKey`, `jobs.returnKey`, `jobs.transferKey` | `ctrl+]`, `ctrl+g`, `ctrl+t` | Leave the terminal view, hand input back to the model, send the screen. |
+| `runtime.openAIResponsesAutoRecovery` | `false` | Recover from one class of OpenAI Responses item ID errors. |
 
 ```json
 {
@@ -80,7 +88,6 @@ All fields are listed in [Configuration](docs/en/configuration.md). You can also
 pnpm install
 pnpm typecheck
 pnpm test
-pnpm exec pi -e .
 ```
 
 See [Development](docs/en/development.md) for the source layout and project rules.
