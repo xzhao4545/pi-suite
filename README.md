@@ -14,7 +14,7 @@ It runs on official, unmodified Pi 1.5.0 and needs no changes to Pi itself. The 
 | [Goal](docs/en/modules/goal.md) | `/goal <objective>`: the model keeps working across turns until it completes the goal with evidence, reports a blocker, or you pause it. Optional token budget. |
 | [Tasks](docs/en/modules/tasks.md) | A two-level task list (groups and child tasks) that the model maintains and the Dock displays, with dependencies and atomic batch edits. |
 | [Jobs](docs/en/modules/jobs/index.md) | Background commands in pipe or PTY mode: bounded log reading, input, output monitors, coding-agent CLI presets, supervised terminals, and stops that check every captured process has exited and report `unconfirmed` when they cannot. |
-| [Agents](docs/en/modules/agents/index.md) | Subagents as child Pi sessions in the same process: custom types, per-type models and thinking, `@handle` mentions, questions to the parent, schedules, scripted [workflows](docs/en/modules/agents/workflows.md) and an [RPC API](docs/en/modules/agents/rpc.md) for other extensions. |
+| [Agents](docs/en/modules/agents/index.md) | Subagents as child Pi sessions in the same process: custom types, per-type models and thinking, `@handle` mentions, questions to the parent, automatic resume after network or upstream errors, schedules, scripted [workflows](docs/en/modules/agents/workflows.md) and an [RPC API](docs/en/modules/agents/rpc.md) for other extensions. |
 
 Shared pieces:
 

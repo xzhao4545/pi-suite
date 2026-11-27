@@ -5,7 +5,6 @@
 ## 任务索引
 
 - [Dock 显示修正](./dock-display.md) — 运行时间每秒刷新与单位显示、token 紧凑显示、Agents 行显示模型；Tasks 分区按组 ID 排序并只展开焦点组。
-- [文本整理](./text-cleanup.md) — doc/current、模型可见文本、UI 文本与注释按统一写作标准整理。
 
 ## 规则
 

@@ -14,7 +14,7 @@ Pi Suite 是 [Pi](https://github.com/earendil-works/pi)（终端编码 agent）�
 | [Goal](docs/zh/modules/goal.md) | `/goal <目标>`：模型跨轮次持续工作，直到附证据完成目标、报告阻塞，或由你暂停。可设置 token 预算。 |
 | [Tasks](docs/zh/modules/tasks.md) | 两级任务清单（分组与子任务），由模型维护、在 Dock 中显示，支持依赖和原子批量编辑。 |
 | [Jobs](docs/zh/modules/jobs/index.md) | pipe 或 PTY 模式的后台命令：有界日志读取、输入、输出监视器、编码 agent CLI 预设、受监督终端；停止时逐一检查已捕获的进程是否退出，无法确认时报告 `unconfirmed`。 |
-| [Agents](docs/zh/modules/agents/index.md) | 在同一进程中以 Pi 子会话运行的子代理：自定义类型、按类型配置模型与 thinking、`@handle` 提及、向父级提问、定时调度、脚本化 [Workflow](docs/zh/modules/agents/workflows.md)，以及供其他扩展使用的 [RPC 接口](docs/zh/modules/agents/rpc.md)。 |
+| [Agents](docs/zh/modules/agents/index.md) | 在同一进程中以 Pi 子会话运行的子代理：自定义类型、按类型配置模型与 thinking、`@handle` 提及、向父级提问、网络或上游错误后自动恢复、定时调度、脚本化 [Workflow](docs/zh/modules/agents/workflows.md)，以及供其他扩展使用的 [RPC 接口](docs/zh/modules/agents/rpc.md)。 |
 
 共享部分：
 

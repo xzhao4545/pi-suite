@@ -36,7 +36,7 @@
 
 - 按模块目录分批，每批同时处理该模块的 `doc/current` 页面、模型可见文本、UI 文本和注释。
 - 每批改写前核对源码；改动字符串后运行该模块相关测试，测试断言字符串时同步更新断言。
-- goal 模块在 [Goal 暂停与用户轮](../finished/pi-suite/goal/goal-pause.md) 的代码完成后处理。
+- goal 模块在 [Goal 暂停与用户轮](./goal/goal-pause.md) 的代码完成后处理。
 - 允许按文件重写，前提是保留全部当前事实；完成后 AGENTS.md 的文档规则不变。
 
 ## 验收
@@ -47,7 +47,7 @@
 
 ## 相关 current 文档
 
-[当前文档索引](../current/index.md)
+[当前文档索引](../../current/index.md)
 
 ## 任务列表
 
@@ -59,5 +59,5 @@
 - [x] ask 与 tasks
 - [x] goal（等待 goal-pause 完成）
 - [x] validation.md
-- [ ] doc/todo 未完成文档与索引
-- [ ] 同步 docs/ 与 README，链接检查与全量测试
+- [x] doc/todo 未完成文档与索引
+- [x] 同步 docs/ 与 README，链接检查与全量测试
