@@ -1,5 +1,5 @@
 import type { AgentRecord } from './types.ts';
-import { field, part, statePart, type StructuredDetails } from '../ui/structured-details.ts';
+import { field, part, section, statePart, type StructuredDetails } from '../ui/structured-details.ts';
 
 /** Runtime statistics are run-scoped; current type configuration cannot rewrite history. */
 export function agentDetails(record: AgentRecord, permissions?: {readonly: boolean; canMessage: boolean; canStop: boolean}, readOnlyBanner = false): StructuredDetails {
@@ -27,7 +27,10 @@ export function agentDetails(record: AgentRecord, permissions?: {readonly: boole
       record.workflowId ? field('Workflow:', part(record.workflowId, 'id')) : undefined, null,
     ] : []),
     record.endedAt ? field('Ended:', part(record.endedAt, 'meta')) : undefined,
-    field('Cwd:', part(record.cwd, 'meta')), '', record.prompt,
-    ...(record.error ? ['', field('Error:', part(record.error, 'error'))] : []),
+    field('Cwd:', part(record.cwd, 'meta')),
+    // Prompt and result are free text; titled sections keep them apart from the fields above.
+    section('Input'), record.prompt,
+    ...(record.result !== undefined || record.error ? [section('Output'),
+      record.error ? field('Error:', part(record.error, 'error')) : undefined, record.result] : []),
   ]};
 }

@@ -5,7 +5,7 @@ import { showDetails } from '../../ui/details.ts';
 import type { Dock } from '../../ui/dock.ts';
 import type { AgentScheduler } from './index.ts';
 import type { ScheduledAgent } from './store.ts';
-import { field, part, plainDetailLines, statePart, type StructuredDetails } from '../../ui/structured-details.ts';
+import { field, part, plainDetailLines, section, statePart, type StructuredDetails } from '../../ui/structured-details.ts';
 
 const details = (job: ScheduledAgent): StructuredDetails => ({rows: [
   [part(job.name, 'heading')], field('ID:', part(job.id, 'id')), field('Type:', job.request.type),
@@ -14,7 +14,7 @@ const details = (job: ScheduledAgent): StructuredDetails => ({rows: [
   field('Next:', part(job.nextRun ?? '—', 'meta')),
   field('Last:', part(job.lastRun ?? '—', 'meta'), part(' ('), statePart(job.lastStatus ?? '—'), part(')')),
   field('Runs:', part(job.runCount, 'number')), field('Agent:', part(job.lastAgentId ?? '—', 'id')),
-  ...(job.lastError !== undefined ? [null, [part(job.lastError, 'error')]] : []), '', job.request.prompt,
+  ...(job.lastError !== undefined ? [null, [part(job.lastError, 'error')]] : []), section('Input'), job.request.prompt,
 ]});
 
 export async function showSchedules(ctx: ExtensionContext, scheduler: AgentScheduler, dock: Dock, page: BrowsePage): Promise<void> {

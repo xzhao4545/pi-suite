@@ -28,9 +28,12 @@ test("five empty or identical automatic rounds pause until a user turn resets th
       await h.session.navigateTree(earlier.id); await sleep(50); await h.idle();
       assert.equal(h.faux.state.callCount, 5, "an older active branch cannot bypass automatic-stop permission");
       assert.equal(h.goal()?.automatic, false); assert.equal(h.goal()?.reason?.kind, repeated ? 'repeated_tools' : 'no_tools');
+      // A paused goal does not hold notifications: the result wakes one turn without goal access.
+      h.faux.setResponses([context => { assert.equal(goalView(context).access, "none"); return fauxAssistantMessage("Noted the job result"); }]);
       const job = await h.session.getToolDefinition("job_start")!.execute("external", { command: "printf done" }, undefined, undefined, ctx as never);
       assert.ok(!job.isError); await sleep(100); await h.idle();
-      assert.equal(h.faux.state.callCount, 5, "background results cannot grant automatic permission");
+      assert.equal(h.faux.state.callCount, 6, "a paused goal delivers background results");
+      assert.equal(h.goal()?.automatic, false, "background results cannot grant automatic permission");
       h.faux.setResponses([
         context => {
           assert.equal(goalView(context).access, "execute"); assert.equal(h.goal()?.reason, undefined);
@@ -40,7 +43,7 @@ test("five empty or identical automatic rounds pause until a user turn resets th
         complete,
       ]);
       await h.session.prompt("Review the unfinished work"); await h.idle();
-      assert.equal(h.faux.state.callCount, 8); assert.equal(h.goal()?.status, "completed");
+      assert.equal(h.faux.state.callCount, 9); assert.equal(h.goal()?.status, "completed");
     } finally { await h.dispose(); }
   }
 });

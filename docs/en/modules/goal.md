@@ -48,7 +48,7 @@ Whether your next message also restarts automatic work depends on why the goal p
 | Budget exhausted | Handled; the goal stays paused. | Raise the budget first. |
 | Quitting Pi, or a cold start of Pi | Handled; the goal stays paused. A new Pi process never continues a goal on its own. | Restarts it. |
 
-Background notifications, `/reload`, tree navigation and compaction never restart a paused goal.
+Background notifications, `/reload`, tree navigation and compaction never restart a paused goal. While a goal is paused, notifications are still delivered; the model handles them in a turn without goal tools.
 
 **Automatic stop.** If 5 consecutive automatic turns make no tool calls, or repeat exactly the same tool calls and results, the goal pauses with reason `no_tools` or `repeated_tools`. This is a guard against loops; it does not judge quality. Your next message restarts automatic work and resets the count.
 

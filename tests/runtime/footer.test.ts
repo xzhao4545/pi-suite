@@ -117,7 +117,9 @@ test("published pi-starship footer coexists with real suite execution and ask at
       ownerSessionId: ctx.sessionManager.getSessionId(), anchorEntryId: null}, testShell()); await runtime.manager.wait(notice.id);
     for (const lines of render(view)) { assert.match(text(lines), /⏳\s+goal/); assert.match(text(lines), /🤖1 · ⚙1/); }
     assert.equal(h.faux.state.callCount, calls + 1, "the explicit ask turn is the only new model call"); assert.notEqual(child.settled, true);
-    view.cancel(); await asking;
+    // Cancelling pauses the goal; a paused goal releases the queued job notice as one turn.
+    h.faux.setResponses([fauxAssistantMessage("Noted the queued notice")]);
+    view.cancel(); await asking; await h.idle();
     // Explicit placement remains available when an external format omits the slot.
     await configure('format = "$model$context"\n' + options, "dock");
     for (const [width, height] of sizes) {
@@ -125,6 +127,6 @@ test("published pi-starship footer coexists with real suite execution and ask at
       assert.ok(!text(footer!.render(width)).includes("goal")); assert.match(text(dock.render(width)), /goal/);
       assert.ok(dock.render(width).length <= dock.budget(height));
     }
-    assert.equal(h.faux.state.callCount, calls + 1);
+    assert.equal(h.faux.state.callCount, calls + 2);
   } finally { gate.resolve(); await h.dispose(); setCapabilities(caps); rmSync(root, {recursive: true, force: true}); }
 });

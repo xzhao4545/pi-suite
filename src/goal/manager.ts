@@ -38,10 +38,17 @@ export class GoalManager {
   constructor(private pi: ExtensionAPI, private binding: SessionBinding, private notifications: Notifications, private status: StatusPublisher,
     private waits: WaitRegistry) {
     this.waitResources = new GoalWaitResources(binding, waits);
-    // Direct child questions and selected monitor/update events can wake an arranged
-    // wait; unrelated settlements remain queued until all requested objects settle.
-    notifications.setAdmission(ids => !this.fault && (!this.goal || this.goal.status === 'active' && this.goal.automatic && this.goal.waiting !== 'user' &&
-      (!this.goal.waitFor || ids.some(id => isQuestion(id) || this.goal!.waitFor!.some(waited => id === `job:${waited}:monitor` || id === `job:${waited}:update`)))));
+    // Only a running goal gates delivery. A paused or completed goal never holds results:
+    // the woken turn gets access "none", so it handles the notification without resuming.
+    // While running, direct child questions and selected monitor/update events can wake an
+    // arranged wait; unrelated settlements remain queued until all requested objects settle.
+    notifications.setAdmission(ids => {
+      const goal = this.goal;
+      if (this.fault) return false;
+      if (!goal || goal.status !== 'active' || !goal.automatic) return true;
+      return goal.waiting !== 'user' && (!goal.waitFor ||
+        ids.some(id => isQuestion(id) || goal.waitFor!.some(waited => id === `job:${waited}:monitor` || id === `job:${waited}:update`)));
+    });
   }
   private get requestId(): string { return `goal:${this.goal!.id}`; }
   private get owned(): boolean {

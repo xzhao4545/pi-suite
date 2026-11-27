@@ -354,7 +354,7 @@ DetailsView 的 `bottom` 回调提供 1–2 行底部信息，DetailsView 按实
 
 ### 结构化详情
 
-`structured-details.ts` 的 `StructuredDetails` 是 Details 面板与预览共用的数据形式：页面只给出行与片段的角色，配色由组件决定。`rows` 的每项为字符串、片段数组、`null`（分组空行）或 `undefined`（省略的可选行）；`field(label, value, ...suffix)` 生成 `标签 值` 行。
+`structured-details.ts` 的 `StructuredDetails` 是 Details 面板与预览共用的数据形式：页面只给出行与片段的角色，配色由组件决定。`rows` 的每项为字符串、片段数组、`section(title)`（分节标题）、`null`（分组空行）或 `undefined`（省略的可选行）；`field(label, value, ...suffix)` 生成 `标签 值` 行。分节标题显示为 `── 标题 ──`（标题 accent + bold，横线 borderMuted），前面总有空行，用于把元数据字段与后面的长文本分开：agent 详情分为字段、`Input`（prompt）与 `Output`（错误与结果），Schedules 详情的 prompt 位于 `Input` 下。
 
 | 片段角色 | 用途 | Pi 主题样式 |
 | --- | --- | --- |
