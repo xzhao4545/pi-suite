@@ -113,11 +113,11 @@
 
 | 项 | 当前值 |
 | --- | --- |
-| 支持的宿主 | 官方未修改的 Pi 1.5.0 |
-| 依赖 | `@earendil-works/pi-ai`、`pi-coding-agent`、`pi-tui` 的 peer 与开发依赖均精确为 `1.5.0` |
+| 支持的宿主 | 官方未修改的 Pi 1.5.0 及更高版本；插件随 Pi 版本更新跟进适配 |
+| 依赖 | `@earendil-works/pi-ai`、`pi-coding-agent`、`pi-tui` 的 peer 依赖为 `>=1.5.0`；开发依赖精确为 `1.5.0`，作为开发与测试基线 |
 | 加载入口 | Pi 包的 `pi` bin 为 `dist/bundle/cli.js`，`./rpc-entry` 为 `dist/bundle/rpc-entry.js`；regular/fullscreen 与 RPC 均可加载 |
 | 发布 | `package.json` 为 `private: true`，未发布到 npm |
-| 未验收 | Git、本地路径和 tarball 安装；其他 Pi 版本 |
+| 未验收 | Git、本地路径和 tarball 安装；开发基线以外的 Pi 版本 |
 
 - 官方 bundle loader 通过虚拟模块向扩展提供宿主的类定义，SDK 入口按原版模块解析加载。Suite 不修改宿主，也不做模块身份适配。
 - UI 只用公开的 Container、ScrollView、VStack/HStack 和 focused overlay，见 [统一界面](../ui/index.md#原生会话查看)。

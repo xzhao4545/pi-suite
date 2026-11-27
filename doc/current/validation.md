@@ -6,7 +6,7 @@
 
 | 项目 | 当前值 |
 | --- | --- |
-| Pi peer 与开发依赖 | `@earendil-works/pi-coding-agent`、`pi-ai`、`pi-tui` 精确锁定 1.5.0，使用官方未修改的包及新作用域 API |
+| Pi peer 与开发依赖 | `@earendil-works/pi-coding-agent`、`pi-ai`、`pi-tui` 的 peer 为 `>=1.5.0`，开发依赖精确锁定 1.5.0 作为验收基线，使用官方未修改的包及新作用域 API |
 | typebox | 1.3.27 |
 | 调度运行依赖 | croner 10.0.1 |
 | 运行环境 | Node.js 24+，pnpm 12.6.0 |
@@ -25,7 +25,7 @@
 
 ## 官方宿主与支持范围
 
-- 支持声明精确限定为官方未修改的 Pi 1.5.0。`dist/bundle/cli.js` 与 `dist/bundle/rpc-entry.js` 通过真实加载与运行验收，见 [官方 Pi 兼容验收](../finished/pi-suite/official-pi-compatibility/validation.md)。
+- 验收基线为官方未修改的 Pi 1.5.0。`dist/bundle/cli.js` 与 `dist/bundle/rpc-entry.js` 通过真实加载与运行验收，见 [官方 Pi 兼容验收](../finished/pi-suite/official-pi-compatibility/validation.md)。
 - Linux PTY/xterm 覆盖 regular/fullscreen 下的 Tasks/Subagents/Jobs、Dock、正文搜索、工具键盘展开、活动 child 的中文原生 Editor、持久 clone、resize、返回和自然退出。本地 HTTP SSE 覆盖 Responses 保存、重启 resume，以及同模型/跨模型的原版 phase 行为。
 - 包为 `private: true`，未发布到 npm。消费者 Git/本地包及 tarball 安装延期，不计为通过，见 [安装验收边界](../finished/pi-suite/official-pi-compatibility/index.md#状态与执行权限)。
 - 未证明的范围：实体人工终端、Windows 人工交互、外网账号/组织权限、真实上游密文解密、中转粘性。各平台专项的结论不扩大到这些范围。
@@ -158,7 +158,7 @@ Windows 已验证：
 
 ## 性能验证方法
 
-源码入口、renderer 提前注册与首次就绪边界见 [公共运行时](runtime/index.md#加载与首次就绪)。性能结论与样本见 [源码入口启动归档](../finished/pi-suite/interaction-improvements/source-startup-performance.md)，不扩大 Pi 1.5.0 支持声明。
+源码入口、renderer 提前注册与首次就绪边界见 [公共运行时](runtime/index.md#加载与首次就绪)。性能结论与样本见 [源码入口启动归档](../finished/pi-suite/interaction-improvements/source-startup-performance.md)。
 
 1. 使用官方实际 Node bin/RPC 测量；不用 SDK factory 时长或源文件读取数代替真实就绪。
 2. 固定宿主版本、配置、cwd 与资源集合。

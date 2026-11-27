@@ -55,7 +55,7 @@ Project rules for code and documentation are in [`AGENTS.md`](../../AGENTS.md).
 
 ## Platform coverage
 
-- Supported host: official, unmodified Pi 1.5.0. The Pi packages are pinned to exactly `1.5.0`.
+- Supported host: official, unmodified Pi 1.5.0 or later. Peer dependencies are `>=1.5.0`; dev dependencies are pinned to exactly `1.5.0` as the test baseline and are upgraded when adapting to a new Pi release.
 - Verified on Linux and Windows, each within the scope recorded for the module in [`doc/current/validation.md`](../../doc/current/validation.md).
 - Consumer installation from Git, a local path or a tarball has not been verified. The package is not published to npm.
 - Subagents share the parent's model runtime through a guarded read of a private Pi field. A Pi upgrade can break this; such a failure is reported as `MODEL_RUNTIME_UNAVAILABLE`, and the suite never falls back to a separate runtime.
