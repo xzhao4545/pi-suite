@@ -76,7 +76,7 @@ Without a TUI, `/suite` prints the effective configuration.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `runtime.openAIResponsesAutoRecovery` | `false` | Recover automatically from one kind of OpenAI Responses error; see [below](#openai-responses-recovery). |
+| `runtime.openAIResponsesAutoRecovery` | `false` | Recover automatically from two kinds of OpenAI Responses history errors; see [below](#openai-responses-recovery). |
 
 ### ui
 
@@ -125,15 +125,16 @@ Key fields use Pi key identifiers such as `ctrl+h`, `alt+x` or `shift+tab`.
 
 ## OpenAI Responses recovery
 
-An OpenAI Responses endpoint can reject a request when its history contains item IDs that were created under a different resource. With `runtime.openAIResponsesAutoRecovery` set to `true`, the suite handles this one case:
+An OpenAI Responses endpoint can reject a request when its history was created under a different resource or account. This happens, for example, when a gateway switches between upstream accounts. With `runtime.openAIResponsesAutoRecovery` set to `true`, the suite handles two cases:
 
-- It only acts on an `openai-responses` model whose final request failed with an explicit resource, ownership or missing-dependency error. An HTTP 400 alone is not enough.
-- It removes the upstream `id` from the history items that the failed request carried and asks the model to continue once. Content, encrypted reasoning, call IDs and tool outputs stay intact.
+- **Item IDs from another resource.** The final request failed with an explicit resource, ownership or missing-dependency error. An HTTP 400 alone is not enough. The suite removes the upstream `id` from the history items that the failed request carried and asks the model to continue. Content, encrypted reasoning, call IDs and tool outputs stay intact.
+- **Encrypted reasoning that can't be decrypted.** The final request failed because encrypted reasoning content could not be verified or decrypted. If the error quotes a shortened piece of the ciphertext, it must match reasoning in the failed request. The suite drops those reasoning items from the replayed history, removes the upstream `id` from the other items, and asks the model to continue. Messages, call IDs and tool outputs stay intact. New reasoning produced afterwards is replayed as usual.
+- It only acts on an `openai-responses` model.
 - It only acts when the failed request's history can be replayed on its own. Requests that depend on server-side state, such as `previous_response_id`, `item_reference` items or server-side compaction, are left alone.
 - It does not retry when the failed response already produced content or tool calls, so side effects are not repeated. Rate limits, auth errors, quota errors, context overflow and ordinary schema errors are left alone.
-- It records the isolated IDs in a `pi-suite:responses-isolation` session entry, storing only hashes of the provider, API, model and base URL. Prompt text, encrypted content and credentials are not stored. The original history stays on disk.
+- It records the isolated IDs and hashes of the dropped ciphertext in a `pi-suite:responses-isolation` session entry, together with a hash of the provider, API, model and base URL. Prompt text, the ciphertext itself and credentials are not stored. The original history stays on disk.
 
-Retries after the repair use Pi's own retry budget. A recovery attempt runs at most once per failure.
+Retries after the repair use Pi's own retry budget. Each kind of repair runs at most once until a request succeeds, so an ID repair followed by a decryption error can still recover.
 
 ## Shutdown with `/exit`
 

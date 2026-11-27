@@ -6,6 +6,7 @@
 
 以下 patched 宿主 UI/入口记录保留迁移前开发依赖组合的审计与验收细节，不作为现状或消费者安装证明。U1/T1/M1、净化及三组补丁清理已实施，当前官方未修改 Pi 1.5.0 的加载/运行范围见 [官方 Pi 插件兼容实施](./pi-suite/official-pi-compatibility/index.md)；消费者安装按用户指示 [延期](./pi-suite/official-pi-compatibility/index.md#状态与执行权限)，未实际 npm 发布。
 
+- [Responses 密文失效恢复](./pi-suite/goal/responses-cipher-recovery.md) — 网关切换上游账号后，移除无法解密的历史 reasoning 并继续；ID 与密文修复在同一阶段各一次，隔离记录 version 2 只存密文哈希。Responses 测试 12/12、typecheck 通过，cpa 网关实际会话自动继续。
 - [工具与通知渲染完善](./pi-suite/ui/render-coverage.md) — 通知按来源折叠、job 屏幕共用渲染、Transcript 使用注册的渲染器、StructuredOutput 与错误折叠、展开只显示 details 字段、workflow 快照回放、Details 着色；全量 260/260 与 typecheck 通过。
 - [Agent UX 改进](./pi-suite/agents/agent-ux-improvements.md) — Runs 页恢复已结束的 agent、同一 agent 只占一行、网络或上游错误自动恢复同一 agent、wait 显示等待时长。
 - [Goal 暂停与用户轮](./pi-suite/goal/goal-pause.md) — 暂停只停止自动续跑，按暂停原因决定用户消息是否恢复。

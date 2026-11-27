@@ -76,7 +76,7 @@ Pi Suite 不需要配置文件即可使用，下面的内容都是可选的。
 
 | 字段 | 默认值 | 含义 |
 | --- | --- | --- |
-| `runtime.openAIResponsesAutoRecovery` | `false` | 自动从某一类 OpenAI Responses 错误中恢复，见 [下文](#openai-responses-恢复)。 |
+| `runtime.openAIResponsesAutoRecovery` | `false` | 自动从两类 OpenAI Responses 历史错误中恢复，见 [下文](#openai-responses-恢复)。 |
 
 ### ui
 
@@ -125,15 +125,16 @@ Pi Suite 不需要配置文件即可使用，下面的内容都是可选的。
 
 ## OpenAI Responses 恢复
 
-当请求历史中包含在其他资源下创建的 item ID 时，OpenAI Responses 端点可能拒绝该请求。将 `runtime.openAIResponsesAutoRecovery` 设为 `true` 后，本套件只处理这一种情况：
+当请求历史是在其他资源或账号下产生的（例如网关在多个上游账号之间切换），OpenAI Responses 端点可能拒绝该请求。将 `runtime.openAIResponsesAutoRecovery` 设为 `true` 后，本套件处理两种情况：
 
-- 只针对 `openai-responses` 模型，且最终请求因明确的资源、所有权或依赖缺失错误而失败。仅有 HTTP 400 不够。
-- 移除失败请求所带历史项的上游 `id`，并让模型继续一次。正文、加密 reasoning、调用 ID 和工具输出保持不变。
+- **来自其他资源的 item ID**：最终请求因明确的资源、所有权或依赖缺失错误而失败，仅有 HTTP 400 不够。本套件移除失败请求所带历史项的上游 `id`，并让模型继续。正文、加密 reasoning、调用 ID 和工具输出保持不变。
+- **无法解密的加密 reasoning**：最终请求因 reasoning 密文无法验证或解密而失败。如果错误中带有截断的密文片段，它必须与失败请求中的 reasoning 匹配。本套件在重放的历史中移除这些 reasoning 项，移除其余历史项的上游 `id`，并让模型继续。消息、调用 ID 和工具输出保持不变。之后新产生的 reasoning 照常重放。
+- 只针对 `openai-responses` 模型。
 - 只在失败请求的历史可以独立重放时处理。依赖服务端状态的请求（例如带 `previous_response_id`、`item_reference` 项或服务端压缩）不处理。
 - 如果失败的响应已经产生内容或工具调用，则不重试，避免重复副作用。限流、认证错误、额度错误、上下文超限和普通 schema 错误不处理。
-- 被隔离的 ID 记录在 `pi-suite:responses-isolation` 会话条目中，只保存 provider、API、模型和 base URL 的哈希，不保存提示文本、密文或凭据。原始历史仍保留在磁盘上。
+- 被隔离的 ID 和被移除密文的哈希记录在 `pi-suite:responses-isolation` 会话条目中，另保存 provider、API、模型和 base URL 的哈希，不保存提示文本、密文原文或凭据。原始历史仍保留在磁盘上。
 
-修复之后的重试使用 Pi 自身的重试预算。每次失败最多尝试恢复一次。
+修复之后的重试使用 Pi 自身的重试预算。在请求成功之前，每种修复最多执行一次，因此 ID 修复后紧接着出现的解密错误仍能恢复。
 
 ## 用 `/exit` 退出
 

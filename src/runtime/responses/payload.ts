@@ -1,5 +1,10 @@
+import { createHash } from 'node:crypto';
+
 type Item = Record<string, unknown>;
 export type ReplayPayload = Item & { input: Item[] };
+export type ReplayReferences = { ids: string[]; ciphers: string[] };
+export type RepairKind = 'id' | 'cipher';
+export const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex');
 const object = (value: unknown): value is Item => value !== null && typeof value === 'object' && !Array.isArray(value);
 const upstreamId = (item: Item): string | undefined => typeof item.id === 'string' &&
   /^(?:rs|msg|fc|ctc)_/.test(item.id) && !item.id.startsWith('msg_pi_') ? item.id : undefined;
@@ -41,38 +46,56 @@ export function replayPayload(value: unknown, model: string): ReplayPayload | un
   return value as ReplayPayload;
 }
 
-export function replayIds(payload: ReplayPayload): string[] {
-  return payload.input.flatMap(item => {
-    if (!['reasoning', 'message', 'function_call', 'custom_tool_call'].includes(String(item.type))) return [];
-    const id = upstreamId(item); return id ? [id] : [];
-  });
-}
-
-/** Copy only the changed path. Body, cipher, phase, arguments and call_id retain identity. */
-export function isolateIds(payload: ReplayPayload, ids: ReadonlySet<string>): ReplayPayload | undefined {
-  let changed = false;
-  const input = payload.input.map(item => {
+/** Capture only what actually leaves after projection so a later failure can be
+ * matched even when an earlier ID repair already removed every upstream ID.
+ * Copy only the changed path; retained body, phase, arguments and call_id keep identity.
+ */
+export function projectReplay(payload: ReplayPayload, isolated?: { ids: ReadonlySet<string>; ciphers: ReadonlySet<string> }):
+    ReplayReferences & { projected?: ReplayPayload } {
+  const ids: string[] = [], ciphers: string[] = [];
+  let input: Item[] | undefined;
+  for (const [index, item] of payload.input.entries()) {
+    if (item.type === 'reasoning') {
+      const cipher = item.encrypted_content as string; // replayPayload validated the wire shape.
+      // The ciphertext belongs to the former account, so removing only the ID cannot make it replayable.
+      if (isolated?.ciphers.size && isolated.ciphers.has(sha256(cipher))) {
+        input ??= payload.input.slice(0, index);
+        continue;
+      }
+      ciphers.push(cipher);
+    }
     const id = upstreamId(item);
-    if (!id || !ids.has(id)) return item;
-    changed = true;
-    const { id: _id, ...replay } = item;
-    return replay;
-  });
-  return changed ? { ...payload, input } : undefined;
+    if (id && isolated?.ids.has(id)) {
+      const { id: _id, ...replay } = item;
+      (input ??= payload.input.slice(0, index)).push(replay);
+    } else {
+      if (id && ['reasoning', 'message', 'function_call', 'custom_tool_call'].includes(String(item.type))) ids.push(id);
+      input?.push(item);
+    }
+  }
+  return { ids, ciphers, projected: input && { ...payload, input } };
 }
 
 /** SDK errors are normalized even when an HTTP status callback is unavailable.
- * Require a specific ownership/dependency failure, not a generic HTTP 400 or crypto error.
+ * Require a specific ownership/dependency or encrypted reasoning failure, not a generic HTTP 400 or crypto error.
  */
-export function resourceMismatch(error: string, ids: readonly string[]): boolean {
+export function resourceMismatch(error: string, { ids, ciphers }: ReplayReferences): RepairKind | undefined {
   const text = error.toLowerCase();
-  if (/\b(?:401|403|429|5\d\d)\b|rate.?limit|quota|billing|context.{0,20}(?:length|window)|maximum context/.test(text)) return false;
+  if (/\b(?:401|403|429|5\d\d)\b|rate.?limit|quota|billing|context.{0,20}(?:length|window)|maximum context/.test(text)) return;
+  if (/\bencrypted\b[^\r\n]*?\b(?:cannot|could not) be (?:verified|decrypted)\b/.test(text)) {
+    if (!ciphers.length) return;
+    // Gateways can identify a ciphertext without naming its item. Compare any
+    // reported fragment case-sensitively; a mismatch invalidates the correlation.
+    for (const [, prefix, suffix] of error.matchAll(/(?<![A-Za-z0-9_-])([A-Za-z0-9_-]{4,})\.{3}([A-Za-z0-9_-]{4,})/g)) {
+      if (!ciphers.some(cipher => cipher.startsWith(prefix) && cipher.endsWith(suffix))) return;
+    }
+    return 'cipher';
+  }
   const namedItem = ids.some(id => error.includes(id));
   const resource = /(?:different|another|across|cross)[ -](?:openai[ -])?(?:resource|organization|project)|(?:resource|organization|project).{0,50}(?:mismatch|does not match|not belong)/.test(text);
   // Gateways may omit the item ID and qualify/redact the resource name. Recognize
   // the explicit creation-origin sentence, not arbitrary words between "different" and "resource".
   const createdElsewhere = /\bitem was created (?:under|in) (?:a different|another) [^.!?\r\n]{0,80}\b(?:resource|organization|project)\b/.test(text);
   const ownership = namedItem && /not found|does not exist|belongs to|was created in|provided without.{0,80}required|not owned by/.test(text);
-  const cipher = namedItem && /encrypted.{0,40}(?:cannot|could not|failed|invalid|verif|decrypt)|(?:decrypt|verif).{0,40}(?:encrypted|reasoning)/.test(text);
-  return resource || createdElsewhere || ownership || cipher;
+  if (resource || createdElsewhere || ownership) return 'id';
 }

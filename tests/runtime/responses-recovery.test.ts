@@ -30,6 +30,10 @@ const cpaMismatch = 'cpa API error (400): ' + JSON.stringify({code: null,
   message: 'OpenAI Responses bad request: The requested item was created under a different *** OpenAI resource. ' +
     'Use the same resource that created the item to access it. [trace_id=f4f12dea59a3ef75ac76fe51a49f110e]',
   param: '', type: 'invalid_request_error'});
+const cpaCipherMismatch = 'cpa API error (400): ' + JSON.stringify({code: null,
+  message: 'OpenAI Responses bad request: The encrypted content ciph...atim could not be verified. ' +
+    'Reason: Encrypted content could not be decrypted or parsed. [trace_id=… code=30000]',
+  param: '', type: 'invalid_request_error'});
 const text = (id: string, value: string): Item => ({type: 'message', id, role: 'assistant', phase: 'final_answer',
   status: 'completed', content: [{type: 'output_text', text: value, annotations: []}]});
 const call = (id: string, name: string, args: object): Item => ({type: 'function_call', id, call_id: `call_${id}`,
@@ -223,6 +227,29 @@ for (const transient of [false, true, 'network'] as const) test(`actual SDK repa
   } finally {await h.dispose();}
 });
 
+test('actual SDK drops reasoning whose ciphertext the endpoint cannot decrypt, alone or after an ID repair', {timeout: 20000}, async () => {
+  for (const idFirst of [false, true]) {
+    const steps: Step[] = idFirst ? [400] : [];
+    const h = await fixture({enabled: true, steps: [...steps, {status: 400, message: cpaCipherMismatch}, 'complete']});
+    try {
+      await h.seed(); await h.run();
+      const failedIndex = idFirst ? 3 : 2;
+      const failed = h.requests[failedIndex];
+      assert.equal(h.requests.length, failedIndex + 2);
+      if (idFirst) assert.deepEqual(failed, {...h.requests[2], input: stripped(h.requests[2].input)});
+      assert.deepEqual(h.requests[failedIndex + 1], {...failed,
+        input: stripped(failed.input.filter(item => item.type !== 'reasoning'))});
+      const isolation = records(h);
+      assert.equal(isolation.length, idFirst ? 2 : 1);
+      const cipherRecord = isolation.at(-1);
+      assert.ok(cipherRecord?.type === 'custom');
+      assert.deepEqual((cipherRecord.data as {ciphers: string[]}).ciphers,
+        [createHash('sha256').update(String(seed[0].encrypted_content)).digest('hex')]);
+      assert.equal(h.goal()?.status, 'completed'); assert.equal(h.effects(), 1);
+    } finally {await h.dispose();}
+  }
+});
+
 test('native retry exhaustion pauses Goal once with the last real error and never opens another budget', {timeout: 20000}, async () => {
   const h = await fixture({enabled: true, maxRetries: 2, steps: [400, 429, 503, 503]});
   try {
@@ -270,6 +297,7 @@ test('ordinary API errors and unknown/compaction resources are not admitted for 
     {error: {status: 429, message: 'You exceeded your current quota', code: 'insufficient_quota'}},
     {error: {status: 400, message: 'Maximum context length is 32000 tokens'}},
     {error: {status: 400, message: 'OpenAI Responses bad request: invalid schema description mentioning a different *** OpenAI resource'}},
+    {error: {status: 400, message: cpaCipherMismatch.replace('ciph...atim', 'atim...ciph')}},
     ...(['unknown', 'compaction'] as const).map(unsafe => ({unsafe, error: {status: 400, message: mismatch}})),
   ];
   for (const scenario of cases) {
@@ -278,7 +306,8 @@ test('ordinary API errors and unknown/compaction resources are not admitted for 
       await h.seed(); await h.run();
       assert.equal(h.requests.length, 3, scenario.error.message); assert.equal(records(h).length, 0);
       assert.equal(h.goal()?.status, 'paused'); assert.equal(h.goal()?.reason?.kind, 'request_failed');
-      assert.ok(h.goal()?.error?.includes(scenario.error.message), 'preserve the actual upstream error');
+      // The SDK reports the JSON envelope, which escapes the nested CPA error string.
+      assert.ok(h.goal()?.error?.includes(JSON.stringify(scenario.error.message).slice(1, -1)), 'preserve the actual upstream error');
       assert.ok(h.requests[2].input.some(item => item.id === 'rs_seed')); assert.equal(h.effects(), 1);
       assert.equal(h.events.filter(event => event.type === 'auto_retry_start').length, 0);
     } finally {await h.dispose();}

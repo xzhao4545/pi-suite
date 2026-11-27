@@ -1,21 +1,21 @@
-import { createHash } from 'node:crypto';
 import type { AgentBeforeSettleEvent, BoundaryResult, ExtensionAPI, ExtensionContext, TurnEndEvent } from '@earendil-works/pi-coding-agent';
 import type { SessionBinding, Binding } from '../binding.ts';
-import { isolateIds, replayIds, replayPayload, resourceMismatch } from './payload.ts';
+import { projectReplay, replayPayload, resourceMismatch, sha256, type RepairKind, type ReplayReferences } from './payload.ts';
 
 export const RECOVERY_ENTRY = 'pi-suite:responses-isolation';
-type Isolation = { version: 1; scope: string; ids: string[] };
-type Request = { generation: number; binding: Binding; scope: string; leaf: string | null; ids: string[]; signal?: AbortSignal };
+type Isolation = { version: 2; scope: string; ids: string[]; ciphers: string[] };
+type IsolationSets = { ids: Set<string>; ciphers: Set<string> };
+type Request = ReplayReferences & { generation: number; binding: Binding; scope: string; leaf: string | null; signal?: AbortSignal };
 type Failure = { request: Request; entryId: string; error: string };
 
 /** Per-session request projection only; retries/backoff and their budgets belong to Pi.
- * The append-only branch record stores IDs and a hashed endpoint scope, never payload/auth.
+ * The append-only branch record stores IDs, cipher hashes and a hashed endpoint scope, never payload/auth.
  */
 export class ResponsesRecovery {
-  private isolated = new Map<string, Set<string>>();
+  private isolated = new Map<string, IsolationSets>();
   private request?: Request;
   private failure?: Failure;
-  private recovering?: { generation: number; scope: string };
+  private recovering?: { scope: string; used: Set<RepairKind> };
   private generation = 0;
   constructor(private binding: SessionBinding, private enabled: boolean) {}
 
@@ -25,13 +25,24 @@ export class ResponsesRecovery {
     if (!this.enabled || !ctx) return;
     for (const entry of ctx.sessionManager.getBranch()) {
       if (entry.type !== 'custom' || entry.customType !== RECOVERY_ENTRY) continue;
-      const data = entry.data as Partial<Isolation> | undefined;
-      if (!data || data.version !== 1 || typeof data.scope !== 'string' || !Array.isArray(data.ids) ||
-          data.ids.some(id => typeof id !== 'string')) throw new Error('Invalid Responses isolation record');
-      const ids = this.isolated.get(data.scope) ?? new Set<string>();
-      for (const id of data.ids) ids.add(id);
-      this.isolated.set(data.scope, ids);
+      const data = entry.data as Partial<Omit<Isolation, 'version'> & { version: 1 | 2 }> | undefined;
+      // A v1 branch only isolated IDs. Don't treat a malformed v2 record as v1
+      // or the next request could silently replay ciphertext already isolated.
+      const ciphers = data?.version === 1 ? [] : data?.ciphers;
+      if (!data || (data.version !== 1 && data.version !== 2) || typeof data.scope !== 'string' ||
+          !Array.isArray(data.ids) || data.ids.some(id => typeof id !== 'string') ||
+          !Array.isArray(ciphers) || ciphers.some(cipher => typeof cipher !== 'string' || !/^[a-f0-9]{64}$/.test(cipher))) {
+        throw new Error('Invalid Responses isolation record');
+      }
+      this.addIsolation({ version: 2, scope: data.scope, ids: data.ids, ciphers });
     }
+  }
+
+  private addIsolation({ scope, ids, ciphers }: Isolation): void {
+    const known = this.isolated.get(scope) ?? { ids: new Set<string>(), ciphers: new Set<string>() };
+    for (const id of ids) known.ids.add(id);
+    for (const cipher of ciphers) known.ciphers.add(cipher);
+    this.isolated.set(scope, known);
   }
 
   beforeRequest(payload: unknown, ctx: ExtensionContext): unknown {
@@ -42,11 +53,12 @@ export class ResponsesRecovery {
     if (!this.enabled || !active || active.ctx.sessionManager !== ctx.sessionManager || model?.api !== 'openai-responses') return;
     const wire = replayPayload(payload, model.id);
     if (!wire) return;
-    const scope = createHash('sha256').update(JSON.stringify([model.provider, model.api, model.id, model.baseUrl])).digest('hex');
+    const scope = sha256(JSON.stringify([model.provider, model.api, model.id, model.baseUrl]));
     if (this.recovering && this.recovering.scope !== scope) this.recovering = undefined;
-    const projected = isolateIds(wire, this.isolated.get(scope) ?? new Set());
+    const { projected, ids, ciphers } = projectReplay(wire, this.isolated.get(scope));
+    // Raw ciphertext is needed for fragment matching, but lives only in the in-flight request state.
     this.request = { generation: ++this.generation, binding: active, scope,
-      leaf: ctx.sessionManager.getLeafId(), ids: replayIds(projected ?? wire), signal: ctx.signal };
+      leaf: ctx.sessionManager.getLeafId(), ids, ciphers, signal: ctx.signal };
     return projected;
   }
 
@@ -72,24 +84,30 @@ export class ResponsesRecovery {
   beforeSettle(event: AgentBeforeSettleEvent): BoundaryResult | undefined {
     const failure = this.failure;
     if (!failure || event.outcome !== 'error' || failure.request.signal?.aborted || !this.binding.isCurrent(failure.request.binding) ||
-        failure.request.generation !== this.request?.generation || !failure.request.ids.length ||
-        !resourceMismatch(failure.error, failure.request.ids)) return;
-    // One repair phase may span many native attempts, but never opens a second budget
-    // when those attempts finally exhaust. A successful turn permits a later new phase.
-    if (this.recovering) return;
+        failure.request.generation !== this.request?.generation) return;
+    const kind = resourceMismatch(failure.error, failure.request);
+    // One phase can span many native attempts. Give ID and cipher repair separate
+    // one-use slots: a resource repair can expose a cipher error on the very next request.
+    // Only a successful turn permits a later new phase at this scope.
+    if (!kind || this.recovering?.used.has(kind)) return;
     const source = event.context.contextEntries.find(entry => entry.sourceEntry.id === failure.entryId);
     if (!source) return; // Compaction/another projection removed the source from this boundary.
     const visible = source.messages.length;
     if (!visible && event.continue) return; // A preceding extension already owns this failure.
-    const { scope, ids, generation } = failure.request;
-    const known = this.isolated.get(scope) ?? new Set<string>();
-    const fresh = ids.filter(id => !known.has(id));
-    if (!fresh.length) return;
-    this.recovering = { generation, scope };
-    for (const id of fresh) known.add(id);
-    this.isolated.set(scope, known);
+    const { scope, ids, ciphers } = failure.request;
+    const known = this.isolated.get(scope);
+    // Cipher repair also isolates IDs: retained tool calls and messages must not
+    // reference upstream state that required the dropped reasoning.
+    const record: Isolation = { version: 2, scope,
+      ids: [...new Set(ids)].filter(id => !known?.ids.has(id)),
+      ciphers: kind === 'cipher' ? [...new Set(ciphers.map(sha256))].filter(hash => !known?.ciphers.has(hash)) : [],
+    };
+    if (!record.ids.length && !record.ciphers.length) return;
+    this.recovering ??= { scope, used: new Set() };
+    this.recovering.used.add(kind);
+    this.addIsolation(record);
     return { continue: true, entries: [...event.entries,
-      { type: 'custom', customType: RECOVERY_ENTRY, data: { version: 1, scope, ids: fresh } satisfies Isolation },
+      { type: 'custom', customType: RECOVERY_ENTRY, data: record },
       ...(visible ? [{ type: 'context_edit' as const, targetId: failure.entryId, replacement: null }] : []),
     ] };
   }
