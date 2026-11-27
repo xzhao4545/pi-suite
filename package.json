@@ -3,6 +3,7 @@
   "version": "0.1.2",
   "private": true,
   "description": "Custom modular Pi extension suite",
+  "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@12.6.0",
   "engines": {

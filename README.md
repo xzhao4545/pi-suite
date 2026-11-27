@@ -1,58 +1,92 @@
-# pi-suite
+# Pi Suite
 
-当前版本：`0.1.2`，对应 Git tag：`v0.1.2`。
+[中文](README.zh-CN.md) · [Documentation](docs/en/index.md)
 
-自定义 Pi 扩展包。使用 pnpm 管理依赖，按模块逐步实现询问、两级任务管理、后台执行、goal 和 subagents 功能。
+Pi Suite is an extension package for [Pi](https://github.com/earendil-works/pi), the terminal coding agent. It adds interactive questions, task lists, background jobs, persistent goals and subagents as one extension that shares a single UI, storage layer and notification queue.
 
-当前提供统一界面与会话绑定基础，以及 ask_user 的批量、多选、推荐、默认答案、超时和历史查阅能力。业务专项进度维护在 doc/todo。
+It runs on official, unmodified Pi 1.5.0 and needs no changes to Pi itself. The current version is 0.1.2 (Git tag `v0.1.2`).
 
-## 开发
+## Features
 
-需要 Node.js 24 或更高版本，以及 pnpm 12.6.0。
+| Module | What it gives you |
+| --- | --- |
+| [Ask](docs/en/modules/ask.md) | `ask_user`: the model asks you one question or a batch of 2–4, with options, defaults, multi-select, free-text answers and an idle timeout. |
+| [Goal](docs/en/modules/goal.md) | `/goal <objective>`: the model keeps working across turns until it completes the goal with evidence, reports a blocker, or you pause it. Optional token budget. |
+| [Tasks](docs/en/modules/tasks.md) | A two-level task list (groups and child tasks) that the model maintains and the Dock displays, with dependencies and atomic batch edits. |
+| [Jobs](docs/en/modules/jobs/index.md) | Background commands in pipe or PTY mode: bounded log reading, input, output monitors, coding-agent CLI presets, supervised terminals, and stops that check every captured process has exited and report `unconfirmed` when they cannot. |
+| [Agents](docs/en/modules/agents/index.md) | Subagents as child Pi sessions in the same process: custom types, per-type models and thinking, `@handle` mentions, questions to the parent, schedules, scripted [workflows](docs/en/modules/agents/workflows.md) and an [RPC API](docs/en/modules/agents/rpc.md) for other extensions. |
+
+Shared pieces:
+
+- **Dock**: one panel above the editor showing goal, tasks, subagents, jobs and workflows. Press ← in an empty editor to select a row and open it.
+- **Browsers**: `/tasks`, `/jobs` and `/subagents` for filtering, reading transcripts and logs, and controlling runs.
+- **`wait`**: one tool that waits for any mix of jobs, subagents and workflows.
+- **Notifications**: results and questions are merged and delivered to the owning session once.
+- **Extras**: the `oh-my-pi` dark theme, and the `pi-suite-jobs` and `pi-suite-workflow` skills.
+
+## Requirements
+
+- Node.js 24 or later.
+- Pi 1.5.0 (official build). Other Pi versions are not supported.
+- Linux or Windows.
+
+## Install
+
+```sh
+pi install git:github.com/xzhao4545/pi-suite
+pi list
+```
+
+Then run `/reload` in an open session, or restart Pi. All modules are enabled by default.
+
+The package has been loaded and tested from this repository. Installing it as a Git, local or tarball package from another project has not been verified yet.
+
+If you use any of `pi-ask-user`, `@tintinweb/pi-tasks`, `pi-interactive-shell`, `pi-background-jobs`, `@narumitw/pi-goal` or `@tintinweb/pi-subagents`, remove them to avoid duplicate tools. See [Installation](docs/en/installation.md) for local installs, updates and replacing these extensions.
+
+## Quick start
+
+| Try | What happens |
+| --- | --- |
+| `/goal Make the test suite pass` | Starts a goal; the model keeps working across turns while the goal stays active. |
+| Ask the model to "run the dev server in the background and tell me when it's ready" | It starts a job with a monitor and is woken when the output matches. |
+| `@explore where is the config loaded?` | Sends the question to an Explore subagent. |
+| `/subagents` | Browse subagent runs, transcripts, types, schedules and workflows. |
+| `/jobs` | Browse jobs, read logs, or take over a PTY with `i`. |
+| `/tasks` | Browse the task list. |
+| `/suite` | Edit settings. |
+| `/exit` | Quit Pi. The suite stops jobs and subagents and waits for cleanup, up to 10 seconds for jobs. |
+
+## Configuration
+
+No configuration is required. Optional settings live in `~/.pi/agent/pi-suite.json` (user) and `.pi/pi-suite.json` (project); the project file overrides the user file field by field.
+
+```json
+{
+  "modules": { "goal": false },
+  "agents": { "maxConcurrent": 4, "types": { "Explore": { "model": "anthropic/claude-haiku-4-5" } } }
+}
+```
+
+All fields are listed in [Configuration](docs/en/configuration.md). You can also edit them with `/suite`.
+
+## Documentation
+
+- [English documentation](docs/en/index.md)
+- [中文文档](docs/zh/index.md)
+
+## Development
 
 ```sh
 pnpm install
 pnpm typecheck
 pnpm test
+pnpm exec pi -e .
 ```
 
-开发时使用本地扩展入口：
+See [Development](docs/en/development.md) for the source layout and project rules.
 
-```sh
-pnpm exec pi -e ./src/index.ts
-```
+## Credits and license
 
-开发依赖使用官方未修改的 Pi 1.5.0；Pi 包的 `pi` bin 与 `./rpc-entry` 分别使用官方 `dist/bundle/cli.js`、`dist/bundle/rpc-entry.js`。扩展复用宿主 loader 的模块解析与公开 UI 组件，不修改消费者的宿主。加载、Responses 与包安装边界见 [公共运行时](./doc/current/runtime/index.md#宿主加载边界)，子代理共享父模型运行时的私有结构依赖见 [模型运行时桥接](./doc/current/agents/models.md#模型运行时桥接)。`package.json` 保持 `private: true`，三个 Pi peer 与开发依赖均精确固定为 `1.5.0`。官方 Pi 1.5.0 的实际 Node bin（regular/fullscreen）与 RPC 加载入口已通过；消费者 Git/本地包及 tarball 安装尚未验收，本包未实际 npm 发布。依赖升级后须重启 Pi；`/reload` 只重载扩展，不替换宿主模块图。
+Pi Suite adapts code and tool contracts from several MIT-licensed Pi extensions: `pi-ask-user`, `@tintinweb/pi-tasks`, `pi-interactive-shell`, `pi-background-jobs`, `@narumitw/pi-goal` and `@tintinweb/pi-subagents`. The theme is based on Oh My Pi's Titanium palette. Details and license texts are in [`third-party/UPSTREAM.md`](third-party/UPSTREAM.md).
 
-Pi 直接加载 TypeScript 扩展，因此当前不需要构建产物。
-
-运行时使用 /suite 搜索、修改和保存配置，通用设置保存后 /reload 生效；/subagents 查看子代理，默认启用的 /exit 使用原生退出清理，询问操作和配置说明见 [ask](./doc/current/ask/index.md) 与 [公共运行时](./doc/current/runtime/index.md)。启用 ask_user 时从实际加载列表移除原版 pi-ask-user，以免同名工具重复注册。
-
-## 主题
-
-内置 `oh-my-pi` 深色主题，参考 Oh My Pi Titanium 的电蓝与蓝灰配色。在 Pi 中，将本包作为 Pi package 加载后执行 `/reload`，通过 `/settings` → **Theme** → `oh-my-pi` 选择；开发预览使用 `pnpm exec pi -e . --use-theme oh-my-pi`。主题 JSON 本身适用于原版 Pi，可单独安装而不加载 Suite 扩展；主题加载、单独安装及终端背景边界见 [主题说明](./doc/current/ui/themes.md)。
-
-## 目录
-
-```text
-src/
-  index.ts          扩展入口
-  ui/               面板布局、焦点与消息渲染
-  runtime/          会话绑定与通知协调
-  ask/              用户询问
-  tasks/            两级任务管理
-  jobs/backends/    后台执行与平台后端
-  goal/             目标与续跑
-  agents/           subagent 管理与查看
-themes/
-  oh-my-pi.json     Oh My Pi 参考深色主题
-doc/
-  current/          当前实现与开发方式
-  todo/             设计、需求与实施计划
-  finished/         已完成专项
-third-party/
-  UPSTREAM.md       上游来源记录
-  licenses/         上游许可证
-```
-
-设计与实施计划见 [设计与实施记录](doc/finished/pi-suite/design/index.md)，当前项目状态见 [doc/current](./doc/current/index.md)。Pi 相关依赖以官方 1.5.0 为开发基线；pnpm-lock.yaml 与 pnpm-workspace.yaml 应提交到版本控制。
+Pi Suite is released under the [MIT License](LICENSE).
