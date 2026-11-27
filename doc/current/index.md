@@ -6,7 +6,7 @@
 
 | 项目 | 当前值 |
 | --- | --- |
-| 包 | 单个 pnpm 包 `pi-suite`，版本 `0.3.0`，Git tag `v0.3.0`，发布到 npm，见[发布](./installation.md#发布) |
+| 包 | 单个 pnpm 包 `pi-suite`，版本 `0.3.1`，Git tag `v0.3.1`，发布到 npm，见[发布](./installation.md#发布) |
 | 工具链 | Node.js ≥24、pnpm `12.6.0`，TypeScript 和 ESM |
 | 扩展入口 | Pi 通过 `package.json` 的 `pi.extensions` 加载 `src/index.ts`；工具、命令和事件见[入口与注册](./runtime/index.md#入口与注册) |
 | 源码 | `src/ui`、`src/runtime`、`src/ask`、`src/tasks`、`src/jobs`（含 `backends`）、`src/goal`、`src/agents`；上游来源见 `third-party/UPSTREAM.md` |
