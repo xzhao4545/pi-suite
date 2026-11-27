@@ -54,7 +54,8 @@ export function workflowEntryData(task: OwnedWorkflowTask): WorkflowEntryData {
     status: task.status,
     startTime: task.startTime,
     endTime: task.endTime,
-    progress: task.workflowProgress,
+    // The live task keeps appending progress after a tool result or entry is captured.
+    progress: task.workflowProgress.slice(),
     agentCount: task.agentCount,
     totalTokens: task.totalTokens,
     scriptPath: task.scriptPath, journalPath: task.journalPath, args: task.args, value: task.value, error: task.error,

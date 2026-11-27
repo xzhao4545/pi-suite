@@ -6,7 +6,8 @@ import * as agents from '../agents/render.ts';
 import { STRUCTURED_OUTPUT_TOOL_NAME, structuredOutputRenderers } from '../agents/output/tool.ts';
 import * as goal from '../goal/render.ts';
 import { askRenderers } from '../ask/tool-render.ts';
-import { workflowRenderers } from '../agents/workflow/render.ts';
+import { WORKFLOW_ENTRY_TYPE } from '../agents/workflow/entry.ts';
+import { workflowEntryRenderer, workflowRenderers } from '../agents/workflow/render.ts';
 import { waitRenderers } from './wait-render.ts';
 import { loadConfig } from './config.ts';
 import { notificationRenderer } from './notification-render.ts';
@@ -18,6 +19,7 @@ import { builtinCommandRenderers } from '../ui/rendering/builtin-command.ts';
 export function registerSuiteRenderers(pi: ExtensionAPI, commandHighlight?: boolean | (() => boolean)): void {
   goal.registerGoalMessageRenderers(pi);
   pi.registerMessageRenderer('pi-suite:notification', notificationRenderer);
+  pi.registerEntryRenderer(WORKFLOW_ENTRY_TYPE, workflowEntryRenderer);
   // Factory scope has no session cwd. Freeze each context's saved option on first display;
   // /reload creates a fresh registry, including when history is rebuilt before session_start.
   const options = new Map<string, boolean>();

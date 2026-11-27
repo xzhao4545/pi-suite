@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { stripVTControlCharacters } from 'node:util';
 import { dirname, join } from 'node:path';
-import { AgentSessionRuntime, type ExtensionAPI, type ExtensionContext, type ExtensionCommandContext, type ExtensionUIContext } from '@earendil-works/pi-coding-agent';
+import { AgentSessionRuntime, SessionManager, ToolExecutionComponent, type ExtensionAPI, type ExtensionContext, type ExtensionCommandContext, type ExtensionUIContext } from '@earendil-works/pi-coding-agent';
 import { fauxAssistantMessage, fauxToolCall, type JsonObject, type TranscriptContext } from '@earendil-works/pi-ai';
 import { getKeybindings, visibleWidth } from '@earendil-works/pi-tui';
 import { host } from '../support/host.ts';
@@ -85,6 +85,33 @@ test('real workflow tool is background, shares schema/gates/wait and restores ch
       assert.ok(child.result); assert.match(transcriptText(transcript(child)), /JSON_STEP|FAST_STEP/);
     }
     assert.equal(h.session.sessionManager.getBranch().filter(e => e.type === 'custom_message' && JSON.stringify(e.content).includes('Workflow result')).length, 0);
+  } finally { await h.cleanup(); }
+});
+
+test('agent_workflow replays persisted result details without the workflow cache', {timeout: 15000}, async () => {
+  const h = await setup();
+  try {
+    const args = {script: script('return 1;')};
+    h.faux.setResponses([
+      fauxAssistantMessage(fauxToolCall('agent_workflow', args)),
+      () => fauxAssistantMessage(fauxToolCall('wait', {ids: [[...h.manager.tasks.keys()].at(-1)!]})),
+      fauxAssistantMessage('Workflow inspected'),
+    ]);
+    await h.session.prompt('Run the workflow');
+    const result = SessionManager.open(h.session.sessionFile!).getBranch()
+      .flatMap(entry => entry.type === 'message' && entry.message.role === 'toolResult' && entry.message.toolName === 'agent_workflow'
+        ? [entry.message] : [])[0];
+    assert.ok(result && !result.isError);
+    // Resolve only the load-time renderer, as when agents are disabled. It has no task lookup.
+    const renderer = h.session.extensionRunner.resolveToolRenderers('agent_workflow', () => undefined);
+    const tool = new ToolExecutionComponent('agent_workflow', result.toolCallId, args, {outputPad: 2}, renderer, terminal(30, 120), h.root);
+    tool.updateResult(result);
+    const shown = () => tool.render(120).map(stripVTControlCharacters).filter(line => line.trim()).join('\n');
+    assert.match(shown(), /^[^\n]*Workflow.*0\/0 agents[^\n]*$/);
+    tool.setExpanded(true);
+    assert.match(shown(), /usage: 0 tokens · 0 tools/);
+    assert.match(shown(), /resultPath:/);
+    assert.doesNotMatch(shown(), /wf_[a-f0-9]{12} running ·/);
   } finally { await h.cleanup(); }
 });
 

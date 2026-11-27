@@ -157,6 +157,12 @@ export function workflowRuntime(agents = agentRuntime()): OwnerHandle<WorkflowMa
   return { owner: handle.owner, stale: handle.stale ?? agents.stale };
 }
 
+/** History can observe an existing owner without admitting the workflows module. */
+export function findWorkflowTask(id: string): OwnedWorkflowTask | undefined {
+  const owner = existingOwner(WORKFLOW_OWNER, getAgentDir()) as WorkflowManager | undefined;
+  return owner?.tasks.get(id);
+}
+
 /** Module admission does not own the lifetime of an already running Worker. */
 export function quitExistingWorkflowRuntime(agentDir: string): Promise<void> | undefined {
   return existingOwner(WORKFLOW_OWNER, agentDir)?.shutdown();

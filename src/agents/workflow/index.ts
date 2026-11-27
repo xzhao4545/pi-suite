@@ -1,12 +1,12 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import type { SessionBinding } from '../../runtime/binding.ts';
-import type { Notifications } from '../../runtime/notifications.ts';
+import type { Notifications, NotificationView } from '../../runtime/notifications.ts';
 import type { Settlement, Waitable } from '../../runtime/wait.ts';
 import type { Dock } from '../../ui/dock.ts';
 import { sanitizeText } from '../../runtime/text.ts';
 import { ToolError } from '../../runtime/errors.ts';
 import type { AgentsModule } from '../index.ts';
-import { WORKFLOW_ENTRY_TYPE, workflowEntryData, workflowEntries, type OwnedWorkflowTask } from './entry.ts';
+import { WORKFLOW_ENTRY_TYPE, workflowEntries, type OwnedWorkflowTask } from './entry.ts';
 import { WorkflowManager, workflowRuntime, workflowActive } from './manager.ts';
 import { workflowResultText } from './task.ts';
 import { formatDuration, elapsedMs } from './progress/index.ts';
@@ -14,6 +14,13 @@ import { formatDuration, elapsedMs } from './progress/index.ts';
 export function workflowSummary(task: OwnedWorkflowTask, modelFacing = false): string {
   const elapsed = elapsedMs(task, Date.now());
   return `${task.id} ${task.status} · ${sanitizeText(task.workflowName ?? task.id).replace(/[\r\n\t]/g, ' ')} · ${task.doneCount}/${task.agentCount} agents · ${modelFacing ? `${(elapsed / 1000).toFixed(1)}s` : formatDuration(elapsed)}`;
+}
+function resultBody(task: OwnedWorkflowTask): string {
+  return `${workflowResultText(task).slice(0, 1000)}\nread: read({"path":${JSON.stringify(task.resultPath)}})`;
+}
+function resultView(task: OwnedWorkflowTask): NotificationView {
+  return { title: 'Workflow result', state: task.status, meta: [task.id, task.workflowName ?? task.id,
+    `${task.doneCount}/${task.agentCount} agents`, formatDuration(elapsedMs(task, Date.now()))], body: resultBody(task) };
 }
 /** Per-binding workflow view; the process-wide owner survives reload and session switches. */
 export class WorkflowsModule implements Waitable {
@@ -71,14 +78,15 @@ export class WorkflowsModule implements Waitable {
     for (const item of this.unread()) {
       if (this.queued.has(item.id)) continue;
       this.queued.add(item.id);
-      this.notices.enqueue(current.sessionId, `workflow:${item.id}:result`, item.summary, () => this.consume(item));
+      this.notices.enqueue(current.sessionId, `workflow:${item.id}:result`, item.summary, () => this.consume(item),
+        'event', resultView(this.manager.get(item.id)));
     }
     this.dock.invalidate();
   }
   settlement(id: string): Settlement {
     const task = this.manager.get(id), current = this.binding.current;
     if (!current || !this.manager.visible(task, this.agents.scope(current.ctx))) throw new Error(`Workflow ${id} is not visible on this branch. Wait from the session branch that started it.`);
-    return {id, state: task.status, settled: this.manager.settled(id), summary: `${workflowSummary(task, true)}\n${workflowResultText(task).slice(0, 1000)}\nread: read({"path":${JSON.stringify(task.resultPath)}})`};
+    return {id, state: task.status, settled: this.manager.settled(id), summary: `${workflowSummary(task, true)}\n${resultBody(task)}`};
   }
   unread(): Settlement[] { return this.list().filter(task => this.manager.settled(task.id) && !task.notified).map(task => this.settlement(task.id)); }
   subscribe(listener: () => void): () => void { return this.manager.subscribe(listener); }

@@ -68,19 +68,19 @@ export function workflowToolRows(task: WorkflowTask): ToolExpandedRow[] {
   if (!workflowActive(task)) rows.push({ label: 'Result', value: workflowResultText(task), tone: task.status === 'failed' ? 'error' : 'toolOutput' });
   return rows;
 }
-export function workflowLine(task: WorkflowTask): ToolLine {
+export function workflowLine(task: WorkflowTask, now = Date.now()): ToolLine {
   const groups = buildPhaseGroups(task.workflowProgress, task.meta?.phases);
-  const title = header(task, task.meta, groups, task.agentCount, Date.now());
+  const title = header(task, task.meta, groups, task.agentCount, now);
   return { ...stateLine(task.status === 'killed' ? 'stopped' : task.status === 'paused' ? 'queued' : task.status), title: 'Workflow', summary: `${title.name} · ${title.stats}${title.state ? ` · ${title.state}` : ''}`,
     meta: [title.subtext ?? '', `${task.totalTokens} tokens · ${task.totalToolCalls} tools${task.replayedCount ? ` · ${task.replayedCount} replayed` : ''}`] };
 }
 
 export class WorkflowProgress extends Text {
   private revision = '';
-  constructor(private task: WorkflowTask, private expanded = true, private theme?: Theme) { super('', 0, 0); }
+  constructor(private task: WorkflowTask, private expanded = true, private theme?: Theme, private snapshotAt?: number) { super('', 0, 0); }
   override render(width: number): string[] {
-    if (!this.expanded && this.theme) return [toolLine(this.theme, workflowLine(this.task), width)];
-    const task = this.task, now = Date.now();
+    const task = this.task, now = this.snapshotAt ?? Date.now();
+    if (!this.expanded && this.theme) return [toolLine(this.theme, workflowLine(task, now), width)];
     const revision = `${task.progressVersion}:${task.status}:${task.endTime}:${task.error}:${Math.floor(now / 1000)}`;
     if (revision !== this.revision) {
       this.revision = revision;

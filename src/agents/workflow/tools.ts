@@ -9,9 +9,8 @@ import { agentTypes } from '../catalog.ts';
 import { workflowToolDescription } from './tool-description.ts';
 import { workflowSummary, type WorkflowsModule } from './index.ts';
 import { decideWorkflowCollision } from './collisions.ts';
-import { WORKFLOW_ENTRY_TYPE, decodeWorkflowEntry, taskFromEntry } from './entry.ts';
-import { workflowRenderers } from './render.ts';
-import { WorkflowProgress, workflowLine, workflowToolRows } from './ui/progress.ts';
+import { workflowEntryData } from './entry.ts';
+import { workflowRenderers, type WorkflowToolDetails } from './render.ts';
 import type { AgentType } from '../types.ts';
 
 const schema = Type.Object({script: Type.Optional(Type.String({minLength: 1})), scriptPath: Type.Optional(Type.String({minLength: 1})),
@@ -27,23 +26,10 @@ export function registerWorkflowTool(pi: ExtensionAPI, workflows: WorkflowsModul
       if (!enabled || !config().agents.workflows) throw new ToolError('INVALID_ARGS', 'Workflow launch is disabled in this session. Use agent_start instead.');
       const task = await workflows.admit().start(params, agents.scope(ctx), config(), id);
       return textResult([workflowSummary(task, true), task.logs.at(-1), `resultPath: ${task.resultPath}`],
-      {id: task.id, status: task.status, scriptPath: task.scriptPath, resultPath: task.resultPath, resumedFrom: task.resumedFrom});
+        {id: task.id, status: task.status, scriptPath: task.scriptPath, resultPath: task.resultPath, resumedFrom: task.resumedFrom,
+          snapshot: {data: workflowEntryData(task), capturedAt: Date.now()}} satisfies WorkflowToolDetails);
     },
-    ...workflowRenderers({
-      line: id => {
-        // Historical results can outlive the runtime task cache.
-        const task = workflows.manager.tasks.get(id);
-        return task ? workflowLine(task) : undefined;
-      },
-      lines: id => {
-        const task = workflows.manager.tasks.get(id);
-        return task ? workflowToolRows(task) : undefined;
-      },
-    }) };
-  pi.registerEntryRenderer(WORKFLOW_ENTRY_TYPE, (entry, _options, theme) => {
-    const data = decodeWorkflowEntry(entry.data);
-    return new WorkflowProgress(workflows.manager.tasks.get(data.id) ?? taskFromEntry(data), false, theme);
-  });
+    ...workflowRenderers(id => workflows.manager.tasks.get(id)) };
   if (enabled) { registerBoundTool(pi, tool, 'initial'); registered = true; }
   const refreshTypes = (ctx: ExtensionContext) => {
     if (!registered) return;

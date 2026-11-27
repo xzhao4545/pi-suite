@@ -20,10 +20,11 @@ export const listRenderers = toolRenderers<{ state?: string; groupId?: string },
     ...nextCursor ? [{ label: 'more', value: 'next page available', tone: 'warning' as const }] : [], ...tasks.length ? [] : ['No tasks'],
   ],
 });
-export const getRenderers = toolRenderers<{ id: string }, { task: TaskView }>({
+export const getRenderers = toolRenderers<{ id: string }, { task: TaskView; generation: string }>({
   call: () => ({ icon: '⟳', tone: 'accent', title: 'Task' }),
   collapsed: ({ task }) => ({ ...line(task), meta: task.progress ? [`${task.progress.done}/${task.progress.total}`] : [] }),
-  expanded: ({ task }, _args, text) => [{ code: JSON.stringify(task, null, 2), language: 'json', label: 'task' }, text],
+  expanded: ({ task, generation }) => [{ label: 'generation', value: generation },
+    { code: JSON.stringify(task, null, 2), language: 'json', label: 'task' }],
 });
 export const editRenderers = toolRenderers<unknown, EditResult>({
   call: () => ({ icon: '⟳', tone: 'accent', title: 'Updating tasks…' }),
