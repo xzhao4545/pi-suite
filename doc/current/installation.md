@@ -2,7 +2,7 @@
 
 ## GitHub 安装
 
-需要 Node.js 24 或更高，以及官方 Pi 1.5.0 或更高版本。Git、本地路径和 tarball 安装的验证范围见[宿主加载边界](./runtime/index.md#宿主加载边界)。使用 Pi 原生包管理命令安装到用户层：
+需要 Node.js 24 或更高，以及官方 Pi 1.6.1 或更高版本。Git、本地路径和 tarball 安装的验证范围见[宿主加载边界](./runtime/index.md#宿主加载边界)。使用 Pi 原生包管理命令安装到用户层：
 
 ```sh
 pi install git:github.com/xzhao4545/pi-suite

@@ -38,13 +38,16 @@ export class GoalManager {
   constructor(private pi: ExtensionAPI, private binding: SessionBinding, private notifications: Notifications, private status: StatusPublisher,
     private waits: WaitRegistry) {
     this.waitResources = new GoalWaitResources(binding, waits);
-    // Only a running goal gates delivery. A paused or completed goal never holds results:
-    // the woken turn gets access "none", so it handles the notification without resuming.
+    // A paused or completed goal does not hold results: the woken turn gets access "none",
+    // so it handles the notification without resuming. The exception is a pause from a
+    // cancelled ask: the user asked the model to stop and wait, so results stay queued and
+    // join the user's next message instead of starting a turn behind the user's back.
     // While running, direct child questions and selected monitor/update events can wake an
     // arranged wait; unrelated settlements remain queued until all requested objects settle.
     notifications.setAdmission(ids => {
       const goal = this.goal;
       if (this.fault) return false;
+      if (goal?.status === 'paused' && goal.reason?.kind === 'cancelled' && goal.reason.wait?.waiting === 'user') return false;
       if (!goal || goal.status !== 'active' || !goal.automatic) return true;
       return goal.waiting !== 'user' && (!goal.waitFor ||
         ids.some(id => isQuestion(id) || goal.waitFor!.some(waited => id === `job:${waited}:monitor` || id === `job:${waited}:update`)));

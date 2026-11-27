@@ -6,7 +6,7 @@
 
 | 项目 | 当前值 |
 | --- | --- |
-| Pi peer 与开发依赖 | `@earendil-works/pi-coding-agent`、`pi-ai`、`pi-tui` 的 peer 为 `>=1.5.0`，开发依赖精确锁定 1.5.0 作为验收基线，使用官方未修改的包及新作用域 API |
+| Pi peer 与开发依赖 | `@earendil-works/pi-coding-agent`、`pi-ai`、`pi-tui` 的 peer 为 `>=1.6.1`，开发依赖精确锁定 1.6.1 作为验收基线，使用官方未修改的包及新作用域 API；组件 `render()` 按 1.6 的 `readonly string[]` 契约透传，不原地修改子组件输出 |
 | typebox | 1.3.27 |
 | 调度运行依赖 | croner 10.0.1 |
 | 运行环境 | Node.js 24+，pnpm 12.6.0 |
@@ -25,7 +25,7 @@
 
 ## 官方宿主与支持范围
 
-- 验收基线为官方未修改的 Pi 1.5.0。`dist/bundle/cli.js` 与 `dist/bundle/rpc-entry.js` 通过真实加载与运行验收，见 [官方 Pi 兼容验收](../finished/pi-suite/official-pi-compatibility/validation.md)。
+- 验收基线为官方未修改的 Pi 1.6.1；下文各专项验收记录注明了实际使用的 Pi 版本。`dist/bundle/cli.js` 与 `dist/bundle/rpc-entry.js` 通过真实加载与运行验收，见 [官方 Pi 兼容验收](../finished/pi-suite/official-pi-compatibility/validation.md)。
 - Linux PTY/xterm 覆盖 regular/fullscreen 下的 Tasks/Subagents/Jobs、Dock、正文搜索、工具键盘展开、活动 child 的中文原生 Editor、持久 clone、resize、返回和自然退出。本地 HTTP SSE 覆盖 Responses 保存、重启 resume，以及同模型/跨模型的原版 phase 行为。
 - 包为 `private: true`，未发布到 npm。消费者 Git/本地包及 tarball 安装延期，不计为通过，见 [安装验收边界](../finished/pi-suite/official-pi-compatibility/index.md#状态与执行权限)。
 - 未证明的范围：实体人工终端、Windows 人工交互、外网账号/组织权限、真实上游密文解密、中转粘性。各平台专项的结论不扩大到这些范围。
@@ -182,7 +182,7 @@ pnpm test
 | 检查 | 环境 | 结果 |
 | --- | --- | --- |
 | `pnpm typecheck` | Linux，Node 24.22.2 | 通过，约 2 秒 |
-| `pnpm test` | Linux，Node 24.22.2，官方未修改 Pi 1.5.0 | 共 260 项全部通过，无失败、跳过或取消；约 57 秒 |
+| `pnpm test` | Linux，Node 24.22.2，官方未修改 Pi 1.6.1 | 共 259 项全部通过，无失败、跳过或取消；约 62 秒 |
 
 `tests/runtime/cli-host.test.ts` 的实际 CLI 用例使用 10 秒等待期限；与其他 CLI/Worker 进程同时运行时可能超时，单独重跑通过。
 

@@ -45,12 +45,12 @@ export function readingOverlayOptions(tui: TUI): OverlayOptions {
 }
 
 /** Shared explicit window budget: short views must still occupy the whole cover. */
-export function readingWindow(lines: string[], height: number): string[] {
+export function readingWindow(lines: readonly string[], height: number): string[] {
   const rows = Math.max(0, Math.floor(height));
   return [...lines.slice(0, rows), ...Array(Math.max(0, rows - lines.length)).fill('')];
 }
 
-export function readingText(render: (width: number) => string[]): Component {
+export function readingText(render: (width: number) => readonly string[]): Component {
   return {render: width => render(width).map(line => truncateToWidth(line, width)), invalidate() {}};
 }
 

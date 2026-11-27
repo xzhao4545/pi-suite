@@ -78,7 +78,7 @@ export function workflowLine(task: WorkflowTask, now = Date.now()): ToolLine {
 export class WorkflowProgress extends Text {
   private revision = '';
   constructor(private task: WorkflowTask, private expanded = true, private theme?: Theme, private snapshotAt?: number) { super('', 0, 0); }
-  override render(width: number): string[] {
+  override render(width: number): readonly string[] {
     const task = this.task, now = this.snapshotAt ?? Date.now();
     if (!this.expanded && this.theme) return [toolLine(this.theme, workflowLine(task, now), width)];
     const revision = `${task.progressVersion}:${task.status}:${task.endTime}:${task.error}:${Math.floor(now / 1000)}`;

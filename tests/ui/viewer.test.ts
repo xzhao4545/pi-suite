@@ -22,7 +22,7 @@ function activeTheme(): Theme {
   }}, terminal(), process.cwd());
   return result;
 }
-const plain = (lines: string[]) => stripVTControlCharacters(lines.join('\n'));
+const plain = (lines: readonly string[]) => stripVTControlCharacters(lines.join('\n'));
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
 test('structured job details retain plain text after stripping theme colors', () => {

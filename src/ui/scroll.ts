@@ -5,13 +5,14 @@ import { readingWindow } from './reading.ts';
 
 /** Stable content components keep native Markdown/tool caches while the shared reader clips lines. */
 class ReadingContent extends Container {
-  constructor(content: Component, private measured: (lines: string[]) => void) { super(); this.addChild(content); }
-  override render(width: number): string[] { const lines = super.render(width); this.measured(lines); return lines; }
+  constructor(content: Component, private measured: (lines: readonly string[]) => void) { super(); this.addChild(content); }
+  // Container returns its cached array; the search index only reads it.
+  override render(width: number): readonly string[] { const lines = super.render(width); this.measured(lines); return lines; }
 }
 
 /** Search is an index, not a second viewport: Pi owns clipping, follow-end and the only offset. */
 export class ScrollView extends NativeScrollView {
-  private lines: string[] = [];
+  private lines: readonly string[] = [];
   private document: ReadingContent;
   private content: Component;
   readonly search = new Input();
@@ -34,7 +35,7 @@ export class ScrollView extends NativeScrollView {
   follow(): void { this.scrollToEnd(); this.hasNewOutput = false; }
   pause(): void { this.scrollTo(this.offset, {disableFollow: true}); }
   markNewOutput(): void { if (!this.following) this.hasNewOutput = true; }
-  private measured(lines: string[]): void {
+  private measured(lines: readonly string[]): void {
     // Source events mark unread output. Layout growth (for example expanding a tool)
     // only updates the search index and must not masquerade as provider output.
     this.lines = lines;

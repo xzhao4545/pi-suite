@@ -225,6 +225,8 @@ test('cross-load owners preserve active controls, then replace both runtimes whe
         && message.toolName === 'ask_user') ? 'answered' : 'parent notice'))]);
     const waiting = await h.agents.start({prompt: 'ask parent', background: false}, {ctx: h.ctx}, loadConfig(h.root));
     await until(() => Boolean(waiting.question));
+    // The question wakes the parent; the SDK rejects reload while that response streams.
+    await h.idle();
     await h.session.reload();
     assert.ok(h.notices.some(notice => notice.type === 'warning' && notice.text.includes('earlier pi-suite load')));
     await assert.rejects(invoke(h, 'agent_start', {prompt: 'new run'}), /RUNTIME_UNAVAILABLE/);

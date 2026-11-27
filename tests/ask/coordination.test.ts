@@ -82,7 +82,9 @@ test('native asks hold real child questions and job completion; only system canc
           ]);
         case 4: return fauxAssistantMessage(children.map(id => fauxToolCall('agent_send', { id, message: 'approved' })));
         case 5: return fauxAssistantMessage(fauxToolCall('job_read', { id: jobId }));
-        default: return complete(context);
+        case 6: return complete(context);
+        // Child results queued behind the goal run wake one ordinary turn once the goal is complete.
+        default: return fauxAssistantMessage('Noted the child results');
       }
     };
     h.faux.setResponses(Array(20).fill(respond));
@@ -128,10 +130,11 @@ test('native asks hold real child questions and job completion; only system canc
       assert.deepEqual(dock.render(40), [], 'the next native Ask also covers Dock without consuming unanswered child questions');
       answer(forms.get('child A')!); await resumed; await h.idle(); await Promise.all(runs.map(run => run.done.promise));
       assert.deepEqual(shown, ['gate', 'child A', 'child B']);
-      assert.equal(h.goal()?.status, 'completed'); assert.equal(rootCalls, 7);
+      assert.equal(h.goal()?.status, 'completed'); assert.equal(rootCalls, 8);
+      assert.match(JSON.stringify(notices().at(-1)), /Agent result/, 'a completed goal releases the child results');
       assert.deepEqual(childResults.slice().sort(), ['CHILD_A', 'CHILD_B'].map(question => `answered\n1. ${question} → custom: approved\nsource: parent`));
       for (const run of runs) { assert.equal(run.record.state, 'completed'); await invoke('agent_read', { id: run.record.id }); }
-      assert.equal(notices().length, 2); agents.changed(); await h.idle(); assert.equal(rootCalls, 7);
+      assert.equal(notices().length, 3); agents.changed(); await h.idle(); assert.equal(rootCalls, 8);
     } finally {
       for (const view of forms.values()) view.cancel();
       await h.dispose(); rmSync(root, { recursive: true, force: true });

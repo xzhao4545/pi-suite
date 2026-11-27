@@ -45,7 +45,7 @@ async function setup() {
     async cleanup() { await h.dispose(); rmSync(root, { recursive: true, force: true }); } };
 }
 
-function nativePicker(ctx: ExtensionContext, choices: (string | undefined)[], inspect?: (view: { render(width: number): string[] }) => void): ExtensionContext {
+function nativePicker(ctx: ExtensionContext, choices: (string | undefined)[], inspect?: (view: { render(width: number): readonly string[] }) => void): ExtensionContext {
   const custom: ExtensionUIContext['custom'] = async factory => new Promise((resolve, reject) => {
     Promise.resolve(factory(terminal(), ctx.ui.theme, {} as never, resolve)).then(view => {
       for (const width of [40, 120]) assert.ok(view.render(width).every(line => visibleWidth(line) <= width));

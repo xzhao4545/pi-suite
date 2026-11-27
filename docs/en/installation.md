@@ -5,7 +5,7 @@
 ## Requirements
 
 - Node.js 24 or later.
-- Official, unmodified Pi **1.5.0** or later. The suite is developed and tested against 1.5.0 and follows Pi releases.
+- Official, unmodified Pi **1.6.1** or later. The suite is developed and tested against 1.6.1 and follows Pi releases.
 - pnpm 12.6.0, only when you install from a local checkout or develop the suite.
 
 The package is `private: true` and is not published to npm. Loading through the official Pi CLI and RPC entry points is verified. Consumer installs from Git, a local path or a tarball follow Pi's normal package flow but are not yet part of the verified scope.

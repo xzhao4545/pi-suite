@@ -16,7 +16,7 @@ export class CodeComponent implements Component {
   private source?: CodeSource;
   private text?: Text;
   private width?: number;
-  private lines?: string[];
+  private lines?: readonly string[];
   private palette?: string;
   private tokens?: CommandSpan[];
   constructor(source: CodeSource) { this.setSource(source); }
@@ -29,7 +29,7 @@ export class CodeComponent implements Component {
     this.invalidate();
   }
   invalidate(): void { this.text = undefined; this.lines = undefined; this.width = undefined; }
-  render(width: number): string[] {
+  render(width: number): readonly string[] {
     const source = this.source!;
     // Pi supplies a live Theme proxy: identity alone cannot detect palette changes.
     const palette = ['syntaxKeyword', 'syntaxString', 'syntaxVariable', 'syntaxComment', 'syntaxNumber',

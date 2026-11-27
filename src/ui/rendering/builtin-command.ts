@@ -16,7 +16,7 @@ class CommandCall implements Component {
     this.highlighted.setSource(source);
   }
   invalidate(): void { this.native?.invalidate(); this.highlighted?.invalidate(); }
-  render(width: number): string[] { return (this.highlighted ?? this.native!).render(width); }
+  render(width: number): readonly string[] { return (this.highlighted ?? this.native!).render(width); }
 }
 
 /** Decorates display only. Default shell, result slot, images, timeout/output and expansion stay native. */
