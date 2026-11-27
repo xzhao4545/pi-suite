@@ -69,7 +69,7 @@ The browser is read-only; tasks are changed only through the model's tools. With
 
 ## Dock display
 
-The Tasks section title shows done/total for all child tasks. Each group is shown as a tree with its own count, using ☐ todo (accent color), ⟳ doing (green), ⚠ blocked (yellow, with `(Blocked)`), and ☑ done (dim, struck through). When space is short, the current group and its doing and blocked tasks are kept, and the rest is collapsed. Completed groups fold into a `☑ N completed groups` line. When the whole list finishes, the section shows the result for 5 seconds and then disappears.
+The Tasks section title shows done/total for all child tasks. Each group is shown as a tree with its own count, using ☐ todo (accent color), ⟳ doing (green), ⚠ blocked (yellow, with `(Blocked)`), and ☑ done (dim, struck through). Only one group is expanded: the group selected in the Dock or chosen with `/tasks`, otherwise a group with a doing task, then one with a blocked task, then the most recently updated. It shows its most recently completed task and up to 5 unfinished tasks; when two or more further unfinished tasks remain they fold into `… N more items`. Other unfinished groups show only their title and count, in ID order, up to 4; the rest fold into `… N more groups`. When the Dock is still short of space, the current group and its current task are kept first. Completed groups fold into a `☑ N completed groups` line. When the whole list finishes, the section shows the result for 5 seconds and then disappears.
 
 ## Reminders
 
