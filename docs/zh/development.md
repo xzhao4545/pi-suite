@@ -21,6 +21,16 @@ pnpm exec pi -e ./src/index.ts   # 仅扩展
 
 修改源码后执行 `/reload`。升级依赖后需要重启 Pi，因为 `/reload` 不会替换 Pi 自身已加载的模块。
 
+要把源码目录作为日常使用的安装来源，安装该目录并移除 npm 包，保证只剩一份 Pi Suite 来源：
+
+```sh
+pi install /absolute/path/to/pi-suite
+pi remove npm:pi-suite
+pi list
+```
+
+Pi 直接加载该目录，因此目录需要保持可访问。依赖变化后先运行 `pnpm install`。`-l` 只决定哪个设置文件记录该来源。
+
 `pnpm-lock.yaml` 与 `pnpm-workspace.yaml` 纳入版本控制。工作区文件让 lockfile 保留 Windows 与 Linux 的可选依赖（`supportedArchitectures`），并禁用两个只打印消息的依赖安装脚本（`allowBuilds`）。lockfile 的变化与引起它的 `package.json` 修改一起提交。
 
 ## 源码结构
@@ -53,11 +63,20 @@ pnpm exec pi -e ./src/index.ts   # 仅扩展
 
 代码和文档的项目规则见 [`AGENTS.md`](../../AGENTS.md)。
 
+## 发布
+
+本包以 `pi-suite` 发布到 npm。推送 `v*` tag 会运行 `.github/workflows/publish.yml`：先检查 tag 与 `package.json` 的 `version` 一致，再运行 `pnpm typecheck` 和 `pnpm test`，然后通过 npm trusted publishing 发布，仓库不保存 npm token。发布包只包含 `package.json` 中 `files` 列出的路径。
+
+发布新版本：
+
+1. 升级 `package.json` 的 `version` 并提交。
+2. 创建同名附注 tag，例如 `git tag -a v0.3.1 -m "pi-suite 0.3.1"`。
+3. 推送提交和 tag：`git push origin main v0.3.1`。
+
 ## 平台覆盖
 
 - 支持的宿主：官方未修改的 Pi 1.6.1 及更高版本。peer 依赖为 `>=1.6.1`，开发依赖精确固定为 `1.6.1` 作为测试基线；适配新 Pi 版本时同步升级开发依赖。
 - 已在 Linux 和 Windows 上验证，各模块的验证范围记录在 [`doc/current/validation.md`](../../doc/current/validation.md)。
-- 从 Git、本地路径或 tarball 的消费者安装尚未验证。本包没有发布到 npm。
 - 子代理通过受保护地读取 Pi 的一个私有字段来共享父级模型运行时。Pi 升级可能破坏这一点；这种失败报告为 `MODEL_RUNTIME_UNAVAILABLE`，本套件从不退回到独立的运行时。
 
 ## 上游来源

@@ -6,7 +6,7 @@ These pages describe how to install, configure and use Pi Suite. They are writte
 
 ## Getting started
 
-- [Installation](installation.md): install from GitHub or a local checkout, update, and remove standalone extensions that the suite replaces.
+- [Installation](installation.md): install from npm, update, and remove standalone extensions that the suite replaces.
 - [Concepts](concepts.md): sessions and ownership, IDs, notifications, the shared `wait` tool, and what survives `/reload`.
 - [Configuration](configuration.md): `pi-suite.json` fields, precedence, the `/suite` settings page, `/exit`, and OpenAI Responses recovery.
 - [Interface](interface.md): the Dock, browsers and reading views, footer status, the bundled theme and command highlighting.

@@ -2,38 +2,40 @@
 
 [English](README.md) · [文档](docs/zh/index.md)
 
-Pi Suite 是 [Pi](https://github.com/earendil-works/pi)（终端编码 agent）的扩展包。它把交互式提问、任务清单、后台任务、持久目标和子代理整合为一个扩展，共用同一套界面、存储层和通知队列。
+Pi Suite 是 [Pi](https://github.com/earendil-works/pi)（终端编码 agent）的扩展包，目标是装一个扩展就能满足用 Pi 做日常开发的大部分需要：模型可以向你提问、维护任务清单、运行并监督后台命令、跨轮次朝一个目标持续工作，以及把工作交给子代理。
+
+这些能力原本分散在六个独立扩展里：`pi-ask-user`、`@tintinweb/pi-tasks`、`pi-interactive-shell`、`pi-background-jobs`、`@narumitw/pi-goal` 和 `@tintinweb/pi-subagents`。Pi Suite 在它们的基础上把这些能力做成同一个扩展的模块，共用一套界面、存储层和通知队列，模块之间互相知道对方的存在，能够联动，而不只是并排安装。
+
+## 模块如何联动
+
+- **任务记录在别处运行的工作。** `job_start` 和 `agent_start` 可以带 `taskId`，job 或子代理的 ID 会记到该任务上。为某个任务启动的子代理可以读取并更新这个任务。
+- **目标等待自己发起的工作。** `goal_wait` 让目标停下，直到列出的 job、子代理或 workflow 全部结束；job 监视器触发或子代理提问时会提前恢复。
+- **子代理向父级提问。** 子代理调用 `ask_user` 时，问题发给启动它的会话，由该会话用 `agent_send` 回答。向你的提问和后台工作的结果互不打断。
+- **一个 `wait` 等待所有对象。** 模型一次调用就能等待任意组合的 job、子代理和 workflow；其中有对象提问或监视器触发时也会返回。
+- **一条通知队列。** 各模块的结果每次唤醒合并为一条消息，只投递给拥有该工作的会话。有提问或浏览器打开时会暂缓投递；因你取消提问而暂停的目标也会暂缓，等你发下一条消息时一起送达。
+- **一个 Dock。** 目标、任务、子代理、job 和 workflow 共用编辑器上方的一个面板。在空编辑器中按 ← 可选择某一行，并在共用的浏览器中打开：`/tasks`、`/jobs` 和 `/subagents`，用于筛选、阅读对话记录和日志，以及控制运行。
+- **Workflow 建立在其他模块之上。** Workflow 脚本批量派出子代理，每个子代理都能像普通子代理一样使用 job、任务和提问。
 
 ## 功能
 
-| 模块 | 提供的能力 |
-| --- | --- |
-| [Ask](docs/zh/modules/ask.md) | `ask_user`：模型向你提出单个问题或 2–4 个批量问题，支持选项、默认值、多选、自由文字回答和空闲超时。 |
-| [Goal](docs/zh/modules/goal.md) | `/goal <目标>`：模型跨轮次持续工作，直到附证据完成目标、报告阻塞，或由你暂停。可设置 token 预算。 |
-| [Tasks](docs/zh/modules/tasks.md) | 两级任务清单（分组与子任务），由模型维护、在 Dock 中显示，支持依赖和原子批量编辑。 |
-| [Jobs](docs/zh/modules/jobs/index.md) | pipe 或 PTY 模式的后台命令：有界日志读取、输入、输出监视器、编码 agent CLI 预设、受监督终端；停止时逐一检查已捕获的进程是否退出，无法确认时报告 `unconfirmed`。 |
-| [Agents](docs/zh/modules/agents/index.md) | 在同一进程中以 Pi 子会话运行的子代理：自定义类型、按类型配置模型与 thinking、`@handle` 提及、向父级提问、网络或上游错误后自动恢复、定时调度、脚本化 [Workflow](docs/zh/modules/agents/workflows.md)，以及供其他扩展使用的 [RPC 接口](docs/zh/modules/agents/rpc.md)。 |
+| 模块 | 替代 | 提供的能力 |
+| --- | --- | --- |
+| [Ask](docs/zh/modules/ask.md) | `pi-ask-user` | `ask_user`：模型向你提出单个问题或 2–4 个批量问题，支持选项、默认值、多选、自由文字回答和空闲超时。 |
+| [Goal](docs/zh/modules/goal.md) | `@narumitw/pi-goal` | `/goal <目标>`：模型跨轮次持续工作，直到附证据完成目标、报告阻塞，或由你暂停。可设置 token 预算。 |
+| [Tasks](docs/zh/modules/tasks.md) | `@tintinweb/pi-tasks` | 两级任务清单（分组与子任务），由模型维护、在 Dock 中显示，支持依赖和原子批量编辑。 |
+| [Jobs](docs/zh/modules/jobs/index.md) | `pi-background-jobs`、`pi-interactive-shell` | pipe 或 PTY 模式的后台命令：有界日志读取、输入、输出监视器、编码 agent CLI 预设、受监督终端；停止时逐一检查已捕获的进程是否退出，无法确认时报告 `unconfirmed`。 |
+| [Agents](docs/zh/modules/agents/index.md) | `@tintinweb/pi-subagents` | 在同一进程中以 Pi 子会话运行的子代理：自定义类型、按类型配置模型与 thinking、`@handle` 提及、向父级提问、网络或上游错误后自动恢复、定时调度、脚本化 [Workflow](docs/zh/modules/agents/workflows.md)，以及供其他扩展使用的 [RPC 接口](docs/zh/modules/agents/rpc.md)。 |
 
-共享部分：
-
-- **Dock**：编辑器上方的面板，显示目标、任务、子代理、job 和 workflow。在空编辑器中按 ← 可选择某一行并打开。
-- **浏览器**：`/tasks`、`/jobs` 和 `/subagents`，用于筛选、阅读对话记录和日志，以及控制运行。
-- **`wait`**：一个工具即可等待任意组合的 job、子代理和 workflow。
-- **通知**：结果和提问会合并，并只向所属会话投递一次。
-- **附带资源**：深色主题 `oh-my-pi`，以及 `pi-suite-jobs` 和 `pi-suite-workflow` 两个技能。
-
-## 环境要求
-
-- Node.js 24 或更高版本。
+本包还附带深色主题 `oh-my-pi`，以及 `pi-suite-jobs` 和 `pi-suite-workflow` 两个技能。安装后请移除对应的独立扩展，见[替换独立扩展](docs/zh/installation.md#替换独立扩展)。
 
 ## 安装
 
 ```sh
-pi install git:github.com/xzhao4545/pi-suite
+pi install npm:pi-suite
 pi list
 ```
 
-然后在已打开的会话中执行 `/reload`，或重启 Pi。所有模块默认启用。更新与本地目录安装见 [安装](docs/zh/installation.md)。
+然后在已打开的会话中执行 `/reload`，或重启 Pi。所有模块默认启用。更新见 [安装](docs/zh/installation.md)。
 
 ## 命令
 

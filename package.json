@@ -1,9 +1,23 @@
 {
   "name": "pi-suite",
   "version": "0.3.0",
-  "private": true,
   "description": "Custom modular Pi extension suite",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xzhao4545/pi-suite.git"
+  },
+  "files": [
+    "src",
+    "skills",
+    "themes",
+    "third-party",
+    "README.md",
+    "README.zh-CN.md"
+  ],
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
   "type": "module",
   "packageManager": "pnpm@12.6.0",
   "engines": {

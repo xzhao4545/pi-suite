@@ -6,7 +6,7 @@
 
 ## 入门
 
-- [安装](installation.md)：从 GitHub 或本地目录安装、更新，以及移除被本套件替代的独立扩展。
+- [安装](installation.md)：从 npm 安装、更新，以及移除被本套件替代的独立扩展。
 - [基本概念](concepts.md)：会话与归属、ID、通知、共享 `wait` 工具，以及 `/reload` 后保留哪些内容。
 - [配置](configuration.md)：`pi-suite.json` 字段、优先级、`/suite` 设置页、`/exit` 和 OpenAI Responses 恢复。
 - [界面](interface.md)：Dock、浏览器与阅读视图、footer 状态、附带主题和命令高亮。

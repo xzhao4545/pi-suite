@@ -21,6 +21,16 @@ pnpm exec pi -e ./src/index.ts   # extension only
 
 Run `/reload` after editing source files. Restart Pi after upgrading dependencies, because `/reload` does not replace modules that Pi itself has already loaded.
 
+To use a checkout as your installed copy, install the directory and remove the npm package so that only one Pi Suite source remains:
+
+```sh
+pi install /absolute/path/to/pi-suite
+pi remove npm:pi-suite
+pi list
+```
+
+Pi loads the directory in place, so it must stay accessible. After changing dependencies, run `pnpm install` first. `-l` only controls which settings file records the source.
+
 `pnpm-lock.yaml` and `pnpm-workspace.yaml` are committed. The workspace file keeps Windows and Linux optional dependencies in the lockfile (`supportedArchitectures`) and disables two dependency install scripts that only print messages (`allowBuilds`). Commit lockfile changes together with the `package.json` change that caused them.
 
 ## Source layout
@@ -53,11 +63,20 @@ Modules are loaded lazily: viewers, the PTY backend, the child runner and the wo
 
 Project rules for code and documentation are in [`AGENTS.md`](../../AGENTS.md).
 
+## Releasing
+
+The package is published to npm as `pi-suite`. Pushing a `v*` tag runs `.github/workflows/publish.yml`: it checks that the tag matches `version` in `package.json`, runs `pnpm typecheck` and `pnpm test`, then publishes through npm trusted publishing, so the repository stores no npm token. The tarball contains only the paths listed in `files` in `package.json`.
+
+To release a new version:
+
+1. Bump `version` in `package.json` and commit.
+2. Create an annotated tag with the same version, for example `git tag -a v0.3.1 -m "pi-suite 0.3.1"`.
+3. Push the commit and the tag: `git push origin main v0.3.1`.
+
 ## Platform coverage
 
 - Supported host: official, unmodified Pi 1.6.1 or later. Peer dependencies are `>=1.6.1`; dev dependencies are pinned to exactly `1.6.1` as the test baseline and are upgraded when adapting to a new Pi release.
 - Verified on Linux and Windows, each within the scope recorded for the module in [`doc/current/validation.md`](../../doc/current/validation.md).
-- Consumer installation from Git, a local path or a tarball has not been verified. The package is not published to npm.
 - Subagents share the parent's model runtime through a guarded read of a private Pi field. A Pi upgrade can break this; such a failure is reported as `MODEL_RUNTIME_UNAVAILABLE`, and the suite never falls back to a separate runtime.
 
 ## Upstream sources

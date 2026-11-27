@@ -1,0 +1,42 @@
+# Publishes the package to npm when a version tag is pushed.
+# Authentication uses npm trusted publishing (GitHub OIDC), so the repository stores no npm token;
+# the package must be registered with this workflow as its trusted publisher on npmjs.com.
+name: Publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  # Required to mint the OIDC token that npm exchanges for a short-lived publish credential.
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # Reads the pnpm version from `packageManager` in package.json.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      # A tag that disagrees with package.json would publish a version nobody tagged.
+      - name: Check tag matches package version
+        run: |
+          version="v$(node -p 'require("./package.json").version')"
+          if [ "$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      # Trusted publishing needs npm 11.5.1 or later, newer than the npm bundled with early Node 24 releases.
+      - run: npm install -g npm@^11.5.1
+      # Provenance is generated automatically under trusted publishing.
+      - run: npm publish

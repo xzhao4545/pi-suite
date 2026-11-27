@@ -27,7 +27,7 @@
 
 - 验收基线为官方未修改的 Pi 1.6.1；下文各专项验收记录注明了实际使用的 Pi 版本。`dist/bundle/cli.js` 与 `dist/bundle/rpc-entry.js` 通过真实加载与运行验收，见 [官方 Pi 兼容验收](../finished/pi-suite/official-pi-compatibility/validation.md)。
 - Linux PTY/xterm 覆盖 regular/fullscreen 下的 Tasks/Subagents/Jobs、Dock、正文搜索、工具键盘展开、活动 child 的中文原生 Editor、持久 clone、resize、返回和自然退出。本地 HTTP SSE 覆盖 Responses 保存、重启 resume，以及同模型/跨模型的原版 phase 行为。
-- 包为 `private: true`，未发布到 npm。消费者 Git/本地包及 tarball 安装延期，不计为通过，见 [安装验收边界](../finished/pi-suite/official-pi-compatibility/index.md#状态与执行权限)。
+- 包以 `pi-suite` 发布到 npm，发布流程见[发布](./installation.md#发布)。从 npm 和本地路径的端到端安装延期，不计为通过，见 [安装验收边界](../finished/pi-suite/official-pi-compatibility/index.md#状态与执行权限)。
 - 未证明的范围：实体人工终端、Windows 人工交互、外网账号/组织权限、真实上游密文解密、中转粘性。各平台专项的结论不扩大到这些范围。
 
 | 宿主边界 | 当前结论 | 详情 |
