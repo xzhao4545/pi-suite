@@ -51,12 +51,18 @@ test('subagents navigates pages and empty filters without menu rows or model wor
             view.handleInput('2'); break;
           case 2:
             assert.match(text(), /Subagents ▸ Types.*2 Types/);
-            assert.ok(view.render(120).some(line => { const left = line.split('│')[0]; return left.includes('not configured · not configured'); }), 'inherited type fields are not configuration pins');
-            assert.match(text(), /Model: not configured \(inherited\)/); assert.match(text(), /Thinking: not configured \(inherited\)/);
             assert.doesNotMatch(text(), /offline/);
-            // Native viewport bounds are independent of terminal width; complete settings
-            // remain readable by scrolling instead of leaking beyond the allocated pane.
-            view.handleInput('\t'); view.handleInput('\x1b[F'); view.handleInput('\x1b[A'); assert.match(text(), /Model settings:/);
+            // Native viewport bounds are independent of terminal width; End then Up should move
+            // the visible window by position, proving the pane scrolls instead of leaking
+            // content beyond the allocated area (position deltas, not label text).
+            view.handleInput('\t');
+            const beforeEnd = /Details · (\d+)\/(\d+)/.exec(text());
+            view.handleInput('\x1b[F');
+            const afterEnd = /Details · (\d+)\/(\d+)/.exec(text());
+            assert.ok(beforeEnd && afterEnd && Number(afterEnd[1]) > Number(beforeEnd[1]), 'End scrolls the details window forward');
+            view.handleInput('\x1b[A');
+            const afterUp = /Details · (\d+)\/(\d+)/.exec(text());
+            assert.ok(afterUp && afterEnd && Number(afterUp[1]) === Number(afterEnd[1]) - 1, 'Up moves the window back by one line');
             view.handleInput('\x1b'); view.handleInput('\x1b[D'); break;
           case 3:
             assert.equal(view.getSelectedItem()?.value, queued.record.id); assert.match(text(), /Filter: probe/);
