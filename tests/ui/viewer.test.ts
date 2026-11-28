@@ -5,7 +5,7 @@ import { ToolExecutionComponent, initTheme, type Theme } from '@earendil-works/p
 import { CURSOR_MARKER, KeybindingsManager, TUI_KEYBINDINGS, Text, visibleWidth } from '@earendil-works/pi-tui';
 import { BrowserView, browseState } from '../../src/ui/browser.ts';
 import { DetailsView } from '../../src/ui/details.ts';
-import { detailsContent } from '../../src/ui/structured-details.ts';
+import { detailsContent, outputRow, readingDetailsContent, section } from '../../src/ui/structured-details.ts';
 import { jobDetail, jobDetailView } from '../../src/jobs/query.ts';
 import type { JobSummary } from '../../src/jobs/types.ts';
 import { readingRows } from '../../src/ui/reading.ts';
@@ -42,6 +42,18 @@ test('structured job details retain plain text after stripping theme colors', ()
     assert.notEqual(lines.join('\n'), plain(lines));
     assert.equal(plain(lines), plainView.render(width).join('\n'));
   }
+});
+
+test('plain detail output stays literal and strips terminal controls when expanded', () => {
+  const heading = section('Output');
+  const {body, output} = readingDetailsContent({rows: [heading, outputRow('\x1b[31m**literal**\x1b[0m')]});
+  assert.ok(output);
+  assert.match(plain(body.render(40)), /Output: 1 line · e expand/);
+  assert.equal(body.render(8).length, detailsContent({rows: [heading]}).render(8).length + 1, 'the summary is one row even when it truncates');
+  output.toggle();
+  const lines = body.render(40).join('\n');
+  assert.match(lines, /\*\*literal\*\*/);
+  assert.doesNotMatch(lines, /\x1b\[31m|e expand/);
 });
 
 test('double Left is an explicit chain result, excludes repeat/release/modifiers and resets across other keys or timeout', () => {

@@ -10,7 +10,7 @@ import { commandFrame } from './frame.ts';
 import { openReading, readingRows, readingText, readingWindow } from './reading.ts';
 import { sanitizeText } from '../runtime/text.ts';
 import { DoubleLeft, type ViewerNavigation } from './viewer/navigation.ts';
-import { detailsContent, plainDetailLines, type StructuredDetails } from './structured-details.ts';
+import { plainDetailLines, readingDetailsContent, type StructuredDetails } from './structured-details.ts';
 
 export interface DetailOptions {
   title?: boolean;
@@ -104,8 +104,20 @@ export async function showDetails(ctx: ExtensionContext, dock: Dock, title: stri
   }
   dock.setDetail(true);
   try {
-    await openReading<void>(ctx, (tui, theme, keys, done) => new DetailsView(tui, () => title,
-      typeof content !== 'string' ? detailsContent(content, theme) : format === 'text' ? new Text(sanitizeText(content), 0, 0) : new Markdown(content, 0, 0, getMarkdownTheme()),
-      done, [], undefined, theme, {navigation, keys}));
+    await openReading<void>(ctx, (tui, theme, keys, done) => {
+      const {body, output} = typeof content !== 'string' ? readingDetailsContent(content, theme) : {
+        body: format === 'text' ? new Text(sanitizeText(content), 0, 0) : new Markdown(content, 0, 0, getMarkdownTheme()),
+      };
+      const view = new DetailsView(tui, () => title, body, done, [], undefined, theme, {navigation, keys});
+      if (output) view.actions.push({key: 'e',
+        get label() { return output.expanded ? 'Collapse output' : 'Expand output'; },
+        run: () => {
+          // End follows the document tail. Stay at the summary instead of jumping to the end of the expanded result.
+          view.reader.pause();
+          output.toggle();
+        },
+      });
+      return view;
+    });
   } finally { dock.setDetail(false); }
 }

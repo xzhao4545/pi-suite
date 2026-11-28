@@ -14,8 +14,9 @@ import { agentRuntime } from '../../src/agents/runtime.ts';
 import { executeAgent } from '../../src/agents/runner.ts';
 import { childSuite } from '../../src/agents/child.ts';
 import { showAgent } from '../../src/agents/viewer.ts';
+import { agentDetails } from '../../src/agents/viewer-info.ts';
 import { loadConfig } from '../../src/runtime/config.ts';
-import { DetailsView } from '../../src/ui/details.ts';
+import { DetailsView, showDetails } from '../../src/ui/details.ts';
 import { Dock } from '../../src/ui/dock.ts';
 
 async function setup() {
@@ -35,7 +36,7 @@ function scripted(ctx: ExtensionContext, steps: ((view: DetailsView) => void | P
     let dispose: (() => void) | undefined;
     const done = (value: unknown) => { opened = false; dispose?.(); resolve(value as never); };
     Promise.resolve(factory(terminal(), ctx.ui.theme, getKeybindings() as never, done)).then(async view => {
-      assert.ok(view instanceof DetailsView); dispose = (view as DetailsView & {dispose?: () => void}).dispose;
+      assert.ok(view instanceof DetailsView); dispose = view.dispose.bind(view);
       for (const width of [40, 60, 120]) assert.ok(view.render(width).every(line => visibleWidth(line) <= width));
       const step = steps.shift(); assert.ok(step, 'Unexpected reader reopen'); await step(view);
     }).catch(reject);
@@ -53,6 +54,36 @@ const text = (view: DetailsView) => view.reader.render(120).map(stripVTControlCh
 const visibleActions = (view: DetailsView) => view.actions.filter(action => action.available?.() !== false).map(action => action.label);
 const renderers = { renderer: () => undefined,
   customRendererLookup: () => ({ getMessageRenderer: () => undefined, getEntryRenderer: () => undefined }) };
+
+test('agent details toggle Markdown output from the reader without shortening non-TUI notifications', {timeout: 15000}, async () => {
+  const h = await setup(), dock = new Dock();
+  try {
+    const result = ['**Rendered result**', '', ...Array.from({length: 30}, (_, i) => `- Item ${i + 1}`)].join('\n');
+    h.faux.setResponses([fauxAssistantMessage(result)]);
+    const run = await h.manager.start({prompt: 'show Markdown output'}, {ctx: h.ctx}, h.config);
+    assert.equal((await run.done.promise).state, 'completed');
+    const steps = [(view: DetailsView) => view.handleInput('d'), (view: DetailsView) => {
+      const screen = () => stripVTControlCharacters(view.render(120).join('\n'));
+      view.handleInput('\x1b[F');
+      assert.match(screen(), /Output: 32 lines · e expand/);
+      assert.match(screen(), /e expand output/);
+      assert.doesNotMatch(text(view), /Rendered result/);
+      view.handleInput('e');
+      assert.match(screen(), /Rendered result/);
+      assert.match(screen(), /e collapse output/);
+      assert.doesNotMatch(text(view), /\*\*Rendered result\*\*/);
+      view.handleInput('e');
+      assert.match(screen(), /Output: 32 lines · e expand/);
+      assert.doesNotMatch(text(view), /Rendered result/);
+      view.handleInput('\x1b');
+    }, (view: DetailsView) => view.handleInput('\x1b')];
+    await showAgent(scripted(h.ctx, steps), {manager: h.manager, admitSend: () => h.manager, ...renderers, scope: ctx => ({ctx})}, dock,
+      run.record.id, run.record.runId, () => h.config);
+    assert.equal(steps.length, 0);
+    await showDetails({...h.ctx, mode: 'rpc'}, dock, 'Agent details', agentDetails(run.record));
+    assert.ok(h.notices.at(-1)?.text.endsWith(`── Output ──\n${result}`));
+  } finally { await h.cleanup(); }
+});
 
 test('viewer answers workflow questions, preserves search through input and requires two x presses to stop the selected live run', {timeout: 15000}, async () => {
   const h = await setup(), gate = Promise.withResolvers<void>(), entered = Promise.withResolvers<void>();

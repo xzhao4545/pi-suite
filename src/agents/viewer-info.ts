@@ -1,5 +1,5 @@
 import type { AgentRecord } from './types.ts';
-import { field, part, section, statePart, type StructuredDetails } from '../ui/structured-details.ts';
+import { field, outputRow, part, section, statePart, type StructuredDetails } from '../ui/structured-details.ts';
 import { countText, elapsedText } from '../ui/format.ts';
 
 /** Runtime statistics are run-scoped; current type configuration cannot rewrite history. */
@@ -32,6 +32,7 @@ export function agentDetails(record: AgentRecord, permissions?: {readonly: boole
     // Prompt and result are free text; titled sections keep them apart from the fields above.
     section('Input'), record.prompt,
     ...(record.result !== undefined || record.error ? [section('Output'),
-      record.error ? field('Error:', part(record.error, 'error')) : undefined, record.result] : []),
+      record.error ? field('Error:', part(record.error, 'error')) : undefined,
+      record.result === undefined ? undefined : outputRow(record.result, {markdown: true})] : []),
   ]};
 }
