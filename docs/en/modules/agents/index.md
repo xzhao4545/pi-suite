@@ -86,7 +86,7 @@ Set `agents.mentions` to `false` to turn this off.
 | `b` | Move a running foreground run to the background. |
 | `x` twice | Stop the run subtree, or cancel a queued run. On a finished run with leftover jobs, clean up those jobs. |
 
-Runs shows one row per agent, using its latest run; `N runs` marks an agent that ran more than once. The message prompt reads `Message <name>`, `Resume <name>` or `Answer parent question`. Only the agent's latest run accepts messages.
+Runs shows one row per agent, using its latest run. The preview shows `model · thinking`, compact token counts and runtime, and the percentage of prompt tokens read from cache for that run. The message prompt reads `Message <name>`, `Resume <name>` or `Answer parent question`. Only the agent's latest run accepts messages.
 
 Records from other sessions or branches in Workspace scope are marked **Read only**. You can read them, but cannot message, stop or reconfigure them.
 
@@ -96,7 +96,7 @@ The transcript uses Pi's own message and tool components. Extra keys there:
 | --- | --- |
 | `o` | Expand or collapse all tool calls. |
 | `h` | Show or hide thinking. |
-| `d` | Details: IDs, cwd, sources, permissions, usage and errors. |
+| `d` | Details: agent ID, `model · thinking`, permissions, usage, cache hit rate and errors. Output starts collapsed to a one-line summary; `e` expands it with Markdown rendering, `e` again collapses it. |
 | `m`, `j`, `c`, `b`, `x` | As in the list. |
 
 The transcript follows new output while you are at the bottom. Scrolling up pauses following; End resumes it. The message editor is Pi's multi-line editor: Enter sends, Shift+Enter or Ctrl+J inserts a newline, and Esc cancels editing without stopping the run.

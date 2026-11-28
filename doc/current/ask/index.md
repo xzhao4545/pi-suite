@@ -152,6 +152,8 @@ timed_out (not consent)
 
 空的自定义项显示 `Type your own answer`，有文字后直接显示文字。已选标记为 success 色，未选为 dim，当前项和推荐标记为 accent。
 
+编辑自定义文字时，`✎` 只显示在编辑区左上角，其余行与首行对齐。
+
 ### 按键
 
 | 按键 | 列表 | 自定义项 |

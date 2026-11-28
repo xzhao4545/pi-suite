@@ -23,6 +23,8 @@ In a batch, `options`, defaults and `allowMultiple` belong inside each entry of 
 
 Every question also accepts a typed answer: the list always ends with a custom entry marked ✎. In single choice, the custom answer replaces the selected option. In multiple choice, it is added to the checked options. `recommended` options are highlighted but never preselected. Mismatched defaults or unknown option IDs are rejected before the panel appears.
 
+While typing a custom answer, ✎ only appears at the top left of the editor; the rest of the text aligns with it.
+
 ## Timeout
 
 The timer measures idle time. It starts when the panel first appears, and any key press, paste, or handled click or scroll restarts it. Time spent in the queue behind another question does not count. The remaining time is shown as `idle mm:ss`.
