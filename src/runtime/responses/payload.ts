@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 type Item = Record<string, unknown>;
 export type ReplayPayload = Item & { input: Item[] };
 export type ReplayReferences = { ids: string[]; ciphers: string[] };
-export type RepairKind = 'id' | 'cipher';
+type RepairMatch = { kind: 'id'; ids: string[] } | { kind: 'cipher'; ciphers: string[] };
 export const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex');
 const object = (value: unknown): value is Item => value !== null && typeof value === 'object' && !Array.isArray(value);
 const upstreamId = (item: Item): string | undefined => typeof item.id === 'string' &&
@@ -79,23 +79,26 @@ export function projectReplay(payload: ReplayPayload, isolated?: { ids: Readonly
 /** SDK errors are normalized even when an HTTP status callback is unavailable.
  * Require a specific ownership/dependency or encrypted reasoning failure, not a generic HTTP 400 or crypto error.
  */
-export function resourceMismatch(error: string, { ids, ciphers }: ReplayReferences): RepairKind | undefined {
+export function resourceMismatch(error: string, { ids, ciphers }: ReplayReferences): RepairMatch | undefined {
   const text = error.toLowerCase();
   if (/\b(?:401|403|429|5\d\d)\b|rate.?limit|quota|billing|context.{0,20}(?:length|window)|maximum context/.test(text)) return;
   if (/\bencrypted\b[^\r\n]*?\b(?:cannot|could not) be (?:verified|decrypted)\b/.test(text)) {
     if (!ciphers.length) return;
     // Gateways can identify a ciphertext without naming its item. Compare any
     // reported fragment case-sensitively; a mismatch invalidates the correlation.
+    const matched = new Set<string>();
     for (const [, prefix, suffix] of error.matchAll(/(?<![A-Za-z0-9_-])([A-Za-z0-9_-]{4,})\.{3}([A-Za-z0-9_-]{4,})/g)) {
-      if (!ciphers.some(cipher => cipher.startsWith(prefix) && cipher.endsWith(suffix))) return;
+      const candidates = ciphers.filter(cipher => cipher.startsWith(prefix) && cipher.endsWith(suffix));
+      if (!candidates.length) return;
+      for (const cipher of candidates) matched.add(cipher);
     }
-    return 'cipher';
+    return { kind: 'cipher', ciphers: [...matched] };
   }
-  const namedItem = ids.some(id => error.includes(id));
+  const matchedIds = ids.filter(id => error.includes(id));
   const resource = /(?:different|another|across|cross)[ -](?:openai[ -])?(?:resource|organization|project)|(?:resource|organization|project).{0,50}(?:mismatch|does not match|not belong)/.test(text);
   // Gateways may omit the item ID and qualify/redact the resource name. Recognize
   // the explicit creation-origin sentence, not arbitrary words between "different" and "resource".
   const createdElsewhere = /\bitem was created (?:under|in) (?:a different|another) [^.!?\r\n]{0,80}\b(?:resource|organization|project)\b/.test(text);
-  const ownership = namedItem && /not found|does not exist|belongs to|was created in|provided without.{0,80}required|not owned by/.test(text);
-  if (resource || createdElsewhere || ownership) return 'id';
+  const ownership = matchedIds.length > 0 && /not found|does not exist|belongs to|was created in|provided without.{0,80}required|not owned by/.test(text);
+  if (resource || createdElsewhere || ownership) return { kind: 'id', ids: matchedIds };
 }

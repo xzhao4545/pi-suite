@@ -42,6 +42,7 @@ const seed: Item[] = [
   {type: 'reasoning', id: 'rs_seed', encrypted_content: 'cipher_keep_verbatim', summary: [{type: 'summary_text', text: 'seed reasoning'}]},
   text('msg_seed', 'seed evidence'), call('fc_seed', 'recovery_probe', {value: 'original arguments'}),
 ];
+const secondReasoning: Item = { ...seed[0], id: 'rs_other', encrypted_content: 'other_resource_ciphertext' };
 function sse(response: ServerResponse, items: Item[], partial = false): void {
   response.writeHead(200, {'content-type': 'text/event-stream'});
   const emit = (event: Record<string, unknown>) => response.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
@@ -73,7 +74,7 @@ function goalId(wire: Wire): string {
 }
 
 async function fixture(options: {
-  steps: Step[]; enabled?: boolean; maxRetries?: number;
+  steps: Step[]; enabled?: boolean; maxRetries?: number; seedFollowup?: Item[];
   unsafe?: Unsafe; coexist?: 'before' | 'after';
 }) {
   const root = mkdtempSync(join(tmpdir(), 'pi-suite-responses-')), user = join(root, 'user');
@@ -91,7 +92,7 @@ async function fixture(options: {
     const chunks: Buffer[] = []; for await (const chunk of request) chunks.push(chunk);
     const wire = JSON.parse(Buffer.concat(chunks).toString()) as Wire;
     requests.push(wire); requestGoals.push(goal()?.status);
-    if (!armed) return sse(response, requests.length === 1 ? seed : [text('msg_seed_done', 'seed finished')]);
+    if (!armed) return sse(response, requests.length === 1 ? seed : [...(options.seedFollowup ?? []), text('msg_seed_done', 'seed finished')]);
     const step = options.steps.shift();
     if (step === undefined) {
       errors.push('Unexpected extra provider request');
@@ -178,11 +179,13 @@ async function fixture(options: {
     },
   };
 }
-const records = (h: Awaited<ReturnType<typeof fixture>>) => h.manager.getBranch().filter(entry => entry.type === 'custom' && entry.customType === RECOVERY_ENTRY);
+const records = (h: Awaited<ReturnType<typeof fixture>>) => h.manager.getBranch().flatMap(entry =>
+  entry.type === 'custom' && entry.customType === RECOVERY_ENTRY ? [entry] : []);
 const errors = (h: Awaited<ReturnType<typeof fixture>>) => h.manager.getBranch().flatMap(entry =>
   entry.type === 'message' && entry.message.role === 'assistant' && entry.message.stopReason === 'error' ? [entry.message] : []);
-const stripped = (input: Item[]) => input.map(item => {
-  if (!['reasoning', 'message', 'function_call'].includes(String(item.type)) || !item.id || item.id.startsWith('msg_pi_')) return item;
+const stripped = (input: Item[], ids?: readonly string[]) => input.map(item => {
+  if (!['reasoning', 'message', 'function_call'].includes(String(item.type)) || !item.id || item.id.startsWith('msg_pi_') ||
+      (ids && !ids.includes(item.id))) return item;
   const {id: _id, ...rest} = item; return rest;
 });
 
@@ -210,7 +213,8 @@ for (const transient of [false, true, 'network'] as const) test(`actual SDK repa
   try {
     await h.seed(); await h.run();
     assert.equal(h.requests.length, 4 + retries); assert.equal(h.effects(), 1, 'history replay must not rerun the seed tool');
-    assert.deepEqual(replayWire(h.requests[3]), replayWire({...h.requests[2], input: stripped(h.requests[2].input)}), 'only upstream history input[].id may change');
+    assert.deepEqual(replayWire(h.requests[3]), replayWire({...h.requests[2],
+      input: stripped(h.requests[2].input, transient ? ['rs_seed'] : undefined)}), 'only targeted upstream history input[].id may change');
     const replay = h.requests[3].input;
     assert.ok(replay.some(item => item.type === 'reasoning' && item.encrypted_content === 'cipher_keep_verbatim'));
     assert.ok(replay.some(item => item.type === 'message' && item.phase === 'final_answer'));
@@ -229,7 +233,7 @@ for (const transient of [false, true, 'network'] as const) test(`actual SDK repa
 
 test('actual SDK drops reasoning whose ciphertext the endpoint cannot decrypt, alone or after an ID repair', {timeout: 20000}, async () => {
   for (const idFirst of [false, true]) {
-    const steps: Step[] = idFirst ? [400] : [];
+    const steps: Step[] = idFirst ? [{status: 400, message: cpaMismatch}] : [];
     const h = await fixture({enabled: true, steps: [...steps, {status: 400, message: cpaCipherMismatch}, 'complete']});
     try {
       await h.seed(); await h.run();
@@ -238,16 +242,47 @@ test('actual SDK drops reasoning whose ciphertext the endpoint cannot decrypt, a
       assert.equal(h.requests.length, failedIndex + 2);
       if (idFirst) assert.deepEqual(failed, {...h.requests[2], input: stripped(h.requests[2].input)});
       assert.deepEqual(h.requests[failedIndex + 1], {...failed,
-        input: stripped(failed.input.filter(item => item.type !== 'reasoning'))});
+        input: failed.input.filter(item => item.type !== 'reasoning')});
       const isolation = records(h);
       assert.equal(isolation.length, idFirst ? 2 : 1);
-      const cipherRecord = isolation.at(-1);
-      assert.ok(cipherRecord?.type === 'custom');
-      assert.deepEqual((cipherRecord.data as {ciphers: string[]}).ciphers,
-        [createHash('sha256').update(String(seed[0].encrypted_content)).digest('hex')]);
+      const {ids, ciphers} = isolation.at(-1)?.data as {ids: string[]; ciphers: string[]};
+      assert.deepEqual(ids, []);
+      assert.deepEqual(ciphers, [createHash('sha256').update(String(seed[0].encrypted_content)).digest('hex')]);
       assert.equal(h.goal()?.status, 'completed'); assert.equal(h.effects(), 1);
     } finally {await h.dispose();}
   }
+});
+
+test('two named ciphertext failures drop only the reasoning item implicated on each replay', {timeout: 20000}, async () => {
+  const h = await fixture({enabled: true, seedFollowup: [secondReasoning], steps: [
+    {status: 400, message: cpaCipherMismatch},
+    {status: 400, message: cpaCipherMismatch.replace('ciph...atim', 'other...text')}, 'complete',
+  ]});
+  try {
+    await h.seed(); await h.run();
+    const [, , failed, firstReplay, secondReplay] = h.requests;
+    assert.equal(h.requests.length, 5);
+    assert.deepEqual(firstReplay, {...failed, input: failed.input.filter(item => item.id !== 'rs_seed')});
+    assert.ok(firstReplay.input.some(item => item.id === 'rs_other' && item.encrypted_content === secondReasoning.encrypted_content));
+    assert.deepEqual(secondReplay, {...firstReplay, input: firstReplay.input.filter(item => item.id !== 'rs_other')});
+    const expected = [seed[0], secondReasoning].map(item => [createHash('sha256').update(String(item.encrypted_content)).digest('hex')]);
+    assert.deepEqual(records(h).map(({data}) => (data as {ciphers: string[]}).ciphers), expected);
+    assert.equal(h.goal()?.status, 'completed'); assert.equal(errors(h).length, 2); assert.equal(h.effects(), 1);
+  } finally {await h.dispose();}
+});
+
+test('two named ID failures strip only the ID implicated on each replay', {timeout: 20000}, async () => {
+  const h = await fixture({enabled: true, steps: [400, {status: 400, message: "Item 'fc_seed' was not found"}, 'complete']});
+  try {
+    await h.seed(); await h.run();
+    const [, , failed, firstReplay, secondReplay] = h.requests;
+    assert.equal(h.requests.length, 5);
+    assert.deepEqual(firstReplay, {...failed, input: stripped(failed.input, ['rs_seed'])});
+    assert.ok(firstReplay.input.some(item => item.id === 'fc_seed'));
+    assert.deepEqual(secondReplay, {...firstReplay, input: stripped(firstReplay.input, ['fc_seed'])});
+    assert.deepEqual(records(h).map(({data}) => (data as {ids: string[]}).ids), [['rs_seed'], ['fc_seed']]);
+    assert.equal(h.goal()?.status, 'completed'); assert.equal(errors(h).length, 2); assert.equal(h.effects(), 1);
+  } finally {await h.dispose();}
 });
 
 test('native retry exhaustion pauses Goal once with the last real error and never opens another budget', {timeout: 20000}, async () => {
@@ -264,12 +299,18 @@ test('native retry exhaustion pauses Goal once with the last real error and neve
   } finally {await h.dispose();}
 });
 
-test('a second resource 400 with no new IDs settles instead of resending the same payload', {timeout: 20000}, async () => {
-  const h = await fixture({enabled: true, steps: [400, 400]});
+for (const kind of ['id', 'cipher'] as const) test(`an unnamed ${kind} failure isolates all references of that kind and settles if repeated`, {timeout: 20000}, async () => {
+  const message = kind === 'id' ? 'The items belong to a different OpenAI resource' : cpaCipherMismatch.replace(' ciph...atim', '');
+  const failure = {status: 400, message};
+  const h = await fixture({enabled: true, seedFollowup: [secondReasoning], steps: [failure, failure]});
   try {
     await h.seed(); await h.run();
+    const [, , failed, replay] = h.requests;
     assert.equal(h.requests.length, 4); assert.equal(records(h).length, 1); assert.equal(h.goal()?.status, 'paused');
-    assert.match(h.goal()?.error ?? '', /different OpenAI resource/);
+    assert.equal(failed.input.filter(item => item.type === 'reasoning').length, 2);
+    assert.deepEqual(replay, {...failed, input: kind === 'id' ? stripped(failed.input) : failed.input.filter(item => item.type !== 'reasoning')});
+    assert.equal(errors(h).length, 2);
+    assert.match(h.goal()?.error ?? '', kind === 'id' ? /different OpenAI resource/ : /could not be verified/);
     assert.equal(h.events.filter(event => event.type === 'auto_retry_start').length, 0);
   } finally {await h.dispose();}
 });
