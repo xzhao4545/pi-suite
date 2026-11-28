@@ -2,31 +2,7 @@
 
 [中文](README.zh-CN.md) · [Documentation](docs/en/index.md)
 
-Pi Suite is an extension package for [Pi](https://github.com/earendil-works/pi), the terminal coding agent. It aims to cover most of what day-to-day development with Pi needs in one install: the model can ask you questions, keep a task list, run and supervise background commands, work toward a goal across turns, and delegate to subagents.
-
-These capabilities usually come from six separate extensions: `pi-ask-user`, `@tintinweb/pi-tasks`, `pi-interactive-shell`, `pi-background-jobs`, `@narumitw/pi-goal` and `@tintinweb/pi-subagents`. Pi Suite builds on them as modules of one extension that share a single UI, storage layer and notification queue, so the modules know about each other and work together instead of side by side.
-
-## How the modules work together
-
-- **Tasks track the work that runs elsewhere.** `job_start` and `agent_start` take a `taskId`, and the job or agent ID is recorded on that task. A subagent started for a task can read and update that task.
-- **A goal waits for the work it started.** `goal_wait` holds the goal until the listed jobs, subagents or workflows settle, and resumes early on a job monitor event or a subagent question.
-- **Subagents ask their parent.** When a subagent calls `ask_user`, the question goes to the session that started it, which answers with `agent_send`. Questions to you and results of background work never interrupt each other.
-- **One `wait` for everything.** The model waits for any mix of jobs, subagents and workflows with a single call, which also returns when one of them asks a question or a monitor fires.
-- **One notification queue.** Results from all modules are merged into one message per wake-up and delivered only to the session that owns the work. They hold back while a question or browser is open, and while a goal is paused because you cancelled a question.
-- **One Dock.** Goal, tasks, subagents, jobs and workflows share one panel above the editor. Press ← in an empty editor to select a row and open it in the shared browsers: `/tasks`, `/jobs` and `/subagents`, for filtering, reading transcripts and logs, and controlling runs.
-- **Workflows build on the rest.** A workflow script fans out subagents, and each of them can use jobs, tasks and questions like any other subagent.
-
-## Features
-
-| Module | Replaces | What it gives you |
-| --- | --- | --- |
-| [Ask](docs/en/modules/ask.md) | `pi-ask-user` | `ask_user`: the model asks you one question or a batch of 2–4, with options, defaults, multi-select, free-text answers and an idle timeout. |
-| [Goal](docs/en/modules/goal.md) | `@narumitw/pi-goal` | `/goal <objective>`: the model keeps working across turns until it completes the goal with evidence, reports a blocker, or you pause it. Optional token budget. |
-| [Tasks](docs/en/modules/tasks.md) | `@tintinweb/pi-tasks` | A two-level task list (groups and child tasks) that the model maintains and the Dock displays, with dependencies and atomic batch edits. |
-| [Jobs](docs/en/modules/jobs/index.md) | `pi-background-jobs`, `pi-interactive-shell` | Background commands in pipe or PTY mode: bounded log reading, input, output monitors, coding-agent CLI presets, supervised terminals, and stops that check every captured process has exited and report `unconfirmed` when they cannot. |
-| [Agents](docs/en/modules/agents/index.md) | `@tintinweb/pi-subagents` | Subagents as child Pi sessions in the same process: custom types, per-type models and thinking, `@handle` mentions, questions to the parent, automatic resume after network or upstream errors, schedules, scripted [workflows](docs/en/modules/agents/workflows.md) and an [RPC API](docs/en/modules/agents/rpc.md) for other extensions. |
-
-The package also includes the `oh-my-pi` dark theme and the `pi-suite-jobs` and `pi-suite-workflow` skills. Remove the standalone extensions after installing; see [Replace standalone extensions](docs/en/installation.md#replace-standalone-extensions).
+An all-in-one extension bundle for [Pi](https://github.com/earendil-works/pi), the terminal coding agent, that integrates six standalone extensions into five modules: goals, subagents, user questions, background jobs and task lists. The modules share one storage layer, one notification queue and one panel above the editor (the Dock).
 
 ## Install
 
@@ -35,20 +11,72 @@ pi install npm:pi-suite
 pi list
 ```
 
-Then run `/reload` in an open session, or restart Pi. All modules are enabled by default. See [Installation](docs/en/installation.md) for updates.
+Run `/reload` in an open session or restart Pi. All modules are enabled by default. Updates are covered in [Installation](docs/en/installation.md).
+
+The package ships two skills: `pi-suite-jobs` teaches the model to run commands and coding-agent CLIs as jobs, and `pi-suite-workflow` teaches it to write and resume workflow scripts.
+
+## Modules
+
+| Module | Upstream |
+| --- | --- |
+| [Goal](docs/en/modules/goal.md) | `@narumitw/pi-goal` |
+| [Agents](docs/en/modules/agents/index.md) | `@tintinweb/pi-subagents` |
+| [Ask](docs/en/modules/ask.md) | `pi-ask-user` |
+| [Jobs](docs/en/modules/jobs/index.md) | `pi-background-jobs`, `pi-interactive-shell` |
+| [Tasks](docs/en/modules/tasks.md) | `@tintinweb/pi-tasks` |
+
+### Goal
+
+`/goal <objective>` sets one objective for the session. The model keeps working across turns until it completes the goal with evidence (`goal_complete`), reports a blocker (`goal_blocked`), or you pause it. `--tokens 100k` sets an optional token budget. `goal_wait` waits for jobs, subagents and workflows in the same way as `wait` (see [Agents](#agents)).
+
+### Agents
+
+Subagents are child Pi sessions that run in the same process, in the foreground or background.
+
+- **Types**: the built-in `general-purpose`, `Explore` and `Plan`, plus custom types defined by a Markdown file in `~/.pi/agent/agents/` (user) or `.pi/agents/` (project). A type sets the system prompt, tools, model, thinking level, turn limit, skills and persistent memory; `agents.types` overrides the model and thinking of any type. See [Agent types, models and resources](docs/en/modules/agents/types-and-models.md).
+- **Mentions**: `@<type> <message>` in the editor, for example `@explore where is the config loaded?`, hands the message to a subagent of that type.
+- **Questions**: a subagent's `ask_user` question goes to the session that started it.
+- **Recovery**: a subagent stopped by a network or upstream error is resumed in the same session.
+- **Waiting**: `wait` waits for any mix of jobs, subagents and workflows, and returns early when a monitor fires or a subagent asks a question.
+
+Subagents can also run on a [schedule](docs/en/modules/agents/schedules.md). A [workflow](docs/en/modules/agents/workflows.md) script fans out many subagents and can resume from an earlier run. Other extensions start and control subagents through the [RPC API](docs/en/modules/agents/rpc.md).
+
+### Ask
+
+`ask_user` lets the model ask you one question or a batch of 2–4, with options, defaults, multi-select, free-text answers and an idle timeout (`ask.timeout`).
+
+### Jobs
+
+Jobs run commands in the background in pipe or PTY mode. The model reads bounded log slices, sends input, and sets output monitors that wake it on a literal, regex or numeric threshold match. In `/jobs` you can read the logs or take over a PTY with `i`.
+
+Presets start coding-agent CLIs in a PTY. The model supervises them hands-free, and you can take over the terminal at any time. See [CLI presets and PTY supervision](docs/en/modules/jobs/cli-and-hands-free.md).
+
+Stopping a job checks that every captured process has exited, and reports `unconfirmed` when it cannot.
+
+### Tasks
+
+A two-level task list (groups and child tasks) that the model maintains and the Dock displays, with dependencies and atomic batch edits. A job or subagent can be linked to a task, and a subagent started for a task can update it.
+
+## Interface
+
+The Dock shows the goal, tasks, subagents, jobs and workflows; press ← in an empty editor to select a row. `/tasks`, `/jobs` and `/subagents` share one browser layout, whose detail pane colors names, IDs, states and errors.
+
+Each suite tool call and notification takes one line and expands to labeled fields; a failed tool shows the first line of its error. Results from all modules are merged into one notification per wake-up and delivered only to the session that owns the work.
+
+Commands in Pi's built-in `bash` / `powershell` calls and in jobs are highlighted by structure: program, options, variables, strings, operators and redirections. The highlighter only scans the text and never runs the command.
+
+The package also includes the `oh-my-pi` dark theme, and makes Pi's copy work inside tmux through OSC 52. See [Interface](docs/en/interface.md).
 
 ## Commands
 
 | Command | What it does |
 | --- | --- |
-| `/goal [--tokens 100k] <objective>` | Starts a goal; the model keeps working across turns until it is done. `/goal status`, `edit`, `pause`, `resume` and `clear` show, change, pause, resume or clear it. |
+| `/goal [--tokens 100k] <objective>` | Starts a goal. `/goal status`, `edit`, `pause`, `resume` and `clear` show, change, pause, resume or clear it. |
 | `/tasks [group ID]` | Browse the task list, optionally opening one group. |
 | `/jobs [finished\|all] [workspace]` | Browse jobs, read logs, or take over a PTY with `i`. Lists active jobs of this session by default. |
 | `/subagents [queued\|finished\|all\|types\|schedules\|workflows]` | Browse subagent runs, transcripts, types, schedules and workflows; `/subagents workspace [...]` covers the whole workspace. |
 | `/suite` | View and edit settings one by one. |
 | `/exit` | Quit Pi after stopping jobs and subagents and waiting for cleanup, up to 10 seconds for jobs. |
-
-Type `@<type>` in the editor (for example `@explore where is the config loaded?`) to hand the message to a subagent of that type.
 
 ## Settings
 
@@ -68,7 +96,7 @@ No configuration is required. Optional settings live in `~/.pi/agent/pi-suite.js
 | `agents.defaultModel`, `agents.types` | unset | Default subagent model; per-type model, thinking and enabled overrides. |
 | `agents.mentions`, `agents.scheduling`, `agents.workflows` | `true` | `@handle` mentions, schedules and workflows. |
 | `jobs.detachKey`, `jobs.returnKey`, `jobs.transferKey` | `ctrl+]`, `ctrl+g`, `ctrl+t` | Leave the terminal view, hand input back to the model, send the screen. |
-| `runtime.openAIResponsesAutoRecovery` | `false` | Recover from one class of OpenAI Responses item ID errors. |
+| `runtime.openAIResponsesAutoRecovery` | `false` | When an OpenAI Responses endpoint rejects history created under another upstream account (for example behind a gateway), drop the rejected item IDs or encrypted reasoning and continue. See [OpenAI Responses recovery](docs/en/configuration.md#openai-responses-recovery). |
 
 ```json
 {

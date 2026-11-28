@@ -14,7 +14,7 @@
 
 ## 模块文档
 
-- [安装与扩展替换](./installation.md) — 安装、更新、移除重复扩展和加载源码。
+- [安装与发布](./installation.md) — 安装、更新、加载源码和发布。
 - [公共运行时与配置](./runtime/index.md) — 模块加载、配置优先级、JSON 存储、会话绑定与通知。
 - [模型工具契约](./runtime/tools.md) — 公共参数、分页、等待、显示与错误码。
 - [设置与退出操作](./runtime/settings.md) — 用 `/suite` 编辑设置，用 `/exit` 退出 Pi。

@@ -1,4 +1,4 @@
-# 安装与扩展替换
+# 安装与发布
 
 ## npm 安装
 
@@ -51,31 +51,5 @@ npm 包名为 `pi-suite`。`package.json` 中：
 3. 执行 `npm publish`。认证使用 npm trusted publishing（GitHub OIDC），仓库不保存 npm token，provenance 自动生成；trusted publishing 要求 npm 11.5.1 或更高，工作流先升级 npm。
 
 npm 只能为已存在的包配置 trusted publisher，因此首个版本在本机 `npm login` 后手动 `npm publish`，再在 npmjs.com 的包设置中把仓库 `xzhao4545/pi-suite` 和工作流 `publish.yml` 登记为 trusted publisher。之后发布新版本：升级 `version` 并提交，打同名附注 tag，推送提交和 tag。
-
-## 替换重复扩展
-
-Pi Suite 整合下列扩展的能力。先完成 Pi Suite 安装，再通过 `pi list` 核对已安装来源，使用 `pi remove <source>` 移除对应独立扩展，避免工具、命令和界面重复注册。
-
-| 独立扩展 | Pi Suite 模块 |
-| --- | --- |
-| pi-ask-user | ask |
-| @tintinweb/pi-tasks | tasks |
-| pi-interactive-shell | jobs（PTY、交互与监督） |
-| pi-background-jobs | jobs（后台执行与日志） |
-| @narumitw/pi-goal | goal |
-| @tintinweb/pi-subagents | agents、定时调度与 Workflow |
-
-卸载命令使用 `pi list` 显示的完整来源；固定版本需保留版本后缀，例如：
-
-```sh
-pi remove npm:pi-ask-user
-pi remove npm:@tintinweb/pi-tasks
-pi remove npm:pi-interactive-shell
-pi remove npm:pi-background-jobs@0.1.3
-pi remove npm:@narumitw/pi-goal
-pi remove npm:@tintinweb/pi-subagents
-```
-
-Pi Suite 不自动迁移独立扩展的配置和持久数据。`@narumitw/pi-starship` 是独立 footer，可与 Pi Suite 的共享状态显示并用。上游来源和范围见[上游登记](../../third-party/UPSTREAM.md)。
 
 [返回当前文档](./index.md)

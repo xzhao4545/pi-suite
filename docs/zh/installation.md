@@ -27,31 +27,3 @@ pi update npm:pi-suite
 安装或更新后，在已打开的会话中执行 `/reload`，或重启 Pi。所有模块默认启用，不需要配置文件。
 
 Pi 的 `/reload` 只重新加载扩展。升级 Pi 或本套件的依赖后，需要退出并重新启动 Pi；用 `--resume` 可继续原会话。
-
-## 替换独立扩展
-
-Pi Suite 包含下列扩展的能力。同时保留会重复注册工具、命令和界面。先安装 Pi Suite，用 `pi list` 核对准确来源，再移除这些独立包。
-
-| 独立扩展 | Pi Suite 模块 |
-| --- | --- |
-| `pi-ask-user` | ask |
-| `@tintinweb/pi-tasks` | tasks |
-| `pi-interactive-shell` | jobs（PTY、交互与监督） |
-| `pi-background-jobs` | jobs（后台执行与日志） |
-| `@narumitw/pi-goal` | goal |
-| `@tintinweb/pi-subagents` | agents、定时调度与 workflow |
-
-使用 `pi list` 显示的完整来源；固定了版本的来源要保留版本后缀：
-
-```sh
-pi remove npm:pi-ask-user
-pi remove npm:@tintinweb/pi-tasks
-pi remove npm:pi-interactive-shell
-pi remove npm:pi-background-jobs@0.1.3
-pi remove npm:@narumitw/pi-goal
-pi remove npm:@tintinweb/pi-subagents
-```
-
-Pi Suite 不会迁移这些扩展的配置或存储数据。
-
-`@narumitw/pi-starship` 是独立的 footer，可以保留。Pi Suite 通过 Pi 的扩展状态接口发布状态，pi-starship 会读取它，见 [界面](interface.md#footer-状态)。
