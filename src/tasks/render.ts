@@ -1,4 +1,5 @@
-import { toolRenderers, type ToolLine } from '../ui/tool-render.ts';
+import { toolRenderers, type ToolExpandedRow, type ToolLine } from '../ui/tool-render.ts';
+import type { StructuredDetails } from '../ui/structured-details.ts';
 import { taskIcon, taskTone, taskHeading, receiptAction, receiptDisplay } from './presentation.ts';
 import type { EditResult, TaskView } from './types.ts';
 
@@ -20,11 +21,19 @@ export const listRenderers = toolRenderers<{ state?: string; groupId?: string },
     ...nextCursor ? [{ label: 'more', value: 'next page available', tone: 'warning' as const }] : [], ...tasks.length ? [] : ['No tasks'],
   ],
 });
-export const getRenderers = toolRenderers<{ id: string }, { task: TaskView; generation: string }>({
+export const getRenderers = toolRenderers<{ id: string }, { task: TaskView; generation: string; view?: StructuredDetails }>({
   call: () => ({ icon: '⟳', tone: 'accent', title: 'Task' }),
   collapsed: ({ task }) => ({ ...line(task), meta: task.progress ? [`${task.progress.done}/${task.progress.total}`] : [] }),
-  expanded: ({ task, generation }) => [{ label: 'generation', value: generation },
-    { code: JSON.stringify(task, null, 2), language: 'json', label: 'task' }],
+  // Saved tool results without detail rows still have the original receipt text.
+  expanded: ({ generation, view }, _args, text) => view ? [{ label: 'generation', value: generation },
+    ...view.rows.flatMap<ToolExpandedRow>(row => {
+      if (typeof row === 'string') return [row];
+      if (!row || !('length' in row)) return [];
+      const [head, ...rest] = row;
+      return head?.role === 'label'
+        ? [{ label: head.text.trimEnd().replace(/:$/, ''), value: rest.map(part => part.text).join('') }]
+        : [row.map(part => part.text).join('')];
+    })] : [text],
 });
 export const editRenderers = toolRenderers<unknown, EditResult>({
   call: () => ({ icon: '⟳', tone: 'accent', title: 'Updating tasks…' }),
@@ -47,7 +56,7 @@ export const editRenderers = toolRenderers<unknown, EditResult>({
     ...data.changes.map(change => ({ ...line({ ...change, status: change.after ?? change.before ?? 'todo' }),
       summary: receiptDisplay(change).slice(receiptDisplay(change).indexOf(' · ') + 3) })),
     ...data.derived.map(change => ({ ...line(change), summary: change.status === 'blocked' ? 'blocked' : 'dependencies cleared' })),
-    ...data.changes.filter(change => change.fields).map(change => ({ code: JSON.stringify(change.fields, null, 2), language: 'json' as const, label: `fields ${change.id}` })),
+    ...data.changes.flatMap(change => Object.entries(change.fields ?? {}).map(([key, value]) => ({ label: `fields ${change.id} ${key}`, value: String(value) }))),
     ...data.progress.map(group => ({ label: `group ${group.id}`, value: `${group.done}/${group.total} ${group.status}`, tone: taskTone(group.status) })),
     ...data.warnings.map(warning => ({ label: 'warning', value: warning, tone: 'warning' as const })),
   ],

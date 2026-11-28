@@ -4,7 +4,8 @@ import { registerBoundTool, checkedArguments, LIST_LIMITS, paginate, textResult 
 import { boundedText } from '../runtime/read.ts';
 import type { TasksModule } from './index.ts';
 import { taskId, taskScope, groupId, generationSchema, type TaskScope, type TaskView } from './types.ts';
-import { taskDetails, taskLabel, type TaskFilter } from './query.ts';
+import { plainDetailLines } from '../ui/structured-details.ts';
+import { taskDetailsView, taskLabel, type TaskFilter } from './query.ts';
 import { taskViews } from './model.ts';
 import { editSchema, editArguments, editChanges } from './schema.ts';
 import { requireGeneration } from './types.ts';
@@ -51,7 +52,9 @@ export function registerTaskTools(pi: ExtensionAPI, tasks: TasksModule): void {
     async execute(_id, params, _signal, _update, ctx) {
       const scope = (params as { scope?: TaskScope }).scope;
       const { task, views } = await tasks.get(ctx, params.id, params.generation, scope);
-      return textResult([`generation: ${params.generation}`, scope === 'assigned' ? `assigned task ${params.id} (parent list)` : undefined, ...taskDetails(task, views)], { task, generation: params.generation });
+      // Persist the selected task's detail rows, not the Map of the entire list.
+      const view = taskDetailsView(task, views);
+      return textResult([`generation: ${params.generation}`, scope === 'assigned' ? `assigned task ${params.id} (parent list)` : undefined, ...plainDetailLines(view)], { task, generation: params.generation, view });
     },
     ...getRenderers,
   }, 'initial');

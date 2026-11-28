@@ -14,7 +14,8 @@ const details = (job: ScheduledAgent): StructuredDetails => ({rows: [
   field('Next:', part(job.nextRun ?? '—', 'meta')),
   field('Last:', part(job.lastRun ?? '—', 'meta'), part(' ('), statePart(job.lastStatus ?? '—'), part(')')),
   field('Runs:', part(job.runCount, 'number')), field('Agent:', part(job.lastAgentId ?? '—', 'id')),
-  ...(job.lastError !== undefined ? [null, [part(job.lastError, 'error')]] : []), section('Input'), job.request.prompt,
+  job.lastError !== undefined ? field('Error:', part(job.lastError, 'error')) : undefined, null,
+  section('Input'), job.request.prompt,
 ]});
 
 export async function showSchedules(ctx: ExtensionContext, scheduler: AgentScheduler, dock: Dock, page: BrowsePage): Promise<void> {

@@ -3,7 +3,7 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { toolLine, stateLine, type ToolExpandedRow, type ToolLine } from '../../../ui/tool-render.ts';
 import { Text } from '@earendil-works/pi-tui';
-import { detailsText, field, part, statePart, type DetailRow, type StructuredDetails } from '../../../ui/structured-details.ts';
+import { detailsText, field, part, section, statePart, type DetailRow, type StructuredDetails } from '../../../ui/structured-details.ts';
 import { workflowActive } from '../manager.ts';
 import { buildPhaseGroups, displayState, formatDuration, header } from '../progress/index.ts';
 import { workflowResultText, type WorkflowTask } from '../task.ts';
@@ -12,14 +12,14 @@ export function workflowDetails(task: WorkflowTask, expanded = true, now = Date.
   const groups = buildPhaseGroups(task.workflowProgress, task.meta?.phases);
   const title = header(task, task.meta, groups, task.agentCount, now);
   const active = workflowActive(task);
-  const rows: DetailRow[] = [
+  const rows: (DetailRow | null)[] = [
     [part(title.name, 'heading'), part(' · '), part(title.stats, 'number'), ...(title.state ? [part(' · '), statePart(title.state)] : [])],
     title.subtext,
     [part(`${task.totalTokens} tokens · ${task.totalToolCalls} tools${task.replayedCount ? ` · ${task.replayedCount} replayed` : ''}`, 'number')],
   ];
   if (expanded) {
     for (const group of groups) {
-      rows.push('', [part(group.title, 'heading'), part(' · '), statePart(group.status, group.status === 'not-started' ? 'queued' : group.status),
+      rows.push(null, [part(group.title, 'heading'), part(' · '), statePart(group.status, group.status === 'not-started' ? 'queued' : group.status),
         part(' · '), part(`${group.doneCount}/${group.totalCount} · ${formatDuration(group.durationMs)}`, 'number')]);
       for (const agent of group.agents) {
         const state = displayState(agent, active);
@@ -39,8 +39,8 @@ export function workflowDetails(task: WorkflowTask, expanded = true, now = Date.
         if (agent.error) rows.push(field('    Error:', part(agent.error, 'error')));
       }
     }
-    if (task.logs.length) rows.push('', [part('Logs', 'label')], ...task.logs);
-    if (!active) rows.push('', [part('Result', 'label')], [part(workflowResultText(task), task.error === undefined ? undefined : 'error')]);
+    if (task.logs.length) rows.push(null, section('Logs'), ...task.logs);
+    if (!active) rows.push(null, section('Result'), [part(workflowResultText(task), task.error === undefined ? undefined : 'error')]);
   }
   return {rows};
 }

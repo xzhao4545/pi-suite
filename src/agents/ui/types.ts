@@ -9,7 +9,7 @@ import { resolveSettings } from '../models.ts';
 import { editTypeModel } from '../model-editor.ts';
 import { truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
 import { sanitizeText } from '../../runtime/text.ts';
-import { field, part, statePart, type DetailRow, type StructuredDetails } from '../../ui/structured-details.ts';
+import { field, part, section, statePart, type DetailRow, type StructuredDetails } from '../../ui/structured-details.ts';
 
 export async function showAgentTypes(ctx: ExtensionContext, dock: Dock, config: () => SuiteConfig, reload: (cwd: string) => void, page: BrowsePage): Promise<void> {
   for (; !page.navigation?.closed;) {
@@ -22,12 +22,7 @@ export async function showAgentTypes(ctx: ExtensionContext, dock: Dock, config: 
         // Inheritance is a runtime choice, not a type default; never preview the parent's live value as a pin.
         model = resolved.modelSource === 'inherited' ? 'not configured' : `${resolved.model.provider}/${resolved.model.id}`;
         thinking = resolved.thinkingSource === 'inherited' ? 'not configured' : clampThinkingLevel(resolved.model, resolved.thinking);
-        settings = [
-          field('Model:', model, part(` (${resolved.modelSource})`, 'meta'),
-            part(resolved.modelSource === 'inherited' ? ' · inherit from parent at start' : '')),
-          field('Thinking:', thinking, part(` (${resolved.thinkingSource})`, 'meta'),
-            part(resolved.thinkingSource === 'inherited' ? ' · inherit from parent at start, adjusted to model capabilities' : '')),
-        ];
+        settings = [field('Model:', `${model} · ${thinking}`)];
       } catch (error) {
         // Invalid model pins remain visible and editable; report the exact failure in details.
         settings = [field('Configuration error:', part(error instanceof Error ? error.message : String(error), 'error'))];
@@ -36,9 +31,8 @@ export async function showAgentTypes(ctx: ExtensionContext, dock: Dock, config: 
       return { value: type.name, status: type.enabled === false ? 'disabled' : 'enabled', modelId: model.slice(model.indexOf('/') + 1), thinking, enabled: type.enabled !== false,
         label: `${type.name} · ${type.enabled === false ? 'disabled' : 'enabled'} · ${model} · ${thinking}`,
         search: `${type.name} ${type.description} ${model} ${thinking}`, details: (): StructuredDetails => ({rows: [
-          [part(type.name, 'heading')], type.description,
-          field('Enabled:', statePart(type.enabled !== false, type.enabled === false ? 'disabled' : 'enabled'),
-            part(` (${current.agents.types[type.name]?.enabled === undefined ? 'definition' : 'configuration'})`, 'meta')), null,
+          [part(type.name, 'heading')],
+          field('Enabled:', statePart(type.enabled !== false, type.enabled === false ? 'disabled' : 'enabled')), null,
           ...settings, null, field('Definition:', part(type.sourcePath ?? 'built-in', 'meta')),
           field('Model settings:', part(locations.model, 'meta')), field('Thinking settings:', part(locations.thinking, 'meta')), null,
           field('Tools:', type.tools?.join(', ') ?? 'inherited'), field('Excluded tools:', type.excludeTools?.join(', ') ?? 'none'),
@@ -48,7 +42,7 @@ export async function showAgentTypes(ctx: ExtensionContext, dock: Dock, config: 
             Isolated: type.isolated, Memory: type.memory, Extensions: type.extensions, 'Excluded extensions': type.excludeExtensions,
             Skills: type.skills, Color: type.color }).map(([label, value]) => value === undefined ? undefined
             : field(`${label}:`, part(Array.isArray(value) ? value.join(', ') : String(value), typeof value === 'number' ? 'number' : label === 'Session directory' ? 'meta' : undefined))),
-          '', type.systemPrompt]}) };
+          null, section('Description'), type.description, section('System prompt'), type.systemPrompt]}) };
     });
     let action = 'model';
     const selected = await browse(ctx, dock, { title: 'Subagents', state: page.state, pages: page.pages, navigation: page.navigation, items: () => items,

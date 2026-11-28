@@ -1,6 +1,7 @@
 import type { MessageRenderer } from '@earendil-works/pi-coding-agent';
 import { Box, truncateToWidth } from '@earendil-works/pi-tui';
 import { sanitizeText } from '../runtime/text.ts';
+import { elapsedText } from '../ui/format.ts';
 import { readingText } from '../ui/reading.ts';
 import { readPageFields } from '../ui/rendering/read-page.ts';
 import { toolRenderers, toolLine, stateLine, type ToolExpandedRow, type ToolLine } from '../ui/tool-render.ts';
@@ -38,14 +39,22 @@ type WriteDetails = JobDetails & { bytesSent?: number; stdinClosed?: boolean };
 const name = (job: JobSummary) => job.name || job.command.split('\n')[0];
 const cleanupTone = (cleanup: string) => cleanup === 'pending' || cleanup === 'unconfirmed' ? 'warning' as const : 'dim' as const;
 function jobFields(job: JobSummary): ToolExpandedRow[] {
+  const exit = job.exitCode ?? job.signal;
   return [
     // Jobs execute through Pi's Bash selection (including Git Bash/WSL on Windows).
     { command: job.command, shell: 'bash', label: 'command' }, { label: 'cwd', value: job.cwd },
     ...job.timeoutMs ? [{ label: 'timeout', value: `${job.timeoutMs}ms` }] : [],
     ...job.taskId ? [{ label: 'task', value: `${job.taskId} · source generation: ${job.taskGeneration ?? 'unavailable (legacy link expired)'}` }] : [],
     { label: 'state', value: job.state, tone: stateLine(job.state).tone },
+    ...job.elapsedMs !== undefined ? [{ label: 'runtime', value: elapsedText(job.elapsedMs) }] : [],
+    ...job.exitCode !== null || job.signal ? [{ label: 'exit', value: String(exit) }] : [],
+    ...job.stopReason ? [{ label: 'stop reason', value: job.stopReason }] : [],
+    ...job.completionReason ? [{ label: 'completion', value: job.completionReason }] : [],
     { label: 'cleanup', value: job.cleanup.state, tone: cleanupTone(job.cleanup.state) },
     ...job.cleanup.error ? [{ label: 'cleanup error', value: job.cleanup.error, tone: 'warning' as const }] : [],
+    ...job.monitor ? [{ label: 'monitor', value: `${job.monitor.config.strategy ?? 'stream'} · events ${job.monitor.events} (${job.monitor.notifiedEvents} notified)` }] : [],
+    ...job.handsFree ? [{ label: 'supervision', value: `${job.handsFree.config.mode} · updates ${job.handsFree.updates} · output ${job.handsFree.totalCharsSent}/${job.handsFree.config.maxTotalChars} chars` }] : [],
+    ...job.creator ? [{ label: 'created by', value: `${job.creator.agentId ?? job.creator.workflowId} ${job.creator.runId}` }] : [],
     ...job.error ? [{ label: 'error', value: job.error, tone: 'error' as const }] : [],
   ];
 }
@@ -71,8 +80,7 @@ export const getRenderers = toolRenderers<JobArgs, JobDetails & { live: boolean 
   call: args => ({ icon: '⟳', tone: 'accent', title: 'Job', summary: args.id }),
   collapsed: ({ job }) => ({ ...stateLine(job.state), title: job.id, summary: name(job),
     meta: [{ text: job.state, tone: stateLine(job.state).tone! }, ...job.error ? [{ text: 'error', tone: 'error' as const }] : []] }),
-  expanded: ({ job, live }) => [...jobFields(job), { label: 'live', value: String(live) },
-    { code: JSON.stringify(job, null, 2), language: 'json', label: 'details' }],
+  expanded: ({ job, live }) => [...jobFields(job), { label: 'live', value: String(live) }],
 });
 export const readRenderers = toolRenderers<ReadArgs, ReadDetails>({
   call: args => ({ icon: '⟳', tone: 'accent', title: 'Job read', summary: args.id, meta: args.stream ? [args.stream] : [] }),
@@ -99,5 +107,5 @@ export const stopRenderers = toolRenderers<JobArgs, StopOutcome & JobDetails>({
     summary: data.requested ? data.state : 'already settled',
     meta: [{ text: `cleanup ${data.cleanup === 'managed_scope_confirmed' ? 'confirmed' : data.cleanup}`, tone: cleanupTone(data.cleanup) }] }),
   expanded: data => [...jobFields(data.job), { label: 'requested', value: String(data.requested) },
-    { code: JSON.stringify(data.affected, null, 2), language: 'json', label: 'affected' }],
+    { label: 'affected', value: data.affected.map(item => `${item.id}: ${item.state}${item.cleanup ? ` (cleanup ${item.cleanup})` : ''}`).join('\n') }],
 });

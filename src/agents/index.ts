@@ -27,9 +27,8 @@ export function agentSummary(record: AgentRecord) {
   const { prompt, result, ...summary } = record;
   return { ...summary, promptSummary: boundedText(prompt, 200), resultSummary: result === undefined ? undefined : boundedText(result, 500) };
 }
-export function usageText(record: AgentRecord): string | undefined {
-  const usage = record.usage;
-  return usage && `usage: input ${usage.tokens.input} · output ${usage.tokens.output} · cacheRead ${usage.tokens.cacheRead} · cacheWrite ${usage.tokens.cacheWrite} · total ${usage.tokens.total} · cost $${usage.cost.toFixed(6)}`;
+export function usageText({ usage }: Pick<AgentRecord, 'usage'>, prefix = 'usage: '): string | undefined {
+  return usage && `${prefix}input ${usage.tokens.input} · output ${usage.tokens.output} · cacheRead ${usage.tokens.cacheRead} · cacheWrite ${usage.tokens.cacheWrite} · total ${usage.tokens.total} · cost $${usage.cost.toFixed(6)}`;
 }
 function resultLines(record: AgentRecord, error = record.error): string[] {
   return [record.error ? usageText(record) : undefined, record.error ? `error: ${error}` : undefined,

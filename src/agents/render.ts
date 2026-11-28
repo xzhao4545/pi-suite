@@ -6,13 +6,15 @@ import type { ReadPage } from '../runtime/read.ts';
 import type { StopOutcome } from '../runtime/tools.ts';
 import type { JobSummary } from '../jobs/types.ts';
 import type { ScheduledAgent } from './schedules/store.ts';
-import type { agentSummary } from './index.ts';
+import type { AskParams } from '../ask/schema.ts';
+import { usageText, type agentSummary } from './index.ts';
 
 type Summary = ReturnType<typeof agentSummary>;
-type Details = { agent: Summary; backgrounded?: boolean; question?: unknown };
+type Details = { agent: Summary; backgrounded?: boolean; question?: AskParams };
 type Args = { id: string; runId?: string };
 type StartArgs = { type?: string; name?: string; prompt: string; schedule?: string; background?: boolean };
 function agentFields(agent: Summary): ToolExpandedRow[] {
+  const usage = usageText(agent, '');
   return [
     { label: 'id', value: agent.id }, { label: 'runId', value: agent.runId },
     { label: 'state', value: agent.state, tone: stateLine(agent.state).tone },
@@ -22,9 +24,13 @@ function agentFields(agent: Summary): ToolExpandedRow[] {
     ...agent.taskId ? [{ label: 'taskId', value: agent.taskId }] : [],
     ...agent.taskGeneration ? [{ label: 'taskGeneration', value: agent.taskGeneration }] : [],
     ...agent.activity ? [{ label: 'activity', value: agent.activity }] : [],
-    ...agent.usage ? [{ code: JSON.stringify(agent.usage, null, 2), language: 'json' as const, label: 'usage' }] : [],
+    ...usage !== undefined ? [{ label: 'usage', value: usage }] : [],
     ...agent.error ? [{ label: 'error', value: agent.error, tone: 'error' as const }] : [],
   ];
+}
+function scheduleFields({ request, ...schedule }: ScheduledAgent): ToolExpandedRow[] {
+  return [...Object.entries(schedule), ...Object.entries(request).map(([key, value]) => [`request.${key}`, value] as const)]
+    .flatMap(([key, value]) => value === undefined ? [] : [{ label: key.toLowerCase(), value: String(value) }]);
 }
 export const startRenderers = toolRenderers<StartArgs, Details | { schedule: ScheduledAgent }>({
   call: args => args.schedule
@@ -39,7 +45,7 @@ export const startRenderers = toolRenderers<StartArgs, Details | { schedule: Sch
   expanded: data => 'agent' in data ? [...agentFields(data.agent),
     { label: 'promptSummary', value: data.agent.promptSummary },
     ...data.agent.resultSummary !== undefined ? [{ label: 'resultSummary', value: data.agent.resultSummary }] : []]
-    : [{ code: JSON.stringify(data.schedule, null, 2), language: 'json', label: 'schedule' }],
+    : scheduleFields(data.schedule),
 });
 export const listRenderers = toolRenderers<{ agentId?: string; state?: string; scope?: string }, { agents: Summary[]; nextCursor?: string }>({
   call: args => ({ icon: '⟳', tone: 'accent', title: 'Agents', summary: args.agentId ? agentDisplayName(args.agentId) : undefined }),
@@ -54,10 +60,13 @@ export const getRenderers = toolRenderers<Args & { detail?: boolean }, Details &
   collapsed: data => ({ ...stateLine(data.question ? 'waiting(parent)' : data.agent.state), title: data.agent.name,
     meta: [{ text: data.question ? 'question pending' : data.agent.state, tone: stateLine(data.question ? 'waiting(parent)' : data.agent.state).tone! }] }),
   expanded: ({ agent, question, jobs, jobsUnavailable }, args) => [...agentFields(agent),
-    ...question ? [{ code: JSON.stringify(question, null, 2), language: 'json' as const, label: 'question' }] : [],
+    ...question ? (question.questions ?? [question]).flatMap(item => [
+      ...item.question !== undefined ? [{ label: 'question', value: item.question }] : [],
+      ...item.options ? [{ label: 'options', value: item.options.map(option => typeof option === 'string' ? option : option.title).join(', ') }] : [],
+    ]) : [],
     ...args.detail ? [
       { label: 'modelSource', value: agent.modelSource }, { label: 'thinkingSource', value: agent.thinkingSource },
-      ...agent.contextUsage ? [{ code: JSON.stringify(agent.contextUsage, null, 2), language: 'json' as const, label: 'contextUsage' }] : [],
+      ...agent.contextUsage ? [{ label: 'contextUsage', value: `${agent.contextUsage.tokens ?? 'unknown'}/${agent.contextUsage.contextWindow} tokens${agent.contextUsage.percent === null ? '' : ` · ${agent.contextUsage.percent.toFixed(1)}%`}` }] : [],
       ...agent.lastUpdateAt ? [{ label: 'lastUpdateAt', value: agent.lastUpdateAt }] : [],
     ] : [],
     ...jobsUnavailable ? [{ label: 'jobsUnavailable', value: jobsUnavailable, tone: 'warning' as const }] : [],
@@ -81,5 +90,5 @@ export const stopRenderers = toolRenderers<Args, StopOutcome & { runId: string; 
       ...data.affected.length > 1 ? [`+${data.affected.length - 1} affected`] : []] }),
   expanded: data => [{ label: 'runId', value: data.runId }, { label: 'requested', value: String(data.requested) },
     { label: 'cleanup', value: data.cleanup, tone: ['pending', 'unconfirmed'].includes(data.cleanup) ? 'warning' : 'dim' },
-    { code: JSON.stringify(data.affected, null, 2), language: 'json', label: 'affected' }],
+    { label: 'affected', value: data.affected.map(item => `${item.id}: ${item.state}${item.cleanup ? ` (cleanup ${item.cleanup})` : ''}`).join('\n') }],
 });
