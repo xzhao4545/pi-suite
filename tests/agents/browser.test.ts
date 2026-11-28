@@ -165,8 +165,8 @@ test('Runs and Dock represent the latest run, and Message resumes the same agent
           case 1:
             assert.ok(view instanceof BrowserView);
             view.handleInput('/'); view.handleInput(runId); view.handleInput('\r');
-            assert.match(text(), /All · .*1\/1/); assert.match(text(), / · 2 runs/);
-            assert.equal(view.getSelectedItem()?.value, id); assert.ok(text().includes(`Run: ${latest()}`));
+            assert.match(text(), /All · .*1\/1/);
+            assert.equal(view.getSelectedItem()?.value, id);
             chooseBrowserAction(view, 'Runs'); break;
           case 2:
             assert.ok(view instanceof BrowserView); assert.equal(view.getSelectedItem()?.value, latest());

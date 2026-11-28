@@ -46,12 +46,11 @@ export async function showRuns(ctx: ExtensionContext, deps: SubagentsDeps, state
       return !agents.manager.visible(record, scope) && (!run || run.settled === true);
     };
     const status = (record: AgentRecord) => agents.manager.runs.get(record.runId)?.question ? 'waiting(parent)' : record.state;
-    const suffix = (record: AgentRecord, count: number) => {
+    const suffix = (record: AgentRecord) => {
       const state = status(record), retry = retrySuffix(agents.manager.runs.get(record.runId));
       const head: DisplayField[] = [{text: state, state}, ...retry ? [{text: retry, tone: 'muted' as const}] : []];
-      const runs: DisplayField[] = count > 1 ? [{text: ` · ${count} runs`, tone: 'muted'}] : [];
-      const full: DisplayField[] = [...head, {text: ` · ${duration(record)}`, tone: 'muted'}, ...runs];
-      return { full, compact: runs.length ? [[...head, ...runs], head] : [head] };
+      const full: DisplayField[] = [...head, {text: ` · ${duration(record)}`, tone: 'muted'}];
+      return { full, compact: [head] };
     };
     const name = (record: AgentRecord) => history ? record.runId : record.name;
     for (; !exit.closed;) {
@@ -69,8 +68,8 @@ export async function showRuns(ctx: ExtensionContext, deps: SubagentsDeps, state
             selected: () => state.filter, select: (value, done) => { changed = true; change(value as RunFilter, state.workspace, done); } }],
         subscribe: refresh => agents.manager.subscribe(refresh), ticking: () => [...displayed.values()].some(([record]) => active(record.state)),
         layout: { truncatePrimary: ({item, maxWidth, theme}) => {
-          const runs = displayed.get(item.value)!, [record] = runs;
-          const { full, compact } = suffix(record, runs.length);
+          const [record] = displayed.get(item.value)!;
+          const { full, compact } = suffix(record);
           return executionRow(sanitizeText(name(record)).replace(/[\r\n\t]/g, ' '), full, compact, maxWidth, theme);
         } },
         items: () => {
@@ -83,7 +82,7 @@ export async function showRuns(ctx: ExtensionContext, deps: SubagentsDeps, state
             .sort(([, [a]], [, [b]]) => compareActivity(a, b, record => active(record.state))));
           return Array.from(displayed, ([value, runs]) => {
             const [record] = runs;
-            const display: DisplayField[] = [{text: name(record)}, {text: ' · ', tone: 'muted'}, ...suffix(record, runs.length).full];
+            const display: DisplayField[] = [{text: name(record)}, {text: ' · ', tone: 'muted'}, ...suffix(record).full];
             return { value, status: status(record), label: displayText(display), display,
               search: `${record.id} ${runs.map(run => run.runId).join(' ')} ${record.name} ${record.type} ${record.state} ${record.model} ${record.prompt}`,
               details: () => agentDetails(record, undefined, readonly(record)) };

@@ -268,10 +268,14 @@ export class AskView extends Container {
   }
   private editorLines(width: number, height: number): string[] {
     const editor = this.editors[this.form.index]; editor.focused = this.focus === "answer";
-    const rendered = editor.render(Math.max(1, width - 2)).slice(1, -1);
+    const prompt = "✎ ", promptWidth = visibleWidth(prompt);
+    const rendered = editor.render(Math.max(1, width - promptWidth)).slice(1, -1);
     const cursor = rendered.findIndex(line => line.includes(CURSOR_MARKER));
     const start = Math.max(0, cursor - height + 1);
-    return rendered.slice(start, start + height).map(line => this.theme.fg("accent", "✎ ") + line);
+    const indent = " ".repeat(promptWidth);
+    // Decorate the viewport after slicing so the prompt stays at its top as the cursor scrolls.
+    return rendered.slice(start, start + height).map((line, index) =>
+      (index === 0 ? this.theme.fg("accent", prompt) : indent) + line);
   }
   private answerLine(width: number): string {
     if (this.focus === "search") { this.search.focused = true; return this.search.render(width)[0]; }
